@@ -14,6 +14,7 @@ async function main() {
   await rejectsManagedPackageJsonSymlink();
   await rejectsPortablePackageJsonSymlink();
   await rejectsNestedTargets();
+  await rejectsSymlinkedNestedTargets();
   await copiesRegularFiles();
   console.log('safe-copy symlink regression checks passed');
 }
@@ -98,6 +99,30 @@ async function rejectsNestedTargets() {
   }, '{"name":"outside-unused"}\n');
 }
 
+async function rejectsSymlinkedNestedTargets() {
+  await withFixture('symlinked-nested-target', async ({ outside, source }) => {
+    const packagePath = path.join(source, 'package.json');
+    await writeFile(packagePath, '{"name":"inside"}\n');
+
+    const linkedTarget = path.join(outside, 'source-link');
+    await symlink(source, linkedTarget);
+
+    await assert.rejects(
+      copyManagedSpfxSource(source, linkedTarget),
+      /Refusing to copy SPFx source into itself/
+    );
+    assert.equal(await readFile(packagePath, 'utf8'), '{"name":"inside"}\n');
+
+    const linkedChildTarget = path.join(outside, 'source-link', 'portable-export');
+    await assert.rejects(
+      copyPortableSpfxSource(source, linkedChildTarget),
+      /Refusing to copy SPFx source into itself/
+    );
+    assert.equal(await exists(linkedChildTarget), false);
+    assert.equal(await readFile(packagePath, 'utf8'), '{"name":"inside"}\n');
+  }, '{"name":"outside-unused"}\n');
+}
+
 async function assertOutsidePackageWasNotRewritten(outsidePackage, target) {
   const originalOutsidePackage = await readFile(outsidePackage, 'utf8');
   await mkdir(path.dirname(path.join(target, 'package.json')), { recursive: true });
@@ -117,7 +142,7 @@ async function withFixture(name, fn, outsidePackageContents) {
   await writeFile(outsidePackage, outsidePackageContents);
 
   try {
-    await fn({ root, source, target, outsidePackage });
+    await fn({ root, source, target, outside, outsidePackage });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

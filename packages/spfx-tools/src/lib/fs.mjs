@@ -1,4 +1,4 @@
-import { chmod, copyFile, cp, lstat, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, cp, lstat, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const EXCLUDED_DIRS = new Set([
@@ -89,7 +89,7 @@ function shouldCopySharedSpfxSourcePath(sourceDir, source) {
 }
 
 async function copyFilteredSpfxSource(sourceDir, targetDir, filter) {
-  assertTargetOutsideSource(sourceDir, targetDir);
+  await assertTargetOutsideSource(sourceDir, targetDir);
   const createdTarget = !(await exists(targetDir));
   try {
     await mkdir(targetDir, { recursive: true });
@@ -102,9 +102,9 @@ async function copyFilteredSpfxSource(sourceDir, targetDir, filter) {
   }
 }
 
-function assertTargetOutsideSource(sourceDir, targetDir) {
-  const sourceRoot = path.resolve(sourceDir);
-  const targetRoot = path.resolve(targetDir);
+async function assertTargetOutsideSource(sourceDir, targetDir) {
+  const sourceRoot = await realpath(sourceDir);
+  const targetRoot = await realPhysicalPath(targetDir);
   const relativeTarget = path.relative(sourceRoot, targetRoot);
   const targetIsInsideSource =
     relativeTarget === '' ||
@@ -113,6 +113,26 @@ function assertTargetOutsideSource(sourceDir, targetDir) {
   if (targetIsInsideSource) {
     throw new Error(`Refusing to copy SPFx source into itself: ${targetDir}`);
   }
+}
+
+async function realPhysicalPath(targetDir) {
+  const targetRoot = path.resolve(targetDir);
+  const existingRoot = await nearestExistingPath(targetRoot);
+  const resolvedExistingRoot = await realpath(existingRoot);
+  const missingPath = path.relative(existingRoot, targetRoot);
+  return missingPath ? path.join(resolvedExistingRoot, missingPath) : resolvedExistingRoot;
+}
+
+async function nearestExistingPath(targetPath) {
+  if (await exists(targetPath)) {
+    return targetPath;
+  }
+
+  const parent = path.dirname(targetPath);
+  if (parent === targetPath) {
+    return targetPath;
+  }
+  return nearestExistingPath(parent);
 }
 
 async function copyEntry(source, target, filter) {
