@@ -325,8 +325,8 @@ export function createSpfxBridge(context: any, options: SpfxBridgeOptions = {}):
       siteAssets: () => spGet(`${webUrl}/_api/web/lists/getbytitle('Site Assets')/items`)
     },
     directory: {
-      users: async (search = ''): Promise<unknown> => graphGet(context, `/users${search ? `?$search="${escapeGraphSearch(search)}"` : ''}`),
-      groups: async (search = ''): Promise<unknown> => graphGet(context, `/groups${search ? `?$search="${escapeGraphSearch(search)}"` : ''}`),
+      users: async (search = ''): Promise<unknown> => graphGet(context, graphSearchPath('/users', search)),
+      groups: async (search = ''): Promise<unknown> => graphGet(context, graphSearchPath('/groups', search)),
       groupMembers: async (groupId: string): Promise<unknown> => graphGet(context, `/groups/${groupId}/members`)
     }
   };
@@ -525,6 +525,14 @@ function escapeOData(value: string): string {
 
 function escapeGraphSearch(value: string): string {
   return value.replace(/"/g, '\\"');
+}
+
+function graphSearchPath(resourcePath: '/users' | '/groups', search: string): string {
+  if (!search) {
+    return resourcePath;
+  }
+  const encodedSearch = encodeURIComponent(`"${escapeGraphSearch(search)}"`);
+  return `${resourcePath}?$search=${encodedSearch}`;
 }
 
 function escapeHtml(value: string): string {

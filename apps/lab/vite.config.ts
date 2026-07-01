@@ -2,13 +2,14 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { mkdir, readFile, readdir, rename, stat } from 'node:fs/promises';
+import { mkdir, readFile, readdir, realpath, rename, stat } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(appDir, '../..');
+const labApiIntentHeader = 'x-spfx-kit-lab-intent';
 
 interface ManagedLabApp {
   id: string;
@@ -55,6 +56,9 @@ function spfxAppApi(): Plugin {
           }
 
           if (req.method === 'POST' && url.pathname === '/unlink') {
+            if (!verifyStateChangingLabRequest(req, res)) {
+              return;
+            }
             const body = await readJsonBody(req);
             const appId = sanitizeSlug(String(body.appId || ''));
             const result = await unlinkLabApp(appId);
@@ -68,6 +72,9 @@ function spfxAppApi(): Plugin {
           }
 
           if (req.method === 'POST' && url.pathname === '/sync') {
+            if (!verifyStateChangingLabRequest(req, res)) {
+              return;
+            }
             const body = await readJsonBody(req);
             const requestedAppId = String(body.appId || '').trim();
             const appId = requestedAppId ? sanitizeSlug(requestedAppId) : '';
@@ -83,6 +90,9 @@ function spfxAppApi(): Plugin {
           }
 
           if (req.method === 'POST' && url.pathname === '/import') {
+            if (!verifyStateChangingLabRequest(req, res)) {
+              return;
+            }
             const body = await readJsonBody(req);
             const name = sanitizeAppName(String(body.name || ''));
             const source = sanitizeRequiredText(body.source, 'Source is required.');
@@ -109,6 +119,9 @@ function spfxAppApi(): Plugin {
           }
 
           if (req.method === 'POST' && url.pathname === '/create') {
+            if (!verifyStateChangingLabRequest(req, res)) {
+              return;
+            }
             const body = await readJsonBody(req);
             const name = sanitizeAppName(String(body.name || ''));
             const title = sanitizeRequiredText(body.title, 'Title is required.');
@@ -162,10 +175,7 @@ function spfxExportApi(): Plugin {
             if (!requestedPath) {
               throw new Error('Archive path is required.');
             }
-            const file = path.resolve(requestedPath);
-            if (!file.startsWith(rootDir)) {
-              throw new Error('Archive path is outside this workspace.');
-            }
+            const file = await resolveWorkspaceFile(requestedPath);
             const info = await stat(file);
             if (!info.isFile()) {
               throw new Error('Archive path must point to a file.');
@@ -185,6 +195,9 @@ function spfxExportApi(): Plugin {
             return;
           }
           if (req.method === 'POST' && url.pathname === '/') {
+            if (!verifyStateChangingLabRequest(req, res)) {
+              return;
+            }
             const body = await readJsonBody(req);
             const app = sanitizeSlug(String(body.app || ''));
             const targets = Array.isArray(body.targets) ? body.targets.map(String).filter(Boolean) : [];
@@ -196,6 +209,9 @@ function spfxExportApi(): Plugin {
             return;
           }
           if (req.method === 'POST' && url.pathname === '/stream') {
+            if (!verifyStateChangingLabRequest(req, res)) {
+              return;
+            }
             const body = await readJsonBody(req);
             const app = sanitizeSlug(String(body.app || ''));
             const targets = Array.isArray(body.targets) ? body.targets.map(String).filter(Boolean) : [];
@@ -213,6 +229,65 @@ function spfxExportApi(): Plugin {
       });
     }
   };
+}
+
+function verifyStateChangingLabRequest(req: IncomingMessage, res: ServerResponse): boolean {
+  if (!isSameOriginRequest(req)) {
+    res.statusCode = 403;
+    sendJson(res, { error: 'Lab API writes require a same-origin request.' });
+    return false;
+  }
+
+  if (req.headers[labApiIntentHeader] !== 'same-origin') {
+    res.statusCode = 403;
+    sendJson(res, { error: 'Lab API writes require an explicit lab request intent.' });
+    return false;
+  }
+
+  if (!isJsonRequest(req)) {
+    res.statusCode = 415;
+    sendJson(res, { error: 'Lab API writes require application/json.' });
+    return false;
+  }
+
+  return true;
+}
+
+function isSameOriginRequest(req: IncomingMessage): boolean {
+  const host = req.headers.host;
+  if (!host) {
+    return false;
+  }
+
+  const origin = req.headers.origin;
+  if (origin) {
+    try {
+      return new URL(origin).host === host;
+    } catch {
+      return false;
+    }
+  }
+
+  const fetchSite = req.headers['sec-fetch-site'];
+  if (fetchSite) {
+    return fetchSite === 'same-origin' || fetchSite === 'none';
+  }
+
+  return false;
+}
+
+function isJsonRequest(req: IncomingMessage): boolean {
+  const contentType = req.headers['content-type'];
+  return typeof contentType === 'string' && contentType.split(';', 1)[0]?.trim().toLowerCase() === 'application/json';
+}
+
+async function resolveWorkspaceFile(requestedPath: string): Promise<string> {
+  const [workspaceRoot, file] = await Promise.all([realpath(rootDir), realpath(path.resolve(requestedPath))]);
+  const relative = path.relative(workspaceRoot, file);
+  if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Archive path is outside this workspace.');
+  }
+  return file;
 }
 
 async function syncLabRegistry() {

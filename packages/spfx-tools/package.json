@@ -15,6 +15,7 @@
   },
   "scripts": {
     "build": "node src/cli/self-check.mjs",
-    "clean": "node src/cli/clean.mjs"
+    "clean": "node src/cli/clean.mjs",
+    "test:safe-copy": "node scripts/test-safe-copy-symlinks.mjs"
   }
 }
