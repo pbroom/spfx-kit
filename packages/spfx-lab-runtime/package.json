@@ -1,0 +1,26 @@
+{
+  "name": "@spfx-kit/spfx-lab-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared registry, fixtures, property-pane contracts, and mock SPFx services for the SPFx Kit lab.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0 <20.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "17.0.45",
+    "typescript": "5.3.3"
+  }
+}

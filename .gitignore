@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+apps/lab/node_modules/
+packages/*/node_modules/
+.spfx-kit/apps/*/node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Turbo / Vite / TypeScript
+.turbo/
+dist/
+apps/lab/.turbo/
+apps/lab/dist/
+packages/*/dist/
+.spfx-kit/apps/*/.turbo/
+.spfx-kit/apps/*/dist/
+*.tsbuildinfo
+
+# Local SPFx app workspace and generated app data
+.spfx-kit/
+apps/*-spfx/
+
+# Generated lab registry
+apps/lab/src/generated/
+
+# SPFx build output
+/lib/
+/temp/
+/release/
+/build/
+/sharepoint/solution/*.sppkg
+/sharepoint/solution/debug/
+.spfx-kit/apps/*/lib/
+.spfx-kit/apps/*/temp/
+.spfx-kit/apps/*/release/
+.spfx-kit/apps/*/build/
+.spfx-kit/apps/*/sharepoint/solution/*.sppkg
+.spfx-kit/apps/*/sharepoint/solution/debug/
+
+# Local config
+.env
+.env.local
+.DS_Store
+
+# Lab screenshots and transient QA output
+artifacts/
+playwright-report/
+test-results/

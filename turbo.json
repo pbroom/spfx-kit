@@ -1,0 +1,28 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [
+    ".spfx-kit/apps/*/.spfx-kit/lab/**",
+    ".spfx-kit/apps/*/src/lab/**",
+    ".spfx-kit/apps/*/src/webparts/**",
+    "apps/*-spfx/.spfx-kit/lab/**",
+    "apps/*-spfx/src/lab/**",
+    "apps/*-spfx/src/webparts/**"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "lib/**", "temp/**", "build/**"]
+    },
+    "ship": {
+      "dependsOn": ["build"],
+      "outputs": ["sharepoint/solution/*.sppkg", "release/assets/**", "temp/deploy/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}

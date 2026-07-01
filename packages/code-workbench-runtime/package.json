@@ -1,0 +1,32 @@
+{
+  "name": "@spfx-kit/code-workbench-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared source, compiler, renderer, and SPFx bridge runtime for the SPFx Code Workbench web part.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@babel/standalone": "8.0.3",
+    "lz-string": "1.5.0"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0 <20.0.0",
+    "react-dom": ">=17.0.0 <20.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "17.0.45",
+    "@types/react-dom": "17.0.17",
+    "typescript": "5.3.3"
+  }
+}

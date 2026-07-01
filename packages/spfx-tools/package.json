@@ -1,0 +1,20 @@
+{
+  "name": "@spfx-kit/spfx-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local CLIs for importing SPFx apps, syncing lab registrations, and validating SPFx app structure.",
+  "bin": {
+    "copy-monaco-assets": "./src/cli/copy-monaco-assets.mjs",
+    "create-spfx-app": "./src/cli/create-spfx-app.mjs",
+    "export-spfx-app": "./src/cli/export-spfx-app.mjs",
+    "import-spfx-app": "./src/cli/import-spfx-app.mjs",
+    "sync-cdn-config": "./src/cli/sync-cdn-config.mjs",
+    "sync-lab": "./src/cli/sync-lab.mjs",
+    "validate-spfx-app": "./src/cli/validate-spfx-app.mjs"
+  },
+  "scripts": {
+    "build": "node src/cli/self-check.mjs",
+    "clean": "node src/cli/clean.mjs"
+  }
+}
