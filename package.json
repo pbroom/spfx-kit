@@ -23,6 +23,7 @@
     "guard:public": "node packages/spfx-tools/src/cli/guard-public-repo.mjs",
     "sync:cdn": "node packages/spfx-tools/src/cli/sync-cdn-config.mjs",
     "sync:lab": "node packages/spfx-tools/src/cli/sync-lab.mjs",
+    "test:security": "npm --workspace @spfx-kit/code-workbench-runtime run build && node scripts/tests/code-workbench-graph-search.mjs && npm --workspace @spfx-kit/spfx-tools run test:safe-copy && node scripts/tests/lab-api-security.mjs",
     "validate:spfx": "node packages/spfx-tools/src/cli/validate-spfx-app.mjs"
   },
   "devDependencies": {

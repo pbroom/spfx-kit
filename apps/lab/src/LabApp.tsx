@@ -171,6 +171,11 @@ const themeOptions: Array<{ label: string; value: LabThemeMode }> = [
   { label: 'Custom', value: 'custom' }
 ];
 
+const labApiWriteHeaders = {
+  'Content-Type': 'application/json',
+  'X-SPFX-KIT-Lab-Intent': 'same-origin'
+};
+
 export function LabApp(): JSX.Element {
   const registry = React.useMemo(() => {
     const next = new LabWebPartRegistry();
@@ -390,7 +395,7 @@ export function LabApp(): JSX.Element {
     try {
       const response = await fetch(`/api/spfx-apps/${action === 'unlink' ? 'unlink' : 'sync'}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: labApiWriteHeaders,
         body: JSON.stringify({ appId })
       });
       const result = await readApiJson<ManageAppsApiResult>(response);
@@ -422,7 +427,7 @@ export function LabApp(): JSX.Element {
     try {
       const response = await fetch('/api/spfx-apps/sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: labApiWriteHeaders,
         body: JSON.stringify({})
       });
       const result = await readApiJson<ManageAppsApiResult>(response);
@@ -485,7 +490,7 @@ export function LabApp(): JSX.Element {
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: labApiWriteHeaders,
         body: JSON.stringify(body)
       });
       const result = await readApiJson<AddSpfxAppApiResult>(response);
@@ -525,7 +530,7 @@ export function LabApp(): JSX.Element {
     try {
       const response = await fetch('/api/export-spfx-app/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: labApiWriteHeaders,
         body: JSON.stringify({
           app: selected.appId,
           targets: selectedTargets

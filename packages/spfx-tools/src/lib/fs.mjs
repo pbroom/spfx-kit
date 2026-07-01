@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, cp, lstat, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const EXCLUDED_DIRS = new Set([
@@ -31,67 +31,135 @@ export async function writeJson(filePath, value) {
 }
 
 export async function copyManagedSpfxSource(sourceDir, targetDir) {
-  await mkdir(targetDir, { recursive: true });
-  await cp(sourceDir, targetDir, {
-    recursive: true,
-    filter: (source) => {
-      const rel = path.relative(sourceDir, source);
-      if (!rel) {
-        return true;
-      }
-      if (path.basename(source) === '.DS_Store') {
-        return false;
-      }
-      const parts = rel.split(path.sep);
-      if (parts.some((part) => EXCLUDED_DIRS.has(part))) {
-        return false;
-      }
-      if (parts[0] === '.spfx-kit' && parts[1] === 'exports') {
-        return false;
-      }
-      if (parts[0] === 'sharepoint' && parts[1] === 'solution' && parts.length > 2) {
-        return false;
-      }
-      if (path.basename(source) === 'package-lock.json') {
-        return false;
-      }
+  await copyFilteredSpfxSource(sourceDir, targetDir, (source) => {
+    const rel = path.relative(sourceDir, source);
+    if (!rel) {
       return true;
     }
+    if (!shouldCopySharedSpfxSourcePath(sourceDir, source)) {
+      return false;
+    }
+    if (path.basename(source) === 'package-lock.json') {
+      return false;
+    }
+    return true;
   });
 }
 
 export async function copyPortableSpfxSource(sourceDir, targetDir, options = {}) {
   const excludeLabSource = options.excludeLabSource !== false;
-  await mkdir(targetDir, { recursive: true });
-  await cp(sourceDir, targetDir, {
-    recursive: true,
-    filter: (source) => {
-      const rel = path.relative(sourceDir, source);
-      if (!rel) {
-        return true;
-      }
-      if (path.basename(source) === '.DS_Store') {
-        return false;
-      }
-      const parts = rel.split(path.sep);
-      if (parts.some((part) => EXCLUDED_DIRS.has(part))) {
-        return false;
-      }
-      if (parts[0] === '.spfx-kit' && parts[1] === 'exports') {
-        return false;
-      }
-      if (parts[0] === 'sharepoint' && parts[1] === 'solution' && parts.length > 2) {
-        return false;
-      }
-      if (parts[0] === 'cdn-handoff') {
-        return false;
-      }
-      if (excludeLabSource && parts[0] === 'src' && parts[1] === 'lab') {
-        return false;
-      }
+  await copyFilteredSpfxSource(sourceDir, targetDir, (source) => {
+    const rel = path.relative(sourceDir, source);
+    if (!rel) {
       return true;
     }
+    if (!shouldCopySharedSpfxSourcePath(sourceDir, source)) {
+      return false;
+    }
+    const parts = rel.split(path.sep);
+    if (parts[0] === 'cdn-handoff') {
+      return false;
+    }
+    if (excludeLabSource && parts[0] === 'src' && parts[1] === 'lab') {
+      return false;
+    }
+    return true;
   });
+}
+
+function shouldCopySharedSpfxSourcePath(sourceDir, source) {
+  const rel = path.relative(sourceDir, source);
+  if (!rel) {
+    return true;
+  }
+  if (path.basename(source) === '.DS_Store') {
+    return false;
+  }
+  const parts = rel.split(path.sep);
+  if (parts.some((part) => EXCLUDED_DIRS.has(part))) {
+    return false;
+  }
+  if (parts[0] === '.spfx-kit' && parts[1] === 'exports') {
+    return false;
+  }
+  if (parts[0] === 'sharepoint' && parts[1] === 'solution' && parts.length > 2) {
+    return false;
+  }
+  return true;
+}
+
+async function copyFilteredSpfxSource(sourceDir, targetDir, filter) {
+  await assertTargetOutsideSource(sourceDir, targetDir);
+  const createdTarget = !(await exists(targetDir));
+  try {
+    await mkdir(targetDir, { recursive: true });
+    await copyEntry(sourceDir, targetDir, filter);
+  } catch (error) {
+    if (createdTarget) {
+      await rm(targetDir, { recursive: true, force: true });
+    }
+    throw error;
+  }
+}
+
+async function assertTargetOutsideSource(sourceDir, targetDir) {
+  const sourceRoot = await realpath(sourceDir);
+  const targetRoot = await realPhysicalPath(targetDir);
+  const relativeTarget = path.relative(sourceRoot, targetRoot);
+  const targetIsInsideSource =
+    relativeTarget === '' ||
+    (relativeTarget && !relativeTarget.startsWith('..') && !path.isAbsolute(relativeTarget));
+
+  if (targetIsInsideSource) {
+    throw new Error(`Refusing to copy SPFx source into itself: ${targetDir}`);
+  }
+}
+
+async function realPhysicalPath(targetDir) {
+  const targetRoot = path.resolve(targetDir);
+  const existingRoot = await nearestExistingPath(targetRoot);
+  const resolvedExistingRoot = await realpath(existingRoot);
+  const missingPath = path.relative(existingRoot, targetRoot);
+  return missingPath ? path.join(resolvedExistingRoot, missingPath) : resolvedExistingRoot;
+}
+
+async function nearestExistingPath(targetPath) {
+  if (await exists(targetPath)) {
+    return targetPath;
+  }
+
+  const parent = path.dirname(targetPath);
+  if (parent === targetPath) {
+    return targetPath;
+  }
+  return nearestExistingPath(parent);
+}
+
+async function copyEntry(source, target, filter) {
+  if (!filter(source)) {
+    return;
+  }
+
+  const sourceStats = await lstat(source);
+  if (sourceStats.isSymbolicLink()) {
+    throw new Error(`Refusing to copy symlink in SPFx source: ${source}`);
+  }
+  if (sourceStats.isDirectory()) {
+    await mkdir(target, { recursive: true });
+    const entries = await readdir(source);
+    for (const entry of entries) {
+      await copyEntry(path.join(source, entry), path.join(target, entry), filter);
+    }
+    return;
+  }
+  if (sourceStats.isFile()) {
+    await mkdir(path.dirname(target), { recursive: true });
+    await copyFile(source, target);
+    await chmod(target, sourceStats.mode);
+    return;
+  }
+
+  throw new Error(`Refusing to copy non-regular file in SPFx source: ${source}`);
 }
 
 export async function preserveOriginalLock(sourceDir, targetDir) {
