@@ -89,6 +89,7 @@ function shouldCopySharedSpfxSourcePath(sourceDir, source) {
 }
 
 async function copyFilteredSpfxSource(sourceDir, targetDir, filter) {
+  assertTargetOutsideSource(sourceDir, targetDir);
   const createdTarget = !(await exists(targetDir));
   try {
     await mkdir(targetDir, { recursive: true });
@@ -98,6 +99,19 @@ async function copyFilteredSpfxSource(sourceDir, targetDir, filter) {
       await rm(targetDir, { recursive: true, force: true });
     }
     throw error;
+  }
+}
+
+function assertTargetOutsideSource(sourceDir, targetDir) {
+  const sourceRoot = path.resolve(sourceDir);
+  const targetRoot = path.resolve(targetDir);
+  const relativeTarget = path.relative(sourceRoot, targetRoot);
+  const targetIsInsideSource =
+    relativeTarget === '' ||
+    (relativeTarget && !relativeTarget.startsWith('..') && !path.isAbsolute(relativeTarget));
+
+  if (targetIsInsideSource) {
+    throw new Error(`Refusing to copy SPFx source into itself: ${targetDir}`);
   }
 }
 

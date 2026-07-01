@@ -13,6 +13,7 @@ import {
 async function main() {
   await rejectsManagedPackageJsonSymlink();
   await rejectsPortablePackageJsonSymlink();
+  await rejectsNestedTargets();
   await copiesRegularFiles();
   console.log('safe-copy symlink regression checks passed');
 }
@@ -74,6 +75,26 @@ async function copiesRegularFiles() {
       await readFile(path.join(target, 'src', 'webpart.ts'), 'utf8'),
       'export {};\n'
     );
+  }, '{"name":"outside-unused"}\n');
+}
+
+async function rejectsNestedTargets() {
+  await withFixture('nested-target', async ({ source }) => {
+    await writeFile(path.join(source, 'package.json'), '{"name":"inside"}\n');
+
+    const managedTarget = path.join(source, 'managed-export');
+    await assert.rejects(
+      copyManagedSpfxSource(source, managedTarget),
+      /Refusing to copy SPFx source into itself/
+    );
+    assert.equal(await exists(managedTarget), false);
+
+    const portableTarget = path.join(source, 'portable-export');
+    await assert.rejects(
+      copyPortableSpfxSource(source, portableTarget),
+      /Refusing to copy SPFx source into itself/
+    );
+    assert.equal(await exists(portableTarget), false);
   }, '{"name":"outside-unused"}\n');
 }
 
