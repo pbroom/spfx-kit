@@ -1,0 +1,3 @@
+#!/bin/sh
+# Blocks commits that would expose managed SPFx apps or generated lab output.
+npm run --silent guard:public
