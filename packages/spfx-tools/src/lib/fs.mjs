@@ -181,6 +181,15 @@ export function legacyAppsDir(rootDir) {
   return path.join(rootDir, 'apps');
 }
 
+export function examplesDir(rootDir) {
+  return path.join(rootDir, 'examples');
+}
+
+export async function listExampleSpfxApps(rootDir) {
+  const apps = await listAppsInDir(examplesDir(rootDir));
+  return apps.filter((app) => app.name.endsWith('-spfx'));
+}
+
 export function managedAppDir(rootDir, slug) {
   return path.join(managedAppsDir(rootDir), slug);
 }

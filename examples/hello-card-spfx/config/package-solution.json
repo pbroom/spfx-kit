@@ -1,0 +1,22 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "Hello Card",
+    "id": "f86bac87-dfa3-4c2e-ba38-9708698a7803",
+    "version": "0.1.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": false,
+    "isDomainIsolated": false,
+    "features": [
+      {
+        "title": "Hello Card Feature",
+        "description": "Activates Hello Card.",
+        "id": "b97163e5-3592-4341-99f7-c80b14419518",
+        "version": "0.1.0.0"
+      }
+    ]
+  },
+  "paths": {
+    "zippedPackage": "solution/hello-card.sppkg"
+  }
+}

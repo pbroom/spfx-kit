@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { exists, listManagedSpfxApps } from '../lib/fs.mjs';
+import { exists, listExampleSpfxApps, listManagedSpfxApps } from '../lib/fs.mjs';
 
 async function main() {
   const jsonOutput = process.argv.includes('--json');
   const rootDir = process.cwd();
-  const apps = await listManagedSpfxApps(rootDir);
+  const managedApps = await listManagedSpfxApps(rootDir);
+  const managedNames = new Set(managedApps.map((app) => app.name));
+  // A managed copy (for example an imported edit of an example) wins over the
+  // committed example with the same slug so web part ids stay unique.
+  const exampleApps = (await listExampleSpfxApps(rootDir)).filter((app) => !managedNames.has(app.name));
+  const apps = [...managedApps, ...exampleApps];
   const registrations = [];
 
   for (const app of apps) {

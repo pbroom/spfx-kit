@@ -1,0 +1,33 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.schema.json",
+  "id": "df01a7fa-0336-4c9e-8d00-f733e65599ee",
+  "alias": "HelloCard",
+  "componentType": "WebPart",
+  "version": "*",
+  "manifestVersion": 2,
+  "requiresCustomScript": false,
+  "supportedHosts": [
+    "SharePointWebPart"
+  ],
+  "supportsThemeVariants": true,
+  "preconfiguredEntries": [
+    {
+      "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
+      "group": {
+        "default": "Advanced"
+      },
+      "title": {
+        "default": "Hello Card"
+      },
+      "description": {
+        "default": "Hello Card"
+      },
+      "officeFabricIconFontName": "Page",
+      "properties": {
+        "title": "Hello Card",
+        "message": "This committed example shows how a managed SPFx app registers into the lab. Use it as a template for your own adapters.",
+        "align": "left"
+      }
+    }
+  ]
+}
