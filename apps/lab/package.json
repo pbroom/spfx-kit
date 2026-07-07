@@ -6,7 +6,7 @@
   "description": "Local SPFx web part lab and SharePoint preview surface.",
   "scripts": {
     "dev": "vite --host ${SPFX_LAB_HOST:-127.0.0.1} --port ${SPFX_LAB_PORT:-5173}",
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.node.json && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
@@ -28,6 +28,7 @@
     "zustand": "4.5.7"
   },
   "devDependencies": {
+    "@types/node": "^22.20.0",
     "@types/react": "17.0.45",
     "@types/react-dom": "17.0.17",
     "@vitejs/plugin-react": "6.0.3",
