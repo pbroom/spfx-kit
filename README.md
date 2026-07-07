@@ -34,9 +34,10 @@ sync step rebuilds the local, ignored
 `.spfx-kit/apps` that has a lab adapter at `.spfx-kit/lab/register.tsx` or the
 legacy `src/lab/register.tsx` path.
 
-A fresh public clone does not include any SPFx app projects. The lab still
-starts, but the app list stays empty until you create or import a managed app
-under `.spfx-kit/apps`.
+A fresh public clone does not include any private SPFx app projects, but it
+ships with a committed example under `examples/hello-card-spfx` that registers
+into the lab automatically, so the preview is never empty. Create or import
+managed apps under `.spfx-kit/apps` for real work (see `examples/README.md`).
 
 ## What The Lab Does
 
@@ -52,9 +53,16 @@ The lab is for fast local authoring and visual QA. Before deployment, still run 
 
 ## Workspace Layout
 
-- `apps/lab` - Vite React lab, started by `npm run dev`.
+- `apps/lab` - Vite React lab, started by `npm run dev`. Lab-only dev-server
+  APIs live in `apps/lab/server`.
 - `packages/spfx-lab-runtime` - shared lab registry, fixtures, mock SPFx context, and property-pane contracts.
-- `packages/spfx-tools` - import, create, export, lab sync, CDN sync, and SPFx validation CLIs.
+- `packages/spfx-tools` - import, create, export, bump, lab sync, CDN sync, and SPFx validation CLIs.
+- `packages/code-workbench-runtime` - in-browser compile and render runtime for
+  code-workbench web parts.
+- `examples/<slug>-spfx` - committed, public-safe example apps that register
+  into the lab.
+- `scripts/tests` - security regression tests run by `npm run test:security`.
+- `tests/` - vitest unit and CLI integration tests run by `npm test`.
 - `.spfx-kit/apps/<slug>-spfx` - ignored local SPFx apps created or imported
   on your machine.
 
@@ -71,7 +79,22 @@ npm run guard:public
 ```
 
 This fails if an SPFx app project, `.spfx-kit` data, generated registry file,
-or app workspace entry is visible to Git.
+or app workspace entry is visible to Git. A pre-commit hook (installed by
+`npm ci` via the `prepare` script) runs the same guard automatically, and the
+GitHub Actions CI workflow enforces it on every push and pull request.
+
+## Quality Gates
+
+CI (`.github/workflows/ci.yml`) runs these on every push and pull request;
+run them locally before handing off changes:
+
+```sh
+npm run build          # sync:lab + all workspace builds
+npm run lint           # ESLint across the monorepo
+npm test               # vitest unit + CLI integration tests
+npm run guard:public   # public-safety guard
+npm run test:security  # lab API, Graph search, and safe-copy regression tests
+```
 
 ## Daily Lab Workflow
 
@@ -125,6 +148,13 @@ To create a new standalone-shaped SPFx app inside the lab:
 npm run create:spfx -- --name team-divider --title "Team Divider" --webpart TeamDivider
 npm run sync:lab
 npm run validate:spfx -- --app .spfx-kit/apps/team-divider-spfx --profile lab
+```
+
+To bump an app version before packaging (keeps `package.json` and the
+`config/package-solution.json` solution and feature versions in sync):
+
+```sh
+npm run bump:spfx -- --app .spfx-kit/apps/<app-slug> --type patch
 ```
 
 To export a managed app:

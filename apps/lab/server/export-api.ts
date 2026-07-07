@@ -7,7 +7,7 @@ import type { Plugin } from 'vite';
 import { readJsonBody, sendJson, verifyStateChangingLabRequest } from './http';
 import { rootDir } from './paths';
 import { sanitizeSlug } from './sanitize';
-import { requireWorkspaceApp, resolveWorkspaceFile } from './workspace';
+import { requireWorkspaceApp, resolveExportArchiveFile } from './workspace';
 
 export function spfxExportApi(): Plugin {
   return {
@@ -26,7 +26,7 @@ export function spfxExportApi(): Plugin {
             if (!requestedPath) {
               throw new Error('Archive path is required.');
             }
-            const file = await resolveWorkspaceFile(requestedPath);
+            const file = await resolveExportArchiveFile(requestedPath);
             const info = await stat(file);
             if (!info.isFile()) {
               throw new Error('Archive path must point to a file.');

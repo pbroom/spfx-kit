@@ -34,6 +34,20 @@ export async function resolveWorkspaceFile(requestedPath: string): Promise<strin
   return file;
 }
 
+// The archive download endpoint only serves files that the export CLI wrote
+// under .spfx-kit/exports, not arbitrary workspace files.
+export async function resolveExportArchiveFile(requestedPath: string): Promise<string> {
+  const file = await resolveWorkspaceFile(requestedPath);
+  const exportsRoot = await realpath(path.join(rootDir, '.spfx-kit', 'exports')).catch(() => {
+    throw new Error('No exports have been generated yet.');
+  });
+  const relative = path.relative(exportsRoot, file);
+  if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Archive path is outside the export output directory.');
+  }
+  return file;
+}
+
 export async function syncLabRegistry() {
   const result = await runWorkspaceNodeCommand(['packages/spfx-tools/src/cli/sync-lab.mjs', '--json']);
   let syncedAdapters: number | undefined;
