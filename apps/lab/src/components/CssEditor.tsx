@@ -177,7 +177,7 @@ export function CssEditor(props: CssEditorProps): JSX.Element {
     setPointerState(createPointerInteraction('resize', event, floatingPanelRef.current, floatingRect, direction));
   };
 
-  const useFloatingTarget = (target: CssEditorTarget): void => {
+  const applyFloatingTarget = (target: CssEditorTarget): void => {
     setEditingTarget(null);
     const editor = floatingEditorRef.current;
     const currentValue = editor?.getValue?.() || props.value || '';
@@ -344,7 +344,7 @@ export function CssEditor(props: CssEditorProps): JSX.Element {
                           aria-label={`Add or jump to ${target.selector}`}
                           title={`Add or jump to ${target.selector}`}
                           type="button"
-                          onClick={() => useFloatingTarget(target)}
+                          onClick={() => applyFloatingTarget(target)}
                           onPointerDown={(event) => event.stopPropagation()}
                         >
                           {target.label}
@@ -372,7 +372,7 @@ export function CssEditor(props: CssEditorProps): JSX.Element {
                   aria-label={`Add or jump to ${target.selector}`}
                   title={`Add or jump to ${target.selector}`}
                   type="button"
-                  onClick={() => useFloatingTarget(target)}
+                  onClick={() => applyFloatingTarget(target)}
                   onPointerDown={(event) => event.stopPropagation()}
                 >
                   {target.label}

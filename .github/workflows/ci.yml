@@ -27,6 +27,12 @@ jobs:
       - name: Build workspaces
         run: npm run build
 
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit and integration tests
+        run: npm test
+
       - name: Public repo guard
         run: npm run guard:public
 
