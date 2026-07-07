@@ -35,11 +35,17 @@ export async function resolveWorkspaceFile(requestedPath: string): Promise<strin
 }
 
 export async function syncLabRegistry() {
-  const result = await runWorkspaceNodeCommand(['packages/spfx-tools/src/cli/sync-lab.mjs']);
-  const match = result.stdout.match(/Synced (\d+) lab adapter/);
+  const result = await runWorkspaceNodeCommand(['packages/spfx-tools/src/cli/sync-lab.mjs', '--json']);
+  let syncedAdapters: number | undefined;
+  try {
+    const parsed = JSON.parse(result.stdout) as { syncedAdapters?: unknown };
+    syncedAdapters = typeof parsed.syncedAdapters === 'number' ? parsed.syncedAdapters : undefined;
+  } catch {
+    throw new Error(`sync-lab --json did not return JSON:\n${result.stdout.slice(0, 500)}`);
+  }
   return {
     stdout: result.stdout,
-    syncedAdapters: match ? Number(match[1]) : undefined
+    syncedAdapters
   };
 }
 

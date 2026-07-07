@@ -20,14 +20,18 @@ import {
 } from '../lib/spfx.mjs';
 
 const usage = `Usage:
-  export-spfx-app --app .spfx-kit/apps/<slug>-spfx --target single,cdn,standalone [--out <dir>] [--json] [--progress-json]`;
+  export-spfx-app --app .spfx-kit/apps/<slug>-spfx --target single,cdn,standalone [--out <dir>] [--json] [--progress-json]
+
+With --json, stdout carries only the final JSON summary; all build logs go to stderr.`;
 
 const allowedTargets = new Set(['single', 'cdn', 'standalone']);
 let progressJson = false;
+let jsonOutput = false;
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   progressJson = args['progress-json'] === true || args['progress-json'] === 'true';
+  jsonOutput = args.json === true || args.json === 'true';
   const app = required(args, 'app', usage);
   const targets = String(required(args, 'target', usage))
     .split(',')
@@ -90,7 +94,7 @@ async function main() {
     message: 'Export archive ready.'
   });
 
-  if (args.json) {
+  if (jsonOutput) {
     console.log(JSON.stringify(summary, null, 2));
   } else {
     console.log(`Exported ${slug}`);
@@ -305,13 +309,19 @@ function runNpmCommand(cwd, args, failureMessage) {
     ? spawnSync(
         '/bin/zsh',
         ['-lc', `source ${shellQuote(nvmScript)} && nvm exec ${shellQuote(nodeVersion)} npm ${args.map(shellQuote).join(' ')}`],
-        { cwd, stdio: 'inherit', env: process.env }
+        { cwd, stdio: childStdio(), env: process.env }
       )
-    : spawnSync('npm', args, { cwd, stdio: 'inherit', env: process.env });
+    : spawnSync('npm', args, { cwd, stdio: childStdio(), env: process.env });
 
   if (result.status !== 0) {
     throw new Error(failureMessage);
   }
+}
+
+// In --json mode stdout must carry only the final summary, so child build
+// output is redirected to stderr instead of inheriting this process's stdout.
+function childStdio() {
+  return jsonOutput ? ['inherit', 2, 'inherit'] : 'inherit';
 }
 
 function readPinnedNodeVersion(cwd) {
@@ -506,7 +516,7 @@ CDN base path: \`${cdnBasePath}\`
 async function createArchive(outDir, targets, archivePath) {
   const targetEntries = targets.map((target) => path.relative(outDir, target.dir).split(path.sep)[0]);
   const entries = [...targetEntries, 'README.md', 'manifest.json'].filter((entry, index, arr) => arr.indexOf(entry) === index);
-  const result = spawnSync('tar', ['-czf', archivePath, '-C', outDir, ...entries], { stdio: 'inherit' });
+  const result = spawnSync('tar', ['-czf', archivePath, '-C', outDir, ...entries], { stdio: childStdio() });
   if (result.status !== 0) {
     throw new Error(`Could not create export archive: ${archivePath}`);
   }

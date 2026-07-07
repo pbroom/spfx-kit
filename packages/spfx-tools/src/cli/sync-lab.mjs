@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { exists, listManagedSpfxApps } from '../lib/fs.mjs';
 
 async function main() {
+  const jsonOutput = process.argv.includes('--json');
   const rootDir = process.cwd();
   const apps = await listManagedSpfxApps(rootDir);
   const registrations = [];
@@ -34,7 +35,11 @@ async function main() {
   ].join('\n');
 
   await writeFile(path.join(generatedDir, 'lab-registry.ts'), source);
-  console.log(`Synced ${registrations.length} lab adapter${registrations.length === 1 ? '' : 's'}.`);
+  if (jsonOutput) {
+    console.log(JSON.stringify({ syncedAdapters: registrations.length }));
+  } else {
+    console.log(`Synced ${registrations.length} lab adapter${registrations.length === 1 ? '' : 's'}.`);
+  }
 }
 
 async function findLabAdapter(appDir) {

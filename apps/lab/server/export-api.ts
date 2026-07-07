@@ -212,6 +212,8 @@ async function runExport(app: string, targets: string[]) {
   });
 }
 
+// export-spfx-app --json guarantees stdout carries only the JSON summary,
+// with build logs routed to stderr, so no output scraping is needed here.
 function parseExportJson(stdout: string) {
   const trimmed = stdout.trim();
   if (!trimmed) {
@@ -220,19 +222,9 @@ function parseExportJson(stdout: string) {
 
   try {
     return JSON.parse(trimmed);
-  } catch {}
-
-  const matches = [...trimmed.matchAll(/\{\s*"app"\s*:/g)].map((match) => match.index ?? -1);
-  for (const start of matches.reverse()) {
-    if (start < 0) {
-      continue;
-    }
-    try {
-      return JSON.parse(trimmed.slice(start));
-    } catch {}
+  } catch {
+    throw new Error(`Export did not return a valid JSON summary.\n${trimmed.slice(-2000)}`);
   }
-
-  throw new Error(`Export completed but did not return a readable summary.\n${trimmed.slice(-2000)}`);
 }
 
 async function estimateAppExports(app: string) {
