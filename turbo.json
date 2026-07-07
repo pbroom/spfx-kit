@@ -6,7 +6,10 @@
     ".spfx-kit/apps/*/src/webparts/**",
     "apps/*-spfx/.spfx-kit/lab/**",
     "apps/*-spfx/src/lab/**",
-    "apps/*-spfx/src/webparts/**"
+    "apps/*-spfx/src/webparts/**",
+    "examples/*-spfx/.spfx-kit/lab/**",
+    "examples/*-spfx/src/lab/**",
+    "examples/*-spfx/src/webparts/**"
   ],
   "tasks": {
     "build": {

@@ -18,12 +18,25 @@ packages/*/dist/
 .spfx-kit/apps/*/dist/
 *.tsbuildinfo
 
-# Local SPFx app workspace and generated app data
-.spfx-kit/
+# Local SPFx app workspace and generated app data (root only; committed
+# examples keep their .spfx-kit/lab adapters)
+/.spfx-kit/
 apps/*-spfx/
 
 # Generated lab registry
 apps/lab/src/generated/
+
+# Example app build output (example source stays committed)
+examples/*/node_modules/
+examples/*/lib/
+examples/*/temp/
+examples/*/dist/
+examples/*/.turbo/
+examples/*/package-lock.json
+examples/*/release/assets/
+examples/*/release/manifests/
+examples/*/sharepoint/solution/*.sppkg
+examples/*/sharepoint/solution/debug/
 
 # SPFx build output
 /lib/
