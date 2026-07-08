@@ -8,12 +8,16 @@ const host = '127.0.0.1';
 const port = Number(process.env.SPFX_LAB_SECURITY_TEST_PORT || 53173);
 const baseUrl = `http://${host}:${port}`;
 const validationDir = path.join(repoRoot, '.tmp-lab-security-validation');
-const archivePath = path.join(validationDir, 'sample-export.tar.gz');
+const workspaceFilePath = path.join(validationDir, 'not-an-export.tar.gz');
+const exportsValidationDir = path.join(repoRoot, '.spfx-kit', 'exports', '.tmp-lab-security-validation');
+const archivePath = path.join(exportsValidationDir, 'sample-export.tar.gz');
 
 let server;
 
 try {
   await mkdir(validationDir, { recursive: true });
+  await writeFile(workspaceFilePath, 'workspace-bytes\n');
+  await mkdir(exportsValidationDir, { recursive: true });
   await writeFile(archivePath, 'archive-bytes\n');
   await runCommand('npm', ['run', 'sync:lab']);
   server = await startLabServer();
@@ -77,9 +81,15 @@ try {
   }
 
   await expectStatus(
-    'workspace archive path downloads',
+    'export-output archive path downloads',
     fetch(`${baseUrl}/api/export-spfx-app/archive?path=${encodeURIComponent(archivePath)}`),
     200
+  );
+
+  await expectStatus(
+    'workspace file outside export output is rejected',
+    fetch(`${baseUrl}/api/export-spfx-app/archive?path=${encodeURIComponent(workspaceFilePath)}`),
+    500
   );
 
   await expectStatus(
@@ -94,6 +104,7 @@ try {
     server.kill('SIGTERM');
   }
   await rm(validationDir, { recursive: true, force: true });
+  await rm(exportsValidationDir, { recursive: true, force: true });
 }
 
 function post(route, options) {
