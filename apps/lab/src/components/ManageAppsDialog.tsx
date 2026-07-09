@@ -8,7 +8,7 @@ import {
   DialogSurface,
   DialogTitle
 } from '@fluentui/react-components';
-import { Check, FolderInput, FolderPlus, RefreshCw, Trash2, X } from 'lucide-react';
+import { Check, FolderInput, FolderPlus, RefreshCw, Unlink, X } from 'lucide-react';
 import type { LabWebPart } from '@spfx-kit/spfx-lab-runtime';
 import { labApiWriteHeaders, readApiJson, ManagedLabApp, ManagedLabAppsApiResult, ManageAppsApiResult } from '../api/labApi';
 import { managedAppPath, titleFromSlug } from '../lib/text';
@@ -228,7 +228,7 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
                             appearance="secondary"
                             data-action="unlink"
                             disabled={busy}
-                            icon={<Trash2 size={14} />}
+                            icon={<Unlink size={14} />}
                             onClick={() => void runManageAppsAction(app.id, 'unlink')}
                           >
                             Unlink
