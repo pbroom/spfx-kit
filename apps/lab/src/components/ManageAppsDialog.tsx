@@ -255,16 +255,16 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
               )}
             </div>
           </DialogContent>
-          <DialogActions>
-            <Button appearance="secondary" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
-            {manageAppsStatus.reloadRecommended && (
+          {manageAppsStatus.reloadRecommended && (
+            <DialogActions>
+              <Button appearance="secondary" onClick={() => onOpenChange(false)}>
+                Dismiss
+              </Button>
               <Button appearance="primary" icon={<RefreshCw size={14} />} onClick={() => window.location.reload()}>
                 Reload lab
               </Button>
-            )}
-          </DialogActions>
+            </DialogActions>
+          )}
         </DialogBody>
       </DialogSurface>
     </Dialog>
