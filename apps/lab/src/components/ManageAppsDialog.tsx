@@ -159,20 +159,22 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
           </DialogTitle>
           <DialogContent className="manage-apps-dialog__content">
             <div className="manage-apps-dialog__toolbar">
-              <Button
-                appearance="secondary"
-                icon={<FolderInput size={14} />}
-                onClick={() => onOpenAddAppDrawer('import')}
-              >
-                Import
-              </Button>
-              <Button
-                appearance="secondary"
-                icon={<FolderPlus size={14} />}
-                onClick={() => onOpenAddAppDrawer('create')}
-              >
-                Create
-              </Button>
+              <div className="manage-apps-dialog__toolbar-primary">
+                <Button
+                  appearance="primary"
+                  icon={<FolderPlus size={14} />}
+                  onClick={() => onOpenAddAppDrawer('create')}
+                >
+                  Create
+                </Button>
+                <Button
+                  appearance="secondary"
+                  icon={<FolderInput size={14} />}
+                  onClick={() => onOpenAddAppDrawer('import')}
+                >
+                  Import
+                </Button>
+              </div>
               <Button
                 appearance="subtle"
                 disabled={manageAppsBusyAppId === '__all__' || manageAppsStatus.phase === 'loading'}

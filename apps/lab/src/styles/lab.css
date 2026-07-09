@@ -275,6 +275,13 @@ textarea {
   gap: 8px;
 }
 
+.manage-apps-dialog__toolbar-primary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .manage-apps-dialog__toolbar > :last-child {
   margin-left: auto;
 }
