@@ -13,6 +13,7 @@ import {
   readJson,
   writeJson
 } from '../lib/fs.mjs';
+import { scaffoldLabAdapter } from '../lib/lab-adapter.mjs';
 import { readSpfxSummary } from '../lib/spfx.mjs';
 
 const usage = `Usage:
@@ -85,67 +86,6 @@ async function resolveSource(source, ref) {
     sourceDir: path.resolve(source),
     cleanup: async () => undefined
   };
-}
-
-async function scaffoldLabAdapter(targetDir, slug, description) {
-  const adapterPath = path.join(targetDir, '.spfx-kit', 'lab', 'register.tsx');
-  if (await exists(adapterPath)) {
-    return;
-  }
-
-  const title = titleFromSlug(slug);
-  const source = `import * as React from 'react';
-import type { LabPropertyBag, LabWebPart, LabWebPartRegistry } from '@spfx-kit/spfx-lab-runtime';
-
-export type ${toPascal(slug)}LabProps = LabPropertyBag & {
-  title: string;
-  description: string;
-};
-
-const defaultProps: ${toPascal(slug)}LabProps = {
-  title: ${JSON.stringify(title)},
-  description: ${JSON.stringify(description || 'Imported SPFx web part')}
-};
-
-const Preview: React.FunctionComponent<{ props: ${toPascal(slug)}LabProps }> = ({ props }) => (
-  <section style={{ fontFamily: '"Segoe UI", sans-serif', color: '#242424' }}>
-    <h2 style={{ margin: 0, fontSize: 24 }}>{props.title}</h2>
-    <p style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5 }}>{props.description}</p>
-  </section>
-);
-
-const webPart: LabWebPart<${toPascal(slug)}LabProps> = {
-  id: '${slug}:default',
-  appId: '${slug}',
-  title: '${title}',
-  description: 'Imported SPFx web part adapter stub.',
-  defaultProps,
-  controls: [
-    { type: 'text', name: 'title', label: 'Title' },
-    { type: 'textarea', name: 'description', label: 'Description' }
-  ],
-  render: Preview
-};
-
-export function register(registry: LabWebPartRegistry): void {
-  registry.register(webPart);
-}
-`;
-  const { mkdir, writeFile } = await import('node:fs/promises');
-  await mkdir(path.dirname(adapterPath), { recursive: true });
-  await writeFile(adapterPath, source);
-}
-
-function titleFromSlug(slug) {
-  return slug
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function toPascal(slug) {
-  return titleFromSlug(slug).replace(/[^A-Za-z0-9]/g, '') || 'ImportedSpfx';
 }
 
 main().catch((error) => {

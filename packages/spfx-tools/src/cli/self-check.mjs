@@ -4,14 +4,18 @@ import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
 const required = [
+  'cli/clone-spfx-app.mjs',
   'cli/create-spfx-app.mjs',
   'cli/export-spfx-app.mjs',
   'cli/import-spfx-app.mjs',
   'cli/sync-lab.mjs',
   'cli/validate-spfx-app.mjs',
+  'lib/app-repo-files.mjs',
   'lib/args.mjs',
   'lib/fs.mjs',
-  'lib/spfx.mjs'
+  'lib/lab-adapter.mjs',
+  'lib/spfx.mjs',
+  '../templates/app-ci.yml'
 ];
 
 await Promise.all(required.map((file) => access(path.join(root, file))));
