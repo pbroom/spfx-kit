@@ -264,7 +264,7 @@ textarea {
 
 .manage-apps-dialog__content {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -354,7 +354,7 @@ textarea {
 
 .manage-apps-list {
   display: grid;
-  gap: 8px;
+  gap: 0;
   min-width: 0;
   max-height: min(52vh, 440px);
   overflow: auto;
@@ -365,12 +365,16 @@ textarea {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
-  border: 1px solid var(--colorNeutralStroke2, #d1d1d1);
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: var(--colorNeutralBackground1, #ffffff);
+  border: 0;
+  border-radius: 0;
+  padding: 10px 2px;
+  background: transparent;
+}
+
+.manage-app-row + .manage-app-row {
+  border-top: 1px solid var(--colorNeutralStroke2, #d1d1d1);
 }
 
 .manage-app-row--has-badge {
@@ -429,9 +433,9 @@ textarea {
 
 .manage-apps-empty {
   margin: 0;
-  border: 1px dashed var(--colorNeutralStroke2, #d1d1d1);
-  border-radius: 8px;
-  padding: 20px;
+  border: 0;
+  border-radius: 0;
+  padding: 16px 2px;
   color: var(--colorNeutralForeground3, #616161);
   font-size: 13px;
   line-height: 18px;
