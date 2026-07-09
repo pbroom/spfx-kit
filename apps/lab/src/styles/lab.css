@@ -291,6 +291,11 @@ textarea {
   min-width: 0;
 }
 
+.manage-apps-dialog__actions {
+  width: 100%;
+  justify-content: flex-end;
+}
+
 .manage-apps-status {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);

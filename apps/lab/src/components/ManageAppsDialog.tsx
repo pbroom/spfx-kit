@@ -284,7 +284,7 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
             </div>
           </DialogContent>
           {manageAppsStatus.reloadRecommended && (
-            <DialogActions>
+            <DialogActions className="manage-apps-dialog__actions" fluid>
               <Button appearance="secondary" onClick={() => onOpenChange(false)}>
                 Dismiss
               </Button>
