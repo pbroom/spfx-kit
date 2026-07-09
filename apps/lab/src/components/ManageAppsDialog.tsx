@@ -7,9 +7,10 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
-  Input
+  Input,
+  Switch
 } from '@fluentui/react-components';
-import { Check, FolderInput, FolderPlus, RefreshCw, Search, Unlink, X } from 'lucide-react';
+import { Check, FolderInput, FolderPlus, RefreshCw, Search, X } from 'lucide-react';
 import type { LabWebPart } from '@spfx-kit/spfx-lab-runtime';
 import { labApiWriteHeaders, readApiJson, ManagedLabApp, ManagedLabAppsApiResult, ManageAppsApiResult } from '../api/labApi';
 import { managedAppPath, middleTruncatePath, titleFromSlug } from '../lib/text';
@@ -242,9 +243,10 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
                   const busy = manageAppsBusyAppId === app.id || manageAppsBusyAppId === '__all__';
                   const connected = app.status === 'connected';
                   const disconnected = app.status === 'disconnected';
+                  const canToggleConnection = connected || disconnected;
                   return (
                     <section
-                      className="manage-app-row manage-app-row--has-badge"
+                      className={`manage-app-row ${canToggleConnection ? '' : 'manage-app-row--has-badge'}`}
                       data-app-id={app.id}
                       key={app.id}
                     >
@@ -254,41 +256,26 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
                           {middleTruncatePath(app.relativeDir)}
                         </span>
                       </div>
-                      {disconnected ? (
-                        <span className="manage-app-row__badge manage-app-row__badge--disconnected">
-                          Disconnected
-                        </span>
-                      ) : connected ? (
-                        <span className="manage-app-row__badge manage-app-row__badge--connected">
-                          Connected
-                        </span>
-                      ) : (
+                      {!canToggleConnection && (
                         <span className="manage-app-row__badge manage-app-row__badge--missing">
                           No adapter
                         </span>
                       )}
                       <div className="manage-app-row__actions">
-                        {connected ? (
-                          <Button
-                            appearance="secondary"
-                            data-action="unlink"
+                        {canToggleConnection ? (
+                          <Switch
+                            aria-label={`Connected: ${app.title}`}
+                            checked={connected}
+                            className="manage-app-row__connection"
+                            data-action={connected ? 'unlink' : 'sync'}
                             disabled={busy}
-                            icon={<Unlink size={14} />}
-                            onClick={() => void runManageAppsAction(app.id, 'unlink')}
-                          >
-                            Unlink
-                          </Button>
-                        ) : (
-                          <Button
-                            appearance="primary"
-                            data-action="sync"
-                            disabled={!disconnected || busy}
-                            icon={<RefreshCw size={14} />}
-                            onClick={() => void runManageAppsAction(app.id, 'sync')}
-                          >
-                            {disconnected ? 'Re-sync' : 'No adapter'}
-                          </Button>
-                        )}
+                            label="Connected"
+                            labelPosition="before"
+                            onChange={(_event, data) => {
+                              void runManageAppsAction(app.id, data.checked ? 'sync' : 'unlink');
+                            }}
+                          />
+                        ) : null}
                       </div>
                     </section>
                   );

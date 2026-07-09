@@ -440,16 +440,6 @@ textarea {
   white-space: nowrap;
 }
 
-.manage-app-row__badge--connected {
-  color: var(--colorPaletteGreenForeground2, #0e700e);
-  background: var(--colorPaletteGreenBackground1, #f1faf1);
-}
-
-.manage-app-row__badge--disconnected {
-  color: var(--colorPaletteMarigoldForeground2, #835b00);
-  background: var(--colorPaletteMarigoldBackground1, #fff9e8);
-}
-
 .manage-app-row__badge--missing {
   color: var(--colorNeutralForeground3, #616161);
   background: var(--colorNeutralBackground3, #f5f5f5);
@@ -457,8 +447,13 @@ textarea {
 
 .manage-app-row__actions {
   display: inline-flex;
+  align-items: center;
   justify-content: flex-end;
-  min-width: 92px;
+  min-width: 0;
+}
+
+.manage-app-row__connection {
+  white-space: nowrap;
 }
 
 .manage-apps-empty {
@@ -484,11 +479,7 @@ textarea {
 
   .manage-app-row__actions {
     grid-column: 1 / -1;
-    justify-content: stretch;
-  }
-
-  .manage-app-row__actions > button {
-    width: 100%;
+    justify-content: flex-start;
   }
 }
 
