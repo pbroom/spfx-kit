@@ -173,6 +173,17 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
             Manage Apps
           </DialogTitle>
           <DialogContent className="manage-apps-dialog__content">
+            <p className="manage-apps-dialog__subtitle">
+              Apps linked into this lab
+              <span aria-hidden="true"> · </span>
+              <span>
+                {appFilter.trim()
+                  ? `${filteredAppRows.length} of ${managedAppRows.length} ${managedAppRows.length === 1 ? 'app' : 'apps'}`
+                  : managedAppRows.length === 1
+                    ? '1 app'
+                    : `${managedAppRows.length} apps`}
+              </span>
+            </p>
             <div className="manage-apps-dialog__toolbar">
               <div className="manage-apps-dialog__toolbar-primary">
                 <Button
@@ -233,7 +244,7 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
                   const disconnected = app.status === 'disconnected';
                   return (
                     <section
-                      className={`manage-app-row ${disconnected ? 'manage-app-row--has-badge' : ''}`}
+                      className="manage-app-row manage-app-row--has-badge"
                       data-app-id={app.id}
                       key={app.id}
                     >
@@ -241,9 +252,17 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
                         <strong>{app.title}</strong>
                         <span>{app.relativeDir}</span>
                       </div>
-                      {disconnected && (
+                      {disconnected ? (
                         <span className="manage-app-row__badge manage-app-row__badge--disconnected">
                           Disconnected
+                        </span>
+                      ) : connected ? (
+                        <span className="manage-app-row__badge manage-app-row__badge--connected">
+                          Connected
+                        </span>
+                      ) : (
+                        <span className="manage-app-row__badge manage-app-row__badge--missing">
+                          No adapter
                         </span>
                       )}
                       <div className="manage-app-row__actions">
