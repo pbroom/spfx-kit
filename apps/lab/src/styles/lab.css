@@ -405,7 +405,7 @@ textarea {
 }
 
 .manage-app-row__main strong,
-.manage-app-row__main span {
+.manage-app-row__path {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -413,14 +413,17 @@ textarea {
 }
 
 .manage-app-row__main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--colorNeutralForeground1, #242424);
   font-size: 14px;
   line-height: 20px;
 }
 
-.manage-app-row__main span {
+.manage-app-row__path {
   color: var(--colorNeutralForeground3, #616161);
-  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 11px;
   line-height: 16px;
 }
 

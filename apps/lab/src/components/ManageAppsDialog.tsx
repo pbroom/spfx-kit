@@ -12,7 +12,7 @@ import {
 import { Check, FolderInput, FolderPlus, RefreshCw, Search, Unlink, X } from 'lucide-react';
 import type { LabWebPart } from '@spfx-kit/spfx-lab-runtime';
 import { labApiWriteHeaders, readApiJson, ManagedLabApp, ManagedLabAppsApiResult, ManageAppsApiResult } from '../api/labApi';
-import { managedAppPath, titleFromSlug } from '../lib/text';
+import { managedAppPath, middleTruncatePath, titleFromSlug } from '../lib/text';
 import type { AddAppMode } from './AddAppDrawer';
 
 type ManageAppsPhase = 'idle' | 'loading' | 'running' | 'complete' | 'error';
@@ -250,7 +250,9 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
                     >
                       <div className="manage-app-row__main">
                         <strong>{app.title}</strong>
-                        <span>{app.relativeDir}</span>
+                        <span className="manage-app-row__path" title={app.relativeDir}>
+                          {middleTruncatePath(app.relativeDir)}
+                        </span>
                       </div>
                       {disconnected ? (
                         <span className="manage-app-row__badge manage-app-row__badge--disconnected">
