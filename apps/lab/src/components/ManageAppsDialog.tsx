@@ -6,9 +6,10 @@ import {
   DialogBody,
   DialogContent,
   DialogSurface,
-  DialogTitle
+  DialogTitle,
+  Input
 } from '@fluentui/react-components';
-import { Check, FolderInput, FolderPlus, RefreshCw, Unlink, X } from 'lucide-react';
+import { Check, FolderInput, FolderPlus, RefreshCw, Search, Unlink, X } from 'lucide-react';
 import type { LabWebPart } from '@spfx-kit/spfx-lab-runtime';
 import { labApiWriteHeaders, readApiJson, ManagedLabApp, ManagedLabAppsApiResult, ManageAppsApiResult } from '../api/labApi';
 import { managedAppPath, titleFromSlug } from '../lib/text';
@@ -35,6 +36,7 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
   const [managedApps, setManagedApps] = React.useState<ManagedLabApp[]>([]);
   const [manageAppsStatus, setManageAppsStatus] = React.useState<ManageAppsStatus>({ phase: 'idle', message: '' });
   const [manageAppsBusyAppId, setManageAppsBusyAppId] = React.useState('');
+  const [appFilter, setAppFilter] = React.useState('');
 
   const refreshManagedApps = React.useCallback(async (options: { quiet?: boolean } = {}): Promise<void> => {
     if (!options.quiet) {
@@ -58,6 +60,7 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
 
   React.useEffect(() => {
     if (open) {
+      setAppFilter('');
       setManageAppsStatus({ phase: 'idle', message: '' });
       void refreshManagedApps();
     }
@@ -71,6 +74,18 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
     })),
     [managedApps, webPartsByAppId]
   );
+
+  const filteredAppRows = React.useMemo(() => {
+    const query = appFilter.trim().toLowerCase();
+    if (!query) {
+      return managedAppRows;
+    }
+
+    return managedAppRows.filter((app) => {
+      const haystack = `${app.title} ${app.relativeDir} ${app.id}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [appFilter, managedAppRows]);
 
   const runManageAppsAction = async (appId: string, action: 'unlink' | 'sync'): Promise<void> => {
     setManageAppsBusyAppId(appId);
@@ -185,6 +200,15 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
               </Button>
             </div>
 
+            <Input
+              aria-label="Filter apps"
+              className="manage-apps-dialog__filter"
+              contentBefore={<Search size={14} aria-hidden="true" />}
+              onChange={(_event, data) => setAppFilter(data.value)}
+              placeholder="Filter by name or path"
+              value={appFilter}
+            />
+
             {manageAppsStatus.phase !== 'idle' && (
               <section
                 aria-live={manageAppsStatus.phase === 'error' ? 'assertive' : 'polite'}
@@ -202,8 +226,8 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
             )}
 
             <div className="manage-apps-list" aria-label="Lab apps">
-              {managedAppRows.length ? (
-                managedAppRows.map((app) => {
+              {filteredAppRows.length ? (
+                filteredAppRows.map((app) => {
                   const busy = manageAppsBusyAppId === app.id || manageAppsBusyAppId === '__all__';
                   const connected = app.status === 'connected';
                   const disconnected = app.status === 'disconnected';
@@ -250,7 +274,11 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
                 })
               ) : (
                 <p className="manage-apps-empty">
-                  {manageAppsStatus.phase === 'loading' ? 'Loading apps...' : 'No workspace apps found.'}
+                  {manageAppsStatus.phase === 'loading'
+                    ? 'Loading apps...'
+                    : managedAppRows.length
+                      ? 'No apps match this filter.'
+                      : 'No workspace apps found.'}
                 </p>
               )}
             </div>
