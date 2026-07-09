@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSlugInput, slugInputValue, slugify, titleFromSlug } from '../apps/lab/src/lib/text';
+import { isSlugInput, middleTruncatePath, slugInputValue, slugify, titleFromSlug } from '../apps/lab/src/lib/text';
 
 describe('slugify', () => {
   it('normalizes titles into slugs', () => {
@@ -30,5 +30,36 @@ describe('isSlugInput', () => {
     expect(isSlugInput('team-app')).toBe(true);
     expect(isSlugInput('-team')).toBe(false);
     expect(isSlugInput('')).toBe(false);
+  });
+});
+
+describe('middleTruncatePath', () => {
+  it('keeps short paths intact', () => {
+    expect(middleTruncatePath('.spfx-kit/apps/hello-card-spfx')).toBe('.spfx-kit/apps/hello-card-spfx');
+  });
+
+  it('keeps the leaf segment when truncating long paths', () => {
+    expect(middleTruncatePath('.spfx-kit/apps/user-management-portal-spfx', 38)).toBe(
+      '.spfx-kit…/user-management-portal-spfx'
+    );
+  });
+
+  it('prefers the leaf when the directory name exceeds the budget', () => {
+    expect(middleTruncatePath('.spfx-kit/apps/user-management-portal-spfx', 29)).toBe(
+      '…/user-management-portal-spfx'
+    );
+  });
+
+  it('truncates an oversized leaf from the start of the leaf', () => {
+    expect(middleTruncatePath('.spfx-kit/apps/extraordinarily-long-app-directory-name-spfx', 24)).toBe(
+      '…/extraordinarily-long-a'
+    );
+  });
+
+  it('does not exceed maxLength when the leaf-with-slash fills the budget', () => {
+    const leaf = 'a'.repeat(41);
+    const truncated = middleTruncatePath(`.spfx-kit/apps/${leaf}`, 42);
+    expect(truncated.length).toBeLessThanOrEqual(42);
+    expect(truncated.startsWith('…/')).toBe(true);
   });
 });
