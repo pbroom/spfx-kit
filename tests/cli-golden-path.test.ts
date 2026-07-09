@@ -35,10 +35,24 @@ describe('create -> sync -> validate golden path', () => {
     expect(result.stdout).toContain('.spfx-kit/apps/team-divider-spfx');
 
     const appDir = path.join(workDir, '.spfx-kit', 'apps', 'team-divider-spfx');
-    for (const file of ['package.json', 'gulpfile.js', 'config/package-solution.json', '.spfx-kit/lab/register.tsx']) {
+    for (const file of [
+      'package.json',
+      'gulpfile.js',
+      'config/package-solution.json',
+      '.spfx-kit/lab/register.tsx',
+      '.github/workflows/ci.yml',
+      '.nvmrc',
+      '.gitignore'
+    ]) {
       const info = await stat(path.join(appDir, file));
       expect(info.isFile()).toBe(true);
     }
+
+    const workflow = await readFile(path.join(appDir, '.github', 'workflows', 'ci.yml'), 'utf8');
+    expect(workflow).toContain('gulp package-solution --ship');
+    expect(workflow).toContain("startsWith(github.ref, 'refs/tags/v')");
+    expect(await readFile(path.join(appDir, '.nvmrc'), 'utf8')).toBe('22.22.3\n');
+    expect(await readFile(path.join(appDir, '.gitignore'), 'utf8')).toContain('sharepoint/solution/*.sppkg');
   });
 
   it('refuses to overwrite an existing app without --force', () => {
