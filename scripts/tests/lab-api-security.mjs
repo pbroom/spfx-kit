@@ -11,6 +11,7 @@ const validationDir = path.join(repoRoot, '.tmp-lab-security-validation');
 const workspaceFilePath = path.join(validationDir, 'not-an-export.tar.gz');
 const exportsValidationDir = path.join(repoRoot, '.spfx-kit', 'exports', '.tmp-lab-security-validation');
 const archivePath = path.join(exportsValidationDir, 'sample-export.tar.gz');
+const requestTimeoutMs = 10_000;
 
 let server;
 
@@ -57,7 +58,7 @@ try {
 
   await expectStatus(
     'same-origin write with non-JSON content type is rejected',
-    fetch(`${baseUrl}/api/export-spfx-app`, {
+    fetchWithTimeout(`${baseUrl}/api/export-spfx-app`, {
       method: 'POST',
       headers: {
         Origin: baseUrl,
@@ -82,33 +83,31 @@ try {
 
   await expectStatus(
     'export-output archive path downloads',
-    fetch(`${baseUrl}/api/export-spfx-app/archive?path=${encodeURIComponent(archivePath)}`),
+    fetchWithTimeout(`${baseUrl}/api/export-spfx-app/archive?path=${encodeURIComponent(archivePath)}`),
     200
   );
 
   await expectStatus(
     'workspace file outside export output is rejected',
-    fetch(`${baseUrl}/api/export-spfx-app/archive?path=${encodeURIComponent(workspaceFilePath)}`),
+    fetchWithTimeout(`${baseUrl}/api/export-spfx-app/archive?path=${encodeURIComponent(workspaceFilePath)}`),
     500
   );
 
   await expectStatus(
     'outside archive path is rejected',
-    fetch(`${baseUrl}/api/export-spfx-app/archive?path=${encodeURIComponent('/etc/hosts')}`),
+    fetchWithTimeout(`${baseUrl}/api/export-spfx-app/archive?path=${encodeURIComponent('/etc/hosts')}`),
     500
   );
 
   console.log('lab API security validation passed');
 } finally {
-  if (server) {
-    server.kill('SIGTERM');
-  }
+  await stopLabServer(server);
   await rm(validationDir, { recursive: true, force: true });
   await rm(exportsValidationDir, { recursive: true, force: true });
 }
 
 function post(route, options) {
-  return fetch(`${baseUrl}${route}`, {
+  return fetchWithTimeout(`${baseUrl}${route}`, {
     method: 'POST',
     headers: {
       Origin: options.origin,
@@ -116,6 +115,13 @@ function post(route, options) {
       'Content-Type': options.contentType
     },
     body: JSON.stringify(options.body)
+  });
+}
+
+function fetchWithTimeout(url, init = {}) {
+  return fetch(url, {
+    ...init,
+    signal: AbortSignal.timeout(requestTimeoutMs)
   });
 }
 
@@ -134,7 +140,8 @@ async function startLabServer() {
       SPFX_LAB_HOST: host,
       SPFX_LAB_PORT: String(port)
     },
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true
   });
   let output = '';
   child.stdout.on('data', (chunk) => {
@@ -155,16 +162,43 @@ async function startLabServer() {
       throw new Error(output || `lab server exited with ${child.exitCode}`);
     }
     try {
-      const response = await fetch(baseUrl);
+      const response = await fetchWithTimeout(baseUrl);
       if (response.ok) {
         return child;
       }
-    } catch {}
+    } catch {
+      // Keep waiting until the lab server is ready or the deadline expires.
+    }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
-  child.kill('SIGTERM');
+  await stopLabServer(child);
   throw new Error(`Timed out waiting for lab server:\n${output}`);
+}
+
+async function stopLabServer(child) {
+  if (!child || child.exitCode !== null || child.signalCode) {
+    return;
+  }
+
+  try {
+    process.kill(-child.pid, 'SIGTERM');
+  } catch {
+    child.kill('SIGTERM');
+  }
+
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline && child.exitCode === null && !child.signalCode) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  if (child.exitCode === null && !child.signalCode) {
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+    } catch {
+      child.kill('SIGKILL');
+    }
+  }
 }
 
 function runCommand(command, args) {
