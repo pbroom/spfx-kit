@@ -286,6 +286,11 @@ textarea {
   margin-left: auto;
 }
 
+.manage-apps-dialog__filter {
+  width: 100%;
+  min-width: 0;
+}
+
 .manage-apps-status {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
