@@ -34,7 +34,6 @@ examples/*/temp/
 examples/*/dist/
 examples/*/jest-output/
 examples/*/.turbo/
-examples/*/package-lock.json
 examples/*/release/
 examples/*/sharepoint/solution/*.sppkg
 examples/*/sharepoint/solution/debug/
