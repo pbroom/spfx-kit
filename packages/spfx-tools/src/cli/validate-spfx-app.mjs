@@ -5,6 +5,7 @@ import { readdir } from 'node:fs/promises';
 import { parseArgs, required } from '../lib/args.mjs';
 import { exists, readJson } from '../lib/fs.mjs';
 import { readSpfxSummary } from '../lib/spfx.mjs';
+import { detectSpfxToolchain, requiredSpfxFiles } from '../lib/spfx-toolchain.mjs';
 
 const usage = `Usage:
   validate-spfx-app --app .spfx-kit/apps/<slug> [--profile lab|standalone|cdn|single] [--build]`;
@@ -18,15 +19,14 @@ async function main() {
     throw new Error('--profile must be one of: lab, standalone, cdn, single');
   }
 
-  const baseRequiredFiles = [
-    'package.json',
-    '.yo-rc.json',
-    'gulpfile.js',
-    'config/config.json',
-    'config/package-solution.json',
-    'config/write-manifests.json',
-    'config/serve.json'
-  ];
+  const packagePath = path.join(appDir, 'package.json');
+  if (!(await exists(packagePath))) {
+    throw new Error(`Missing required SPFx files in ${app}:\n  - package.json`);
+  }
+
+  const packageJson = await readJson(packagePath);
+  const toolchain = detectSpfxToolchain(packageJson);
+  const baseRequiredFiles = requiredSpfxFiles(toolchain);
 
   const missing = [];
   for (const file of baseRequiredFiles) {
@@ -48,15 +48,12 @@ async function main() {
     throw new Error(`Missing required SPFx files in ${app}:\n${missing.map((file) => `  - ${file}`).join('\n')}`);
   }
 
-  if (
-    profile === 'lab' &&
-    isUnderLegacyCommittedApps(appDir) &&
-    (await exists(path.join(appDir, 'package-lock.json')))
-  ) {
-    throw new Error('Imported app must not keep an active package-lock.json. Preserve it under .spfx-kit/original-package-lock.json instead.');
+  if (profile === 'lab' && isUnderLegacyCommittedApps(appDir) && (await exists(path.join(appDir, 'package-lock.json')))) {
+    throw new Error(
+      'Imported app must not keep an active package-lock.json. Preserve it under .spfx-kit/original-package-lock.json instead.'
+    );
   }
 
-  const packageJson = await readJson(path.join(appDir, 'package.json'));
   const packageSolution = await readJson(path.join(appDir, 'config', 'package-solution.json'));
   const writeManifests = await readJson(path.join(appDir, 'config', 'write-manifests.json'));
   const summary = await readSpfxSummary(appDir);
@@ -78,6 +75,18 @@ async function main() {
   if (!summary.spfxVersion) {
     issues.push('could not detect SPFx version');
   }
+  if (summary.toolchain === 'unknown') {
+    issues.push('could not detect SPFx toolchain from @microsoft/sp-build-web or @microsoft/spfx-web-build-rig');
+  }
+  if (summary.toolchain === 'ambiguous') {
+    issues.push('app declares both Gulp and Heft SPFx toolchains');
+  }
+  if (summary.toolchain === 'heft') {
+    const rig = await readJson(path.join(appDir, 'config', 'rig.json'));
+    if (rig.rigPackageName !== '@microsoft/spfx-web-build-rig') {
+      issues.push('config/rig.json must reference @microsoft/spfx-web-build-rig');
+    }
+  }
   if (!summary.solutionId) {
     issues.push('could not detect solution id');
   }
@@ -98,12 +107,15 @@ async function main() {
     issues.push('cdn profile requires cdn-handoff/README.md');
   }
   if (await exists(path.join(appDir, 'sharepoint', 'solution'))) {
-    const hasAssets = (await hasFiles(path.join(appDir, 'release', 'assets'))) || (await hasFiles(path.join(appDir, 'temp', 'deploy')));
+    const hasAssets =
+      (await hasFiles(path.join(appDir, 'release', 'assets'))) || (await hasFiles(path.join(appDir, 'temp', 'deploy')));
     if (profile === 'cdn' && !hasAssets) {
       issues.push('ship output exists but no CDN assets were found in release/assets or temp/deploy');
     }
     if (profile === 'cdn' && hasDependency(packageJson, 'monaco-editor') && !(await hasMonacoAssets(appDir))) {
-      issues.push('monaco-editor dependency requires CDN assets at release/assets/monaco-editor/min/vs or temp/deploy/monaco-editor/min/vs');
+      issues.push(
+        'monaco-editor dependency requires CDN assets at release/assets/monaco-editor/min/vs or temp/deploy/monaco-editor/min/vs'
+      );
     }
   }
   if (issues.length) {
@@ -120,6 +132,7 @@ async function main() {
   console.log(`Validated ${packageJson.name}`);
   console.log(`  Profile: ${profile}`);
   console.log(`  SPFx: ${summary.spfxVersion}`);
+  console.log(`  Toolchain: ${summary.toolchain}`);
   console.log(`  Node: ${summary.nodeRange || 'not declared'}`);
   console.log(`  Solution: ${summary.solutionId}`);
   console.log(`  Components: ${summary.componentIds.join(', ')}`);
@@ -140,9 +153,7 @@ async function hasLabAdapter(appDir) {
 
 function hasMonorepoOnlyDependency(packageJson) {
   const all = { ...(packageJson.dependencies || {}), ...(packageJson.devDependencies || {}) };
-  return Object.entries(all).some(
-    ([name, spec]) => name.startsWith('@spfx-kit/') || String(spec).includes('../../packages')
-  );
+  return Object.entries(all).some(([name, spec]) => name.startsWith('@spfx-kit/') || String(spec).includes('../../packages'));
 }
 
 function isValidCdnBasePath(value) {

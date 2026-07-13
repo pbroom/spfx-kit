@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { exists, readJson, writeJson } from './fs.mjs';
+import { detectSpfxToolchain, spfxVersionFromPackage } from './spfx-toolchain.mjs';
 
 export async function readSpfxSummary(appDir) {
   const packagePath = path.join(appDir, 'package.json');
@@ -11,15 +12,13 @@ export async function readSpfxSummary(appDir) {
   const solution = (await exists(solutionPath)) ? await readJson(solutionPath) : {};
   const generator = yo['@microsoft/generator-sharepoint'] || {};
   const components = await findComponentIds(appDir);
+  const toolchain = detectSpfxToolchain(packageJson);
 
   return {
     originalPackageName: packageJson.name,
-    spfxVersion:
-      generator.version ||
-      packageJson.dependencies?.['@microsoft/sp-core-library'] ||
-      packageJson.devDependencies?.['@microsoft/sp-build-web'],
+    spfxVersion: generator.version || spfxVersionFromPackage(packageJson),
     nodeRange: packageJson.engines?.node,
-    toolchain: packageJson.devDependencies?.['@microsoft/sp-build-web'] ? 'gulp' : 'unknown',
+    toolchain,
     solutionId: solution.solution?.id,
     componentIds: components
   };
