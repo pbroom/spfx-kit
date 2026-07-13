@@ -68,11 +68,12 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
   }, [open, refreshManagedApps]);
 
   const managedAppRows = React.useMemo(
-    () => managedApps.map((app) => ({
-      ...app,
-      title: titleForManagedApp(app, webPartsByAppId),
-      webPartCount: webPartsByAppId.get(app.id)?.length || 0
-    })),
+    () =>
+      managedApps.map((app) => ({
+        ...app,
+        title: titleForManagedApp(app, webPartsByAppId),
+        webPartCount: webPartsByAppId.get(app.id)?.length || 0
+      })),
     [managedApps, webPartsByAppId]
   );
 
@@ -154,22 +155,18 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
   };
 
   return (
-    <Dialog
-      modalType="modal"
-      open={open}
-      onOpenChange={(_event, data) => onOpenChange(data.open)}
-    >
+    <Dialog modalType="modal" open={open} onOpenChange={(_event, data) => onOpenChange(data.open)}>
       <DialogSurface className="manage-apps-dialog">
         <DialogBody>
           <DialogTitle
-            action={(
+            action={
               <Button
                 appearance="subtle"
                 aria-label="Close manage apps"
                 icon={<X size={16} />}
                 onClick={() => onOpenChange(false)}
               />
-            )}
+            }
           >
             Manage Apps
           </DialogTitle>
@@ -187,18 +184,10 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
             </p>
             <div className="manage-apps-dialog__toolbar">
               <div className="manage-apps-dialog__toolbar-primary">
-                <Button
-                  appearance="primary"
-                  icon={<FolderPlus size={14} />}
-                  onClick={() => onOpenAddAppDrawer('create')}
-                >
+                <Button appearance="primary" icon={<FolderPlus size={14} />} onClick={() => onOpenAddAppDrawer('create')}>
                   Create
                 </Button>
-                <Button
-                  appearance="secondary"
-                  icon={<FolderInput size={14} />}
-                  onClick={() => onOpenAddAppDrawer('import')}
-                >
+                <Button appearance="secondary" icon={<FolderInput size={14} />} onClick={() => onOpenAddAppDrawer('import')}>
                   Import
                 </Button>
               </div>
@@ -227,8 +216,17 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
                 className={`manage-apps-status manage-apps-status--${manageAppsStatus.phase}`}
                 role={manageAppsStatus.phase === 'error' ? 'alert' : 'status'}
               >
-                <span className={`manage-apps-status__icon manage-apps-status__icon--${manageAppsStatus.phase}`} aria-hidden="true">
-                  {manageAppsStatus.phase === 'complete' ? <Check size={13} /> : manageAppsStatus.phase === 'error' ? <X size={13} /> : <RefreshCw size={13} />}
+                <span
+                  className={`manage-apps-status__icon manage-apps-status__icon--${manageAppsStatus.phase}`}
+                  aria-hidden="true"
+                >
+                  {manageAppsStatus.phase === 'complete' ? (
+                    <Check size={13} />
+                  ) : manageAppsStatus.phase === 'error' ? (
+                    <X size={13} />
+                  ) : (
+                    <RefreshCw size={13} />
+                  )}
                 </span>
                 <span>
                   <strong>{manageAppsStatus.message}</strong>
@@ -257,9 +255,7 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
                         </span>
                       </div>
                       {!canToggleConnection && (
-                        <span className="manage-app-row__badge manage-app-row__badge--missing">
-                          No adapter
-                        </span>
+                        <span className="manage-app-row__badge manage-app-row__badge--missing">No adapter</span>
                       )}
                       <div className="manage-app-row__actions">
                         {canToggleConnection ? (

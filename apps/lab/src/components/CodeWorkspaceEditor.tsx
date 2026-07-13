@@ -145,9 +145,12 @@ export const CodeWorkspaceEditor: React.FunctionComponent<CodeWorkspaceEditorPro
       <div className={classes.root}>
         <div className={classes.headerRow}>
           <div className={classes.headerCopy}>
-            <Text size={200} weight="semibold">Source editor</Text>
+            <Text size={200} weight="semibold">
+              Source editor
+            </Text>
             <Text className={classes.meta} size={100}>
-              {Math.round(measureCodeWorkbenchSource(source) / 1024)} KB raw · {Math.round(serialized.compressedBytes / 1024)} KB stored
+              {Math.round(measureCodeWorkbenchSource(source) / 1024)} KB raw · {Math.round(serialized.compressedBytes / 1024)} KB
+              stored
             </Text>
           </div>
           <Badge appearance="tint" color={isValid ? 'success' : 'danger'} size="small">
@@ -241,7 +244,9 @@ export const CodeWorkspaceEditor: React.FunctionComponent<CodeWorkspaceEditorPro
           </div>
         )}
 
-        <Text className={classes.moduleList} size={100}>Approved imports: {approvedCodeWorkspaceModuleNames.join(', ')}</Text>
+        <Text className={classes.moduleList} size={100}>
+          Approved imports: {approvedCodeWorkspaceModuleNames.join(', ')}
+        </Text>
         {(props.updatedAt || props.updatedBy) && (
           <Text className={classes.meta} size={100}>
             Last saved {props.updatedAt || 'unknown time'} {props.updatedBy ? `by ${props.updatedBy}` : ''}

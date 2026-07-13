@@ -5,30 +5,34 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   verify:
-    name: Build, guard, and security tests
+    name: Build, lint, test, and audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
-        # Vite 8/rolldown ships per-platform optional native bindings. A
-        # macOS-authored lockfile can leave Linux runners without the
-        # matching linux-{x64,arm64}-gnu packages after plain `npm ci`
-        # (npm/cli#4828). The lab package pins both arches as optional
-        # deps; re-resolve them for the runner OS without mutating the
-        # lockfile.
+        # Vite 8/rolldown ships per-platform optional native bindings. Re-resolve
+        # the runner's Linux binding after npm ci (npm/cli#4828).
         run: npm ci && npm install --include=optional --no-save
+
+      - name: Check formatting
+        run: npm run format:check
 
       - name: Build workspaces
         run: npm run build
@@ -46,15 +50,84 @@ jobs:
         timeout-minutes: 5
         run: npm run test:security
 
+      - name: Audit production dependencies
+        run: npm run security:audit
+
+  lab-e2e:
+    name: Lab browser and accessibility tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci && npm install --include=optional --no-save
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser tests
+        run: npm run test:e2e
+
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+
+  spfx-package:
+    name: Build and verify SPFx package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
       - name: Build supported SPFx canary package
         run: npm run ship:canary
 
       - name: Verify SPFx package artifact
         run: npm run verify:sppkg -- --app examples/hello-card-spfx
 
+      - name: Audit SPFx production dependencies
+        run: npm run security:audit:canary
+
       - name: Upload SPFx canary package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: hello-card-sppkg
           path: examples/hello-card-spfx/sharepoint/solution/hello-card.sppkg
           if-no-files-found: error
+
+  dependency-review:
+    name: Dependency review
+    # The repository must have Dependency graph enabled before this API-backed
+    # action can run. Set the repository variable after enabling that setting.
+    if: github.event_name == 'pull_request' && vars.DEPENDENCY_REVIEW_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate

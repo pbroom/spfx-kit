@@ -1,5 +1,11 @@
 :root {
-  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  font-family:
+    'Segoe UI',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
   color: #242424;
   background: #f5f5f5;
   font-synthesis: none;
@@ -120,7 +126,7 @@ textarea {
   background: #333333;
 }
 
-.icon-button[aria-pressed="true"] {
+.icon-button[aria-pressed='true'] {
   color: #0f6cbd;
   background: #eef6ff;
 }
@@ -155,13 +161,15 @@ textarea {
   color: #dedede;
 }
 
-.breakpoint-tab[aria-selected="true"] {
+.breakpoint-tab[aria-selected='true'] {
   color: #242424;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 10%), 0 1px 2px rgb(0 0 0 / 10%);
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 10%),
+    0 1px 2px rgb(0 0 0 / 10%);
 }
 
-.lab-shell--dark .breakpoint-tab[aria-selected="true"] {
+.lab-shell--dark .breakpoint-tab[aria-selected='true'] {
   color: #ffffff;
   background: #1f1f1f;
 }
@@ -664,7 +672,7 @@ textarea {
 }
 
 @property --export-progress {
-  syntax: "<percentage>";
+  syntax: '<percentage>';
   inherits: false;
   initial-value: 0%;
 }
@@ -763,7 +771,7 @@ textarea {
   inset: 4px;
   border-radius: 50%;
   background: var(--colorBrandBackground2, #ebf3fc);
-  content: "";
+  content: '';
 }
 
 .export-option__state-icon--complete {
@@ -807,7 +815,7 @@ textarea {
 }
 
 .export-option__summary::after {
-  content: "";
+  content: '';
   width: 0;
   height: 0;
   flex: 0 0 auto;
@@ -869,7 +877,7 @@ textarea {
   min-width: 0;
   max-width: 100%;
   color: var(--colorNeutralForeground3, #616161);
-  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 12px;
   line-height: 16px;
 }
@@ -1048,7 +1056,7 @@ textarea {
   gap: 2px;
 }
 
-.property-radio-toolbar__group [role="radio"] {
+.property-radio-toolbar__group [role='radio'] {
   min-width: 28px;
   width: 28px;
   height: 28px;
@@ -1066,12 +1074,12 @@ textarea {
   gap: 10px;
 }
 
-.property-color-picker__popover [class~="fui-ColorPicker"] {
+.property-color-picker__popover [class~='fui-ColorPicker'] {
   display: grid;
   gap: 8px;
 }
 
-.property-color-picker__popover [class~="fui-ColorArea"] {
+.property-color-picker__popover [class~='fui-ColorArea'] {
   width: 100%;
   min-width: 0;
   min-height: 0;
@@ -1079,7 +1087,7 @@ textarea {
   height: auto;
 }
 
-.property-color-picker__popover [class~="fui-ColorSlider"] {
+.property-color-picker__popover [class~='fui-ColorSlider'] {
   width: 100%;
   min-width: 0;
 }
@@ -1100,7 +1108,7 @@ textarea {
   line-height: 14px;
 }
 
-.property-color-picker__hsl-field [class~="fui-Input"] {
+.property-color-picker__hsl-field [class~='fui-Input'] {
   width: 100%;
   min-width: 0;
 }
@@ -1144,7 +1152,13 @@ textarea {
 }
 
 .property-color-picker__hex input {
-  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  font-family:
+    'Segoe UI',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
 }
 
 .property-empty {
@@ -1234,7 +1248,7 @@ textarea {
   margin: 0;
   border: 0;
   padding: 8px 10px;
-  font-family: Menlo, Consolas, "Courier New", monospace;
+  font-family: Menlo, Consolas, 'Courier New', monospace;
   font-size: 12px;
   line-height: 18px;
   tab-size: 2;
@@ -1294,7 +1308,9 @@ textarea {
   border: 1px solid #475569;
   border-radius: 8px;
   background: #0f172a;
-  box-shadow: 0 24px 64px rgb(0 0 0 / 28%), 0 8px 24px rgb(0 0 0 / 18%);
+  box-shadow:
+    0 24px 64px rgb(0 0 0 / 28%),
+    0 8px 24px rgb(0 0 0 / 18%);
 }
 
 .css-floating-editor__titlebar {
@@ -1347,7 +1363,7 @@ textarea {
   padding: 3px 8px;
   color: #dbeafe;
   background: #1e293b;
-  font-family: Menlo, Consolas, "Courier New", monospace;
+  font-family: Menlo, Consolas, 'Courier New', monospace;
   font-size: 11px;
   line-height: 16px;
   cursor: pointer;
@@ -1400,7 +1416,7 @@ textarea {
   padding: 3px 8px;
   color: #f8fafc;
   background: #020617;
-  font-family: Menlo, Consolas, "Courier New", monospace;
+  font-family: Menlo, Consolas, 'Courier New', monospace;
   font-size: 11px;
   line-height: 16px;
   outline: 0;

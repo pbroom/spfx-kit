@@ -184,7 +184,14 @@ async function runExport(app: string, targets: string[]) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      ['packages/spfx-tools/src/cli/export-spfx-app.mjs', '--app', workspaceApp.relativeDir, '--target', targets.join(','), '--json'],
+      [
+        'packages/spfx-tools/src/cli/export-spfx-app.mjs',
+        '--app',
+        workspaceApp.relativeDir,
+        '--target',
+        targets.join(','),
+        '--json'
+      ],
       { cwd: rootDir, env: process.env }
     );
     let stdout = '';
@@ -252,7 +259,10 @@ async function estimateAppExports(app: string) {
     },
     standalone: {
       files: [
-        ...prefixFileNames(await describeFiles(appRoot, ['package.json', 'CLAUDE.md', 'config/package-solution.json']), `${app}-repo`),
+        ...prefixFileNames(
+          await describeFiles(appRoot, ['package.json', 'CLAUDE.md', 'config/package-solution.json']),
+          `${app}-repo`
+        ),
         { name: `${app}-repo/SPFX-KIT-EXPORT-README.md`, size: 'generated' }
       ],
       totalSize: 'Calculated on export'
