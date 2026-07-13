@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +7,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
 import { readSpfxSummary } from '../packages/spfx-tools/src/lib/spfx.mjs';
 // @ts-expect-error plain .mjs module without type declarations
-import { detectSpfxToolchain, requiredSpfxFiles } from '../packages/spfx-tools/src/lib/spfx-toolchain.mjs';
+import { normalizeManagedSpfxTsconfig } from '../packages/spfx-tools/src/lib/fs.mjs';
+// @ts-expect-error plain .mjs module without type declarations
+import {
+  detectSpfxToolchain,
+  requiredSpfxFiles,
+  standaloneScriptsForToolchain
+} from '../packages/spfx-tools/src/lib/spfx-toolchain.mjs';
+// @ts-expect-error plain .mjs module without type declarations
+import { DEFAULT_SPFX_VERSION, SPFX_RUNTIME_DEPENDENCIES } from '../packages/spfx-tools/src/lib/spfx-support.mjs';
 
 const temporaryDirectories: string[] = [];
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -18,6 +26,12 @@ afterEach(async () => {
 });
 
 describe('SPFx toolchain model', () => {
+  it('keeps generated Microsoft runtime packages on the supported SPFx release', () => {
+    expect(DEFAULT_SPFX_VERSION).toBe('1.23.2');
+    expect(Object.keys(SPFX_RUNTIME_DEPENDENCIES)).not.toHaveLength(0);
+    expect(new Set(Object.values(SPFX_RUNTIME_DEPENDENCIES))).toEqual(new Set([DEFAULT_SPFX_VERSION]));
+  });
+
   it('detects Gulp and Heft packages without depending on their location', () => {
     expect(detectSpfxToolchain({ devDependencies: { '@microsoft/sp-build-web': '1.21.1' } })).toBe('gulp');
     expect(detectSpfxToolchain({ devDependencies: { '@microsoft/spfx-web-build-rig': '1.23.2' } })).toBe('heft');
@@ -44,6 +58,30 @@ describe('SPFx toolchain model', () => {
     expect(requiredSpfxFiles('ambiguous')).toContain('gulpfile.js');
     expect(requiredSpfxFiles('ambiguous')).toContain('config/rig.json');
     expect(requiredSpfxFiles('ambiguous')).toContain('config/typescript.json');
+  });
+
+  it('keeps standalone build scripts on the detected toolchain', () => {
+    expect(standaloneScriptsForToolchain('gulp').ship).toContain('gulp package-solution');
+    expect(standaloneScriptsForToolchain('gulp').ship).not.toContain('heft');
+    expect(standaloneScriptsForToolchain('heft').ship).toContain('heft package-solution');
+    expect(standaloneScriptsForToolchain('heft').ship).not.toContain('gulp');
+    expect(standaloneScriptsForToolchain('heft', { monaco: true }).ship).toContain('copy-monaco-assets.mjs');
+  });
+
+  it('preserves a managed Heft app tsconfig instead of rewriting it to the Gulp compiler shim', async () => {
+    const rootDir = await mkdtemp(path.join(tmpdir(), 'spfx-managed-heft-'));
+    temporaryDirectories.push(rootDir);
+    const appDir = path.join(rootDir, '.spfx-kit', 'apps', 'heft-app');
+    const expectedExtends = './node_modules/@microsoft/spfx-web-build-rig/profiles/default/tsconfig-base.json';
+    await writeFixtureFile(appDir, 'package.json', {
+      devDependencies: { '@microsoft/spfx-web-build-rig': '1.23.2' }
+    });
+    await writeFixtureFile(appDir, 'tsconfig.json', { extends: expectedExtends });
+
+    await normalizeManagedSpfxTsconfig(rootDir, appDir);
+
+    const tsconfig = JSON.parse(await readFile(path.join(appDir, 'tsconfig.json'), 'utf8'));
+    expect(tsconfig.extends).toBe(expectedExtends);
   });
 
   it('summarizes a Heft app without Yeoman metadata', async () => {

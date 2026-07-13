@@ -35,10 +35,25 @@ describe('create -> sync -> validate golden path', () => {
     expect(result.stdout).toContain('.spfx-kit/apps/team-divider-spfx');
 
     const appDir = path.join(workDir, '.spfx-kit', 'apps', 'team-divider-spfx');
-    for (const file of ['package.json', 'gulpfile.js', 'config/package-solution.json', '.spfx-kit/lab/register.tsx']) {
+    for (const file of [
+      'package.json',
+      'config/rig.json',
+      'config/typescript.json',
+      'config/package-solution.json',
+      '.spfx-kit/lab/register.tsx',
+      '.spfx-kit/lab/tsconfig.json'
+    ]) {
       const info = await stat(path.join(appDir, file));
       expect(info.isFile()).toBe(true);
     }
+    await expect(stat(path.join(appDir, 'gulpfile.js'))).rejects.toMatchObject({ code: 'ENOENT' });
+    const packageJson = JSON.parse(await readFile(path.join(appDir, 'package.json'), 'utf8'));
+    expect(packageJson.devDependencies).toMatchObject({
+      '@microsoft/spfx-web-build-rig': '1.23.2',
+      '@rushstack/heft': '1.2.17',
+      typescript: '~5.8.0'
+    });
+    expect(packageJson.devDependencies).not.toHaveProperty('@microsoft/sp-build-web');
   });
 
   it('refuses to overwrite an existing app without --force', () => {

@@ -29,12 +29,13 @@ apps/lab/src/generated/
 # Example app build output (example source stays committed)
 examples/*/node_modules/
 examples/*/lib/
+examples/*/lib-commonjs/
 examples/*/temp/
 examples/*/dist/
+examples/*/jest-output/
 examples/*/.turbo/
 examples/*/package-lock.json
-examples/*/release/assets/
-examples/*/release/manifests/
+examples/*/release/
 examples/*/sharepoint/solution/*.sppkg
 examples/*/sharepoint/solution/debug/
 

@@ -2,8 +2,8 @@
   "@microsoft/generator-sharepoint": {
     "plusBeta": false,
     "isCreatingSolution": true,
-    "nodeVersion": "22.14.0",
-    "version": "1.21.1",
+    "nodeVersion": "22.22.3",
+    "version": "1.23.2",
     "libraryName": "hello-card-spfx",
     "libraryId": "f86bac87-dfa3-4c2e-ba38-9708698a7803",
     "environment": "spo",
@@ -12,6 +12,8 @@
     "solutionShortDescription": "Hello Card",
     "skipFeatureDeployment": false,
     "isDomainIsolated": false,
-    "componentType": "webpart"
+    "componentType": "webpart",
+    "template": "react",
+    "useGulp": false
   }
 }

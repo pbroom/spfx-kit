@@ -14,6 +14,7 @@ import {
   writeJson
 } from '../lib/fs.mjs';
 import { readSpfxSummary } from '../lib/spfx.mjs';
+import { labAdapterTsconfig } from '../lib/spfx-support.mjs';
 
 const usage = `Usage:
   import-spfx-app --source <git-url-or-path> --name <slug> [--ref <ref>] [--force]`;
@@ -89,6 +90,7 @@ async function resolveSource(source, ref) {
 
 async function scaffoldLabAdapter(targetDir, slug, description) {
   const adapterPath = path.join(targetDir, '.spfx-kit', 'lab', 'register.tsx');
+  await writeJson(path.join(targetDir, '.spfx-kit', 'lab', 'tsconfig.json'), labAdapterTsconfig());
   if (await exists(adapterPath)) {
     return;
   }
