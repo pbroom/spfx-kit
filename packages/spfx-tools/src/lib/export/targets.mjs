@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { copyPortableSpfxSource, exists, listFilesRecursive, readJson, writeJson } from '../fs.mjs';
 import { cdnBasePathForSlug, standalonePackageName, setCdnBasePath, setIncludeClientSideAssets } from '../spfx.mjs';
+import { detectSpfxToolchain, standaloneScriptsForToolchain } from '../spfx-toolchain.mjs';
 import {
   defaultClaude,
   writeCdnHandoffReadme,
@@ -134,15 +135,9 @@ async function rewriteStandalonePackageJson(targetDir, packageName) {
       }
     }
   }
-  packageJson.scripts = {
-    build: 'gulp bundle',
-    clean: 'gulp clean',
-    test: 'gulp test',
-    serve: 'gulp serve',
-    ship: hasDependency(packageJson, 'monaco-editor')
-      ? 'gulp clean && gulp bundle --ship && node scripts/copy-monaco-assets.mjs --app . && gulp package-solution --ship'
-      : 'gulp clean && gulp bundle --ship && gulp package-solution --ship'
-  };
+  packageJson.scripts = standaloneScriptsForToolchain(detectSpfxToolchain(packageJson), {
+    monaco: hasDependency(packageJson, 'monaco-editor')
+  });
   await writeJson(packagePath, packageJson);
   if (hasDependency(packageJson, 'monaco-editor')) {
     await writeLocalMonacoCopyScript(targetDir);
@@ -166,7 +161,8 @@ async function rewriteStandaloneTsconfig(targetDir) {
 
 async function ensureHouseStandardDocs(targetDir, slug) {
   if (!(await exists(path.join(targetDir, 'CLAUDE.md')))) {
-    await writeFile(path.join(targetDir, 'CLAUDE.md'), defaultClaude(slug));
+    const packageJson = await readJson(path.join(targetDir, 'package.json'));
+    await writeFile(path.join(targetDir, 'CLAUDE.md'), defaultClaude(slug, detectSpfxToolchain(packageJson)));
   }
   await mkdir(path.join(targetDir, 'cdn-handoff'), { recursive: true });
   if (!(await exists(path.join(targetDir, 'cdn-handoff', 'README.md')))) {

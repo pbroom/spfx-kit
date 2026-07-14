@@ -53,3 +53,28 @@ export function spfxVersionFromPackage(packageJson) {
     dependencies['@microsoft/sp-build-web']
   );
 }
+
+export function standaloneScriptsForToolchain(toolchain, { monaco = false } = {}) {
+  const copyMonaco = monaco ? ' && node scripts/copy-monaco-assets.mjs --app .' : '';
+  if (toolchain === 'heft') {
+    return {
+      build: 'heft test --clean --production && heft package-solution --production',
+      clean: 'heft clean',
+      test: 'heft test',
+      serve: 'heft start --clean',
+      start: 'heft start --clean',
+      ship: `heft test --clean --production${copyMonaco} && heft package-solution --production`,
+      'eject-webpack': 'heft eject-webpack'
+    };
+  }
+  if (toolchain === 'gulp') {
+    return {
+      build: 'gulp bundle',
+      clean: 'gulp clean',
+      test: 'gulp test',
+      serve: 'gulp serve',
+      ship: `gulp clean && gulp bundle --ship${copyMonaco} && gulp package-solution --ship`
+    };
+  }
+  throw new Error(`Cannot generate standalone scripts for SPFx toolchain: ${toolchain}`);
+}

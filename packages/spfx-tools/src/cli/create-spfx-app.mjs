@@ -5,6 +5,16 @@ import path from 'node:path';
 import { parseArgs, required } from '../lib/args.mjs';
 import { exists, managedAppDir, writeJson } from '../lib/fs.mjs';
 import { cdnBasePathForSlug } from '../lib/spfx.mjs';
+import {
+  DEFAULT_HEFT_VERSION,
+  DEFAULT_NODE_RANGE,
+  DEFAULT_NODE_VERSION,
+  DEFAULT_REACT_VERSION,
+  DEFAULT_SPFX_VERSION,
+  labAdapterTsconfig,
+  SPFX_HEFT_DEV_DEPENDENCIES,
+  SPFX_RUNTIME_DEPENDENCIES
+} from '../lib/spfx-support.mjs';
 
 const usage = `Usage:
   create-spfx-app --name <slug> --title <title> --webpart <name> [--force]`;
@@ -32,7 +42,6 @@ async function main() {
   await mkdir(path.join(appDir, 'src', 'webparts', camel(webPartName), 'loc'), { recursive: true });
   await mkdir(path.join(appDir, '.spfx-kit', 'lab'), { recursive: true });
   await mkdir(path.join(appDir, 'cdn-handoff'), { recursive: true });
-  await mkdir(path.join(appDir, 'release'), { recursive: true });
   await mkdir(path.join(appDir, 'sharepoint', 'solution'), { recursive: true });
 
   const solutionId = cryptoRandomUuid();
@@ -45,21 +54,39 @@ async function main() {
   await writeJson(path.join(appDir, '.yo-rc.json'), yoRc(slug, title, solutionId));
   await writeJson(path.join(appDir, 'config', 'config.json'), configJson(bundleName, webPartName));
   await writeJson(path.join(appDir, 'config', 'package-solution.json'), packageSolution(title, solutionId, featureId, slug));
-  await writeJson(path.join(appDir, 'config', 'write-manifests.json'), { $schema: 'https://developer.microsoft.com/json-schemas/spfx-build/write-manifests.schema.json', cdnBasePath: cdnBasePathForSlug(slug) });
+  await writeJson(path.join(appDir, 'config', 'write-manifests.json'), {
+    $schema: 'https://developer.microsoft.com/json-schemas/spfx-build/write-manifests.schema.json',
+    cdnBasePath: cdnBasePathForSlug(slug)
+  });
   await writeJson(path.join(appDir, 'config', 'serve.json'), serveJson());
   await writeJson(path.join(appDir, 'config', 'deploy-azure-storage.json'), deployJson());
+  await writeJson(path.join(appDir, 'config', 'rig.json'), rigJson());
+  await writeJson(path.join(appDir, 'config', 'sass.json'), sassJson());
+  await writeJson(path.join(appDir, 'config', 'typescript.json'), typescriptJson());
   await writeJson(path.join(appDir, 'tsconfig.json'), tsconfig());
-  await writeFile(path.join(appDir, 'gulpfile.js'), "'use strict';\nconst build = require('@microsoft/sp-build-web');\nbuild.initialize(require('gulp'));\n");
+  await writeFile(path.join(appDir, 'eslint.config.js'), eslintConfig());
   await writeFile(path.join(appDir, 'CLAUDE.md'), claude(slug));
   await writeFile(path.join(appDir, 'cdn-handoff', 'README.md'), cdnReadme(slug));
-  await writeFile(path.join(appDir, 'release', 'README.md'), releaseReadme(slug));
-  await writeFile(path.join(appDir, 'README.md'), `# ${title}\n\nSPFx 1.21.1 web part project managed by SPFx Kit.\n`);
+  await writeFile(
+    path.join(appDir, 'README.md'),
+    `# ${title}\n\nSPFx ${DEFAULT_SPFX_VERSION} Heft web part project managed by SPFx Kit.\n`
+  );
   await writeJson(path.join(appDir, `${webPartDir}/${webPartName}.manifest.json`), manifest(componentId, title, webPartName));
   await writeFile(path.join(appDir, `${webPartDir}/${webPartName}.ts`), webPartSource(webPartName, title));
-  await writeFile(path.join(appDir, `${webPartDir}/loc/en-us.js`), "define([], function() { return { PropertyPaneDescription: 'Configure this web part.', TitleFieldLabel: 'Title' }; });\n");
-  await writeFile(path.join(appDir, `${webPartDir}/loc/mystrings.d.ts`), "declare interface IWebPartStrings { PropertyPaneDescription: string; TitleFieldLabel: string; }\ndeclare module 'WebPartStrings' { const strings: IWebPartStrings; export = strings; }\n");
+  await writeFile(
+    path.join(appDir, `${webPartDir}/loc/en-us.js`),
+    "define([], function() { return { PropertyPaneDescription: 'Configure this web part.', TitleFieldLabel: 'Title' }; });\n"
+  );
+  await writeFile(
+    path.join(appDir, `${webPartDir}/loc/mystrings.d.ts`),
+    "declare interface IWebPartStrings { PropertyPaneDescription: string; TitleFieldLabel: string; }\ndeclare module 'WebPartStrings' { const strings: IWebPartStrings; export = strings; }\n"
+  );
   await writeFile(path.join(appDir, '.spfx-kit', 'lab', 'register.tsx'), labAdapter(slug, title, webPartName));
-  await writeFile(path.join(appDir, '.spfx-kit', 'lab', `${camel(webPartName)}Lab.css`), `.spfx-kit-created-webpart { font-family: "Segoe UI", sans-serif; }\n`);
+  await writeJson(path.join(appDir, '.spfx-kit', 'lab', 'tsconfig.json'), labAdapterTsconfig());
+  await writeFile(
+    path.join(appDir, '.spfx-kit', 'lab', `${camel(webPartName)}Lab.css`),
+    `.spfx-kit-created-webpart { font-family: "Segoe UI", sans-serif; }\n`
+  );
 
   console.log(`Created ${path.relative(rootDir, appDir).replace(/\\/g, '/')}`);
 }
@@ -69,40 +96,29 @@ function packageJson(slug) {
     name: `@spfx-kit/${slug}`,
     version: '0.1.0',
     private: true,
-    engines: { node: '>=22.14.0 <23.0.0' },
+    engines: { node: DEFAULT_NODE_RANGE },
     main: 'lib/index.js',
     scripts: {
-      build: 'gulp bundle',
-      clean: 'gulp clean',
-      test: 'gulp test',
-      serve: 'gulp serve',
-      ship: 'gulp clean && gulp bundle --ship && gulp package-solution --ship'
+      build: 'heft test --clean --production && heft package-solution --production',
+      clean: 'heft clean',
+      test: 'heft test',
+      serve: 'heft start --clean',
+      start: 'heft start --clean',
+      ship: 'heft test --clean --production && heft package-solution --production',
+      'eject-webpack': 'heft eject-webpack'
     },
     dependencies: {
       '@fluentui/react-components': '9.74.1',
-      '@microsoft/sp-core-library': '1.21.1',
-      '@microsoft/sp-property-pane': '1.21.1',
-      '@microsoft/sp-webpart-base': '1.21.1',
-      react: '17.0.1',
-      'react-dom': '17.0.1',
+      ...SPFX_RUNTIME_DEPENDENCIES,
+      react: DEFAULT_REACT_VERSION,
+      'react-dom': DEFAULT_REACT_VERSION,
       tslib: '2.3.1'
     },
     devDependencies: {
-      '@microsoft/eslint-config-spfx': '1.21.1',
-      '@microsoft/eslint-plugin-spfx': '1.21.1',
-      '@microsoft/rush-stack-compiler-5.3': '0.1.0',
-      '@microsoft/sp-build-web': '1.21.1',
-      '@microsoft/sp-module-interfaces': '1.21.1',
-      '@rushstack/eslint-config': '4.3.0',
-      '@types/react': '17.0.45',
-      '@types/react-dom': '17.0.17',
-      '@types/webpack-env': '1.18.8',
-      ajv: '6.15.0',
-      eslint: '8.57.1',
-      'eslint-plugin-react-hooks': '4.6.2',
-      gulp: '4.0.2',
-      typescript: '5.3.3'
-    }
+      ...SPFX_HEFT_DEV_DEPENDENCIES
+    },
+    overrides: { '@rushstack/heft': DEFAULT_HEFT_VERSION },
+    resolutions: { '@types/react': '17.0.45' }
   };
 }
 
@@ -111,8 +127,8 @@ function yoRc(slug, title, id) {
     '@microsoft/generator-sharepoint': {
       plusBeta: false,
       isCreatingSolution: true,
-      nodeVersion: '22.14.0',
-      version: '1.21.1',
+      nodeVersion: DEFAULT_NODE_VERSION,
+      version: DEFAULT_SPFX_VERSION,
       libraryName: slug,
       libraryId: id,
       environment: 'spo',
@@ -121,7 +137,9 @@ function yoRc(slug, title, id) {
       solutionShortDescription: title,
       skipFeatureDeployment: false,
       isDomainIsolated: false,
-      componentType: 'webpart'
+      componentType: 'webpart',
+      template: 'react',
+      useGulp: false
     }
   };
 }
@@ -164,36 +182,70 @@ function packageSolution(title, solutionId, featureId, slug) {
 }
 
 function serveJson() {
-  return { $schema: 'https://developer.microsoft.com/json-schemas/core-build/serve.schema.json', port: 4321, https: true, initialPage: 'https://{tenantDomain}/_layouts/workbench.aspx' };
+  return {
+    $schema: 'https://developer.microsoft.com/json-schemas/spfx-build/spfx-serve.schema.json',
+    port: 4321,
+    https: true,
+    initialPage: 'https://{tenantDomain}/_layouts/workbench.aspx'
+  };
 }
 
 function deployJson() {
-  return { $schema: 'https://developer.microsoft.com/json-schemas/core-build/deploy-azure-storage.schema.json', workingDir: './release/assets/', account: '', container: '', accessKey: '' };
+  return {
+    $schema: 'https://developer.microsoft.com/json-schemas/core-build/deploy-azure-storage.schema.json',
+    workingDir: './release/assets/',
+    account: '',
+    container: '',
+    accessKey: ''
+  };
 }
 
 function tsconfig() {
   return {
-    extends: './node_modules/@microsoft/rush-stack-compiler-5.3/includes/tsconfig-web.json',
-    compilerOptions: {
-      target: 'es2017',
-      forceConsistentCasingInFileNames: true,
-      module: 'esnext',
-      moduleResolution: 'node',
-      jsx: 'react',
-      declaration: true,
-      sourceMap: true,
-      experimentalDecorators: true,
-      skipLibCheck: true,
-      outDir: 'lib',
-      rootDir: 'src',
-      inlineSources: false,
-      noImplicitAny: true,
-      typeRoots: ['./node_modules/@types', './node_modules/@microsoft'],
-      types: ['webpack-env'],
-      lib: ['es2017', 'dom', 'dom.iterable', 'esnext']
-    },
-    include: ['src/**/*.ts', 'src/**/*.tsx']
+    extends: './node_modules/@microsoft/spfx-web-build-rig/profiles/default/tsconfig-base.json'
   };
+}
+
+function rigJson() {
+  return {
+    $schema: 'https://developer.microsoft.com/json-schemas/rig-package/rig.schema.json',
+    rigPackageName: '@microsoft/spfx-web-build-rig'
+  };
+}
+
+function sassJson() {
+  return {
+    $schema: 'https://developer.microsoft.com/json-schemas/heft/v0/heft-sass-plugin.schema.json',
+    extends: '@microsoft/spfx-web-build-rig/profiles/default/config/sass.json'
+  };
+}
+
+function typescriptJson() {
+  return {
+    extends: '@microsoft/spfx-web-build-rig/profiles/default/config/typescript.json',
+    staticAssetsToCopy: {
+      fileExtensions: ['.resx', '.jpg', '.png', '.woff', '.eot', '.ttf', '.svg', '.gif'],
+      includeGlobs: ['webparts/*/loc/*.js']
+    }
+  };
+}
+
+function eslintConfig() {
+  return `const spfxProfile = require('@microsoft/eslint-config-spfx/lib/flat-profiles/react');
+
+module.exports = [
+  ...spfxProfile,
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    languageOptions: {
+      parserOptions: {
+        tsconfigRootDir: __dirname,
+        project: './tsconfig.json'
+      }
+    }
+  }
+];
+`;
 }
 
 function manifest(id, title, webPartName) {
@@ -289,7 +341,7 @@ export function register(registry: LabWebPartRegistry): void {
 function claude(slug) {
   return `# ${slug} SPFx Project Rules
 
-- Use Node >=22.14.0 <23.0.0, npm 10, SPFx 1.21.1, React 17, TypeScript 5.3.3, and gulp 4.
+- Use Node ${DEFAULT_NODE_RANGE}, npm 10, SPFx ${DEFAULT_SPFX_VERSION}, React 17, TypeScript 5.8, and Heft.
 - Keep production-consumed code under src/.
 - CDN production packages use includeClientSideAssets=false and ${cdnBasePathForSlug(slug)}.
 - Provision SharePoint lists manually; do not add hidden PnP provisioning.
@@ -303,17 +355,14 @@ Upload release assets to ${cdnBasePathForSlug(slug)}.
 `;
 }
 
-function releaseReadme(slug) {
-  return `# ${slug} Release
-
-Generated ship output is copied here by SPFx Kit exports.
-
-CDN base path: ${cdnBasePathForSlug(slug)}
-`;
-}
-
 function toPascal(value) {
-  return value.split(/[^A-Za-z0-9]+/).filter(Boolean).map((part) => part[0].toUpperCase() + part.slice(1)).join('') || 'SpfxWebPart';
+  return (
+    value
+      .split(/[^A-Za-z0-9]+/)
+      .filter(Boolean)
+      .map((part) => part[0].toUpperCase() + part.slice(1))
+      .join('') || 'SpfxWebPart'
+  );
 }
 
 function camel(value) {

@@ -16,6 +16,7 @@ async function main() {
   await rejectsNestedTargets();
   await rejectsSymlinkedNestedTargets();
   await copiesRegularFiles();
+  await excludesGeneratedBuildOutput();
   console.log('safe-copy symlink regression checks passed');
 }
 
@@ -76,6 +77,22 @@ async function copiesRegularFiles() {
       await readFile(path.join(target, 'src', 'webpart.ts'), 'utf8'),
       'export {};\n'
     );
+  }, '{"name":"outside-unused"}\n');
+}
+
+async function excludesGeneratedBuildOutput() {
+  await withFixture('generated-output', async ({ source, target }) => {
+    await writeFile(path.join(source, 'package.json'), '{"name":"inside"}\n');
+    for (const directory of ['jest-output', 'lib-commonjs']) {
+      await mkdir(path.join(source, directory), { recursive: true });
+      await writeFile(path.join(source, directory, 'generated.js'), 'generated\n');
+    }
+
+    await copyPortableSpfxSource(source, target);
+
+    assert.equal(await exists(path.join(target, 'jest-output')), false);
+    assert.equal(await exists(path.join(target, 'lib-commonjs')), false);
+    assert.equal(await exists(path.join(target, 'package.json')), true);
   }, '{"name":"outside-unused"}\n');
 }
 
