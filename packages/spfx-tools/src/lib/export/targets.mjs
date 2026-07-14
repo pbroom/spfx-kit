@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { copyPortableSpfxSource, exists, listFilesRecursive, readJson, writeJson } from '../fs.mjs';
 import { cdnBasePathForSlug, standalonePackageName, setCdnBasePath, setIncludeClientSideAssets } from '../spfx.mjs';
 import { detectSpfxToolchain, standaloneScriptsForToolchain } from '../spfx-toolchain.mjs';
+import { verifySppkg } from '../sppkg.mjs';
 import {
   defaultClaude,
   writeCdnHandoffReadme,
@@ -24,7 +25,7 @@ export async function exportSingleBundle(appDir, outDir, slug) {
   reportTargetProgress('single', 'assembling', 0.82, 'Copying SharePoint package into export.');
   const targetDir = path.join(outDir, exportDirNameForTarget('single', slug));
   await mkdir(targetDir, { recursive: true });
-  const packageFile = await copyFirstSppkg(appDir, targetDir, `${slug}-standalone.sppkg`);
+  const packageFile = await copyExpectedSppkg(appDir, targetDir, `${slug}-standalone.sppkg`);
   const readmeFile = await writeSingleBundleReadme(targetDir, slug, path.basename(packageFile));
   reportTargetProgress('single', 'packaging', 0.94, 'Reading embedded bundle package contents.');
   const target = await describeTarget('single', `${slug}-standalone`, targetDir, [packageFile, readmeFile]);
@@ -49,7 +50,7 @@ export async function exportCdnPackage(appDir, outDir, slug) {
   await mkdir(releaseDir, { recursive: true });
   await mkdir(handoffDir, { recursive: true });
 
-  const packageFile = await copyFirstSppkg(appDir, solutionDir, `${slug}.cdn.sppkg`);
+  const packageFile = await copyExpectedSppkg(appDir, solutionDir, `${slug}.cdn.sppkg`);
   await copyIfExists(path.join(appDir, 'release', 'assets'), path.join(releaseDir, 'assets'));
   await copyIfExists(path.join(appDir, 'release', 'manifests'), path.join(releaseDir, 'manifests'));
   await copyContentsIfExists(path.join(appDir, 'temp', 'deploy'), path.join(releaseDir, 'assets'));
@@ -91,15 +92,10 @@ function runShip(appDir) {
   runNpmCommand(appDir, ['run', 'ship'], `Ship build failed in ${appDir}`);
 }
 
-async function copyFirstSppkg(appDir, targetDir, targetName) {
-  const packages = (await listFilesRecursive(path.join(appDir, 'sharepoint', 'solution'))).filter((file) =>
-    file.endsWith('.sppkg')
-  );
-  if (!packages.length) {
-    throw new Error(`No .sppkg was produced under ${path.join(appDir, 'sharepoint', 'solution')}`);
-  }
+async function copyExpectedSppkg(appDir, targetDir, targetName) {
+  const { packagePath } = await verifySppkg(appDir);
   const target = path.join(targetDir, targetName);
-  await cp(packages[0], target);
+  await cp(packagePath, target);
   return target;
 }
 

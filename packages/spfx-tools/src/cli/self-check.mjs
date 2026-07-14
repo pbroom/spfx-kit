@@ -9,9 +9,11 @@ const required = [
   'cli/import-spfx-app.mjs',
   'cli/sync-lab.mjs',
   'cli/validate-spfx-app.mjs',
+  'cli/verify-sppkg.mjs',
   'lib/args.mjs',
   'lib/fs.mjs',
-  'lib/spfx.mjs'
+  'lib/spfx.mjs',
+  'lib/sppkg.mjs'
 ];
 
 await Promise.all(required.map((file) => access(path.join(root, file))));

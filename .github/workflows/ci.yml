@@ -45,3 +45,16 @@ jobs:
       - name: Security regression tests
         timeout-minutes: 5
         run: npm run test:security
+
+      - name: Build supported SPFx canary package
+        run: npm run ship:canary
+
+      - name: Verify SPFx package artifact
+        run: npm run verify:sppkg -- --app examples/hello-card-spfx
+
+      - name: Upload SPFx canary package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hello-card-sppkg
+          path: examples/hello-card-spfx/sharepoint/solution/hello-card.sppkg
+          if-no-files-found: error

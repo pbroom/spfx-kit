@@ -16,7 +16,9 @@
     "prepare": "test \"$(git rev-parse --show-toplevel 2>/dev/null)\" = \"$PWD\" && git config --local core.hooksPath scripts/git-hooks || exit 0",
     "dev": "npm run sync:lab && turbo run dev --filter @spfx-kit/lab",
     "build": "npm run sync:lab && turbo run build",
-    "ship": "turbo run ship",
+    "ship": "turbo run ship && npm run ship:canary",
+    "install:canary": "npm ci --prefix examples/hello-card-spfx",
+    "ship:canary": "npm run install:canary && npm --prefix examples/hello-card-spfx run ship",
     "clean": "turbo run clean",
     "import:spfx": "node packages/spfx-tools/src/cli/import-spfx-app.mjs",
     "create:spfx": "node packages/spfx-tools/src/cli/create-spfx-app.mjs",
@@ -30,7 +32,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:security": "npm --workspace @spfx-kit/code-workbench-runtime run build && node scripts/tests/code-workbench-graph-search.mjs && npm --workspace @spfx-kit/spfx-tools run test:safe-copy && node scripts/tests/lab-api-security.mjs",
-    "validate:spfx": "node packages/spfx-tools/src/cli/validate-spfx-app.mjs"
+    "validate:spfx": "node packages/spfx-tools/src/cli/validate-spfx-app.mjs",
+    "verify:sppkg": "node packages/spfx-tools/src/cli/verify-sppkg.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
