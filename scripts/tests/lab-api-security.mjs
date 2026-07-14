@@ -181,6 +181,9 @@ async function stopLabServer(child) {
     return;
   }
 
+  // Negative-PID kill targets the whole detached process group (npm + vite).
+  // On Windows this throws and the fallback only kills the direct npm child,
+  // which can orphan grandchildren; this script targets Linux CI/cloud only.
   try {
     process.kill(-child.pid, 'SIGTERM');
   } catch {

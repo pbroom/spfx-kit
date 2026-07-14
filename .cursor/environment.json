@@ -1,0 +1,21 @@
+{
+  "name": "spfx-kit",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "install": "npm ci && npm install --include=optional --no-save",
+  "terminals": [
+    {
+      "name": "lab",
+      "command": "SPFX_LAB_HOST=0.0.0.0 SPFX_LAB_PORT=5173 npm run dev",
+      "description": "Vite SPFx lab preview on http://127.0.0.1:5173/ (bound to 0.0.0.0 for cloud access)."
+    }
+  ],
+  "ports": [
+    {
+      "name": "SPFx Lab",
+      "port": 5173
+    }
+  ]
+}
