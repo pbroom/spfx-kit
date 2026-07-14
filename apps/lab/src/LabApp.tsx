@@ -93,10 +93,7 @@ export function LabApp(): JSX.Element {
     const handleAppCommandShortcut = (event: KeyboardEvent): void => {
       const key = event.key.toLowerCase();
       const isAppCommandShortcut =
-        (key === 'o' || key === 'n' || key === 'e') &&
-        (event.metaKey || event.ctrlKey) &&
-        !event.altKey &&
-        !event.shiftKey;
+        (key === 'o' || key === 'n' || key === 'e') && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey;
 
       if (!isAppCommandShortcut || event.defaultPrevented || event.repeat) {
         return;
@@ -172,7 +169,10 @@ export function LabApp(): JSX.Element {
 
   return (
     <FluentProvider theme={fluentTheme}>
-      <main className={`lab-shell lab-shell--${themeMode}`} style={{ '--lab-section-background': theme.background } as React.CSSProperties}>
+      <main
+        className={`lab-shell lab-shell--${themeMode}`}
+        style={{ '--lab-section-background': theme.background } as React.CSSProperties}
+      >
         <section className="preview-area" aria-label="Web part preview area">
           <div className="lab-toolbar lab-toolbar--preview">
             <div className="app-menu-control" aria-label="App menu">
@@ -193,28 +193,19 @@ export function LabApp(): JSX.Element {
                 </MenuTrigger>
                 <MenuPopover className="app-menu-popover">
                   <MenuList>
-                    <MenuItem
-                      icon={<FolderInput size={14} />}
-                      onClick={() => openAddAppDrawer('import')}
-                    >
+                    <MenuItem icon={<FolderInput size={14} />} onClick={() => openAddAppDrawer('import')}>
                       <span className="app-menu-command">
                         <span>Import SPFx app</span>
                         <kbd className="app-menu-shortcut">{importShortcutLabel}</kbd>
                       </span>
                     </MenuItem>
-                    <MenuItem
-                      icon={<FolderPlus size={14} />}
-                      onClick={() => openAddAppDrawer('create')}
-                    >
+                    <MenuItem icon={<FolderPlus size={14} />} onClick={() => openAddAppDrawer('create')}>
                       <span className="app-menu-command">
                         <span>Create SPFx app</span>
                         <kbd className="app-menu-shortcut">{createShortcutLabel}</kbd>
                       </span>
                     </MenuItem>
-                    <MenuItem
-                      icon={<Upload size={14} />}
-                      onClick={openExportDrawer}
-                    >
+                    <MenuItem icon={<Upload size={14} />} onClick={openExportDrawer}>
                       <span className="app-menu-command">
                         <span>Export package</span>
                         <kbd className="app-menu-shortcut">{exportShortcutLabel}</kbd>
@@ -353,11 +344,7 @@ export function LabApp(): JSX.Element {
                   <HugeiconsIcon className="huge-icon" icon={LayoutRightIcon} size={16} strokeWidth={1.7} aria-hidden="true" />
                 </IconButton>
               </div>
-              <PropertyPane
-                webPart={selected}
-                values={activeProps}
-                onChange={updateProps}
-              />
+              <PropertyPane webPart={selected} values={activeProps} onChange={updateProps} />
             </>
           )}
         </aside>
@@ -379,12 +366,7 @@ export function LabApp(): JSX.Element {
           onOpenAddAppDrawer={openAddAppDrawer}
         />
 
-        <AddAppDrawer
-          open={addDrawerOpen}
-          mode={addMode}
-          onOpenChange={setAddDrawerOpen}
-          onModeChange={setAddMode}
-        />
+        <AddAppDrawer open={addDrawerOpen} mode={addMode} onOpenChange={setAddDrawerOpen} onModeChange={setAddMode} />
 
         <ExportDrawer
           open={exportDrawerOpen}

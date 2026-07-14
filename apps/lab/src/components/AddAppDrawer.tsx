@@ -54,9 +54,10 @@ export function AddAppDrawer(props: AddAppDrawerProps): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode]);
 
-  const canSubmitAddApp = mode === 'import'
-    ? Boolean(importSource.trim() && isSlugInput(importName.trim()) && !addingApp)
-    : Boolean(isSlugInput(createName.trim()) && createTitle.trim() && createWebPart.trim() && !addingApp);
+  const canSubmitAddApp =
+    mode === 'import'
+      ? Boolean(importSource.trim() && isSlugInput(importName.trim()) && !addingApp)
+      : Boolean(isSlugInput(createName.trim()) && createTitle.trim() && createWebPart.trim() && !addingApp);
   const addActionLabel = mode === 'import' ? 'Import app' : 'Create app';
 
   const submitAddApp = async (): Promise<void> => {
@@ -65,19 +66,20 @@ export function AddAppDrawer(props: AddAppDrawerProps): JSX.Element {
     }
 
     const endpoint = mode === 'import' ? '/api/spfx-apps/import' : '/api/spfx-apps/create';
-    const body = mode === 'import'
-      ? {
-          source: importSource.trim(),
-          name: importName.trim(),
-          ref: importRef.trim() || undefined,
-          force: addForce
-        }
-      : {
-          name: createName.trim(),
-          title: createTitle.trim(),
-          webpart: createWebPart.trim(),
-          force: addForce
-        };
+    const body =
+      mode === 'import'
+        ? {
+            source: importSource.trim(),
+            name: importName.trim(),
+            ref: importRef.trim() || undefined,
+            force: addForce
+          }
+        : {
+            name: createName.trim(),
+            title: createTitle.trim(),
+            webpart: createWebPart.trim(),
+            force: addForce
+          };
 
     setAddingApp(true);
     setAddStatus({
@@ -122,14 +124,14 @@ export function AddAppDrawer(props: AddAppDrawerProps): JSX.Element {
     >
       <DrawerHeader>
         <DrawerHeaderTitle
-          action={(
+          action={
             <Button
               appearance="subtle"
               aria-label="Close add SPFx app drawer"
               icon={<X size={16} />}
               onClick={() => onOpenChange(false)}
             />
-          )}
+          }
         >
           Add SPFx app
         </DrawerHeaderTitle>
@@ -160,12 +162,7 @@ export function AddAppDrawer(props: AddAppDrawerProps): JSX.Element {
 
         {mode === 'import' ? (
           <div className="spfx-app-drawer__form">
-            <Field
-              hint="Git URL or local path to an SPFx project."
-              label="Source"
-              required
-              size="small"
-            >
+            <Field hint="Git URL or local path to an SPFx project." label="Source" required size="small">
               <Input
                 placeholder="https://github.com/team/app.git or /path/to/app"
                 value={importSource}
@@ -173,39 +170,21 @@ export function AddAppDrawer(props: AddAppDrawerProps): JSX.Element {
               />
             </Field>
             <div className="spfx-app-drawer__field-row">
-              <Field
-                hint="-spfx is added if omitted."
-                label="App slug"
-                required
-                size="small"
-              >
+              <Field hint="-spfx is added if omitted." label="App slug" required size="small">
                 <Input
                   placeholder="team-dashboard"
                   value={importName}
                   onChange={(event) => setImportName(slugInputValue(event.currentTarget.value))}
                 />
               </Field>
-              <Field
-                hint="Branch, tag, or commit."
-                label="Git ref"
-                size="small"
-              >
-                <Input
-                  placeholder="main"
-                  value={importRef}
-                  onChange={(event) => setImportRef(event.currentTarget.value)}
-                />
+              <Field hint="Branch, tag, or commit." label="Git ref" size="small">
+                <Input placeholder="main" value={importRef} onChange={(event) => setImportRef(event.currentTarget.value)} />
               </Field>
             </div>
           </div>
         ) : (
           <div className="spfx-app-drawer__form">
-            <Field
-              hint="-spfx is added if omitted."
-              label="App slug"
-              required
-              size="small"
-            >
+            <Field hint="-spfx is added if omitted." label="App slug" required size="small">
               <Input
                 placeholder="team-dashboard"
                 value={createName}
@@ -219,12 +198,7 @@ export function AddAppDrawer(props: AddAppDrawerProps): JSX.Element {
                 onChange={(event) => setCreateTitle(event.currentTarget.value)}
               />
             </Field>
-            <Field
-              hint="Used for the generated web part class name."
-              label="Web part name"
-              required
-              size="small"
-            >
+            <Field hint="Used for the generated web part class name." label="Web part name" required size="small">
               <Input
                 placeholder="TeamDashboard"
                 value={createWebPart}
@@ -248,7 +222,13 @@ export function AddAppDrawer(props: AddAppDrawerProps): JSX.Element {
             role={addStatus.phase === 'error' ? 'alert' : 'status'}
           >
             <span className={`spfx-app-drawer__status-icon spfx-app-drawer__status-icon--${addStatus.phase}`} aria-hidden="true">
-              {addStatus.phase === 'complete' ? <Check size={13} /> : addStatus.phase === 'error' ? <X size={13} /> : <RefreshCw size={13} />}
+              {addStatus.phase === 'complete' ? (
+                <Check size={13} />
+              ) : addStatus.phase === 'error' ? (
+                <X size={13} />
+              ) : (
+                <RefreshCw size={13} />
+              )}
             </span>
             <span>
               <strong>{addStatus.message}</strong>

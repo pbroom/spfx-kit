@@ -32,9 +32,7 @@ async function main() {
     ...registrations.map((item) => `import { register as ${item.localName} } from "${item.importPath}";`),
     '',
     'export function registerGeneratedWebParts(registry: LabWebPartRegistry): void {',
-    registrations.length
-      ? registrations.map((item) => `  ${item.localName}(registry);`).join('\n')
-      : '  void registry;',
+    registrations.length ? registrations.map((item) => `  ${item.localName}(registry);`).join('\n') : '  void registry;',
     '}',
     ''
   ].join('\n');
@@ -68,7 +66,10 @@ function generatedDirFor(rootDir) {
 }
 
 function relativeImportPath(fromDir, toFile) {
-  const rel = path.relative(fromDir, toFile).replace(/\\/g, '/').replace(/\.tsx$/, '');
+  const rel = path
+    .relative(fromDir, toFile)
+    .replace(/\\/g, '/')
+    .replace(/\.tsx$/, '');
   return rel.startsWith('.') ? rel : `./${rel}`;
 }
 

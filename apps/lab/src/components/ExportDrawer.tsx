@@ -57,7 +57,11 @@ interface ExportDrawerProps {
 
 export function ExportDrawer(props: ExportDrawerProps): JSX.Element {
   const { open, onOpenChange, webParts, selected, onSelectApp } = props;
-  const [exportSelections, setExportSelections] = React.useState<ExportSelections>({ single: true, cdn: true, standalone: false });
+  const [exportSelections, setExportSelections] = React.useState<ExportSelections>({
+    single: true,
+    cdn: true,
+    standalone: false
+  });
   const [exportEstimates, setExportEstimates] = React.useState<ExportEstimates>({});
   const [exporting, setExporting] = React.useState(false);
   const [exportError, setExportError] = React.useState('');
@@ -65,7 +69,10 @@ export function ExportDrawer(props: ExportDrawerProps): JSX.Element {
   const [exportTargetProgress, setExportTargetProgress] = React.useState<ExportTargetProgressMap>({});
 
   const exportSlug = selected?.appId || slugify(selected?.title || selected?.id || 'spfx-web-part');
-  const exportOptions = React.useMemo(() => createExportPackageOptions(exportSlug, exportEstimates), [exportEstimates, exportSlug]);
+  const exportOptions = React.useMemo(
+    () => createExportPackageOptions(exportSlug, exportEstimates),
+    [exportEstimates, exportSlug]
+  );
   const selectedExportOptions = exportOptions.filter((option) => exportSelections[option.id]);
   const exportAppName = selected?.title || 'selected app';
   const exportCardMode = exportProgress.phase !== 'idle';
@@ -220,9 +227,7 @@ export function ExportDrawer(props: ExportDrawerProps): JSX.Element {
         message: 'Export failed',
         detail: message
       });
-      setExportTargetProgress((prev) =>
-        updateAllActiveExportTargets(prev, selectedTargets, 'error', 1, message)
-      );
+      setExportTargetProgress((prev) => updateAllActiveExportTargets(prev, selectedTargets, 'error', 1, message));
     } finally {
       setExporting(false);
     }
@@ -240,14 +245,14 @@ export function ExportDrawer(props: ExportDrawerProps): JSX.Element {
     >
       <DrawerHeader>
         <DrawerHeaderTitle
-          action={(
+          action={
             <Button
               appearance="subtle"
               aria-label="Close export package drawer"
               icon={<X size={16} />}
               onClick={() => onOpenChange(false)}
             />
-          )}
+          }
         >
           <span className="export-drawer__title">
             <span>Export</span>
@@ -273,9 +278,7 @@ export function ExportDrawer(props: ExportDrawerProps): JSX.Element {
         </DrawerHeaderTitle>
       </DrawerHeader>
       <DrawerBody className="export-drawer__body">
-        <p className="export-drawer__description">
-          Select one or more package formats to include in the download.
-        </p>
+        <p className="export-drawer__description">Select one or more package formats to include in the download.</p>
         <div className="export-drawer__options">
           {exportOptions.map((option) => {
             const selectedForExport = exportSelections[option.id];
@@ -284,7 +287,9 @@ export function ExportDrawer(props: ExportDrawerProps): JSX.Element {
             const optionPhase = targetProgress?.phase || exportProgress.phase;
             const progressPercent = Math.round((targetProgress?.value ?? exportProgress.value ?? 0) * 100);
             const optionInFlight = exportCardMode && selectedForExport && isExportPhaseInFlight(optionPhase);
-            const statusText = exportCardMode ? getExportOptionStatus(option, targetProgress, exportProgress, exportError) : option.description;
+            const statusText = exportCardMode
+              ? getExportOptionStatus(option, targetProgress, exportProgress, exportError)
+              : option.description;
 
             return (
               <section
@@ -296,16 +301,15 @@ export function ExportDrawer(props: ExportDrawerProps): JSX.Element {
                   optionInFlight ? 'export-option--running' : '',
                   optionPhase === 'complete' && selectedForExport ? 'export-option--complete' : '',
                   optionPhase === 'error' && selectedForExport ? 'export-option--error' : ''
-                ].filter(Boolean).join(' ')}
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
                 key={option.id}
               >
                 <div className="export-option__header">
                   {exportCardMode && selectedForExport ? (
                     <div className="export-option__state-label">
-                      <ExportOptionStateIcon
-                        phase={optionPhase}
-                        progress={progressPercent}
-                      />
+                      <ExportOptionStateIcon phase={optionPhase} progress={progressPercent} />
                       <span>{option.label}</span>
                     </div>
                   ) : (
@@ -416,10 +420,7 @@ function updateAllActiveExportTargets(
   const next: ExportTargetProgressMap = { ...previous };
   for (const target of targets) {
     const existing = next[target];
-    const canOverrideSettledPhase =
-      phase === 'packaging' ||
-      phase === 'complete' ||
-      phase === 'error';
+    const canOverrideSettledPhase = phase === 'packaging' || phase === 'complete' || phase === 'error';
     if ((existing?.phase === 'complete' || existing?.phase === 'error') && !canOverrideSettledPhase) {
       continue;
     }
@@ -523,33 +524,39 @@ function createExportPackageOptions(slug: string, estimates: ExportEstimates): E
       label: `${slug}-standalone`,
       description: 'Exports one SharePoint package with the web part bundle embedded for tenant app catalog upload.',
       totalSize: estimates.single?.totalSize || 'Calculated on export',
-      files: estimates.single?.files?.length ? estimates.single.files : [
-        { name: `${slug}-standalone/${slug}-standalone.sppkg`, size: '~420 KB' },
-        { name: `${slug}-standalone/README.md`, size: 'generated' }
-      ]
+      files: estimates.single?.files?.length
+        ? estimates.single.files
+        : [
+            { name: `${slug}-standalone/${slug}-standalone.sppkg`, size: '~420 KB' },
+            { name: `${slug}-standalone/README.md`, size: 'generated' }
+          ]
     },
     {
       id: 'cdn',
       label: 'SPFx + CDN JS package',
       description: 'Exports a small SharePoint package plus JavaScript and CSS assets intended for your configured CDN path.',
       totalSize: estimates.cdn?.totalSize || 'Calculated on export',
-      files: estimates.cdn?.files?.length ? estimates.cdn.files : [
-        { name: 'cdn/README.md', size: 'generated' },
-        { name: `cdn/sharepoint/solution/${slug}.cdn.sppkg`, size: '~34 KB' },
-        { name: 'cdn/release/assets', size: 'from latest build' },
-        { name: 'cdn/cdn-handoff', size: 'from latest build' }
-      ]
+      files: estimates.cdn?.files?.length
+        ? estimates.cdn.files
+        : [
+            { name: 'cdn/README.md', size: 'generated' },
+            { name: `cdn/sharepoint/solution/${slug}.cdn.sppkg`, size: '~34 KB' },
+            { name: 'cdn/release/assets', size: 'from latest build' },
+            { name: 'cdn/cdn-handoff', size: 'from latest build' }
+          ]
     },
     {
       id: 'standalone',
       label: `${slug}-repo`,
       description: 'Exports a clean house-standard SPFx repo that can run by itself or be imported into another SPFx Kit lab.',
       totalSize: estimates.standalone?.totalSize || 'Calculated on export',
-      files: estimates.standalone?.files?.length ? estimates.standalone.files : [
-        { name: `${slug}-repo/package.json`, size: 'generated' },
-        { name: `${slug}-repo/package-lock.json`, size: 'generated' },
-        { name: `${slug}-repo/SPFX-KIT-EXPORT-README.md`, size: 'upload instructions' }
-      ]
+      files: estimates.standalone?.files?.length
+        ? estimates.standalone.files
+        : [
+            { name: `${slug}-repo/package.json`, size: 'generated' },
+            { name: `${slug}-repo/package-lock.json`, size: 'generated' },
+            { name: `${slug}-repo/SPFX-KIT-EXPORT-README.md`, size: 'upload instructions' }
+          ]
     }
   ];
 }

@@ -39,15 +39,11 @@ describe('middleTruncatePath', () => {
   });
 
   it('keeps the leaf segment when truncating long paths', () => {
-    expect(middleTruncatePath('.spfx-kit/apps/user-management-portal-spfx', 38)).toBe(
-      '.spfx-kit…/user-management-portal-spfx'
-    );
+    expect(middleTruncatePath('.spfx-kit/apps/user-management-portal-spfx', 38)).toBe('.spfx-kit…/user-management-portal-spfx');
   });
 
   it('prefers the leaf when the directory name exceeds the budget', () => {
-    expect(middleTruncatePath('.spfx-kit/apps/user-management-portal-spfx', 29)).toBe(
-      '…/user-management-portal-spfx'
-    );
+    expect(middleTruncatePath('.spfx-kit/apps/user-management-portal-spfx', 29)).toBe('…/user-management-portal-spfx');
   });
 
   it('truncates an oversized leaf from the start of the leaf', () => {

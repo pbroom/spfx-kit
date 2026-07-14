@@ -143,7 +143,10 @@ export function serializeCodeWorkbenchSource(source: CodeWorkbenchSourceV1): Cod
   };
 }
 
-export function deserializeCodeWorkbenchSource(value: string | undefined, fallback: Partial<CodeWorkbenchSourceV1> = {}): CodeWorkbenchSourceV1 {
+export function deserializeCodeWorkbenchSource(
+  value: string | undefined,
+  fallback: Partial<CodeWorkbenchSourceV1> = {}
+): CodeWorkbenchSourceV1 {
   if (!value) {
     return createDefaultCodeWorkbenchSource(fallback);
   }
@@ -209,7 +212,10 @@ export function compileCodeWorkbenchSource(options: CodeWorkbenchCompileOptions)
 export function renderCodeWorkbench(options: CodeWorkbenchRenderOptions): CodeWorkbenchRenderHandle {
   const compiled = compileCodeWorkbenchSource(options);
   const host = options.host;
-  const reactDom = options.modules['react-dom'] as { render?: (...args: unknown[]) => void; unmountComponentAtNode?: (node: Element) => void };
+  const reactDom = options.modules['react-dom'] as {
+    render?: (...args: unknown[]) => void;
+    unmountComponentAtNode?: (node: Element) => void;
+  };
   const react = options.modules.react as { createElement?: (...args: unknown[]) => unknown };
   let mountedNode: HTMLElement | undefined;
   let styleNode: HTMLStyleElement | undefined;
@@ -309,7 +315,8 @@ export function createSpfxBridge(context: any, options: SpfxBridgeOptions = {}):
     siteUrl,
     currentUser,
     lists: {
-      getItems: (listTitle: string, query = '') => spGet(`${webUrl}/_api/web/lists/getbytitle('${escapeOData(listTitle)}')/items${query}`),
+      getItems: (listTitle: string, query = '') =>
+        spGet(`${webUrl}/_api/web/lists/getbytitle('${escapeOData(listTitle)}')/items${query}`),
       addItem: (listTitle: string, fields: Record<string, unknown>) =>
         spPost(`${webUrl}/_api/web/lists/getbytitle('${escapeOData(listTitle)}')/items`, fields),
       updateItem: (listTitle: string, itemId: number, fields: Record<string, unknown>) =>
@@ -486,7 +493,13 @@ async function graphGet(context: any, path: string): Promise<unknown> {
   return request.header ? request.header('ConsistencyLevel', 'eventual').get() : request.get();
 }
 
-async function callSpHttp(client: any, method: 'get' | 'post', url: string, body?: unknown, configuration?: unknown): Promise<any> {
+async function callSpHttp(
+  client: any,
+  method: 'get' | 'post',
+  url: string,
+  body?: unknown,
+  configuration?: unknown
+): Promise<any> {
   if (!client || typeof client[method] !== 'function') {
     throw new Error('SharePoint HTTP client is not available in this SPFx context.');
   }

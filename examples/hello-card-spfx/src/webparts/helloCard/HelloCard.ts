@@ -41,8 +41,12 @@ export default class HelloCardWebPart extends BaseClientSideWebPart<IHelloCardPr
       this.domElement
     );
   }
-  protected onDispose(): void { ReactDom.unmountComponentAtNode(this.domElement); }
-  protected get dataVersion(): Version { return Version.parse('1.0'); }
+  protected onDispose(): void {
+    ReactDom.unmountComponentAtNode(this.domElement);
+  }
+  protected get dataVersion(): Version {
+    return Version.parse('1.0');
+  }
   protected getPropertyPaneConfiguration(): IPropertyPaneConfiguration {
     return {
       pages: [
