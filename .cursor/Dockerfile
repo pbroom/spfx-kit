@@ -17,8 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Pin Node to the SPFx Kit engine (.nvmrc / .node-version): 22.22.3
 ENV NODE_VERSION=22.22.3
-RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
-    | tar -xJ -C /usr/local --strip-components=1 \
+# Verify the tarball against the published SHA256 checksums before extracting.
+RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz \
+    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" -o /tmp/SHASUMS256.txt \
+    && cd /tmp && grep " node-v${NODE_VERSION}-linux-x64.tar.xz\$" SHASUMS256.txt | sha256sum -c - \
+    && tar -xJ -C /usr/local --strip-components=1 -f /tmp/node.tar.xz \
+    && rm /tmp/node.tar.xz /tmp/SHASUMS256.txt \
     && node --version \
     && npm --version
 
