@@ -15,3 +15,10 @@ npm run sync:lab
 
 The managed copy takes precedence over the committed example with the same
 slug, so the lab will not register both.
+
+`hello-card-spfx` also serves as the supported production canary. It keeps an
+app-local lockfile, installs with `npm ci`, builds with Heft, and produces the
+verified `.sppkg` artifact used by the root `npm run ship` and CI gates. It is
+deliberately outside the root npm workspaces so the Microsoft Heft rig resolves
+its project-local dependencies exactly as it does in a standalone deployment
+repository.

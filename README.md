@@ -2,13 +2,12 @@
 
 SPFx Kit is a Turbo + npm workspaces monorepo for importing, authoring, previewing, validating, and shipping SharePoint Framework applications and web parts.
 
-The default development surface is the local lab. The lab lets you work on SPFx web parts in a fast Vite preview before using the real SPFx gulp build, package, and hosted workbench path as the deployment gate.
+The default development surface is the local lab. The lab lets you work on SPFx web parts in a fast Vite preview before using the supported Heft build, package, and modern SharePoint Debug Toolbar path as the deployment gate.
 
 ## Lab Quickstart
 
-Use Node `22.22.3`. This matches the SPFx `1.21.1` apps this kit is built
-to manage and keeps validation inside the supported `>=22.14.0 <23.0.0`
-engine range.
+Use Node `22.22.3`. This matches the SPFx `1.23.2` default and keeps
+validation inside the supported `>=22.14.0 <23.0.0` engine range.
 
 ```sh
 nvm use
@@ -63,6 +62,10 @@ The lab is for fast local authoring and visual QA. Before deployment, still run 
   into the lab.
 - `scripts/tests` - security regression tests run by `npm run test:security`.
 - `tests/` - vitest unit and CLI integration tests run by `npm test`.
+- `tests/e2e/` - Playwright browser and Axe accessibility tests run by
+  `npm run test:e2e`.
+- [`docs/toolchain.md`](docs/toolchain.md) - the Heft, Gulp compatibility, app-boundary, and SPFx
+  CLI decision record.
 - `.spfx-kit/apps/<slug>-spfx` - ignored local SPFx apps created or imported
   on your machine.
 
@@ -91,9 +94,14 @@ run them locally before handing off changes:
 ```sh
 npm run build          # sync:lab + all workspace builds
 npm run lint           # ESLint across the monorepo
+npm run format:check   # Prettier baseline
 npm test               # vitest unit + CLI integration tests
+npm run test:e2e       # Playwright smoke + Axe WCAG A/AA checks
 npm run guard:public   # public-safety guard
 npm run test:security  # lab API, Graph search, and safe-copy regression tests
+npm run security:audit # production dependency audit
+npm run ship           # workspace tasks + isolated SPFx canary package
+npm run verify:sppkg -- --app examples/hello-card-spfx
 ```
 
 ## Daily Lab Workflow
@@ -127,7 +135,8 @@ Build or ship one SPFx app:
 
 ```sh
 cd .spfx-kit/apps/<app-slug>
-npm install
+npm install # first install only; creates the app-local package-lock.json
+npm ci      # repeatable installs after the lock exists
 npm run build
 npm run ship
 ```
@@ -170,6 +179,13 @@ history. Because managed apps are ignored local projects, they can also
 maintain their own app-local install and lockfile without changing the root
 `package-lock.json`.
 
+After importing or creating an app, run `npm install` in that app once to
+create its active lockfile. Commit that lockfile when the app is exported to
+its deployment repository, and use `npm ci` for every repeatable local or CI
+install after that. The committed canary follows the same boundary under
+`examples/hello-card-spfx`; it is intentionally not an npm workspace because
+the Microsoft Heft rig resolves project-local `node_modules` paths.
+
 Managed apps keep portable lab metadata under `.spfx-kit/lab/register.tsx`.
 The older `src/lab/register.tsx` location still works for compatibility, but
 new imports and created apps use `.spfx-kit/lab`.
@@ -178,9 +194,44 @@ Exports are profile-specific:
 
 - `single` produces an `.sppkg` with `includeClientSideAssets=true`.
 - `cdn` produces an `.sppkg`, `release/`, and `cdn-handoff/` assets for `SPFX_KIT_CDN_BASE_URL`.
-- `standalone` produces a clean standalone repo with root-level `config/`, `src/`, `sharepoint/`, `release/`, `cdn-handoff/`, `gulpfile.js`, `tsconfig.json`, `package.json`, `package-lock.json`, `CLAUDE.md`, and `.spfx-kit` import metadata.
+- `standalone` produces a clean standalone repo with root-level `config/`,
+  `src/`, `sharepoint/`, `release/`, `cdn-handoff/`, `tsconfig.json`,
+  `package.json`, `package-lock.json`, `CLAUDE.md`, `.spfx-kit` import metadata,
+  and the detected toolchain files. Heft apps retain their rig configuration;
+  legacy Gulp imports retain `gulpfile.js`.
 
 Production SPFx app exports must not depend on `@spfx-kit/*` packages or top-level monorepo `packages/*` code. Lab-only helpers stay in this monorepo.
+
+## SPFx Toolchain Policy
+
+New apps use SPFx `1.23.2`, React `17.0.1`, TypeScript `5.8`, and Heft. Heft
+is Microsoft's default for generated SPFx projects from `1.22` onward. The kit
+still detects, validates, imports, and exports legacy Gulp apps without silently
+converting their build scripts.
+
+See [`docs/toolchain.md`](docs/toolchain.md) for the full decision, including why deployable SPFx
+apps keep project-local installs and why the pre-release `@microsoft/spfx-cli`
+is monitored rather than used as the production scaffolding path.
+
+## Debug On A Modern SharePoint Page
+
+The hosted workbench is deprecated and is scheduled for retirement on
+December 1, 2026. Use the real modern page and SPFx Debug Toolbar path:
+
+1. Set `SPFX_SERVE_TENANT_DOMAIN` to the tenant and site path, for example
+   `contoso.sharepoint.com/sites/team-a`.
+2. Ensure that `config/serve.json` points to an editable modern page in that
+   site. Generated apps use `/SitePages/Home.aspx` plus the local manifest
+   query by default.
+3. Run `npm run serve`, accept the prompt to load debug scripts, edit the page,
+   and add the local web part from the toolbox.
+4. Use the Debug Toolbar for manifest info, the developer dashboard, and
+   stopping the debug session.
+
+Only load local debug scripts in a development tenant or a page where that
+code is safe to execute. See Microsoft's guidance for
+[debugging on modern pages](https://learn.microsoft.com/en-us/sharepoint/dev/spfx/debug-modern-pages)
+and the [SPFx Debug Toolbar](https://learn.microsoft.com/en-us/sharepoint/dev/spfx/debug-toolbar).
 
 ## Lab Adapter Checklist
 
@@ -259,7 +310,8 @@ Preserve source history under the app's `.spfx-kit/`, run
 `npm run sync:lab`, then validate with:
 `npm run validate:spfx -- --app .spfx-kit/apps/<slug>-spfx --profile lab`
 
-Summarize any compatibility issues against Node 22 and SPFx 1.21.x.
+Summarize the detected Gulp or Heft toolchain and any compatibility issues
+against Node 22 and the app's declared SPFx version.
 ```
 
 ### Create A New Web Part
@@ -322,8 +374,8 @@ the affected `npm run validate:spfx` command
 ## Runtime Notes
 
 This workspace is pinned to Node `22.22.3` and npm `10.9.x` because the
-deployment-target apps use SPFx `1.21.1` with an engine range of
-`>=22.14.0 <23.0.0`. Use `nvm use` before SPFx validation.
+supported SPFx `1.23.2` baseline uses the `>=22.14.0 <23.0.0` engine range.
+Use `nvm use` before SPFx validation.
 
 SPFx apps are configured for CDN-hosted JavaScript bundles. Set
 `SPFX_KIT_CDN_BASE_URL` and run

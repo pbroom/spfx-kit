@@ -4,3 +4,4 @@
 - Keep production-consumed code under src/.
 - CDN production packages use includeClientSideAssets=false and https://cdn.example.com/spfx/hello-card-spfx/.
 - Provision SharePoint lists manually; do not add hidden PnP provisioning.
+- Debug on a modern SharePoint page with the SPFx Debug Toolbar; do not add a hosted-workbench dependency.

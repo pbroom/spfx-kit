@@ -54,6 +54,10 @@ describe('create -> sync -> validate golden path', () => {
       typescript: '~5.8.0'
     });
     expect(packageJson.devDependencies).not.toHaveProperty('@microsoft/sp-build-web');
+    const serveJson = JSON.parse(await readFile(path.join(appDir, 'config', 'serve.json'), 'utf8'));
+    expect(serveJson.initialPage).toContain('/SitePages/Home.aspx?loadSPFX=true');
+    expect(serveJson.initialPage).toContain('debugManifestsFile=https://localhost:4321/temp/build/manifests.js');
+    expect(serveJson.initialPage).not.toContain('workbench.aspx');
   });
 
   it('refuses to overwrite an existing app without --force', () => {

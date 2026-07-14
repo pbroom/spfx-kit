@@ -67,10 +67,7 @@ async function main() {
   await writeFile(path.join(appDir, 'eslint.config.js'), eslintConfig());
   await writeFile(path.join(appDir, 'CLAUDE.md'), claude(slug));
   await writeFile(path.join(appDir, 'cdn-handoff', 'README.md'), cdnReadme(slug));
-  await writeFile(
-    path.join(appDir, 'README.md'),
-    `# ${title}\n\nSPFx ${DEFAULT_SPFX_VERSION} Heft web part project managed by SPFx Kit.\n`
-  );
+  await writeFile(path.join(appDir, 'README.md'), projectReadme(title));
   await writeJson(path.join(appDir, `${webPartDir}/${webPartName}.manifest.json`), manifest(componentId, title, webPartName));
   await writeFile(path.join(appDir, `${webPartDir}/${webPartName}.ts`), webPartSource(webPartName, title));
   await writeFile(
@@ -186,7 +183,8 @@ function serveJson() {
     $schema: 'https://developer.microsoft.com/json-schemas/spfx-build/spfx-serve.schema.json',
     port: 4321,
     https: true,
-    initialPage: 'https://{tenantDomain}/_layouts/workbench.aspx'
+    initialPage:
+      'https://{tenantDomain}/SitePages/Home.aspx?loadSPFX=true&debugManifestsFile=https://localhost:4321/temp/build/manifests.js'
   };
 }
 
@@ -198,6 +196,30 @@ function deployJson() {
     container: '',
     accessKey: ''
   };
+}
+
+function projectReadme(title) {
+  return `# ${title}
+
+SPFx ${DEFAULT_SPFX_VERSION} Heft web part project managed by SPFx Kit.
+
+## Install And Build
+
+Run \`npm install\` once to create the app-local lockfile. Commit that lockfile
+in the deployment repository and use \`npm ci\` for repeatable installs.
+
+Use \`npm run build\` for a production build and \`npm run ship\` to produce the
+configured package under \`sharepoint/solution/\`.
+
+## Debug On SharePoint
+
+Set \`SPFX_SERVE_TENANT_DOMAIN\` to a development tenant and site path, such as
+\`contoso.sharepoint.com/sites/team-a\`, then run \`npm run serve\`. The generated
+\`config/serve.json\` opens a modern page with the local manifest parameters.
+Accept the prompt to load debug scripts and use the SPFx Debug Toolbar. Replace
+the page path when the site's editable development page is not
+\`/SitePages/Home.aspx\`.
+`;
 }
 
 function tsconfig() {
