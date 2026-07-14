@@ -41,6 +41,9 @@ describe('SPFx toolchain model', () => {
     expect(requiredSpfxFiles('heft')).toContain('config/typescript.json');
     expect(requiredSpfxFiles('heft')).toContain('config/config.json');
     expect(requiredSpfxFiles('heft')).not.toContain('gulpfile.js');
+    expect(requiredSpfxFiles('ambiguous')).toContain('gulpfile.js');
+    expect(requiredSpfxFiles('ambiguous')).toContain('config/rig.json');
+    expect(requiredSpfxFiles('ambiguous')).toContain('config/typescript.json');
   });
 
   it('summarizes a Heft app without Yeoman metadata', async () => {

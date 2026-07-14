@@ -34,6 +34,9 @@ export function detectSpfxToolchain(packageJson) {
 }
 
 export function requiredSpfxFiles(toolchain) {
+  if (toolchain === 'ambiguous') {
+    return [...COMMON_REQUIRED_FILES, ...TOOLCHAIN_REQUIRED_FILES.gulp, ...TOOLCHAIN_REQUIRED_FILES.heft];
+  }
   return [...COMMON_REQUIRED_FILES, ...(TOOLCHAIN_REQUIRED_FILES[toolchain] || [])];
 }
 
