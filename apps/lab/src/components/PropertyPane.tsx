@@ -31,7 +31,8 @@ import { CssEditor } from './CssEditor';
 
 const codeWorkbenchModules = createApprovedCodeWorkspaceModules();
 const codeWorkbenchMockSpfx = createSpfxBridge(createMockSpfxContext());
-const labMonacoBaseUrl = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs';
+// Keep in sync with the monaco-editor version pinned in apps/lab/package.json.
+const labMonacoBaseUrl = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs';
 
 interface PropertyPaneProps {
   webPart?: LabWebPart;

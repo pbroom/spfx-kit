@@ -14,7 +14,8 @@ interface CssEditorProps {
   onTargetRename?: (target: CssEditorTarget, nextSelector: string, nextValue: string) => void;
 }
 
-const defaultMonacoBaseUrl = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs';
+// Keep in sync with the monaco-editor version pinned in apps/lab/package.json.
+const defaultMonacoBaseUrl = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs';
 let configuredMonacoBaseUrl = '';
 let configuredCssIntellisense = false;
 const floatingResizeZones: Array<{ direction: ResizeDirection; label: string }> = [
