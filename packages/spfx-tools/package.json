@@ -20,6 +20,6 @@
     "test:safe-copy": "node scripts/test-safe-copy-symlinks.mjs"
   },
   "dependencies": {
-    "fflate": "0.8.2"
+    "fflate": "0.8.3"
   }
 }

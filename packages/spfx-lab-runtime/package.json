@@ -21,6 +21,6 @@
   },
   "devDependencies": {
     "@types/react": "17.0.45",
-    "typescript": "5.3.3"
+    "typescript": "7.0.2"
   }
 }
