@@ -76,7 +76,7 @@ async function main() {
 }
 
 function isRemoteUrl(source) {
-  return /^(https?:|git@|ssh:)/.test(source);
+  return /^(https?:|git@|ssh:|git:)/.test(source);
 }
 
 function runGit(cwd, args) {

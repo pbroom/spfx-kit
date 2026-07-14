@@ -52,7 +52,8 @@ export function register(registry: LabWebPartRegistry): void {
 }
 
 export function titleFromSlug(slug) {
-  return slug
+  const base = slug.endsWith('-spfx') ? slug.slice(0, -5) : slug;
+  return base
     .split('-')
     .filter(Boolean)
     .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
