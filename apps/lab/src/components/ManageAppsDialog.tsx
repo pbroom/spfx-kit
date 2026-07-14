@@ -6,12 +6,14 @@ import {
   DialogBody,
   DialogContent,
   DialogSurface,
-  DialogTitle
+  DialogTitle,
+  Input,
+  Switch
 } from '@fluentui/react-components';
-import { Check, FolderInput, FolderPlus, RefreshCw, Trash2, X } from 'lucide-react';
+import { Check, FolderInput, FolderPlus, RefreshCw, Search, X } from 'lucide-react';
 import type { LabWebPart } from '@spfx-kit/spfx-lab-runtime';
 import { labApiWriteHeaders, readApiJson, ManagedLabApp, ManagedLabAppsApiResult, ManageAppsApiResult } from '../api/labApi';
-import { managedAppPath, titleFromSlug } from '../lib/text';
+import { managedAppPath, middleTruncatePath, titleFromSlug } from '../lib/text';
 import type { AddAppMode } from './AddAppDrawer';
 
 type ManageAppsPhase = 'idle' | 'loading' | 'running' | 'complete' | 'error';
@@ -35,6 +37,7 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
   const [managedApps, setManagedApps] = React.useState<ManagedLabApp[]>([]);
   const [manageAppsStatus, setManageAppsStatus] = React.useState<ManageAppsStatus>({ phase: 'idle', message: '' });
   const [manageAppsBusyAppId, setManageAppsBusyAppId] = React.useState('');
+  const [appFilter, setAppFilter] = React.useState('');
 
   const refreshManagedApps = React.useCallback(async (options: { quiet?: boolean } = {}): Promise<void> => {
     if (!options.quiet) {
@@ -58,6 +61,7 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
 
   React.useEffect(() => {
     if (open) {
+      setAppFilter('');
       setManageAppsStatus({ phase: 'idle', message: '' });
       void refreshManagedApps();
     }
@@ -71,6 +75,18 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
     })),
     [managedApps, webPartsByAppId]
   );
+
+  const filteredAppRows = React.useMemo(() => {
+    const query = appFilter.trim().toLowerCase();
+    if (!query) {
+      return managedAppRows;
+    }
+
+    return managedAppRows.filter((app) => {
+      const haystack = `${app.title} ${app.relativeDir} ${app.id}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [appFilter, managedAppRows]);
 
   const runManageAppsAction = async (appId: string, action: 'unlink' | 'sync'): Promise<void> => {
     setManageAppsBusyAppId(appId);
@@ -158,21 +174,34 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
             Manage Apps
           </DialogTitle>
           <DialogContent className="manage-apps-dialog__content">
+            <p className="manage-apps-dialog__subtitle">
+              Apps linked into this lab
+              <span aria-hidden="true"> · </span>
+              <span>
+                {appFilter.trim()
+                  ? `${filteredAppRows.length} of ${managedAppRows.length} ${managedAppRows.length === 1 ? 'app' : 'apps'}`
+                  : managedAppRows.length === 1
+                    ? '1 app'
+                    : `${managedAppRows.length} apps`}
+              </span>
+            </p>
             <div className="manage-apps-dialog__toolbar">
-              <Button
-                appearance="secondary"
-                icon={<FolderInput size={14} />}
-                onClick={() => onOpenAddAppDrawer('import')}
-              >
-                Import
-              </Button>
-              <Button
-                appearance="secondary"
-                icon={<FolderPlus size={14} />}
-                onClick={() => onOpenAddAppDrawer('create')}
-              >
-                Create
-              </Button>
+              <div className="manage-apps-dialog__toolbar-primary">
+                <Button
+                  appearance="primary"
+                  icon={<FolderPlus size={14} />}
+                  onClick={() => onOpenAddAppDrawer('create')}
+                >
+                  Create
+                </Button>
+                <Button
+                  appearance="secondary"
+                  icon={<FolderInput size={14} />}
+                  onClick={() => onOpenAddAppDrawer('import')}
+                >
+                  Import
+                </Button>
+              </div>
               <Button
                 appearance="subtle"
                 disabled={manageAppsBusyAppId === '__all__' || manageAppsStatus.phase === 'loading'}
@@ -182,6 +211,15 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
                 Re-sync
               </Button>
             </div>
+
+            <Input
+              aria-label="Filter apps"
+              className="manage-apps-dialog__filter"
+              contentBefore={<Search size={14} aria-hidden="true" />}
+              onChange={(_event, data) => setAppFilter(data.value)}
+              placeholder="Filter by name or path"
+              value={appFilter}
+            />
 
             {manageAppsStatus.phase !== 'idle' && (
               <section
@@ -200,69 +238,69 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
             )}
 
             <div className="manage-apps-list" aria-label="Lab apps">
-              {managedAppRows.length ? (
-                managedAppRows.map((app) => {
+              {filteredAppRows.length ? (
+                filteredAppRows.map((app) => {
                   const busy = manageAppsBusyAppId === app.id || manageAppsBusyAppId === '__all__';
                   const connected = app.status === 'connected';
                   const disconnected = app.status === 'disconnected';
+                  const canToggleConnection = connected || disconnected;
                   return (
                     <section
-                      className={`manage-app-row ${disconnected ? 'manage-app-row--has-badge' : ''}`}
+                      className={`manage-app-row ${canToggleConnection ? '' : 'manage-app-row--has-badge'}`}
                       data-app-id={app.id}
                       key={app.id}
                     >
                       <div className="manage-app-row__main">
                         <strong>{app.title}</strong>
-                        <span>{app.relativeDir}</span>
+                        <span className="manage-app-row__path" title={app.relativeDir}>
+                          {middleTruncatePath(app.relativeDir)}
+                        </span>
                       </div>
-                      {disconnected && (
-                        <span className="manage-app-row__badge manage-app-row__badge--disconnected">
-                          Disconnected
+                      {!canToggleConnection && (
+                        <span className="manage-app-row__badge manage-app-row__badge--missing">
+                          No adapter
                         </span>
                       )}
                       <div className="manage-app-row__actions">
-                        {connected ? (
-                          <Button
-                            appearance="secondary"
-                            data-action="unlink"
+                        {canToggleConnection ? (
+                          <Switch
+                            aria-label={`Connected: ${app.title}`}
+                            checked={connected}
+                            className="manage-app-row__connection"
+                            data-action={connected ? 'unlink' : 'sync'}
                             disabled={busy}
-                            icon={<Trash2 size={14} />}
-                            onClick={() => void runManageAppsAction(app.id, 'unlink')}
-                          >
-                            Unlink
-                          </Button>
-                        ) : (
-                          <Button
-                            appearance="primary"
-                            data-action="sync"
-                            disabled={!disconnected || busy}
-                            icon={<RefreshCw size={14} />}
-                            onClick={() => void runManageAppsAction(app.id, 'sync')}
-                          >
-                            {disconnected ? 'Re-sync' : 'No adapter'}
-                          </Button>
-                        )}
+                            label="Connected"
+                            labelPosition="before"
+                            onChange={(_event, data) => {
+                              void runManageAppsAction(app.id, data.checked ? 'sync' : 'unlink');
+                            }}
+                          />
+                        ) : null}
                       </div>
                     </section>
                   );
                 })
               ) : (
                 <p className="manage-apps-empty">
-                  {manageAppsStatus.phase === 'loading' ? 'Loading apps...' : 'No workspace apps found.'}
+                  {manageAppsStatus.phase === 'loading'
+                    ? 'Loading apps...'
+                    : managedAppRows.length
+                      ? 'No apps match this filter.'
+                      : 'No workspace apps found.'}
                 </p>
               )}
             </div>
           </DialogContent>
-          <DialogActions>
-            <Button appearance="secondary" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
-            {manageAppsStatus.reloadRecommended && (
+          {manageAppsStatus.reloadRecommended && (
+            <DialogActions className="manage-apps-dialog__actions" fluid>
+              <Button appearance="secondary" onClick={() => onOpenChange(false)}>
+                Dismiss
+              </Button>
               <Button appearance="primary" icon={<RefreshCw size={14} />} onClick={() => window.location.reload()}>
                 Reload lab
               </Button>
-            )}
-          </DialogActions>
+            </DialogActions>
+          )}
         </DialogBody>
       </DialogSurface>
     </Dialog>
