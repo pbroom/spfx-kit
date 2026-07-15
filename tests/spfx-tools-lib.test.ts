@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+// @ts-expect-error plain .mjs module without type declarations
+import { writeAppRepoFiles } from '../packages/spfx-tools/src/lib/app-repo-files.mjs';
 // @ts-expect-error plain .mjs module without type declarations
 import { parseArgs, required } from '../packages/spfx-tools/src/lib/args.mjs';
 // @ts-expect-error plain .mjs module without type declarations
@@ -35,5 +40,39 @@ describe('spfx helpers', () => {
   it('builds per-app CDN base paths', () => {
     expect(cdnBasePathForSlug('team-spfx')).toBe('https://cdn.example.com/spfx/team-spfx/');
     expect(cdnBasePathForSlug('team-spfx', 'https://cdn.contoso.com/base///')).toBe('https://cdn.contoso.com/base/team-spfx/');
+  });
+});
+
+describe('writeAppRepoFiles', () => {
+  let appDir = '';
+
+  afterEach(async () => {
+    if (appDir) {
+      await rm(appDir, { recursive: true, force: true });
+      appDir = '';
+    }
+  });
+
+  it('emits CI workflow, .nvmrc, and .gitignore for a fresh app', async () => {
+    appDir = await mkdtemp(path.join(tmpdir(), 'spfx-kit-repo-files-'));
+    const written = await writeAppRepoFiles(appDir);
+    expect(written.sort()).toEqual(['.github/workflows/ci.yml', '.gitignore', '.nvmrc']);
+
+    const workflow = await readFile(path.join(appDir, '.github', 'workflows', 'ci.yml'), 'utf8');
+    expect(workflow).toContain('node-version-file: .nvmrc');
+    expect(workflow).toContain('npm run ship');
+    expect(workflow).toContain('@spfx-kit/');
+    expect(await readFile(path.join(appDir, '.nvmrc'), 'utf8')).toBe('22.22.3\n');
+    expect(await readFile(path.join(appDir, '.gitignore'), 'utf8')).toContain('node_modules/');
+  });
+
+  it('never overwrites existing files', async () => {
+    appDir = await mkdtemp(path.join(tmpdir(), 'spfx-kit-repo-files-'));
+    await writeFile(path.join(appDir, '.nvmrc'), 'custom\n');
+    const written = await writeAppRepoFiles(appDir);
+    expect(written.sort()).toEqual(['.github/workflows/ci.yml', '.gitignore']);
+    expect(await readFile(path.join(appDir, '.nvmrc'), 'utf8')).toBe('custom\n');
+
+    expect(await writeAppRepoFiles(appDir)).toEqual([]);
   });
 });

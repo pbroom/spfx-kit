@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { cp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { writeAppRepoFiles } from '../app-repo-files.mjs';
 import { copyPortableSpfxSource, exists, listFilesRecursive, readJson, writeJson } from '../fs.mjs';
 import { cdnBasePathForSlug, standalonePackageName, setCdnBasePath, setIncludeClientSideAssets } from '../spfx.mjs';
 import { detectSpfxToolchain, standaloneScriptsForToolchain } from '../spfx-toolchain.mjs';
@@ -74,6 +75,7 @@ export async function exportStandaloneRepo(appDir, outDir, slug) {
   await copyPortableSpfxSource(appDir, targetDir);
   reportTargetProgress('standalone', 'assembling', 0.34, 'Writing house-standard docs and metadata.');
   await ensureHouseStandardDocs(targetDir, slug);
+  await writeAppRepoFiles(targetDir);
   await writeRepoExportReadme(targetDir, slug);
   reportTargetProgress('standalone', 'configuring', 0.52, 'Rewriting standalone package configuration.');
   await rewriteStandalonePackageJson(targetDir, standalonePackageName(appDir));

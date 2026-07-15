@@ -21,6 +21,7 @@
     "ship:canary": "npm run install:canary && npm --prefix examples/hello-card-spfx run ship",
     "clean": "turbo run clean",
     "import:spfx": "node packages/spfx-tools/src/cli/import-spfx-app.mjs",
+    "clone:spfx": "node packages/spfx-tools/src/cli/clone-spfx-app.mjs",
     "create:spfx": "node packages/spfx-tools/src/cli/create-spfx-app.mjs",
     "export:spfx": "node packages/spfx-tools/src/cli/export-spfx-app.mjs",
     "bump:spfx": "node packages/spfx-tools/src/cli/bump-spfx-app.mjs",

@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Local CLIs for importing SPFx apps, syncing lab registrations, and validating SPFx app structure.",
   "bin": {
+    "clone-spfx-app": "./src/cli/clone-spfx-app.mjs",
     "copy-monaco-assets": "./src/cli/copy-monaco-assets.mjs",
     "create-spfx-app": "./src/cli/create-spfx-app.mjs",
     "export-spfx-app": "./src/cli/export-spfx-app.mjs",

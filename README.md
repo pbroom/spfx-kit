@@ -60,6 +60,7 @@ The lab is for fast local authoring and visual QA. Before deployment, still run 
   code-workbench web parts.
 - `examples/<slug>-spfx` - committed, public-safe example apps that register
   into the lab.
+- `docs/` - workflow guides, including app source control and CI.
 - `scripts/tests` - security regression tests run by `npm run test:security`.
 - `tests/` - vitest unit and CLI integration tests run by `npm test`.
 - `tests/e2e/` - Playwright browser and Axe accessibility tests run by
@@ -151,6 +152,15 @@ npm run sync:lab
 npm run validate:spfx -- --app .spfx-kit/apps/team-webpart-spfx --profile lab
 ```
 
+To clone someone else's SPFx repo with full git history so you can test and
+modify it and send changes back (see `docs/source-control.md`):
+
+```sh
+npm run clone:spfx -- --source https://github.com/example/their-webpart --name their-webpart --fork git@github.com:you/their-webpart.git
+npm run sync:lab
+npm run validate:spfx -- --app .spfx-kit/apps/their-webpart-spfx --profile lab
+```
+
 To create a new standalone-shaped SPFx app inside the lab:
 
 ```sh
@@ -201,6 +211,26 @@ Exports are profile-specific:
   legacy Gulp imports retain `gulpfile.js`.
 
 Production SPFx app exports must not depend on `@spfx-kit/*` packages or top-level monorepo `packages/*` code. Lab-only helpers stay in this monorepo.
+
+## App Source Control And CI
+
+Each app under `.spfx-kit/apps/<slug>-spfx` is its own git repository, nested
+inside the (ignored) managed area, so app history and remotes never touch the
+public kit repo. `docs/source-control.md` covers the full workflows:
+
+- **Managed apps you own**: `create:spfx` scaffolds a repo-ready app with a
+  GitHub Actions workflow (`npm run ship`, `.sppkg` artifact, and
+  a `v*` tag release job), `.nvmrc`, and `.gitignore`. `git init` inside the
+  app, push to a private remote, and release with `bump:spfx` plus a tag.
+  Standalone exports get the same files.
+- **Third-party apps shared with you**: `clone:spfx` keeps their full git
+  history and leaves the project pristine, sets `origin`/`upstream` remotes
+  when you pass `--fork`, and keeps kit-generated files out of their
+  `git status`. Test and modify in the lab, then push a branch, open a pull
+  request upstream, or hand back a `git format-patch` file.
+
+Do not use git submodules for apps; a submodule entry would be tracked by the
+public repo and break the `guard:public` safety model.
 
 ## SPFx Toolchain Policy
 

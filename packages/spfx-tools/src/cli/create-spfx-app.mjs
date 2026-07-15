@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { parseArgs, required } from '../lib/args.mjs';
+import { writeAppRepoFiles } from '../lib/app-repo-files.mjs';
 import { exists, managedAppDir, writeJson } from '../lib/fs.mjs';
 import { cdnBasePathForSlug } from '../lib/spfx.mjs';
 import {
@@ -84,6 +85,7 @@ async function main() {
     path.join(appDir, '.spfx-kit', 'lab', `${camel(webPartName)}Lab.css`),
     `.spfx-kit-created-webpart { font-family: "Segoe UI", sans-serif; }\n`
   );
+  await writeAppRepoFiles(appDir);
 
   console.log(`Created ${path.relative(rootDir, appDir).replace(/\\/g, '/')}`);
 }
