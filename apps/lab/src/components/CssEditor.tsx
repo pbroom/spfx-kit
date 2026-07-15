@@ -242,6 +242,7 @@ export function CssEditor(props: CssEditorProps): JSX.Element {
               onMount={(editor) => handleCssEditorMount(editor, () => setEditorReady(true))}
               onChange={(value) => props.onChange(value || '')}
               options={{
+                acceptSuggestionOnEnter: 'off',
                 autoClosingBrackets: 'always',
                 autoClosingQuotes: 'always',
                 automaticLayout: true,
@@ -390,6 +391,7 @@ export function CssEditor(props: CssEditorProps): JSX.Element {
                   }}
                   onChange={(value) => props.onChange(value || '')}
                   options={{
+                    acceptSuggestionOnEnter: 'off',
                     autoClosingBrackets: 'always',
                     autoClosingQuotes: 'always',
                     automaticLayout: true,
@@ -795,7 +797,7 @@ function registerBetterDividerCompletions(monaco: any): void {
   }
   configuredCssIntellisense = true;
   monaco.languages?.registerCompletionItemProvider?.('scss', {
-    triggerCharacters: ['.', ':', '-', '#', ' ', '\n'],
+    triggerCharacters: ['.', ':', '-', '#', ' '],
     provideCompletionItems(model: any, position: any) {
       const word = model.getWordUntilPosition(position);
       const range = {
