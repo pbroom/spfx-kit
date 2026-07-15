@@ -12,11 +12,15 @@
     "import-spfx-app": "./src/cli/import-spfx-app.mjs",
     "sync-cdn-config": "./src/cli/sync-cdn-config.mjs",
     "sync-lab": "./src/cli/sync-lab.mjs",
-    "validate-spfx-app": "./src/cli/validate-spfx-app.mjs"
+    "validate-spfx-app": "./src/cli/validate-spfx-app.mjs",
+    "verify-sppkg": "./src/cli/verify-sppkg.mjs"
   },
   "scripts": {
     "build": "node src/cli/self-check.mjs",
     "clean": "node src/cli/clean.mjs",
     "test:safe-copy": "node scripts/test-safe-copy-symlinks.mjs"
+  },
+  "dependencies": {
+    "fflate": "0.8.2"
   }
 }

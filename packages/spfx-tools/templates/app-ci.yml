@@ -37,14 +37,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npx gulp build
-
-      - name: Bundle (ship)
-        run: npx gulp bundle --ship
-
-      - name: Package solution (ship)
-        run: npx gulp package-solution --ship
+      - name: Build and package (ship)
+        run: npm run ship
 
       - name: Upload SharePoint package
         uses: actions/upload-artifact@v4

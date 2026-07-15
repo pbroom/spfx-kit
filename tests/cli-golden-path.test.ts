@@ -37,9 +37,11 @@ describe('create -> sync -> validate golden path', () => {
     const appDir = path.join(workDir, '.spfx-kit', 'apps', 'team-divider-spfx');
     for (const file of [
       'package.json',
-      'gulpfile.js',
+      'config/rig.json',
+      'config/typescript.json',
       'config/package-solution.json',
       '.spfx-kit/lab/register.tsx',
+      '.spfx-kit/lab/tsconfig.json',
       '.github/workflows/ci.yml',
       '.nvmrc',
       '.gitignore'
@@ -47,9 +49,21 @@ describe('create -> sync -> validate golden path', () => {
       const info = await stat(path.join(appDir, file));
       expect(info.isFile()).toBe(true);
     }
+    await expect(stat(path.join(appDir, 'gulpfile.js'))).rejects.toMatchObject({ code: 'ENOENT' });
+    const packageJson = JSON.parse(await readFile(path.join(appDir, 'package.json'), 'utf8'));
+    expect(packageJson.devDependencies).toMatchObject({
+      '@microsoft/spfx-web-build-rig': '1.23.2',
+      '@rushstack/heft': '1.2.17',
+      typescript: '~5.8.0'
+    });
+    expect(packageJson.devDependencies).not.toHaveProperty('@microsoft/sp-build-web');
+    const serveJson = JSON.parse(await readFile(path.join(appDir, 'config', 'serve.json'), 'utf8'));
+    expect(serveJson.initialPage).toContain('/SitePages/Home.aspx?loadSPFX=true');
+    expect(serveJson.initialPage).toContain('debugManifestsFile=https://localhost:4321/temp/build/manifests.js');
+    expect(serveJson.initialPage).not.toContain('workbench.aspx');
 
     const workflow = await readFile(path.join(appDir, '.github', 'workflows', 'ci.yml'), 'utf8');
-    expect(workflow).toContain('gulp package-solution --ship');
+    expect(workflow).toContain('npm run ship');
     expect(workflow).toContain("startsWith(github.ref, 'refs/tags/v')");
     expect(await readFile(path.join(appDir, '.nvmrc'), 'utf8')).toBe('22.22.3\n');
     expect(await readFile(path.join(appDir, '.gitignore'), 'utf8')).toContain('sharepoint/solution/*.sppkg');

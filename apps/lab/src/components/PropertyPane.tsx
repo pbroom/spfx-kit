@@ -31,7 +31,8 @@ import { CssEditor } from './CssEditor';
 
 const codeWorkbenchModules = createApprovedCodeWorkspaceModules();
 const codeWorkbenchMockSpfx = createSpfxBridge(createMockSpfxContext());
-const labMonacoBaseUrl = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs';
+// Keep in sync with the monaco-editor version pinned in apps/lab/package.json.
+const labMonacoBaseUrl = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs';
 
 interface PropertyPaneProps {
   webPart?: LabWebPart;
@@ -43,9 +44,7 @@ export function PropertyPane(props: PropertyPaneProps): JSX.Element {
   const renderControl = (control: LabPropertyControl): JSX.Element => {
     const value = control.getValue ? control.getValue(props.values) : props.values[control.name];
     const onChange = (nextValue: LabPropertyBag[string]): void => {
-      props.onChange(
-        control.getPatch ? control.getPatch(nextValue, props.values) : { [control.name]: nextValue }
-      );
+      props.onChange(control.getPatch ? control.getPatch(nextValue, props.values) : { [control.name]: nextValue });
     };
 
     return (
@@ -87,10 +86,7 @@ function renderControlRows(
       const group = [control];
       let nextIndex = index + 1;
 
-      while (
-        nextIndex < controls.length &&
-        controls[nextIndex].inlineGroup === control.inlineGroup
-      ) {
+      while (nextIndex < controls.length && controls[nextIndex].inlineGroup === control.inlineGroup) {
         group.push(controls[nextIndex]);
         nextIndex += 1;
       }
@@ -122,7 +118,10 @@ interface ControlRendererProps {
 
 function ControlRenderer({ control, values, value, onChange, onPatch }: ControlRendererProps): JSX.Element {
   if (control.type === 'codeWorkspace') {
-    const source = deserializeCodeWorkbenchSource(typeof value === 'string' ? value : undefined, createDefaultCodeWorkbenchSource());
+    const source = deserializeCodeWorkbenchSource(
+      typeof value === 'string' ? value : undefined,
+      createDefaultCodeWorkbenchSource()
+    );
     return (
       <Field className="property-field" hint={control.description} label={control.label} size="small">
         <CodeWorkspaceEditor
@@ -350,18 +349,11 @@ function ColorPropertyControl({ label, value, onChange }: ColorPropertyControlPr
               className="property-color-picker__swatch-button"
               onClick={() => setIsOpen((currentValue) => !currentValue)}
             >
-              <span
-                aria-hidden="true"
-                className="property-color-picker__swatch"
-                style={{ backgroundColor: value }}
-              />
+              <span aria-hidden="true" className="property-color-picker__swatch" style={{ backgroundColor: value }} />
             </Button>
           </PopoverTrigger>
           <PopoverSurface className="property-color-picker__popover">
-            <ColorPicker
-              color={hsvColor}
-              onColorChange={(_event, data) => onChange(hsvToHex(data.color))}
-            >
+            <ColorPicker color={hsvColor} onColorChange={(_event, data) => onChange(hsvToHex(data.color))}>
               <ColorArea aria-label={`${label} saturation and brightness`} />
               <ColorSlider aria-label={`${label} hue`} />
               <div className="property-color-picker__hsl" aria-label={`${label} HSL values`}>
@@ -520,9 +512,7 @@ function hslToHex(color: HslColor): string {
     return `#${toHexChannel(lightness)}${toHexChannel(lightness)}${toHexChannel(lightness)}`;
   }
 
-  const q = lightness < 0.5
-    ? lightness * (1 + saturation)
-    : lightness + saturation - lightness * saturation;
+  const q = lightness < 0.5 ? lightness * (1 + saturation) : lightness + saturation - lightness * saturation;
   const p = 2 * lightness - q;
 
   return `#${toHexChannel(hueToRgb(p, q, hue + 1 / 3))}${toHexChannel(hueToRgb(p, q, hue))}${toHexChannel(hueToRgb(p, q, hue - 1 / 3))}`;

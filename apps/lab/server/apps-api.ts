@@ -1,7 +1,14 @@
 import type { Plugin } from 'vite';
 import { readJsonBody, sendJson, verifyStateChangingLabRequest } from './http';
 import { appPathForMessage } from './paths';
-import { normalizeSpfxSlug, sanitizeAppName, sanitizeOptionalRef, sanitizeRequiredText, sanitizeSlug, sanitizeWebPartName } from './sanitize';
+import {
+  normalizeSpfxSlug,
+  sanitizeAppName,
+  sanitizeOptionalRef,
+  sanitizeRequiredText,
+  sanitizeSlug,
+  sanitizeWebPartName
+} from './sanitize';
 import { listManagedLabApps, reconnectLabApp, runWorkspaceNodeCommand, syncLabRegistry, unlinkLabApp } from './workspace';
 
 export function spfxAppApi(): Plugin {

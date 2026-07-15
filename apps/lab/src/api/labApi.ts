@@ -1,5 +1,6 @@
 export type ExportPackageFormat = 'single' | 'cdn' | 'standalone';
-export type ExportProgressPhase = 'idle' | 'queued' | 'configuring' | 'preparing' | 'building' | 'assembling' | 'packaging' | 'complete' | 'error';
+export type ExportProgressPhase =
+  'idle' | 'queued' | 'configuring' | 'preparing' | 'building' | 'assembling' | 'packaging' | 'complete' | 'error';
 
 export interface AddSpfxAppApiResult {
   appId: string;

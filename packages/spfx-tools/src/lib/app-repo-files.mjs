@@ -1,9 +1,7 @@
 import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { exists } from './fs.mjs';
-
-// Matches the kit's root .nvmrc: the Node line supported by SPFx 1.21.x.
-const PINNED_NODE_VERSION = '22.22.3';
+import { DEFAULT_NODE_VERSION } from './spfx-support.mjs';
 
 const APP_GITIGNORE = `# Dependencies
 node_modules/
@@ -47,7 +45,7 @@ export async function writeAppRepoFiles(appDir) {
 
   const nvmrcPath = path.join(appDir, '.nvmrc');
   if (!(await exists(nvmrcPath))) {
-    await writeFile(nvmrcPath, `${PINNED_NODE_VERSION}\n`);
+    await writeFile(nvmrcPath, `${DEFAULT_NODE_VERSION}\n`);
     written.push('.nvmrc');
   }
 

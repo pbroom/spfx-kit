@@ -40,10 +40,10 @@ git push -u origin main
 repo-ready out of the box:
 
 - `.github/workflows/ci.yml` — CI that builds, ships, and packages the app
-  with the real SPFx gulp toolchain and uploads the `.sppkg` artifact, plus a
-  release job for `v*` tags.
-- `.nvmrc` — pins Node `22.22.3` so CI and teammates match the SPFx 1.21.x
-  engine range.
+  through its toolchain-aware `npm run ship` script and uploads the `.sppkg`
+  artifact, plus a release job for `v*` tags.
+- `.nvmrc` — pins Node `22.22.3` so CI and teammates use the same supported
+  runtime.
 - `.gitignore` — keeps `node_modules/`, `lib/`, `temp/`, release assets, and
   `.sppkg` files out of the app repo.
 
@@ -56,8 +56,8 @@ teammate can then clone the app repo into their own kit checkout's
 Work in the lab as usual (`npm run dev`, `npm run sync:lab`,
 `npm run validate:spfx -- --app .spfx-kit/apps/<slug> --profile lab`), then
 commit and push from inside the app directory. The kit is the fast preview
-surface; the app repo's CI runs the real `gulp build`, `gulp bundle --ship`,
-and `gulp package-solution --ship` as the merge gate.
+surface; the app repo's CI runs `npm run ship`, which uses that app's detected
+Heft or Gulp toolchain, as the merge gate.
 
 ### Releasing
 
@@ -71,7 +71,7 @@ git push origin main --tags
 
 `bump:spfx` keeps `package.json` and the `config/package-solution.json`
 solution and feature versions in sync. The tag triggers the CI release job,
-which rebuilds `--ship` and attaches the `.sppkg` to a GitHub Release.
+which attaches the exact build-job `.sppkg` artifact to a GitHub Release.
 Deploying to a tenant (App Catalog upload, CDN asset sync via
 `SPFX_KIT_CDN_BASE_URL` and `npm run sync:cdn`) stays a deliberate manual or
 separately-credentialed step.
@@ -113,7 +113,7 @@ npm install
 git switch -c fix/column-overflow
 # ...edit, then preview in the lab and gate with the real build:
 npm run sync:lab            # from the kit root
-npx gulp build              # from the app directory
+npm run build               # from the app directory
 ```
 
 ### Sharing changes back

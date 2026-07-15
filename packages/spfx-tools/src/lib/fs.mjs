@@ -1,13 +1,16 @@
 import { chmod, copyFile, cp, lstat, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { detectSpfxToolchain } from './spfx-toolchain.mjs';
 
 const EXCLUDED_DIRS = new Set([
   '.git',
   'node_modules',
   'lib',
+  'lib-commonjs',
   'dist',
   'temp',
   'release',
+  'jest-output',
   'build',
   '.turbo'
 ]);
@@ -235,6 +238,10 @@ export async function normalizeManagedSpfxTsconfig(_rootDir, appDir) {
     return;
   }
   const tsconfig = await readJson(tsconfigPath);
+  const packageJson = await readJson(path.join(appDir, 'package.json'));
+  if (detectSpfxToolchain(packageJson) !== 'gulp') {
+    return;
+  }
   if (typeof tsconfig.extends === 'string' && tsconfig.extends.includes('node_modules/')) {
     const rootNodeModules = path.relative(appDir, path.join(rootDir, 'node_modules')).replace(/\\/g, '/') || '.';
     tsconfig.extends = `${rootNodeModules}/@microsoft/rush-stack-compiler-5.3/includes/tsconfig-web.json`;

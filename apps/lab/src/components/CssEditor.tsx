@@ -14,7 +14,8 @@ interface CssEditorProps {
   onTargetRename?: (target: CssEditorTarget, nextSelector: string, nextValue: string) => void;
 }
 
-const defaultMonacoBaseUrl = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs';
+// Keep in sync with the monaco-editor version pinned in apps/lab/package.json.
+const defaultMonacoBaseUrl = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs';
 let configuredMonacoBaseUrl = '';
 let configuredCssIntellisense = false;
 const floatingResizeZones: Array<{ direction: ResizeDirection; label: string }> = [
@@ -48,7 +49,8 @@ const defaultCssEditorTargets: CssEditorTarget[] = [
   {
     label: '.better-divider__line',
     selector: '.better-divider__line',
-    snippet: '.better-divider__line {\n  width: 100%;\n  height: 1px;\n  background: #8a8886;\n  border-radius: 0;\n  border: 0;\n}'
+    snippet:
+      '.better-divider__line {\n  width: 100%;\n  height: 1px;\n  background: #8a8886;\n  border-radius: 0;\n  border: 0;\n}'
   }
 ];
 let latestCssEditorTargets: CssEditorTarget[] = defaultCssEditorTargets;
@@ -219,23 +221,14 @@ export function CssEditor(props: CssEditorProps): JSX.Element {
     <div className="css-editor-field">
       <div className="css-editor-field__header">
         <label className="css-editor-field__label">{props.label}</label>
-        <button
-          aria-expanded={floatingOpen}
-          className="css-editor-field__popout"
-          type="button"
-          onClick={toggleFloatingEditor}
-        >
+        <button aria-expanded={floatingOpen} className="css-editor-field__popout" type="button" onClick={toggleFloatingEditor}>
           Pop out
         </button>
       </div>
       {props.description && <p className="css-editor-field__description">{props.description}</p>}
       <div className="css-editor-field__frame" style={{ height: minHeight, minHeight }}>
         {(!monacoBaseUrl || !editorReady) && (
-          <FallbackCssEditor
-            label={props.label}
-            value={props.value}
-            onChange={props.onChange}
-          />
+          <FallbackCssEditor label={props.label} value={props.value} onChange={props.onChange} />
         )}
         {monacoBaseUrl && (
           <div className={`css-editor-field__monaco ${editorReady ? 'css-editor-field__monaco--ready' : ''}`}>
@@ -268,7 +261,7 @@ export function CssEditor(props: CssEditorProps): JSX.Element {
                 suggestOnTriggerCharacters: true,
                 tabCompletion: 'on',
                 tabSize: 2,
-                wordBasedSuggestions: false,
+                wordBasedSuggestions: 'off',
                 wordWrap: 'on'
               }}
             />
@@ -321,9 +314,7 @@ export function CssEditor(props: CssEditorProps): JSX.Element {
                         className="css-floating-editor__target-input"
                         value={editingTarget.value}
                         onBlur={(event) => commitTargetEdit(target, event.currentTarget.value)}
-                        onChange={(event) =>
-                          setEditingTarget({ selector: target.selector, value: event.currentTarget.value })
-                        }
+                        onChange={(event) => setEditingTarget({ selector: target.selector, value: event.currentTarget.value })}
                         onKeyDown={(event) => {
                           if (event.key === 'Escape') {
                             event.preventDefault();
@@ -382,11 +373,7 @@ export function CssEditor(props: CssEditorProps): JSX.Element {
           </div>
           <div className="css-floating-editor__body">
             {(!monacoBaseUrl || !floatingEditorReady) && (
-              <FallbackCssEditor
-                label={`${props.label} floating editor`}
-                value={props.value}
-                onChange={props.onChange}
-              />
+              <FallbackCssEditor label={`${props.label} floating editor`} value={props.value} onChange={props.onChange} />
             )}
             {monacoBaseUrl && (
               <div className={`css-editor-field__monaco ${floatingEditorReady ? 'css-editor-field__monaco--ready' : ''}`}>
@@ -419,7 +406,7 @@ export function CssEditor(props: CssEditorProps): JSX.Element {
                     suggestOnTriggerCharacters: true,
                     tabCompletion: 'on',
                     tabSize: 2,
-                    wordBasedSuggestions: false,
+                    wordBasedSuggestions: 'off',
                     wordWrap: 'on'
                   }}
                 />
@@ -617,13 +604,17 @@ function insertCssTarget(
 
   editor.focus?.();
   editor.pushUndoStop?.();
-  editor.executeEdits?.('better-divider-target-shortcut', [
-    {
-      forceMoveMarkers: true,
-      range: fullRange,
-      text: nextValue
-    }
-  ], cursorSelection ? [cursorSelection] : undefined);
+  editor.executeEdits?.(
+    'better-divider-target-shortcut',
+    [
+      {
+        forceMoveMarkers: true,
+        range: fullRange,
+        text: nextValue
+      }
+    ],
+    cursorSelection ? [cursorSelection] : undefined
+  );
   editor.pushUndoStop?.();
   settleCursorAtEditorPosition(editor, findCssTargetInteriorPositionInModel(model, target.selector) || cursorPosition);
 }
@@ -890,7 +881,11 @@ function normalizeBaseUrl(value: string | undefined): string {
 }
 
 function pathForLabel(label: string): string {
-  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'custom-css-scss';
+  const slug =
+    label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || 'custom-css-scss';
   return `spfx-kit.${slug}.scss`;
 }
 
@@ -930,12 +925,7 @@ function createPointerInteraction(
   };
 }
 
-function resizeFloatingRect(
-  startRect: FloatingRect,
-  deltaX: number,
-  deltaY: number,
-  direction: ResizeDirection
-): FloatingRect {
+function resizeFloatingRect(startRect: FloatingRect, deltaX: number, deltaY: number, direction: ResizeDirection): FloatingRect {
   const next = { ...startRect };
 
   if (direction.includes('e')) {
@@ -1034,10 +1024,5 @@ function renderToken(match: RegExpExecArray): string {
 }
 
 function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }

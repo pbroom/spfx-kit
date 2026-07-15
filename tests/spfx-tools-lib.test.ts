@@ -60,7 +60,7 @@ describe('writeAppRepoFiles', () => {
 
     const workflow = await readFile(path.join(appDir, '.github', 'workflows', 'ci.yml'), 'utf8');
     expect(workflow).toContain('node-version-file: .nvmrc');
-    expect(workflow).toContain('gulp bundle --ship');
+    expect(workflow).toContain('npm run ship');
     expect(workflow).toContain('@spfx-kit/');
     expect(await readFile(path.join(appDir, '.nvmrc'), 'utf8')).toBe('22.22.3\n');
     expect(await readFile(path.join(appDir, '.gitignore'), 'utf8')).toContain('node_modules/');

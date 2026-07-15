@@ -1,9 +1,11 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { exists } from './fs.mjs';
+import { exists, writeJson } from './fs.mjs';
+import { labAdapterTsconfig } from './spfx-support.mjs';
 
 export async function scaffoldLabAdapter(targetDir, slug, description) {
   const adapterPath = path.join(targetDir, '.spfx-kit', 'lab', 'register.tsx');
+  await writeJson(path.join(targetDir, '.spfx-kit', 'lab', 'tsconfig.json'), labAdapterTsconfig());
   if (await exists(adapterPath)) {
     return false;
   }

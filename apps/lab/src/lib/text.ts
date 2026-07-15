@@ -39,3 +39,32 @@ export function getPrimaryShortcutLabel(key: string): string {
 
   return `Ctrl+${key.toUpperCase()}`;
 }
+
+export function middleTruncatePath(path: string, maxLength = 42): string {
+  if (path.length <= maxLength) {
+    return path;
+  }
+
+  const ellipsis = '…';
+  const lastSlash = path.lastIndexOf('/');
+  if (lastSlash > 0) {
+    const leaf = path.slice(lastSlash + 1);
+    const leafWithSlash = `/${leaf}`;
+    const prefixBudget = maxLength - ellipsis.length - leafWithSlash.length;
+    if (prefixBudget >= 1) {
+      return `${path.slice(0, prefixBudget)}${ellipsis}${leafWithSlash}`;
+    }
+
+    if (leafWithSlash.length < maxLength) {
+      return `${ellipsis}${leafWithSlash}`;
+    }
+
+    const leafBudget = maxLength - ellipsis.length - 1;
+    return `${ellipsis}/${leaf.slice(0, Math.max(1, leafBudget))}`;
+  }
+
+  const available = maxLength - ellipsis.length;
+  const headLength = Math.max(1, Math.ceil(available * 0.35));
+  const tailLength = Math.max(1, available - headLength);
+  return `${path.slice(0, headLength)}${ellipsis}${path.slice(-tailLength)}`;
+}

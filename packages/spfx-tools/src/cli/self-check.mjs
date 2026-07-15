@@ -10,11 +10,15 @@ const required = [
   'cli/import-spfx-app.mjs',
   'cli/sync-lab.mjs',
   'cli/validate-spfx-app.mjs',
+  'cli/verify-sppkg.mjs',
   'lib/app-repo-files.mjs',
   'lib/args.mjs',
   'lib/fs.mjs',
   'lib/lab-adapter.mjs',
+  'lib/spfx-support.mjs',
+  'lib/spfx-toolchain.mjs',
   'lib/spfx.mjs',
+  'lib/sppkg.mjs',
   '../templates/app-ci.yml'
 ];
 

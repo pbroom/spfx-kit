@@ -6,9 +6,7 @@
   "version": "*",
   "manifestVersion": 2,
   "requiresCustomScript": false,
-  "supportedHosts": [
-    "SharePointWebPart"
-  ],
+  "supportedHosts": ["SharePointWebPart"],
   "supportsThemeVariants": true,
   "preconfiguredEntries": [
     {
