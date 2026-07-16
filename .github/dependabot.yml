@@ -4,26 +4,92 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 1
+    cooldown:
+      default-days: 14
     groups:
-      root-dependencies:
+      root-maintenance:
         patterns: ['*']
         update-types:
           - minor
           - patch
+    ignore:
+      # Major upgrades are planned migrations, not routine maintenance.
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
+
+      # Keep the lab aligned with the supported SPFx, React, and TypeScript matrix.
+      - dependency-name: react
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: react-dom
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: '@types/react'
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: '@types/react-dom'
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: '@microsoft/rush-stack-compiler-5.3'
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: '@vitejs/plugin-react'
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+
+      # These versions are deliberate security and cross-platform CI pins.
+      - dependency-name: monaco-editor
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: '@monaco-editor/react'
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: '@rolldown/binding-linux-*-gnu'
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: 'lightningcss-linux-*'
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
 
   - package-ecosystem: npm
     directory: /examples/hello-card-spfx
     schedule:
-      interval: weekly
-    groups:
-      spfx-canary-dependencies:
-        patterns: ['*']
-        update-types:
-          - minor
-          - patch
+      interval: monthly
+    # The canary moves only as a coordinated SPFx compatibility upgrade.
+    # Security updates remain enabled and use their separate pull request limit.
+    open-pull-requests-limit: 0
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 1
+    cooldown:
+      default-days: 14
+    groups:
+      github-actions:
+        patterns: ['*']
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
