@@ -5,6 +5,7 @@ import {
   ColorArea,
   ColorPicker,
   ColorSlider,
+  Combobox,
   Dropdown,
   Field,
   Input,
@@ -18,7 +19,7 @@ import {
   ToolbarRadioGroup
 } from '@fluentui/react-components';
 import { TextAlignCenterRegular, TextAlignLeftRegular, TextAlignRightRegular } from '@fluentui/react-icons';
-import { LabPropertyBag, LabPropertyControl, LabWebPart } from '@spfx-kit/spfx-lab-runtime';
+import { LabPropertyBag, LabPropertyControl, LabPropertyPaneRenderProps, LabWebPart } from '@spfx-kit/spfx-lab-runtime';
 import {
   createDefaultCodeWorkbenchSource,
   createSpfxBridge,
@@ -26,10 +27,18 @@ import {
   serializeCodeWorkbenchSource
 } from '@spfx-kit/code-workbench-runtime';
 import { createMockSpfxContext } from '@spfx-kit/spfx-lab-runtime';
-import { CodeWorkspaceEditor, createApprovedCodeWorkspaceModules } from './CodeWorkspaceEditor';
 import { CssEditor } from './CssEditor';
+import { SourceEditor } from './SourceEditor';
 
-const codeWorkbenchModules = createApprovedCodeWorkspaceModules();
+const LazyCodeWorkspaceEditor = React.lazy(async () => {
+  const codeWorkspace = await import('./CodeWorkspaceEditor');
+  const modules = codeWorkspace.createApprovedCodeWorkspaceModules();
+  return {
+    default: (props: Omit<React.ComponentProps<typeof codeWorkspace.CodeWorkspaceEditor>, 'modules'>) => (
+      <codeWorkspace.CodeWorkspaceEditor {...props} modules={modules} />
+    )
+  };
+});
 const codeWorkbenchMockSpfx = createSpfxBridge(createMockSpfxContext());
 // Keep in sync with the monaco-editor version pinned in apps/lab/package.json.
 const labMonacoBaseUrl = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs';
@@ -59,11 +68,20 @@ export function PropertyPane(props: PropertyPaneProps): JSX.Element {
     );
   };
 
+  const CustomPropertyPane = props.webPart?.propertyPane as React.ComponentType<LabPropertyPaneRenderProps> | undefined;
+
   return (
     <div className="property-pane">
       <section className="property-section">
         <h2>{props.webPart ? props.webPart.title : 'Property pane'}</h2>
-        {props.webPart ? (
+        {CustomPropertyPane && props.webPart ? (
+          <CustomPropertyPane
+            title={props.webPart.title}
+            values={props.values}
+            onChange={props.onChange}
+            renderControl={renderControl}
+          />
+        ) : props.webPart ? (
           renderControlRows(props.webPart.controls, renderControl)
         ) : (
           <p className="property-empty">No web part selected.</p>
@@ -124,18 +142,19 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
     );
     return (
       <Field className="property-field" hint={control.description} label={control.label} size="small">
-        <CodeWorkspaceEditor
-          source={source}
-          modules={codeWorkbenchModules}
-          spfx={codeWorkbenchMockSpfx}
-          updatedAt={source.updatedAt}
-          updatedBy={source.updatedBy}
-          monacoBaseUrl={labMonacoBaseUrl}
-          onSourceChange={(nextSource) => {
-            const serialized = serializeCodeWorkbenchSource(nextSource);
-            onChange(serialized.blocked ? value : serialized.value);
-          }}
-        />
+        <React.Suspense fallback={<p className="property-field__loading">Loading editor…</p>}>
+          <LazyCodeWorkspaceEditor
+            source={source}
+            spfx={codeWorkbenchMockSpfx}
+            updatedAt={source.updatedAt}
+            updatedBy={source.updatedBy}
+            monacoBaseUrl={labMonacoBaseUrl}
+            onSourceChange={(nextSource) => {
+              const serialized = serializeCodeWorkbenchSource(nextSource);
+              onChange(serialized.blocked ? value : serialized.value);
+            }}
+          />
+        </React.Suspense>
       </Field>
     );
   }
@@ -171,6 +190,49 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
                 : { [control.name]: nextValue }
             );
           }}
+        />
+      </div>
+    );
+  }
+
+  if (control.type === 'sourceEditor') {
+    const targets = control.language === 'scss' ? (control.getTargets ? control.getTargets(values) : control.targets) : undefined;
+    const targetComment =
+      control.language === 'scss'
+        ? control.getTargetComment
+          ? control.getTargetComment(values)
+          : control.targetComment
+        : undefined;
+
+    return (
+      <div className="property-field">
+        <SourceEditor
+          commitMode={control.commitMode}
+          description={control.description}
+          height={control.height}
+          label={control.label}
+          language={control.language}
+          maxBytes={control.maxBytes}
+          minHeight={control.minHeight}
+          monacoBaseUrl={labMonacoBaseUrl}
+          placeholder={control.placeholder}
+          snippets={control.snippets}
+          targetComment={targetComment}
+          targets={targets}
+          validate={control.validate ? (source) => control.validate?.(source, values) || [] : undefined}
+          value={String(value ?? '')}
+          onChange={onChange}
+          onTargetRename={
+            control.language === 'scss'
+              ? (target, nextSelector, nextValue) => {
+                  onPatch(
+                    control.getTargetRenamePatch
+                      ? control.getTargetRenamePatch(target, nextSelector, nextValue, values)
+                      : { [control.name]: nextValue }
+                  );
+                }
+              : undefined
+          }
         />
       </div>
     );
@@ -232,6 +294,21 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
             </Option>
           ))}
         </Dropdown>
+      </Field>
+    );
+  }
+
+  if (control.type === 'combobox') {
+    return (
+      <Field className="property-field" label={control.label} size="small">
+        <ComboboxPropertyControl
+          label={control.label}
+          maxVisibleOptions={control.maxVisibleOptions}
+          options={control.options}
+          placeholder={control.placeholder}
+          value={String(value ?? '')}
+          onChange={onChange}
+        />
       </Field>
     );
   }
@@ -306,6 +383,52 @@ function getPropertyControlIcon(icon: string | undefined): JSX.Element | undefin
   }
 
   return undefined;
+}
+
+interface ComboboxPropertyControlProps {
+  label: string;
+  maxVisibleOptions?: number;
+  options: Array<{ label: string; value: string }>;
+  placeholder?: string;
+  value: string;
+  onChange: (value: string) => void;
+}
+
+function ComboboxPropertyControl(props: ComboboxPropertyControlProps): JSX.Element {
+  const [query, setQuery] = React.useState<string | undefined>(undefined);
+  const limit = props.maxVisibleOptions ?? 50;
+  const selectedOption = props.options.find((option) => option.value === props.value);
+  const displayValue = query !== undefined ? query : selectedOption?.label || props.value;
+  const visibleOptions = React.useMemo(() => {
+    const normalized = (query || '').trim().toLowerCase();
+    if (!normalized) {
+      return props.options.slice(0, limit);
+    }
+    return props.options.filter((option) => option.label.toLowerCase().includes(normalized)).slice(0, limit);
+  }, [limit, props.options, query]);
+
+  return (
+    <Combobox
+      aria-label={props.label}
+      placeholder={props.placeholder}
+      selectedOptions={props.value ? [props.value] : ['']}
+      value={displayValue}
+      onBlur={() => setQuery(undefined)}
+      onChange={(event) => setQuery(event.currentTarget.value)}
+      onOptionSelect={(_event, data) => {
+        setQuery(undefined);
+        if (data.optionValue !== undefined) {
+          props.onChange(data.optionValue);
+        }
+      }}
+    >
+      {visibleOptions.map((option) => (
+        <Option key={option.value || '__empty__'} text={option.label} value={option.value}>
+          {option.label}
+        </Option>
+      ))}
+    </Combobox>
+  );
 }
 
 interface ColorPropertyControlProps {

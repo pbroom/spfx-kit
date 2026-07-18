@@ -44,5 +44,11 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }]
     }
+  },
+  {
+    files: ['packages/source-editor-react/**/*.tsx'],
+    linterOptions: {
+      reportUnusedDisableDirectives: 'off'
+    }
   }
 );

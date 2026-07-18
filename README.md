@@ -120,6 +120,14 @@ Regenerate the lab registry after adding, importing, or moving adapters:
 npm run sync:lab
 ```
 
+Vendor the canonical source-editor core into the Better Divider, Better Text,
+and Better List standalone repositories:
+
+```sh
+npm run sync:source-editor
+npm run sync:source-editor -- --check
+```
+
 Build the lab:
 
 ```sh
@@ -228,6 +236,12 @@ public kit repo. `docs/source-control.md` covers the full workflows:
   when you pass `--fork`, and keeps kit-generated files out of their
   `git status`. Test and modify in the lab, then push a branch, open a pull
   request upstream, or hand back a `git format-patch` file.
+
+The three Better app repositories also vendor the framework-neutral
+`@spfx-kit/source-editor-core` and React 17-compatible
+`@spfx-kit/source-editor-react` control under `src/vendor/source-editor/`.
+Each generated file pins the canonical package version and SHA-256 digest, so
+the apps remain standalone while `sync:source-editor -- --check` detects drift.
 
 Do not use git submodules for apps; a submodule entry would be tracked by the
 public repo and break the `guard:public` safety model.

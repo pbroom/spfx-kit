@@ -7,6 +7,12 @@ import { writeAppRepoFiles } from '../packages/spfx-tools/src/lib/app-repo-files
 // @ts-expect-error plain .mjs module without type declarations
 import { parseArgs, required } from '../packages/spfx-tools/src/lib/args.mjs';
 // @ts-expect-error plain .mjs module without type declarations
+import {
+  SOURCE_EDITOR_VENDOR_FILES,
+  createSourceEditorVendor,
+  sourceEditorDigest
+} from '../packages/spfx-tools/src/lib/source-editor-vendor.mjs';
+// @ts-expect-error plain .mjs module without type declarations
 import { appSlugFromDir, cdnBasePathForSlug, standalonePackageName } from '../packages/spfx-tools/src/lib/spfx.mjs';
 
 describe('parseArgs', () => {
@@ -20,6 +26,22 @@ describe('parseArgs', () => {
 
   it('treats trailing flags as booleans', () => {
     expect(parseArgs(['--force'])).toEqual({ force: true });
+  });
+});
+
+describe('source editor vendor', () => {
+  it('produces a versioned, hash-checked standalone snapshot', () => {
+    const canonical = 'export const language = "html";\n';
+    const vendor = createSourceEditorVendor(canonical, '1.2.3', '@spfx-kit/source-editor-react');
+
+    expect(SOURCE_EDITOR_VENDOR_FILES.map((file) => file.vendorPath)).toEqual([
+      'src/vendor/source-editor/sourceEditorCore.ts',
+      'src/vendor/source-editor/SourceEditorField.tsx'
+    ]);
+    expect(vendor.digest).toBe(sourceEditorDigest(canonical));
+    expect(vendor.source).toContain('Vendored from @spfx-kit/source-editor-react@1.2.3');
+    expect(vendor.source).toContain(`Canonical source sha256: ${vendor.digest}`);
+    expect(vendor.source.endsWith(canonical)).toBe(true);
   });
 });
 

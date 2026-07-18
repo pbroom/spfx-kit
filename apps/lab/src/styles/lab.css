@@ -1196,6 +1196,31 @@ textarea {
   line-height: 15px;
 }
 
+.css-editor-field__diagnostics {
+  display: grid;
+  gap: 4px;
+}
+
+.css-editor-field__diagnostic {
+  margin: 0;
+  border-left: 3px solid #8a8886;
+  padding: 4px 7px;
+  color: var(--lab-muted);
+  background: rgb(255 255 255 / 4%);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.css-editor-field__diagnostic--error {
+  border-left-color: #d13438;
+  color: #a4262c;
+  background: #fde7e9;
+}
+
+.css-editor-field__diagnostic--warning {
+  border-left-color: #f2c811;
+}
+
 .css-editor-field__popout,
 .css-floating-editor__close {
   display: inline-flex;
