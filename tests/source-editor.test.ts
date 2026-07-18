@@ -5,10 +5,16 @@ import {
   appendCssTarget,
   constrainFloatingRect,
   evaluateSourceTargetRename,
+  getCssEditorTargetsForModel,
   isCloseShortcut,
   replaceCssTargetSelector,
-  resizeFloatingRect
+  resizeFloatingRect,
+  setCssEditorTargetsForModel
 } from '../apps/lab/src/components/SourceEditor';
+import {
+  getCssEditorTargetsForModel as getProductionCssEditorTargetsForModel,
+  setCssEditorTargetsForModel as setProductionCssEditorTargetsForModel
+} from '../packages/source-editor-react/src/SourceEditorField';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -84,6 +90,33 @@ describe('source editor state', () => {
 
     expect(rejected).toEqual({ value: '.renamed-card {}', shouldCommit: false });
     expect(accepted).toEqual({ value: '.renamed-card {}', shouldCommit: true });
+  });
+
+  it('keeps SCSS completion targets isolated by Monaco model', () => {
+    const dividerModel = {};
+    const textModel = {};
+    const dividerTargets = [{ label: 'Line', selector: '.line', snippet: '.line {}' }];
+    const textTargets = [{ label: 'Text', selector: '.text', snippet: '.text {}' }];
+    const dividerTargetsRef = { current: dividerTargets };
+    const textTargetsRef = { current: textTargets };
+
+    setCssEditorTargetsForModel(dividerModel, dividerTargetsRef);
+    setCssEditorTargetsForModel(textModel, textTargetsRef);
+
+    expect(getCssEditorTargetsForModel(dividerModel)).toBe(dividerTargets);
+    expect(getCssEditorTargetsForModel(textModel)).toBe(textTargets);
+    expect(getCssEditorTargetsForModel({})).toEqual([]);
+
+    const renamedTargets = [{ label: 'Line', selector: '.renamed-line', snippet: '.renamed-line {}' }];
+    dividerTargetsRef.current = renamedTargets;
+    expect(getCssEditorTargetsForModel(dividerModel)).toBe(renamedTargets);
+
+    const productionModel = {};
+    const productionTargetsRef = { current: textTargets };
+    setProductionCssEditorTargetsForModel(productionModel, productionTargetsRef);
+    expect(getProductionCssEditorTargetsForModel(productionModel)).toBe(textTargets);
+    productionTargetsRef.current = renamedTargets;
+    expect(getProductionCssEditorTargetsForModel(productionModel)).toBe(renamedTargets);
   });
 
   it('keeps floating drag and resize geometry inside viewport bounds', () => {

@@ -37,7 +37,9 @@ export interface SourceEditorSnippet {
 // Keep in sync with the monaco-editor version pinned in apps/lab/package.json.
 const defaultMonacoBaseUrl = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs';
 let configuredMonacoBaseUrl = '';
-let configuredCssIntellisense = false;
+let nextSourceEditorInstanceId = 0;
+const configuredCssIntellisense = new WeakSet<object>();
+const cssEditorTargetsByModel = new WeakMap<object, React.MutableRefObject<readonly CssEditorTarget[]>>();
 const labMonacoAdapter: SourceEditorMonacoAdapter = {
   async load(_baseUrl) {
     const [monacoReact, monaco] = await Promise.all([
@@ -64,7 +66,6 @@ const floatingResizeZones: Array<{ direction: ResizeDirection; label: string }> 
   { direction: 'sw', label: 'Resize floating editor from bottom left' },
   { direction: 'se', label: 'Resize floating editor from bottom right' }
 ];
-let latestCssEditorTargets: CssEditorTarget[] = [];
 const minFloatingWidth = 360;
 const minFloatingHeight = 260;
 
@@ -72,7 +73,11 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
   const minHeight = props.height || props.minHeight || 180;
   const monacoBaseUrl = normalizeBaseUrl(props.monacoBaseUrl || defaultMonacoBaseUrl);
   const monacoAdapter = props.monacoAdapter || labMonacoAdapter;
-  const editorPath = pathForLabel(props.label, props.language);
+  const sourceEditorInstanceIdRef = React.useRef(0);
+  if (sourceEditorInstanceIdRef.current === 0) {
+    sourceEditorInstanceIdRef.current = ++nextSourceEditorInstanceId;
+  }
+  const editorPath = pathForLabel(props.label, props.language, sourceEditorInstanceIdRef.current);
   const [draft, setDraft] = React.useState(props.value);
   const [editorReady, setEditorReady] = React.useState(false);
   const [floatingEditorReady, setFloatingEditorReady] = React.useState(false);
@@ -83,6 +88,8 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
   const floatingPanelRef = React.useRef<HTMLDivElement | null>(null);
   const floatingEditorRef = React.useRef<any>(null);
   const cssEditorTargets = props.language === 'scss' ? props.targets || [] : [];
+  const cssEditorTargetsRef = React.useRef<readonly CssEditorTarget[]>(cssEditorTargets);
+  cssEditorTargetsRef.current = cssEditorTargets;
   const cssTargetComment = props.targetComment || '';
   const sourceEditorSnippets = props.snippets || [];
   const { commitMode, maxBytes, onChange, validate } = props;
@@ -106,6 +113,7 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
 
   const closeFloatingEditor = React.useCallback((): void => {
     floatingEditorRef.current = null;
+    setFloatingEditorReady(false);
     setFloatingOpen(false);
   }, []);
 
@@ -306,8 +314,8 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
               path={editorPath}
               theme="vs-dark"
               value={draft}
-              beforeMount={(monaco: any) => configureSourceEditorMonaco(monaco, props.language, cssEditorTargets)}
-              onMount={(editor: any) => handleSourceEditorMount(editor, () => setEditorReady(true))}
+              beforeMount={(monaco: any) => configureSourceEditorMonaco(monaco, props.language)}
+              onMount={(editor: any) => handleSourceEditorMount(editor, cssEditorTargetsRef, () => setEditorReady(true))}
               onChange={(value: string | undefined) => updateValue(value || '')}
               options={{
                 acceptSuggestionOnEnter: 'off',
@@ -486,10 +494,10 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
                   path={`${editorPath}.floating`}
                   theme="vs-dark"
                   value={draft}
-                  beforeMount={(monaco: any) => configureSourceEditorMonaco(monaco, props.language, cssEditorTargets)}
+                  beforeMount={(monaco: any) => configureSourceEditorMonaco(monaco, props.language)}
                   onMount={(editor: any) => {
                     floatingEditorRef.current = editor;
-                    handleSourceEditorMount(editor, () => setFloatingEditorReady(true), closeFloatingEditor);
+                    handleSourceEditorMount(editor, cssEditorTargetsRef, () => setFloatingEditorReady(true), closeFloatingEditor);
                   }}
                   onChange={(value: string | undefined) => updateValue(value || '')}
                   options={{
@@ -654,16 +662,21 @@ function configureMonacoLoader(
   monacoLoader.config({ monaco });
 }
 
-function configureSourceEditorMonaco(monaco: any, language: 'scss' | 'html', targets: CssEditorTarget[]): void {
+function configureSourceEditorMonaco(monaco: any, language: 'scss' | 'html'): void {
   if (language !== 'scss') {
     return;
   }
-  latestCssEditorTargets = targets;
   configureCssLanguage(monaco);
   registerSourceEditorCompletions(monaco);
 }
 
-function handleSourceEditorMount(editor: any, onReady: () => void, onCloseShortcut?: () => void): void {
+function handleSourceEditorMount(
+  editor: any,
+  targetsRef: React.MutableRefObject<readonly CssEditorTarget[]>,
+  onReady: () => void,
+  onCloseShortcut?: () => void
+): void {
+  setCssEditorTargetsForModel(editor.getModel?.(), targetsRef);
   editor.updateOptions?.({ tabFocusMode: false });
   installTabTraversalGuard(editor);
   if (onCloseShortcut) {
@@ -950,10 +963,10 @@ function configureCssLanguage(monaco: any): void {
 }
 
 function registerSourceEditorCompletions(monaco: any): void {
-  if (configuredCssIntellisense) {
+  if (typeof monaco !== 'object' || monaco === null || configuredCssIntellisense.has(monaco)) {
     return;
   }
-  configuredCssIntellisense = true;
+  configuredCssIntellisense.add(monaco);
   monaco.languages?.registerCompletionItemProvider?.('scss', {
     triggerCharacters: ['.', ':', '-', '#', ' '],
     provideCompletionItems(model: any, position: any) {
@@ -965,13 +978,26 @@ function registerSourceEditorCompletions(monaco: any): void {
         endColumn: word.endColumn
       };
       return {
-        suggestions: createSelectorSuggestions(monaco, range, latestCssEditorTargets)
+        suggestions: createSelectorSuggestions(monaco, range, getCssEditorTargetsForModel(model))
       };
     }
   });
 }
 
-function createSelectorSuggestions(monaco: any, range: any, targets: CssEditorTarget[]): any[] {
+export function setCssEditorTargetsForModel(
+  model: unknown,
+  targetsRef: React.MutableRefObject<readonly CssEditorTarget[]>
+): void {
+  if (typeof model === 'object' && model !== null) {
+    cssEditorTargetsByModel.set(model, targetsRef);
+  }
+}
+
+export function getCssEditorTargetsForModel(model: unknown): readonly CssEditorTarget[] {
+  return typeof model === 'object' && model !== null ? cssEditorTargetsByModel.get(model)?.current || [] : [];
+}
+
+function createSelectorSuggestions(monaco: any, range: any, targets: readonly CssEditorTarget[]): any[] {
   const snippetRule = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
   return targets.map((target) => ({
     label: target.selector,
@@ -988,13 +1014,13 @@ function normalizeBaseUrl(value: string | undefined): string {
   return value ? value.replace(/\/+$/, '') : '';
 }
 
-function pathForLabel(label: string, language: 'scss' | 'html'): string {
+function pathForLabel(label: string, language: 'scss' | 'html', instanceId: number): string {
   const slug =
     label
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '') || `custom-${language}`;
-  return `spfx-kit.${slug}.${language}`;
+  return `spfx-kit.${slug}.${instanceId}.${language}`;
 }
 
 function createInitialFloatingRect(): FloatingRect {
