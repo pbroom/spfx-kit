@@ -369,7 +369,7 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
                 glyphMargin: false,
                 lineDecorationsWidth: 8,
                 lineHeight: 18,
-                lineNumbers: 'off',
+                lineNumbers: props.fillHeight ? 'on' : 'off',
                 minimap: { enabled: Boolean(props.fillHeight) },
                 quickSuggestions: { other: true, comments: false, strings: true },
                 scrollBeyondLastLine: false,
