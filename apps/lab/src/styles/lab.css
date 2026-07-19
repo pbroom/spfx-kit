@@ -1387,10 +1387,14 @@ textarea {
 
 .source-workspace__pane {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 4px;
   min-width: 0;
   min-height: 0;
+}
+
+.source-workspace__body--split .source-workspace__pane {
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .source-workspace__pane[hidden] {

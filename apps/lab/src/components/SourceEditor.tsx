@@ -343,7 +343,7 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
             <MonacoSurface
               adapter={monacoAdapter}
               baseUrl={monacoBaseUrl}
-              height={`${minHeight}px`}
+              height={props.fillHeight ? '100%' : `${minHeight}px`}
               language={props.language}
               path={editorPath}
               theme="vs-dark"
