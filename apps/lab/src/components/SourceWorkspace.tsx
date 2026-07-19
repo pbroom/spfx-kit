@@ -164,6 +164,46 @@ export function SourceWorkspace(props: SourceWorkspaceProps): JSX.Element | null
   }
 
   const activeTabId = `${idPrefix}-${view}-tab`;
+  const viewTabs = (
+    <div
+      aria-label={`${props.label} views`}
+      className="source-workspace__tabs"
+      role="tablist"
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      {props.documents.map((document, index) => (
+        <button
+          aria-controls={panelId}
+          aria-selected={view === document.id}
+          className="source-workspace__tab"
+          id={`${idPrefix}-${document.id}-tab`}
+          key={document.id}
+          role="tab"
+          tabIndex={view === document.id ? 0 : -1}
+          type="button"
+          onClick={() => selectView(document.id)}
+          onKeyDown={(event) => handleTabKeyDown(event, index, viewIds, selectView)}
+        >
+          {document.label}
+        </button>
+      ))}
+      {props.documents.length > 1 ? (
+        <button
+          aria-controls={panelId}
+          aria-selected={view === 'split'}
+          className="source-workspace__tab source-workspace__tab--split"
+          id={`${idPrefix}-split-tab`}
+          role="tab"
+          tabIndex={view === 'split' ? 0 : -1}
+          type="button"
+          onClick={() => selectView('split')}
+          onKeyDown={(event) => handleTabKeyDown(event, viewIds.length - 1, viewIds, selectView)}
+        >
+          Split
+        </button>
+      ) : null}
+    </div>
+  );
   return (
     <div
       aria-label={floatingOpen ? `${props.label} source workspace` : undefined}
@@ -186,6 +226,7 @@ export function SourceWorkspace(props: SourceWorkspaceProps): JSX.Element | null
     >
       <div className="source-workspace__titlebar" onPointerDown={(event) => startPointerInteraction('drag', event)}>
         <span className="source-workspace__label">{props.label}</span>
+        {floatingOpen ? viewTabs : null}
         {floatingOpen ? (
           <button
             aria-label="Close source workspace"
@@ -211,39 +252,7 @@ export function SourceWorkspace(props: SourceWorkspaceProps): JSX.Element | null
         )}
       </div>
       {props.description && !floatingOpen ? <p className="source-workspace__description">{props.description}</p> : null}
-      <div aria-label={`${props.label} views`} className="source-workspace__tabs" role="tablist">
-        {props.documents.map((document, index) => (
-          <button
-            aria-controls={panelId}
-            aria-selected={view === document.id}
-            className="source-workspace__tab"
-            id={`${idPrefix}-${document.id}-tab`}
-            key={document.id}
-            role="tab"
-            tabIndex={view === document.id ? 0 : -1}
-            type="button"
-            onClick={() => selectView(document.id)}
-            onKeyDown={(event) => handleTabKeyDown(event, index, viewIds, selectView)}
-          >
-            {document.label}
-          </button>
-        ))}
-        {props.documents.length > 1 ? (
-          <button
-            aria-controls={panelId}
-            aria-selected={view === 'split'}
-            className="source-workspace__tab source-workspace__tab--split"
-            id={`${idPrefix}-split-tab`}
-            role="tab"
-            tabIndex={view === 'split' ? 0 : -1}
-            type="button"
-            onClick={() => selectView('split')}
-            onKeyDown={(event) => handleTabKeyDown(event, viewIds.length - 1, viewIds, selectView)}
-          >
-            Split
-          </button>
-        ) : null}
-      </div>
+      {!floatingOpen ? viewTabs : null}
       <div
         aria-labelledby={activeTabId}
         className={`source-workspace__body ${view === 'split' ? 'source-workspace__body--split' : ''}`}

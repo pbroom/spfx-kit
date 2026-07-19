@@ -1408,7 +1408,7 @@ textarea {
 .source-workspace--floating {
   position: fixed;
   z-index: 1000;
-  grid-template-rows: 36px 34px minmax(0, 1fr);
+  grid-template-rows: 42px minmax(0, 1fr);
   gap: 0;
   min-width: 520px;
   min-height: 360px;
@@ -1422,6 +1422,8 @@ textarea {
 }
 
 .source-workspace--floating .source-workspace__titlebar {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto minmax(100px, 1fr);
   border-bottom: 1px solid #334155;
   padding: 0 8px 0 12px;
   background: #111827;
@@ -1434,18 +1436,23 @@ textarea {
 }
 
 .source-workspace--floating .source-workspace__tabs {
+  align-self: center;
+  justify-self: center;
   gap: 4px;
   border: 0;
-  border-bottom: 1px solid #334155;
-  border-radius: 0;
-  padding: 4px 8px;
-  background: #0b1220;
+  padding: 2px;
+  background: transparent;
+  cursor: default;
 }
 
 .source-workspace--floating .source-workspace__tab {
   flex: 0 0 auto;
   min-width: 84px;
   color: #bfdbfe;
+}
+
+.source-workspace--floating .css-floating-editor__close {
+  justify-self: end;
 }
 
 .source-workspace--floating .source-workspace__tab:hover,
@@ -1765,6 +1772,22 @@ textarea {
 
   .source-workspace--floating {
     min-width: 360px;
+  }
+
+  .source-workspace--floating .source-workspace__titlebar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .source-workspace--floating .source-workspace__label {
+    display: none;
+  }
+
+  .source-workspace--floating .source-workspace__tabs {
+    justify-self: start;
+  }
+
+  .source-workspace--floating .source-workspace__tab {
+    min-width: 64px;
   }
 
   .source-workspace--floating .source-workspace__body--split {
