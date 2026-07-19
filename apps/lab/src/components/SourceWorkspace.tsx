@@ -225,7 +225,7 @@ export function SourceWorkspace(props: SourceWorkspaceProps): JSX.Element | null
       }
     >
       <div className="source-workspace__titlebar" onPointerDown={(event) => startPointerInteraction('drag', event)}>
-        <span className="source-workspace__label">{props.label}</span>
+        {!floatingOpen ? <span className="source-workspace__label">{props.label}</span> : null}
         {floatingOpen ? viewTabs : null}
         {floatingOpen ? (
           <button

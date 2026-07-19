@@ -1423,7 +1423,7 @@ textarea {
 
 .source-workspace--floating .source-workspace__titlebar {
   display: grid;
-  grid-template-columns: minmax(100px, 1fr) auto minmax(100px, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   border-bottom: 1px solid #334155;
   padding: 0 8px 0 12px;
   background: #111827;
@@ -1437,7 +1437,7 @@ textarea {
 
 .source-workspace--floating .source-workspace__tabs {
   align-self: center;
-  justify-self: center;
+  justify-self: start;
   gap: 4px;
   border: 0;
   padding: 2px;
@@ -1776,10 +1776,6 @@ textarea {
 
   .source-workspace--floating .source-workspace__titlebar {
     grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .source-workspace--floating .source-workspace__label {
-    display: none;
   }
 
   .source-workspace--floating .source-workspace__tabs {
