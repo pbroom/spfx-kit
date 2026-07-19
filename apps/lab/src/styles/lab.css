@@ -1576,6 +1576,10 @@ textarea {
   background: #0b1220;
 }
 
+.source-workspace--floating .css-floating-editor__toolbar {
+  border-bottom: 0;
+}
+
 .css-floating-editor__target-button {
   flex: 0 0 auto;
   border: 1px solid #475569;
