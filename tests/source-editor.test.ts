@@ -61,6 +61,24 @@ describe('source editor state', () => {
     expect(markup).toContain('&lt;article&gt;{{item.title}}&lt;/article&gt;');
   });
 
+  it('hides inline guidance when the editor is embedded in a floating workspace', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(SourceEditor, {
+        description: 'Inline-only guidance.',
+        embedded: true,
+        fillHeight: true,
+        label: 'Template HTML',
+        language: 'html',
+        showShortcuts: true,
+        value: '<article>{{item.title}}</article>',
+        onChange: () => undefined
+      })
+    );
+
+    expect(markup).not.toContain('Inline-only guidance.');
+    expect(markup).toContain('css-editor-field--fill');
+  });
+
   it('recognizes the editor close shortcut without intercepting modified variants', () => {
     expect(isCloseShortcut({ altKey: false, ctrlKey: true, key: 's', metaKey: false, shiftKey: false })).toBe(true);
     expect(isCloseShortcut({ altKey: false, ctrlKey: false, key: 'S', metaKey: true, shiftKey: false })).toBe(true);

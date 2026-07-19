@@ -308,7 +308,9 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
           </button>
         </div>
       )}
-      {props.description && <p className="css-editor-field__description">{props.description}</p>}
+      {props.description && !(props.embedded && props.showShortcuts) ? (
+        <p className="css-editor-field__description">{props.description}</p>
+      ) : null}
       {props.embedded && props.showShortcuts && (
         <SourceEditorShortcutToolbar
           ariaLabel={`${props.language.toUpperCase()} editor shortcuts`}
@@ -368,7 +370,7 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
                 lineDecorationsWidth: 8,
                 lineHeight: 18,
                 lineNumbers: 'off',
-                minimap: { enabled: false },
+                minimap: { enabled: Boolean(props.fillHeight) },
                 quickSuggestions: { other: true, comments: false, strings: true },
                 scrollBeyondLastLine: false,
                 snippetSuggestions: 'top',
