@@ -1375,6 +1375,20 @@ textarea {
   background: #0f6cbd;
 }
 
+.source-workspace__tab--split {
+  display: inline-grid;
+  flex: 0 0 28px;
+  width: 28px;
+  min-width: 28px;
+  place-items: center;
+  padding-inline: 0;
+}
+
+.source-workspace__tab--split svg {
+  width: 16px;
+  height: 16px;
+}
+
 .source-workspace__body {
   min-width: 0;
   min-height: 0;
@@ -1453,6 +1467,12 @@ textarea {
   flex: 0 0 auto;
   min-width: 84px;
   color: #bfdbfe;
+}
+
+.source-workspace--floating .source-workspace__tab--split {
+  flex-basis: 28px;
+  width: 28px;
+  min-width: 28px;
 }
 
 .source-workspace--floating .css-floating-editor__close {
@@ -1792,6 +1812,10 @@ textarea {
 
   .source-workspace--floating .source-workspace__tab {
     min-width: 64px;
+  }
+
+  .source-workspace--floating .source-workspace__tab--split {
+    min-width: 28px;
   }
 
   .source-workspace--floating .source-workspace__body--split {

@@ -205,7 +205,9 @@ describe('source editor state', () => {
     expect(markup).toContain('role="tablist"');
     expect(markup).toContain('>CSS/SCSS</button>');
     expect(markup).toContain('>HTML template</button>');
-    expect(markup).toContain('>Split</button>');
+    expect(markup).toContain('aria-label="Split"');
+    expect(markup).toContain('title="Split view"');
+    expect(markup).toContain('source-workspace__tab--split');
     expect(markup).toContain('aria-selected="true"');
     expect(markup).toContain('hidden=""');
   });
