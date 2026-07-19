@@ -1172,6 +1172,16 @@ textarea {
   gap: 4px;
 }
 
+.css-editor-field--fill {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.css-editor-field--fill .css-editor-field__frame {
+  min-height: 0;
+}
+
 .css-editor-field__header {
   display: flex;
   align-items: center;
@@ -1295,6 +1305,180 @@ textarea {
 
 .css-editor-field__textarea::selection {
   background: rgb(96 165 250 / 34%);
+}
+
+.source-workspace {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.source-workspace__titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.source-workspace__label {
+  color: #242424;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.lab-shell--dark .source-workspace__label {
+  color: #f5f5f5;
+}
+
+.source-workspace__description {
+  margin: 0;
+  color: var(--lab-muted);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.source-workspace__tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  border: 1px solid #d1d1d1;
+  border-radius: 6px;
+  padding: 2px;
+  background: #f5f5f5;
+}
+
+.source-workspace__tab {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 7px;
+  color: #424242;
+  background: transparent;
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.source-workspace__tab:hover,
+.source-workspace__tab:focus-visible {
+  color: #0f548c;
+  background: #ffffff;
+  outline: 1px solid #0f6cbd;
+  outline-offset: -1px;
+}
+
+.source-workspace__tab[aria-selected='true'] {
+  color: #ffffff;
+  background: #0f6cbd;
+}
+
+.source-workspace__body {
+  min-width: 0;
+  min-height: 0;
+}
+
+.source-workspace__body--split {
+  display: grid;
+  gap: 10px;
+}
+
+.source-workspace__pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.source-workspace__pane[hidden] {
+  display: none;
+}
+
+.source-workspace__pane-label {
+  margin: 0;
+  color: var(--lab-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.source-workspace--floating {
+  position: fixed;
+  z-index: 1000;
+  grid-template-rows: 36px 34px minmax(0, 1fr);
+  gap: 0;
+  min-width: 520px;
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  background: #0f172a;
+  box-shadow:
+    0 24px 64px rgb(0 0 0 / 28%),
+    0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.source-workspace--floating .source-workspace__titlebar {
+  border-bottom: 1px solid #334155;
+  padding: 0 8px 0 12px;
+  background: #111827;
+  cursor: move;
+  user-select: none;
+}
+
+.source-workspace--floating .source-workspace__label {
+  color: #f8fafc;
+}
+
+.source-workspace--floating .source-workspace__tabs {
+  gap: 4px;
+  border: 0;
+  border-bottom: 1px solid #334155;
+  border-radius: 0;
+  padding: 4px 8px;
+  background: #0b1220;
+}
+
+.source-workspace--floating .source-workspace__tab {
+  flex: 0 0 auto;
+  min-width: 84px;
+  color: #bfdbfe;
+}
+
+.source-workspace--floating .source-workspace__tab:hover,
+.source-workspace--floating .source-workspace__tab:focus-visible {
+  color: #ffffff;
+  background: #24324a;
+}
+
+.source-workspace--floating .source-workspace__tab[aria-selected='true'] {
+  color: #ffffff;
+  background: #1d4ed8;
+}
+
+.source-workspace--floating .source-workspace__body {
+  overflow: hidden;
+  padding: 8px;
+}
+
+.source-workspace--floating .source-workspace__body--split {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.source-workspace--floating .source-workspace__pane {
+  height: 100%;
+}
+
+.source-workspace--floating .source-workspace__pane-label {
+  color: #bfdbfe;
+}
+
+.source-workspace--resizing,
+.source-workspace--resizing * {
+  user-select: none;
 }
 
 .css-token--comment {
@@ -1577,5 +1761,13 @@ textarea {
 
   .preview-canvas {
     padding-inline: 16px;
+  }
+
+  .source-workspace--floating {
+    min-width: 360px;
+  }
+
+  .source-workspace--floating .source-workspace__body--split {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

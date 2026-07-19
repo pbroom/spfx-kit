@@ -20,6 +20,9 @@ export interface SourceEditorProps {
   commitMode?: 'immediate' | 'valid';
   validate?: (value: string) => SourceEditorDiagnostic[];
   snippets?: SourceEditorSnippet[];
+  embedded?: boolean;
+  fillHeight?: boolean;
+  showShortcuts?: boolean;
   onChange: (value: string) => void;
   onTargetRename?: (target: CssEditorTarget, nextSelector: string, nextValue: string) => void;
 }
@@ -42,6 +45,11 @@ const configuredCssIntellisense = new WeakSet<object>();
 const cssEditorTargetsByModel = new WeakMap<object, React.MutableRefObject<readonly CssEditorTarget[]>>();
 const labMonacoAdapter: SourceEditorMonacoAdapter = {
   async load(_baseUrl) {
+    await import(
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore Monaco's ESM core-feature entrypoint is runtime-only and has no declaration file.
+      'monaco-editor/esm/vs/editor/edcore.main.js'
+    );
     const [monacoReact, monaco] = await Promise.all([
       import('@monaco-editor/react'),
       import('monaco-editor/esm/vs/editor/editor.api')
@@ -86,6 +94,7 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
   const [pointerState, setPointerState] = React.useState<PointerInteraction | null>(null);
   const [editingTarget, setEditingTarget] = React.useState<{ selector: string; value: string } | null>(null);
   const floatingPanelRef = React.useRef<HTMLDivElement | null>(null);
+  const inlineEditorRef = React.useRef<any>(null);
   const floatingEditorRef = React.useRef<any>(null);
   const cssEditorTargets = props.language === 'scss' ? props.targets || [] : [];
   const cssEditorTargetsRef = React.useRef<readonly CssEditorTarget[]>(cssEditorTargets);
@@ -214,9 +223,9 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
     setPointerState(createPointerInteraction('resize', event, floatingPanelRef.current, floatingRect, direction));
   };
 
-  const applyFloatingTarget = (target: CssEditorTarget): void => {
+  const applyTarget = (target: CssEditorTarget): void => {
     setEditingTarget(null);
-    const editor = floatingEditorRef.current;
+    const editor = floatingEditorRef.current || inlineEditorRef.current;
     const currentValue = editor?.getValue?.() || draft || '';
     const existingLine = findCssTargetLine(currentValue, target.selector);
 
@@ -232,8 +241,8 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
     setEditingTarget({ selector: target.selector, value: target.selector });
   };
 
-  const applyFloatingSnippet = (snippet: SourceEditorSnippet): void => {
-    const editor = floatingEditorRef.current;
+  const applySnippet = (snippet: SourceEditorSnippet): void => {
+    const editor = floatingEditorRef.current || inlineEditorRef.current;
     const currentValue = editor?.getValue?.() || draft || '';
     const searchText = snippet.searchText || snippet.snippet;
     const existingIndex = currentValue.indexOf(searchText);
@@ -269,7 +278,7 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
       return;
     }
 
-    const editor = floatingEditorRef.current;
+    const editor = floatingEditorRef.current || inlineEditorRef.current;
     const currentValue = editor?.getValue?.() || draft || '';
     const rename = evaluateSourceTargetRename(currentValue, target.selector, nextSelector, commitMode, maxBytes, validate);
     if (!rename.shouldCommit) {
@@ -286,15 +295,40 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
   };
 
   return (
-    <div className="css-editor-field">
-      <div className="css-editor-field__header">
-        <label className="css-editor-field__label">{props.label}</label>
-        <button aria-expanded={floatingOpen} className="css-editor-field__popout" type="button" onClick={toggleFloatingEditor}>
-          Pop out
-        </button>
-      </div>
+    <div
+      className={`css-editor-field ${props.embedded ? 'css-editor-field--embedded' : ''} ${
+        props.fillHeight ? 'css-editor-field--fill' : ''
+      }`}
+    >
+      {!props.embedded && (
+        <div className="css-editor-field__header">
+          <label className="css-editor-field__label">{props.label}</label>
+          <button aria-expanded={floatingOpen} className="css-editor-field__popout" type="button" onClick={toggleFloatingEditor}>
+            Pop out
+          </button>
+        </div>
+      )}
       {props.description && <p className="css-editor-field__description">{props.description}</p>}
-      <div className="css-editor-field__frame" style={{ height: minHeight, minHeight }}>
+      {props.embedded && props.showShortcuts && (
+        <SourceEditorShortcutToolbar
+          ariaLabel={`${props.language.toUpperCase()} editor shortcuts`}
+          editingTarget={editingTarget}
+          snippets={sourceEditorSnippets}
+          targets={cssEditorTargets}
+          onApplySnippet={applySnippet}
+          onApplyTarget={applyTarget}
+          onCommitTarget={commitTargetEdit}
+          onEditTarget={startTargetEdit}
+          onEditingTargetChange={setEditingTarget}
+        />
+      )}
+      <div
+        className="css-editor-field__frame"
+        style={{
+          height: props.fillHeight ? '100%' : minHeight,
+          minHeight: props.fillHeight ? 0 : minHeight
+        }}
+      >
         {(!monacoBaseUrl || !editorReady) && (
           <FallbackSourceEditor
             label={props.label}
@@ -315,7 +349,10 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
               theme="vs-dark"
               value={draft}
               beforeMount={(monaco: any) => configureSourceEditorMonaco(monaco, props.language)}
-              onMount={(editor: any) => handleSourceEditorMount(editor, cssEditorTargetsRef, () => setEditorReady(true))}
+              onMount={(editor: any) => {
+                inlineEditorRef.current = editor;
+                handleSourceEditorMount(editor, cssEditorTargetsRef, () => setEditorReady(true));
+              }}
               onChange={(value: string | undefined) => updateValue(value || '')}
               options={{
                 acceptSuggestionOnEnter: 'off',
@@ -358,7 +395,7 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
           ))}
         </div>
       )}
-      {floatingOpen && (
+      {!props.embedded && floatingOpen && (
         <div
           aria-label={`${props.label} floating editor`}
           aria-modal="false"
@@ -387,93 +424,17 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
               <kbd className="css-floating-editor__close-shortcut">{closeShortcutLabel}</kbd>
             </button>
           </div>
-          {(cssEditorTargets.length > 0 || sourceEditorSnippets.length > 0) && (
-            <div className="css-floating-editor__toolbar" aria-label={`${props.language.toUpperCase()} editor shortcuts`}>
-              {cssEditorTargets.map((target) => {
-                const isEditing = editingTarget?.selector === target.selector;
-
-                if (target.editable) {
-                  return (
-                    <span
-                      className={`css-floating-editor__target-chip ${isEditing ? 'css-floating-editor__target-chip--editing' : ''}`}
-                      key={target.selector}
-                    >
-                      {isEditing ? (
-                        <input
-                          aria-label={target.renameLabel || `Edit ${target.selector}`}
-                          autoFocus
-                          className="css-floating-editor__target-input"
-                          value={editingTarget.value}
-                          onBlur={(event) => commitTargetEdit(target, event.currentTarget.value)}
-                          onChange={(event) => setEditingTarget({ selector: target.selector, value: event.currentTarget.value })}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Escape') {
-                              event.preventDefault();
-                              setEditingTarget(null);
-                              return;
-                            }
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              commitTargetEdit(target, event.currentTarget.value);
-                            }
-                          }}
-                          onPointerDown={(event) => event.stopPropagation()}
-                        />
-                      ) : (
-                        <>
-                          <button
-                            className="css-floating-editor__target-button"
-                            aria-label={`Add or jump to ${target.selector}`}
-                            title={`Add or jump to ${target.selector}`}
-                            type="button"
-                            onClick={() => applyFloatingTarget(target)}
-                            onPointerDown={(event) => event.stopPropagation()}
-                          >
-                            {target.label}
-                          </button>
-                          <button
-                            aria-label={target.renameLabel || `Edit ${target.selector}`}
-                            className="css-floating-editor__target-edit-button"
-                            title={target.renameLabel || `Edit ${target.selector}`}
-                            type="button"
-                            onClick={() => startTargetEdit(target)}
-                            onPointerDown={(event) => event.stopPropagation()}
-                          >
-                            <EditIcon />
-                          </button>
-                        </>
-                      )}
-                    </span>
-                  );
-                }
-
-                return (
-                  <button
-                    className="css-floating-editor__target-button"
-                    key={target.selector}
-                    aria-label={`Add or jump to ${target.selector}`}
-                    title={`Add or jump to ${target.selector}`}
-                    type="button"
-                    onClick={() => applyFloatingTarget(target)}
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    {target.label}
-                  </button>
-                );
-              })}
-              {sourceEditorSnippets.map((snippet) => (
-                <button
-                  className="css-floating-editor__target-button"
-                  key={`${snippet.label}-${snippet.searchText || snippet.snippet}`}
-                  type="button"
-                  onClick={() => applyFloatingSnippet(snippet)}
-                  onPointerDown={(event) => event.stopPropagation()}
-                >
-                  {snippet.label}
-                </button>
-              ))}
-            </div>
-          )}
+          <SourceEditorShortcutToolbar
+            ariaLabel={`${props.language.toUpperCase()} editor shortcuts`}
+            editingTarget={editingTarget}
+            snippets={sourceEditorSnippets}
+            targets={cssEditorTargets}
+            onApplySnippet={applySnippet}
+            onApplyTarget={applyTarget}
+            onCommitTarget={commitTargetEdit}
+            onEditTarget={startTargetEdit}
+            onEditingTargetChange={setEditingTarget}
+          />
           <div className="css-floating-editor__body">
             {(!monacoBaseUrl || !floatingEditorReady) && (
               <FallbackSourceEditor
@@ -537,6 +498,114 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+interface SourceEditorShortcutToolbarProps {
+  ariaLabel: string;
+  editingTarget: { selector: string; value: string } | null;
+  snippets: readonly SourceEditorSnippet[];
+  targets: readonly CssEditorTarget[];
+  onApplySnippet: (snippet: SourceEditorSnippet) => void;
+  onApplyTarget: (target: CssEditorTarget) => void;
+  onCommitTarget: (target: CssEditorTarget, value: string) => void;
+  onEditingTargetChange: React.Dispatch<React.SetStateAction<{ selector: string; value: string } | null>>;
+  onEditTarget: (target: CssEditorTarget) => void;
+}
+
+function SourceEditorShortcutToolbar(props: SourceEditorShortcutToolbarProps): JSX.Element | null {
+  if (props.targets.length === 0 && props.snippets.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="css-floating-editor__toolbar" aria-label={props.ariaLabel}>
+      {props.targets.map((target) => {
+        const isEditing = props.editingTarget?.selector === target.selector;
+
+        if (target.editable) {
+          return (
+            <span
+              className={`css-floating-editor__target-chip ${isEditing ? 'css-floating-editor__target-chip--editing' : ''}`}
+              key={target.selector}
+            >
+              {isEditing ? (
+                <input
+                  aria-label={target.renameLabel || `Edit ${target.selector}`}
+                  autoFocus
+                  className="css-floating-editor__target-input"
+                  value={props.editingTarget?.value || target.selector}
+                  onBlur={(event) => props.onCommitTarget(target, event.currentTarget.value)}
+                  onChange={(event) =>
+                    props.onEditingTargetChange({ selector: target.selector, value: event.currentTarget.value })
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      props.onEditingTargetChange(null);
+                      return;
+                    }
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      props.onCommitTarget(target, event.currentTarget.value);
+                    }
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                />
+              ) : (
+                <>
+                  <button
+                    aria-label={`Add or jump to ${target.selector}`}
+                    className="css-floating-editor__target-button"
+                    title={`Add or jump to ${target.selector}`}
+                    type="button"
+                    onClick={() => props.onApplyTarget(target)}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    {target.label}
+                  </button>
+                  <button
+                    aria-label={target.renameLabel || `Edit ${target.selector}`}
+                    className="css-floating-editor__target-edit-button"
+                    title={target.renameLabel || `Edit ${target.selector}`}
+                    type="button"
+                    onClick={() => props.onEditTarget(target)}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <EditIcon />
+                  </button>
+                </>
+              )}
+            </span>
+          );
+        }
+
+        return (
+          <button
+            aria-label={`Add or jump to ${target.selector}`}
+            className="css-floating-editor__target-button"
+            key={target.selector}
+            title={`Add or jump to ${target.selector}`}
+            type="button"
+            onClick={() => props.onApplyTarget(target)}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            {target.label}
+          </button>
+        );
+      })}
+      {props.snippets.map((snippet) => (
+        <button
+          className="css-floating-editor__target-button"
+          key={`${snippet.label}-${snippet.searchText || snippet.snippet}`}
+          type="button"
+          onClick={() => props.onApplySnippet(snippet)}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          {snippet.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -978,7 +1047,7 @@ function registerSourceEditorCompletions(monaco: any): void {
         endColumn: word.endColumn
       };
       return {
-        suggestions: createSelectorSuggestions(monaco, range, getCssEditorTargetsForModel(model))
+        suggestions: createSourceEditorSuggestions(monaco, range, getCssEditorTargetsForModel(model))
       };
     }
   });
@@ -997,6 +1066,18 @@ export function getCssEditorTargetsForModel(model: unknown): readonly CssEditorT
   return typeof model === 'object' && model !== null ? cssEditorTargetsByModel.get(model)?.current || [] : [];
 }
 
+export function createSourceEditorSuggestions(
+  monaco: any,
+  range: Record<string, number>,
+  targets: readonly CssEditorTarget[]
+): any[] {
+  return [
+    ...createSelectorSuggestions(monaco, range, targets),
+    ...createPropertySuggestions(monaco, range),
+    ...createValueSuggestions(monaco, range)
+  ];
+}
+
 function createSelectorSuggestions(monaco: any, range: any, targets: readonly CssEditorTarget[]): any[] {
   const snippetRule = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
   return targets.map((target) => ({
@@ -1006,6 +1087,74 @@ function createSelectorSuggestions(monaco: any, range: any, targets: readonly Cs
     documentation: `Insert the configured ${target.label} target.`,
     insertText: target.snippet.replace(/ {2}/g, '\t'),
     insertTextRules: snippetRule,
+    range
+  }));
+}
+
+function createPropertySuggestions(monaco: any, range: any): any[] {
+  const snippetRule = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
+  const properties = [
+    ['display', 'display: ${1|block,flex,grid,inline,none|};', 'Layout mode'],
+    ['position', 'position: ${1|relative,absolute,fixed,sticky|};', 'Positioning mode'],
+    ['inset', 'inset: ${1:0};', 'Logical positioning shorthand'],
+    ['width', 'width: ${1:100%};', 'Element width'],
+    ['min-width', 'min-width: ${1:0};', 'Minimum width'],
+    ['max-width', 'max-width: ${1:100%};', 'Maximum width'],
+    ['height', 'height: ${1:auto};', 'Element height'],
+    ['margin', 'margin: ${1:0};', 'Outer spacing'],
+    ['padding', 'padding: ${1:16px};', 'Inner spacing'],
+    ['gap', 'gap: ${1:8px};', 'Flex or grid spacing'],
+    ['grid-template-columns', 'grid-template-columns: ${1:repeat(2, minmax(0, 1fr))};', 'Grid columns'],
+    ['align-items', 'align-items: ${1|stretch,center,flex-start,flex-end|};', 'Cross-axis alignment'],
+    ['justify-content', 'justify-content: ${1|flex-start,center,flex-end,space-between|};', 'Main-axis alignment'],
+    ['color', 'color: ${1:#242424};', 'Foreground color'],
+    ['background', 'background: ${1:#ffffff};', 'Background color or image'],
+    ['border', 'border: ${1:1px solid #d1d1d1};', 'Border shorthand'],
+    ['border-radius', 'border-radius: ${1:6px};', 'Corner radius'],
+    ['box-shadow', 'box-shadow: ${1:0 1px 2px rgb(0 0 0 / 12%)};', 'Element shadow'],
+    ['font-size', 'font-size: ${1:14px};', 'Text size'],
+    ['font-weight', 'font-weight: ${1|400,500,600,700|};', 'Text weight'],
+    ['line-height', 'line-height: ${1:1.5};', 'Line height'],
+    ['text-align', 'text-align: ${1|left,center,right|};', 'Text alignment'],
+    ['overflow', 'overflow: ${1|visible,hidden,auto|};', 'Overflow behavior'],
+    ['opacity', 'opacity: ${1:1};', 'Element opacity'],
+    ['transform', 'transform: ${1:translateY(0)};', 'Element transform'],
+    ['transition', 'transition: ${1:all 160ms ease};', 'Transition shorthand']
+  ];
+
+  return properties.map(([label, insertText, detail]) => ({
+    label,
+    kind: monaco.languages.CompletionItemKind.Property,
+    detail,
+    insertText,
+    insertTextRules: snippetRule,
+    range
+  }));
+}
+
+function createValueSuggestions(monaco: any, range: any): any[] {
+  const values = [
+    ['var(--colorNeutralForeground1, #242424)', 'Fluent neutral foreground'],
+    ['var(--colorNeutralBackground1, #ffffff)', 'Fluent neutral background'],
+    ['var(--colorNeutralStroke2, #e0e0e0)', 'Fluent neutral border'],
+    ['var(--colorBrandForeground1, #0f6cbd)', 'Fluent brand foreground'],
+    ['transparent', 'Transparent color'],
+    ['currentColor', 'Current text color'],
+    ['#ffffff', 'White'],
+    ['#242424', 'Fluent neutral foreground'],
+    ['#0f6cbd', 'Fluent brand blue'],
+    ['#c50f1f', 'Fluent danger red'],
+    ['0', 'Reset value'],
+    ['100%', 'Full available size'],
+    ['auto', 'Automatic sizing'],
+    ['inherit', 'Inherit from parent']
+  ];
+
+  return values.map(([label, detail]) => ({
+    label,
+    kind: monaco.languages.CompletionItemKind.Value,
+    detail,
+    insertText: label,
     range
   }));
 }

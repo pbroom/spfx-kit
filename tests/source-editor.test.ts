@@ -4,6 +4,7 @@ import {
   SourceEditor,
   appendCssTarget,
   constrainFloatingRect,
+  createSourceEditorSuggestions,
   evaluateSourceTargetRename,
   getCssEditorTargetsForModel,
   isCloseShortcut,
@@ -11,7 +12,9 @@ import {
   resizeFloatingRect,
   setCssEditorTargetsForModel
 } from '../apps/lab/src/components/SourceEditor';
+import { SourceWorkspace } from '../apps/lab/src/components/SourceWorkspace';
 import {
+  createSourceEditorSuggestions as createProductionSourceEditorSuggestions,
   getCssEditorTargetsForModel as getProductionCssEditorTargetsForModel,
   setCssEditorTargetsForModel as setProductionCssEditorTargetsForModel
 } from '../packages/source-editor-react/src/SourceEditorField';
@@ -117,6 +120,76 @@ describe('source editor state', () => {
     expect(getProductionCssEditorTargetsForModel(productionModel)).toBe(textTargets);
     productionTargetsRef.current = renamedTargets;
     expect(getProductionCssEditorTargetsForModel(productionModel)).toBe(renamedTargets);
+  });
+
+  it('offers selector, property, and color completions for SCSS editing', () => {
+    const monaco = {
+      languages: {
+        CompletionItemInsertTextRule: { InsertAsSnippet: 4 },
+        CompletionItemKind: { Class: 5, Property: 9, Value: 12 }
+      }
+    };
+    const range = {
+      startLineNumber: 1,
+      endLineNumber: 1,
+      startColumn: 1,
+      endColumn: 5
+    };
+    const suggestions = createSourceEditorSuggestions(monaco, range, [
+      { label: 'Web part', selector: '.better-list', snippet: '.better-list {\n  $0\n}' }
+    ]);
+
+    expect(suggestions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: '.better-list', kind: 5, range }),
+        expect.objectContaining({ label: 'background', kind: 9, range }),
+        expect.objectContaining({ label: '#0f6cbd', kind: 12, range })
+      ])
+    );
+    expect(
+      createProductionSourceEditorSuggestions(monaco, range, [
+        { label: 'Web part', selector: '.better-list', snippet: '.better-list {\n  $0\n}' }
+      ])
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: '.better-list', kind: 5, range }),
+        expect.objectContaining({ label: 'background', kind: 9, range }),
+        expect.objectContaining({ label: '#0f6cbd', kind: 12, range })
+      ])
+    );
+  });
+
+  it('renders one source workspace with CSS, HTML, and split views', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(SourceWorkspace, {
+        label: 'Styles & template',
+        description: 'Edit both sources together.',
+        documents: [
+          {
+            id: 'scss',
+            label: 'CSS/SCSS',
+            language: 'scss',
+            value: '.better-list {}',
+            onChange: () => undefined
+          },
+          {
+            id: 'html',
+            label: 'HTML template',
+            language: 'html',
+            value: '<template data-bl-fragment="item"></template>',
+            onChange: () => undefined
+          }
+        ]
+      })
+    );
+
+    expect(markup.match(/>Pop out</g)).toHaveLength(1);
+    expect(markup).toContain('role="tablist"');
+    expect(markup).toContain('>CSS/SCSS</button>');
+    expect(markup).toContain('>HTML template</button>');
+    expect(markup).toContain('>Split</button>');
+    expect(markup).toContain('aria-selected="true"');
+    expect(markup).toContain('hidden=""');
   });
 
   it('keeps floating drag and resize geometry inside viewport bounds', () => {

@@ -78,6 +78,12 @@ const minFloatingWidth = 360;
 const minFloatingHeight = 260;
 const defaultMonacoAdapter: SourceEditorMonacoAdapter = {
   async load(language) {
+    await import(
+      /* webpackChunkName: "source-editor-monaco" */
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore Monaco's ESM core-feature entrypoint is runtime-only and has no declaration file.
+      'monaco-editor/esm/vs/editor/edcore.main.js'
+    );
     const monaco = await import(
       /* webpackChunkName: "source-editor-monaco" */
       'monaco-editor/esm/vs/editor/editor.api'
@@ -1177,7 +1183,7 @@ function registerSourceEditorCompletions(monaco: any): void {
         endColumn: word.endColumn
       };
       return {
-        suggestions: createSelectorSuggestions(monaco, range, getCssEditorTargetsForModel(model))
+        suggestions: createSourceEditorSuggestions(monaco, range, getCssEditorTargetsForModel(model))
       };
     }
   });
@@ -1196,6 +1202,18 @@ export function getCssEditorTargetsForModel(model: unknown): readonly SourceEdit
   return typeof model === 'object' && model !== null ? cssEditorTargetsByModel.get(model)?.current || [] : [];
 }
 
+export function createSourceEditorSuggestions(
+  monaco: any,
+  range: Record<string, number>,
+  targets: readonly SourceEditorTarget[]
+): any[] {
+  return [
+    ...createSelectorSuggestions(monaco, range, targets),
+    ...createPropertySuggestions(monaco, range),
+    ...createValueSuggestions(monaco, range)
+  ];
+}
+
 function createSelectorSuggestions(monaco: any, range: any, targets: readonly SourceEditorTarget[]): any[] {
   const snippetRule = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
   return targets.map((target) => ({
@@ -1205,6 +1223,74 @@ function createSelectorSuggestions(monaco: any, range: any, targets: readonly So
     documentation: `Insert the configured ${target.label} target.`,
     insertText: target.snippet.replace(/ {2}/g, '\t'),
     insertTextRules: snippetRule,
+    range
+  }));
+}
+
+function createPropertySuggestions(monaco: any, range: any): any[] {
+  const snippetRule = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
+  const properties = [
+    ['display', 'display: ${1|block,flex,grid,inline,none|};', 'Layout mode'],
+    ['position', 'position: ${1|relative,absolute,fixed,sticky|};', 'Positioning mode'],
+    ['inset', 'inset: ${1:0};', 'Logical positioning shorthand'],
+    ['width', 'width: ${1:100%};', 'Element width'],
+    ['min-width', 'min-width: ${1:0};', 'Minimum width'],
+    ['max-width', 'max-width: ${1:100%};', 'Maximum width'],
+    ['height', 'height: ${1:auto};', 'Element height'],
+    ['margin', 'margin: ${1:0};', 'Outer spacing'],
+    ['padding', 'padding: ${1:16px};', 'Inner spacing'],
+    ['gap', 'gap: ${1:8px};', 'Flex or grid spacing'],
+    ['grid-template-columns', 'grid-template-columns: ${1:repeat(2, minmax(0, 1fr))};', 'Grid columns'],
+    ['align-items', 'align-items: ${1|stretch,center,flex-start,flex-end|};', 'Cross-axis alignment'],
+    ['justify-content', 'justify-content: ${1|flex-start,center,flex-end,space-between|};', 'Main-axis alignment'],
+    ['color', 'color: ${1:#242424};', 'Foreground color'],
+    ['background', 'background: ${1:#ffffff};', 'Background color or image'],
+    ['border', 'border: ${1:1px solid #d1d1d1};', 'Border shorthand'],
+    ['border-radius', 'border-radius: ${1:6px};', 'Corner radius'],
+    ['box-shadow', 'box-shadow: ${1:0 1px 2px rgb(0 0 0 / 12%)};', 'Element shadow'],
+    ['font-size', 'font-size: ${1:14px};', 'Text size'],
+    ['font-weight', 'font-weight: ${1|400,500,600,700|};', 'Text weight'],
+    ['line-height', 'line-height: ${1:1.5};', 'Line height'],
+    ['text-align', 'text-align: ${1|left,center,right|};', 'Text alignment'],
+    ['overflow', 'overflow: ${1|visible,hidden,auto|};', 'Overflow behavior'],
+    ['opacity', 'opacity: ${1:1};', 'Element opacity'],
+    ['transform', 'transform: ${1:translateY(0)};', 'Element transform'],
+    ['transition', 'transition: ${1:all 160ms ease};', 'Transition shorthand']
+  ];
+
+  return properties.map(([label, insertText, detail]) => ({
+    label,
+    kind: monaco.languages.CompletionItemKind.Property,
+    detail,
+    insertText,
+    insertTextRules: snippetRule,
+    range
+  }));
+}
+
+function createValueSuggestions(monaco: any, range: any): any[] {
+  const values = [
+    ['var(--colorNeutralForeground1, #242424)', 'Fluent neutral foreground'],
+    ['var(--colorNeutralBackground1, #ffffff)', 'Fluent neutral background'],
+    ['var(--colorNeutralStroke2, #e0e0e0)', 'Fluent neutral border'],
+    ['var(--colorBrandForeground1, #0f6cbd)', 'Fluent brand foreground'],
+    ['transparent', 'Transparent color'],
+    ['currentColor', 'Current text color'],
+    ['#ffffff', 'White'],
+    ['#242424', 'Fluent neutral foreground'],
+    ['#0f6cbd', 'Fluent brand blue'],
+    ['#c50f1f', 'Fluent danger red'],
+    ['0', 'Reset value'],
+    ['100%', 'Full available size'],
+    ['auto', 'Automatic sizing'],
+    ['inherit', 'Inherit from parent']
+  ];
+
+  return values.map(([label, detail]) => ({
+    label,
+    kind: monaco.languages.CompletionItemKind.Value,
+    detail,
+    insertText: label,
     range
   }));
 }

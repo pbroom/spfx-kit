@@ -81,6 +81,24 @@ interface LabSourceEditorControlBase extends LabPropertyControlBase {
 
 export type LabPropertyControlIcon = 'text-align-left' | 'text-align-center' | 'text-align-right';
 
+export type LabSourceEditorControl =
+  | (LabSourceEditorControlBase & {
+      language: 'scss';
+      targets?: LabCssEditorTarget[];
+      targetComment?: string;
+      getTargets?: (values: LabPropertyBag) => LabCssEditorTarget[];
+      getTargetComment?: (values: LabPropertyBag) => string;
+      getTargetRenamePatch?: (
+        target: LabCssEditorTarget,
+        nextSelector: string,
+        nextValue: string,
+        values: LabPropertyBag
+      ) => LabPropertyBag;
+    })
+  | (LabSourceEditorControlBase & {
+      language: 'html';
+    });
+
 export type LabPropertyControl =
   | (LabPropertyControlBase & {
       type: 'text' | 'textarea' | 'color';
@@ -132,21 +150,11 @@ export type LabPropertyControl =
         values: LabPropertyBag
       ) => LabPropertyBag;
     })
-  | (LabSourceEditorControlBase & {
-      language: 'scss';
-      targets?: LabCssEditorTarget[];
-      targetComment?: string;
-      getTargets?: (values: LabPropertyBag) => LabCssEditorTarget[];
-      getTargetComment?: (values: LabPropertyBag) => string;
-      getTargetRenamePatch?: (
-        target: LabCssEditorTarget,
-        nextSelector: string,
-        nextValue: string,
-        values: LabPropertyBag
-      ) => LabPropertyBag;
-    })
-  | (LabSourceEditorControlBase & {
-      language: 'html';
+  | LabSourceEditorControl
+  | (LabPropertyControlBase & {
+      type: 'sourceWorkspace';
+      documents: LabSourceEditorControl[];
+      defaultView?: 'first' | 'split';
     });
 
 export interface LabPropertyPaneRenderProps<Props extends LabPropertyBag = LabPropertyBag> {

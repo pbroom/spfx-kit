@@ -19,7 +19,13 @@ import {
   ToolbarRadioGroup
 } from '@fluentui/react-components';
 import { TextAlignCenterRegular, TextAlignLeftRegular, TextAlignRightRegular } from '@fluentui/react-icons';
-import { LabPropertyBag, LabPropertyControl, LabPropertyPaneRenderProps, LabWebPart } from '@spfx-kit/spfx-lab-runtime';
+import {
+  LabPropertyBag,
+  LabPropertyControl,
+  LabPropertyPaneRenderProps,
+  LabSourceEditorControl,
+  LabWebPart
+} from '@spfx-kit/spfx-lab-runtime';
 import {
   createDefaultCodeWorkbenchSource,
   createSpfxBridge,
@@ -29,6 +35,8 @@ import {
 import { createMockSpfxContext } from '@spfx-kit/spfx-lab-runtime';
 import { CssEditor } from './CssEditor';
 import { SourceEditor } from './SourceEditor';
+import { SourceWorkspace } from './SourceWorkspace';
+import type { SourceWorkspaceDocument } from './SourceWorkspace';
 
 const LazyCodeWorkspaceEditor = React.lazy(async () => {
   const codeWorkspace = await import('./CodeWorkspaceEditor');
@@ -238,6 +246,22 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
     );
   }
 
+  if (control.type === 'sourceWorkspace') {
+    const documents = control.documents.map((document): SourceWorkspaceDocument =>
+      resolveSourceWorkspaceDocument(document, values, onPatch)
+    );
+    return (
+      <div className="property-field">
+        <SourceWorkspace
+          defaultView={control.defaultView}
+          description={control.description}
+          documents={documents}
+          label={control.label}
+        />
+      </div>
+    );
+  }
+
   if (control.type === 'textarea') {
     return (
       <Field className="property-field" label={control.label} size="small">
@@ -369,6 +393,53 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
       />
     </Field>
   );
+}
+
+function resolveSourceWorkspaceDocument(
+  control: LabSourceEditorControl,
+  values: LabPropertyBag,
+  onPatch: (patch: LabPropertyBag) => void
+): SourceWorkspaceDocument {
+  const value = control.getValue ? control.getValue(values) : values[control.name];
+  const targets = control.language === 'scss' ? (control.getTargets ? control.getTargets(values) : control.targets) : undefined;
+  const targetComment =
+    control.language === 'scss'
+      ? control.getTargetComment
+        ? control.getTargetComment(values)
+        : control.targetComment
+      : undefined;
+  const updateValue = (nextValue: string): void => {
+    onPatch(control.getPatch ? control.getPatch(nextValue, values) : { [control.name]: nextValue });
+  };
+
+  return {
+    commitMode: control.commitMode,
+    description: control.description,
+    height: control.height,
+    id: control.name,
+    label: control.label,
+    language: control.language,
+    maxBytes: control.maxBytes,
+    minHeight: control.minHeight,
+    monacoBaseUrl: labMonacoBaseUrl,
+    placeholder: control.placeholder,
+    snippets: control.snippets,
+    targetComment,
+    targets,
+    validate: control.validate ? (source) => control.validate?.(source, values) || [] : undefined,
+    value: String(value ?? ''),
+    onChange: updateValue,
+    onTargetRename:
+      control.language === 'scss'
+        ? (target, nextSelector, nextValue) => {
+            onPatch(
+              control.getTargetRenamePatch
+                ? control.getTargetRenamePatch(target, nextSelector, nextValue, values)
+                : { [control.name]: nextValue }
+            );
+          }
+        : undefined
+  };
 }
 
 function getPropertyControlIcon(icon: string | undefined): JSX.Element | undefined {
