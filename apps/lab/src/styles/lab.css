@@ -136,6 +136,22 @@ textarea {
   cursor: pointer;
 }
 
+.lab-toolbar--panel .icon-button {
+  width: 32px;
+  height: 32px;
+  inline-size: 32px;
+  block-size: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  min-inline-size: 32px;
+  min-block-size: 32px;
+  max-width: 32px;
+  max-height: 32px;
+  max-inline-size: 32px;
+  max-block-size: 32px;
+  padding: 0;
+}
+
 .lab-shell--dark .icon-button {
   color: #f5f5f5;
 }

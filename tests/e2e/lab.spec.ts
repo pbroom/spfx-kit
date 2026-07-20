@@ -31,6 +31,14 @@ test('keeps viewer controls anchored while collapsing the options content', asyn
   expect(previewBefore).not.toBeNull();
 
   const collapsePanelButton = page.getByRole('button', { name: 'Collapse options panel' });
+  const manageAppsButtonBox = await page.getByRole('button', { name: 'Manage apps' }).boundingBox();
+  const collapsePanelButtonBox = await collapsePanelButton.boundingBox();
+  expect(manageAppsButtonBox).not.toBeNull();
+  expect(collapsePanelButtonBox).not.toBeNull();
+  expect(manageAppsButtonBox!.width).toBe(32);
+  expect(manageAppsButtonBox!.height).toBe(32);
+  expect(collapsePanelButtonBox!.width).toBe(manageAppsButtonBox!.width);
+  expect(collapsePanelButtonBox!.height).toBe(manageAppsButtonBox!.height);
   await expect(collapsePanelButton).toHaveAttribute('aria-pressed', 'false');
   await collapsePanelButton.click();
 
