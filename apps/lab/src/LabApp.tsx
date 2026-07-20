@@ -264,6 +264,9 @@ export function LabApp(): JSX.Element {
                     </MenuList>
                   </MenuPopover>
                 </Menu>
+                <IconButton label="Export package" onClick={openExportDrawer}>
+                  <Upload size={16} />
+                </IconButton>
               </div>
             ) : (
               <span aria-hidden="true" />

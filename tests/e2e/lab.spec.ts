@@ -11,6 +11,10 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(preview.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Select web part' })).toHaveText('Hello Card');
 
+  await page.getByRole('button', { name: 'Export package' }).click();
+  await expect(page.getByRole('combobox', { name: 'Select app to export' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close export package drawer' }).click();
+
   await page.getByRole('button', { name: 'Theme: Light' }).click();
   await page.getByRole('menuitemradio', { name: 'Dark' }).click();
   await expect(page.locator('main.lab-shell')).toHaveClass(/lab-shell--dark/);

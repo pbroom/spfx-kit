@@ -136,7 +136,9 @@ textarea {
   cursor: pointer;
 }
 
-.lab-toolbar--panel .icon-button {
+.lab-toolbar--panel .icon-button,
+.app-menu-control .app-menu-button,
+.app-menu-control .icon-button {
   width: 32px;
   height: 32px;
   inline-size: 32px;
@@ -262,6 +264,7 @@ textarea {
   align-items: center;
   justify-self: start;
   min-width: 0;
+  gap: 4px;
 }
 
 .app-menu-button {
