@@ -1,6 +1,7 @@
 import type * as React from 'react';
 
 export type LabThemeMode = 'light' | 'dark' | 'custom';
+export type LabDisplayMode = 'edit' | 'viewer';
 
 export interface LabBreakpoint {
   id: 'one-column' | 'two-third' | 'one-half' | 'one-third' | 'mobile';
@@ -30,6 +31,7 @@ export interface LabThemeContext {
 
 export interface LabRenderContext {
   breakpoint: LabBreakpoint;
+  displayMode: LabDisplayMode;
   theme: LabThemeContext;
   spfxContext: MockSpfxContext;
   fixtures: Record<string, unknown>;
