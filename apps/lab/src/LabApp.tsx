@@ -58,7 +58,7 @@ import {
   resolveInitialWebPartId,
   resolvePinnedAppId
 } from './lib/pinnedApp';
-import { getPrimaryShortcutLabel, slugify } from './lib/text';
+import { getPrimaryShortcutLabel } from './lib/text';
 
 type PropsByWebPart = Record<string, LabPropertyBag>;
 
@@ -75,13 +75,8 @@ export function LabApp(): JSX.Element {
     return next;
   }, []);
   const webParts = React.useMemo(() => registry.list(), [registry]);
-  const initialPinnedAppIdRef = React.useRef<string | undefined>(undefined);
-  if (initialPinnedAppIdRef.current === undefined) {
-    initialPinnedAppIdRef.current = resolvePinnedAppId(webParts, readPinnedAppId(getBrowserStorage()));
-  }
-  const initialPinnedAppId = initialPinnedAppIdRef.current || '';
-  const [pinnedAppId, setPinnedAppId] = React.useState(initialPinnedAppId);
-  const [selectedId, setSelectedId] = React.useState<string>(() => resolveInitialWebPartId(webParts, initialPinnedAppId));
+  const [pinnedAppId, setPinnedAppId] = React.useState(() => resolvePinnedAppId(webParts, readPinnedAppId(getBrowserStorage())));
+  const [selectedId, setSelectedId] = React.useState<string>(() => resolveInitialWebPartId(webParts, pinnedAppId));
   const selected = registry.get(selectedId) || webParts[0];
   const [breakpointId, setBreakpointId] = React.useState<LabBreakpoint['id']>('one-column');
   const [boundsVisible, setBoundsVisible] = React.useState(false);
@@ -493,7 +488,7 @@ function IconButton(props: IconButtonProps): JSX.Element {
 function groupWebPartsByAppId(webParts: LabWebPart[]): Map<string, LabWebPart[]> {
   const groups = new Map<string, LabWebPart[]>();
   for (const webPart of webParts) {
-    const appId = webPart.appId || slugify(webPart.title || webPart.id);
+    const appId = getLabAppId(webPart);
     groups.set(appId, [...(groups.get(appId) || []), webPart]);
   }
   return groups;
