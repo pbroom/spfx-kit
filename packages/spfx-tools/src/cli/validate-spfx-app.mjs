@@ -58,7 +58,11 @@ async function main() {
   const writeManifests = await readJson(path.join(appDir, 'config', 'write-manifests.json'));
   const summary = await readSpfxSummary(appDir);
   const issues = [];
-  if (profile === 'lab' && !packageJson.name?.startsWith('@spfx-kit/')) {
+  const attachedStandaloneRepo =
+    profile === 'lab' &&
+    (await exists(path.join(appDir, '.git'))) &&
+    (await exists(path.join(appDir, '.spfx-kit', 'clone.json')));
+  if (profile === 'lab' && !packageJson.name?.startsWith('@spfx-kit/') && !attachedStandaloneRepo) {
     issues.push('package name should be namespaced as @spfx-kit/<slug>');
   }
   if (profile === 'standalone') {

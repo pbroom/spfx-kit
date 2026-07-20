@@ -12,6 +12,7 @@
     "import-spfx-app": "./src/cli/import-spfx-app.mjs",
     "sync-cdn-config": "./src/cli/sync-cdn-config.mjs",
     "sync-lab": "./src/cli/sync-lab.mjs",
+    "sync-source-editor": "./src/cli/sync-source-editor.mjs",
     "validate-spfx-app": "./src/cli/validate-spfx-app.mjs",
     "verify-sppkg": "./src/cli/verify-sppkg.mjs"
   },

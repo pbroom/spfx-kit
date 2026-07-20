@@ -6,6 +6,9 @@ import { rootDir } from './server/paths';
 
 export default defineConfig({
   plugins: [react(), spfxAppApi(), spfxExportApi()],
+  resolve: {
+    dedupe: ['react', 'react-dom']
+  },
   server: {
     strictPort: false,
     fs: {

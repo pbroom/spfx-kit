@@ -56,7 +56,48 @@ export interface LabCssEditorTarget {
   renameLabel?: string;
 }
 
+export interface LabSourceEditorDiagnostic {
+  level: 'warning' | 'error';
+  message: string;
+}
+
+export interface LabSourceEditorSnippet {
+  label: string;
+  snippet: string;
+  searchText?: string;
+}
+
+interface LabSourceEditorControlBase extends LabPropertyControlBase {
+  type: 'sourceEditor';
+  placeholder?: string;
+  height?: number;
+  /** @deprecated Use height for sourceEditor controls. */
+  minHeight?: number;
+  maxBytes?: number;
+  commitMode?: 'immediate' | 'valid';
+  snippets?: LabSourceEditorSnippet[];
+  validate?: (value: string, values: LabPropertyBag) => LabSourceEditorDiagnostic[];
+}
+
 export type LabPropertyControlIcon = 'text-align-left' | 'text-align-center' | 'text-align-right';
+
+export type LabSourceEditorControl =
+  | (LabSourceEditorControlBase & {
+      language: 'scss';
+      targets?: LabCssEditorTarget[];
+      targetComment?: string;
+      getTargets?: (values: LabPropertyBag) => LabCssEditorTarget[];
+      getTargetComment?: (values: LabPropertyBag) => string;
+      getTargetRenamePatch?: (
+        target: LabCssEditorTarget,
+        nextSelector: string,
+        nextValue: string,
+        values: LabPropertyBag
+      ) => LabPropertyBag;
+    })
+  | (LabSourceEditorControlBase & {
+      language: 'html';
+    });
 
 export type LabPropertyControl =
   | (LabPropertyControlBase & {
@@ -80,6 +121,13 @@ export type LabPropertyControl =
       options: Array<{ label: string; value: string }>;
     })
   | (LabPropertyControlBase & {
+      type: 'combobox';
+      options: Array<{ label: string; value: string }>;
+      placeholder?: string;
+      /** Maximum options rendered while filtering. Defaults to 50. */
+      maxVisibleOptions?: number;
+    })
+  | (LabPropertyControlBase & {
       type: 'radio';
       options: Array<{ label: string; value: string; icon?: LabPropertyControlIcon }>;
     })
@@ -87,6 +135,7 @@ export type LabPropertyControl =
       type: 'codeWorkspace';
     })
   | (LabPropertyControlBase & {
+      /** @deprecated Use sourceEditor with language: 'scss'. */
       type: 'cssEditor';
       placeholder?: string;
       minHeight?: number;
@@ -100,7 +149,20 @@ export type LabPropertyControl =
         nextValue: string,
         values: LabPropertyBag
       ) => LabPropertyBag;
+    })
+  | LabSourceEditorControl
+  | (LabPropertyControlBase & {
+      type: 'sourceWorkspace';
+      documents: LabSourceEditorControl[];
+      defaultView?: 'first' | 'split';
     });
+
+export interface LabPropertyPaneRenderProps<Props extends LabPropertyBag = LabPropertyBag> {
+  title: string;
+  values: Props;
+  onChange: (patch: Partial<Props>) => void;
+  renderControl: (control: LabPropertyControl) => React.ReactNode;
+}
 
 export interface LabRenderProps<Props extends LabPropertyBag = LabPropertyBag> {
   props: Props;
@@ -116,6 +178,7 @@ export interface LabWebPart<Props extends LabPropertyBag = LabPropertyBag> {
   group?: string;
   defaultProps: Props;
   controls: LabPropertyControl[];
+  propertyPane?: React.ComponentType<LabPropertyPaneRenderProps<Props>>;
   supportedBreakpoints?: LabBreakpointId[];
   fixtures?: Record<string, unknown>;
   render: React.ComponentType<LabRenderProps<Props>>;

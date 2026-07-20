@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cloneCli = path.join(repoRoot, 'packages/spfx-tools/src/cli/clone-spfx-app.mjs');
 const syncCli = path.join(repoRoot, 'packages/spfx-tools/src/cli/sync-lab.mjs');
+const validateCli = path.join(repoRoot, 'packages/spfx-tools/src/cli/validate-spfx-app.mjs');
 
 const forkUrl = 'https://example.com/me/their-webpart.git';
 
@@ -33,9 +34,33 @@ beforeAll(async () => {
   await mkdir(path.join(sourceRepoDir, 'src'), { recursive: true });
   await writeFile(
     path.join(sourceRepoDir, 'package.json'),
-    `${JSON.stringify({ name: 'their-webpart', version: '1.0.0', description: 'Their web part' }, null, 2)}\n`
+    `${JSON.stringify(
+      {
+        name: 'their-webpart',
+        version: '1.0.0',
+        description: 'Their web part',
+        dependencies: { '@microsoft/sp-core-library': '1.21.1' },
+        devDependencies: { '@microsoft/sp-build-web': '1.21.1' }
+      },
+      null,
+      2
+    )}\n`
   );
-  await writeFile(path.join(sourceRepoDir, 'src', 'index.ts'), 'export {};\n');
+  await mkdir(path.join(sourceRepoDir, 'config'), { recursive: true });
+  await mkdir(path.join(sourceRepoDir, 'src', 'webparts', 'example'), { recursive: true });
+  await writeFile(path.join(sourceRepoDir, 'gulpfile.js'), 'module.exports = {};\n');
+  await writeFile(path.join(sourceRepoDir, 'tsconfig.json'), '{}\n');
+  await writeFile(path.join(sourceRepoDir, 'config', 'config.json'), '{}\n');
+  await writeFile(path.join(sourceRepoDir, 'config', 'serve.json'), '{}\n');
+  await writeFile(
+    path.join(sourceRepoDir, 'config', 'package-solution.json'),
+    '{"solution":{"id":"solution-id","includeClientSideAssets":false}}\n'
+  );
+  await writeFile(
+    path.join(sourceRepoDir, 'config', 'write-manifests.json'),
+    '{"cdnBasePath":"https://cdn.example.com/their-webpart/"}\n'
+  );
+  await writeFile(path.join(sourceRepoDir, 'src', 'webparts', 'example', 'Example.manifest.json'), '{"id":"component-id"}\n');
   runGit(sourceRepoDir, ['init', '-q', '-b', 'main']);
   runGit(sourceRepoDir, ['config', 'user.email', 'test@example.com']);
   runGit(sourceRepoDir, ['config', 'user.name', 'Test']);
@@ -54,7 +79,7 @@ describe('clone:spfx third-party flow', () => {
   it('clones a repo with full history into the managed apps area', async () => {
     const result = runCli(cloneCli, ['--source', sourceRepoDir, '--name', 'their-webpart', '--fork', forkUrl]);
     expect(result.stderr).not.toContain('Error');
-    expect(result.status).toBe(0);
+    expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toContain('.spfx-kit/apps/their-webpart-spfx');
 
     const gitDir = await stat(path.join(appDir, '.git'));
@@ -92,6 +117,13 @@ describe('clone:spfx third-party flow', () => {
     const result = runCli(syncCli, ['--json']);
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({ syncedAdapters: 1 });
+  });
+
+  it('validates an attached repository for the lab without rewriting its unscoped package name', () => {
+    const result = runCli(validateCli, ['--app', appDir, '--profile', 'lab']);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toContain('Validated their-webpart');
   });
 
   it('refuses to overwrite an existing clone without --force', () => {

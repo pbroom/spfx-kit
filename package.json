@@ -15,6 +15,7 @@
   "scripts": {
     "prepare": "test \"$(git rev-parse --show-toplevel 2>/dev/null)\" = \"$PWD\" && git config --local core.hooksPath scripts/git-hooks || exit 0",
     "dev": "npm run sync:lab && turbo run dev --filter @spfx-kit/lab",
+    "prebuild": "npm run sync:source-editor -- --check",
     "build": "npm run sync:lab && turbo run build",
     "ship": "turbo run ship && npm run ship:canary",
     "install:canary": "npm ci --prefix examples/hello-card-spfx",
@@ -28,6 +29,7 @@
     "guard:public": "node packages/spfx-tools/src/cli/guard-public-repo.mjs",
     "sync:cdn": "node packages/spfx-tools/src/cli/sync-cdn-config.mjs",
     "sync:lab": "node packages/spfx-tools/src/cli/sync-lab.mjs",
+    "sync:source-editor": "node packages/spfx-tools/src/cli/sync-source-editor.mjs",
     "lint": "eslint --no-config-lookup --config eslint.config.mjs .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
