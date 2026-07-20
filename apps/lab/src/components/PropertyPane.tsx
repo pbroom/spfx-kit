@@ -277,11 +277,12 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
   }
 
   if (control.type === 'number') {
+    const unit = control.getUnit ? control.getUnit(values) : control.unit;
     return (
       <Field className="property-field" label={control.label} size="small">
         <Input
-          aria-label={control.unit ? `${control.label} (${control.unit})` : control.label}
-          contentAfter={control.unit ? <span className="property-number-unit">{control.unit}</span> : undefined}
+          aria-label={unit ? `${control.label} (${unit})` : control.label}
+          contentAfter={unit ? <span className="property-number-unit">{unit}</span> : undefined}
           type="number"
           min={control.min}
           max={control.max}

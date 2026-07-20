@@ -112,6 +112,7 @@ export type LabPropertyControl =
       max?: number;
       step?: number;
       unit?: string;
+      getUnit?: (values: LabPropertyBag) => string;
     })
   | (LabPropertyControlBase & {
       type: 'toggle';
