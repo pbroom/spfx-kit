@@ -23,20 +23,41 @@ test('keeps viewer controls anchored while collapsing the options content', asyn
   const preview = page.getByRole('region', { name: 'Web part preview area' });
   const modeTabs = page.getByRole('tablist', { name: 'Lab display mode' });
   const appPicker = page.getByRole('combobox', { name: 'Select web part' });
+  const optionsPanel = page.getByRole('complementary', { name: 'Options panel' });
   const modeTabsBefore = await modeTabs.boundingBox();
   const previewBefore = await preview.boundingBox();
 
   expect(modeTabsBefore).not.toBeNull();
   expect(previewBefore).not.toBeNull();
 
+  const collapsePanelButton = page.getByRole('button', { name: 'Collapse options panel' });
+  await expect(collapsePanelButton).toHaveAttribute('aria-pressed', 'false');
+  await collapsePanelButton.click();
+
+  await expect(shell).toHaveAttribute('data-display-mode', 'edit');
+  await expect(optionsPanel).toHaveAttribute('data-panel-state', 'header-only');
+  await expect(appPicker).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Manage apps' })).toBeVisible();
+  const expandPanelButton = page.getByRole('button', { name: 'Expand options panel' });
+  await expect(expandPanelButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.property-pane')).toHaveCount(0);
+
+  await expandPanelButton.click();
+  await expect(optionsPanel).toHaveAttribute('data-panel-state', 'expanded');
+  await expect(page.locator('.property-pane')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Collapse options panel' })).toHaveAttribute('aria-pressed', 'false');
+
   await page.getByRole('tab', { name: 'Viewer' }).click();
 
   await expect(shell).toHaveAttribute('data-display-mode', 'viewer');
   await expect(page.getByRole('tab', { name: 'Viewer' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('complementary', { name: 'Options panel' })).toHaveAttribute('data-panel-state', 'header-only');
+  await expect(optionsPanel).toHaveAttribute('data-panel-state', 'header-only');
   await expect(appPicker).toBeVisible();
   await expect(page.getByRole('button', { name: 'Manage apps' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Expand options panel and switch to edit mode' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Expand options panel and switch to edit mode' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
   await expect(page.locator('.property-pane')).toHaveCount(0);
 
   const modeTabsAfter = await modeTabs.boundingBox();
@@ -53,9 +74,9 @@ test('keeps viewer controls anchored while collapsing the options content', asyn
   await page.getByRole('button', { name: 'Expand options panel and switch to edit mode' }).click();
   await expect(shell).toHaveAttribute('data-display-mode', 'edit');
   await expect(page.getByRole('tab', { name: 'Edit' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('complementary', { name: 'Options panel' })).toHaveAttribute('data-panel-state', 'expanded');
+  await expect(optionsPanel).toHaveAttribute('data-panel-state', 'expanded');
   await expect(page.locator('.property-pane')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Collapse options panel' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Collapse options panel' })).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('has no automatically detectable WCAG A or AA violations', async ({ page }) => {

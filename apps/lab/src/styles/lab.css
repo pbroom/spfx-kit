@@ -83,7 +83,7 @@ textarea {
   padding: 0 8px;
 }
 
-.lab-shell--viewer .lab-toolbar--preview {
+.lab-shell--panel-header-only .lab-toolbar--preview {
   padding-right: calc(var(--lab-options-panel-width) + 8px);
 }
 
@@ -984,13 +984,7 @@ textarea {
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
 }
 
-.options-panel--collapsed {
-  width: 0;
-  flex-basis: 0;
-  border-left: 0;
-}
-
-.options-panel--viewer {
+.options-panel--header-only {
   position: absolute;
   top: 0;
   right: 0;
@@ -1882,24 +1876,6 @@ textarea {
 .css-floating-editor__resize-zone--nw,
 .css-floating-editor__resize-zone--sw {
   left: 0;
-}
-
-.floating-panel-toggle {
-  position: fixed;
-  top: 4px;
-  right: 4px;
-  z-index: 10;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 8px;
-  color: #404040;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
-  cursor: pointer;
 }
 
 @media (max-width: 760px) {

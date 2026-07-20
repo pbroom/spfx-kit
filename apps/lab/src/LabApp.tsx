@@ -22,7 +22,6 @@ import {
 import {
   Moon,
   PanelRight,
-  PanelRightOpen,
   RectangleHorizontal,
   Smartphone,
   Square,
@@ -144,6 +143,7 @@ export function LabApp(): JSX.Element {
   const exportShortcutLabel = React.useMemo(() => getPrimaryShortcutLabel('E'), []);
   const context = React.useMemo(() => createMockSpfxContext(), []);
   const viewerMode = displayMode === 'viewer';
+  const panelHeaderOnly = viewerMode || panelCollapsed;
   const effectiveBoundsVisible = displayMode === 'edit' && boundsVisible;
   const ignorePropertyUpdate = React.useCallback((): void => undefined, []);
 
@@ -216,7 +216,9 @@ export function LabApp(): JSX.Element {
   return (
     <FluentProvider theme={fluentTheme}>
       <main
-        className={`lab-shell lab-shell--${themeMode} lab-shell--${displayMode}`}
+        className={`lab-shell lab-shell--${themeMode} lab-shell--${displayMode} ${
+          panelHeaderOnly ? 'lab-shell--panel-header-only' : ''
+        }`}
         data-display-mode={displayMode}
         style={{ '--lab-section-background': theme.background } as React.CSSProperties}
       >
@@ -388,122 +390,111 @@ export function LabApp(): JSX.Element {
 
         <aside
           aria-label="Options panel"
-          className={`options-panel ${displayMode === 'edit' && panelCollapsed ? 'options-panel--collapsed' : ''} ${
-            viewerMode ? 'options-panel--viewer' : ''
-          }`}
-          data-panel-state={viewerMode ? 'header-only' : panelCollapsed ? 'collapsed' : 'expanded'}
+          className={`options-panel ${panelHeaderOnly ? 'options-panel--header-only' : ''}`}
+          data-panel-state={panelHeaderOnly ? 'header-only' : 'expanded'}
         >
-          {(viewerMode || !panelCollapsed) && (
-            <>
-              <div className="lab-toolbar lab-toolbar--panel">
-                <Dropdown
-                  aria-label="Select web part"
-                  className="webpart-select"
-                  open={webPartPickerOpen}
-                  selectedOptions={selected?.id ? [selected.id] : []}
-                  size="small"
-                  value={selected?.title || ''}
-                  onActiveOptionChange={(_event, data) => {
-                    activeWebPartOptionIdRef.current = data.nextOption?.value || selected?.id || '';
-                  }}
-                  onKeyDown={(event) => {
-                    if (!webPartPickerOpen || !event.altKey || event.key.toLowerCase() !== 'p') {
-                      return;
-                    }
-                    const activeWebPart = webParts.find((webPart) => webPart.id === activeWebPartOptionIdRef.current);
-                    if (!activeWebPart) {
-                      return;
-                    }
-                    event.preventDefault();
-                    event.stopPropagation();
-                    togglePinnedApp(activeWebPart);
-                  }}
-                  onOpenChange={(_event, data) => {
-                    setWebPartPickerOpen(data.open);
-                    if (data.open) {
-                      activeWebPartOptionIdRef.current = selected?.id || '';
-                    }
-                  }}
-                  onOptionSelect={(_event, data) => {
-                    if (data.optionValue) {
-                      setSelectedId(data.optionValue);
-                    }
-                  }}
-                >
-                  {webParts.map((webPart) => {
-                    const appPinned = pinnedAppId === getLabAppId(webPart);
-                    return (
-                      <div
-                        className={`webpart-option-row ${appPinned ? 'webpart-option-row--pinned' : ''}`}
-                        key={webPart.id}
-                        role="presentation"
+          <>
+            <div className="lab-toolbar lab-toolbar--panel">
+              <Dropdown
+                aria-label="Select web part"
+                className="webpart-select"
+                open={webPartPickerOpen}
+                selectedOptions={selected?.id ? [selected.id] : []}
+                size="small"
+                value={selected?.title || ''}
+                onActiveOptionChange={(_event, data) => {
+                  activeWebPartOptionIdRef.current = data.nextOption?.value || selected?.id || '';
+                }}
+                onKeyDown={(event) => {
+                  if (!webPartPickerOpen || !event.altKey || event.key.toLowerCase() !== 'p') {
+                    return;
+                  }
+                  const activeWebPart = webParts.find((webPart) => webPart.id === activeWebPartOptionIdRef.current);
+                  if (!activeWebPart) {
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  togglePinnedApp(activeWebPart);
+                }}
+                onOpenChange={(_event, data) => {
+                  setWebPartPickerOpen(data.open);
+                  if (data.open) {
+                    activeWebPartOptionIdRef.current = selected?.id || '';
+                  }
+                }}
+                onOptionSelect={(_event, data) => {
+                  if (data.optionValue) {
+                    setSelectedId(data.optionValue);
+                  }
+                }}
+              >
+                {webParts.map((webPart) => {
+                  const appPinned = pinnedAppId === getLabAppId(webPart);
+                  return (
+                    <div
+                      className={`webpart-option-row ${appPinned ? 'webpart-option-row--pinned' : ''}`}
+                      key={webPart.id}
+                      role="presentation"
+                    >
+                      <Option
+                        aria-label={`${webPart.title}. ${appPinned ? 'Pinned' : 'Not pinned'}. Press Alt+P to ${
+                          appPinned ? 'unpin' : 'pin'
+                        }.`}
+                        className="webpart-option"
+                        text={webPart.title}
+                        value={webPart.id}
                       >
-                        <Option
-                          aria-label={`${webPart.title}. ${appPinned ? 'Pinned' : 'Not pinned'}. Press Alt+P to ${
-                            appPinned ? 'unpin' : 'pin'
-                          }.`}
-                          className="webpart-option"
-                          text={webPart.title}
-                          value={webPart.id}
-                        >
-                          <span className="webpart-option__label">{webPart.title}</span>
-                        </Option>
-                        <button
-                          aria-label={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
-                          aria-pressed={appPinned}
-                          className="webpart-option__pin"
-                          title={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
-                          type="button"
-                          onPointerDown={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
+                        <span className="webpart-option__label">{webPart.title}</span>
+                      </Option>
+                      <button
+                        aria-label={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
+                        aria-pressed={appPinned}
+                        className="webpart-option__pin"
+                        title={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
+                        type="button"
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          togglePinnedApp(webPart);
+                        }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (event.detail === 0) {
                             togglePinnedApp(webPart);
-                          }}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            if (event.detail === 0) {
-                              togglePinnedApp(webPart);
-                            }
-                          }}
-                        >
-                          {appPinned ? <Pin16Filled aria-hidden="true" /> : <Pin16Regular aria-hidden="true" />}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </Dropdown>
-                <span aria-live="polite" className="visually-hidden" role="status">
-                  {pinAnnouncement}
-                </span>
-                <IconButton label="Manage apps" onClick={openManageApps}>
-                  <Settings size={16} />
-                </IconButton>
-                <IconButton
-                  label={viewerMode ? 'Expand options panel and switch to edit mode' : 'Collapse options panel'}
-                  onClick={viewerMode ? expandOptionsPanel : () => setPanelCollapsed(true)}
-                >
-                  {viewerMode ? (
-                    <PanelRightOpen size={16} />
-                  ) : (
-                    <HugeiconsIcon aria-hidden="true" className="huge-icon" icon={LayoutRightIcon} size={16} strokeWidth={1.7} />
-                  )}
-                </IconButton>
-              </div>
-              {!viewerMode && <PropertyPane webPart={selected} values={activeProps} onChange={updateProps} />}
-            </>
-          )}
+                          }
+                        }}
+                      >
+                        {appPinned ? <Pin16Filled aria-hidden="true" /> : <Pin16Regular aria-hidden="true" />}
+                      </button>
+                    </div>
+                  );
+                })}
+              </Dropdown>
+              <span aria-live="polite" className="visually-hidden" role="status">
+                {pinAnnouncement}
+              </span>
+              <IconButton label="Manage apps" onClick={openManageApps}>
+                <Settings size={16} />
+              </IconButton>
+              <IconButton
+                label={
+                  panelHeaderOnly
+                    ? viewerMode
+                      ? 'Expand options panel and switch to edit mode'
+                      : 'Expand options panel'
+                    : 'Collapse options panel'
+                }
+                pressed={panelHeaderOnly}
+                onClick={panelHeaderOnly ? expandOptionsPanel : () => setPanelCollapsed(true)}
+              >
+                <HugeiconsIcon aria-hidden="true" className="huge-icon" icon={LayoutRightIcon} size={16} strokeWidth={1.7} />
+              </IconButton>
+            </div>
+            {!panelHeaderOnly && <PropertyPane webPart={selected} values={activeProps} onChange={updateProps} />}
+          </>
         </aside>
-
-        {displayMode === 'edit' && panelCollapsed && (
-          <Button
-            appearance="subtle"
-            aria-label="Expand options panel"
-            className="floating-panel-toggle"
-            icon={<PanelRightOpen size={16} />}
-            onClick={expandOptionsPanel}
-          />
-        )}
 
         <ManageAppsDialog
           open={manageAppsOpen}
