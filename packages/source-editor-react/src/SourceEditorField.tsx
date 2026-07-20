@@ -64,6 +64,9 @@ export type ISourceEditorTarget = SourceEditorTarget;
 let nextSourceEditorInstanceId = 0;
 const configuredCssIntellisense = new WeakSet<object>();
 const cssEditorTargetsByModel = new WeakMap<object, React.MutableRefObject<readonly SourceEditorTarget[]>>();
+export const sourceEditorAcceptSuggestionOnEnter = 'on' as const;
+export const sourceEditorCompletionTriggerCharacters = ['.', ':', '-', '#', ' '] as const;
+export const sourceEditorTabCompletion = 'on' as const;
 const floatingResizeZones: Array<{ direction: ResizeDirection; label: string }> = [
   { direction: 'n', label: 'Resize floating editor from top edge' },
   { direction: 's', label: 'Resize floating editor from bottom edge' },
@@ -306,9 +309,25 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
 
     const separator = currentValue.trim() ? '\n\n' : '';
     const nextValue = `${currentValue.replace(/\s+$/, '')}${separator}${snippet.snippet}\n`;
-    updateValue(nextValue);
-    editor?.setValue?.(nextValue);
-    editor?.focus?.();
+    const model = editor?.getModel?.();
+    const fullRange = model?.getFullModelRange?.();
+
+    if (!editor || !model || !fullRange || typeof editor.executeEdits !== 'function') {
+      updateValue(nextValue);
+      return;
+    }
+
+    editor.focus?.();
+    editor.pushUndoStop?.();
+    editor.executeEdits('source-editor-snippet-shortcut', [
+      {
+        forceMoveMarkers: true,
+        range: fullRange,
+        text: nextValue
+      }
+    ]);
+    editor.pushUndoStop?.();
+    settleCursorAtEditorPosition(editor, model.getPositionAt?.(nextValue.length));
   };
 
   const commitTargetEdit = (target: SourceEditorTarget, value: string): void => {
@@ -396,6 +415,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
             }}
             onLoadError={markMonacoError}
             options={{
+              acceptSuggestionOnEnter: sourceEditorAcceptSuggestionOnEnter,
               autoClosingBrackets: 'always',
               autoClosingQuotes: 'always',
               automaticLayout: true,
@@ -413,7 +433,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
               scrollBeyondLastLine: false,
               snippetSuggestions: 'top',
               suggestOnTriggerCharacters: true,
-              tabCompletion: 'on',
+              tabCompletion: sourceEditorTabCompletion,
               tabSize: 2,
               wordBasedSuggestions: 'off',
               wordWrap: 'on',
@@ -575,6 +595,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
                   onChange={(value) => updateValue(value || '')}
                   onLoadError={markMonacoError}
                   options={{
+                    acceptSuggestionOnEnter: sourceEditorAcceptSuggestionOnEnter,
                     autoClosingBrackets: 'always',
                     autoClosingQuotes: 'always',
                     automaticLayout: true,
@@ -589,7 +610,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
                     scrollBeyondLastLine: false,
                     snippetSuggestions: 'top',
                     suggestOnTriggerCharacters: true,
-                    tabCompletion: 'on',
+                    tabCompletion: sourceEditorTabCompletion,
                     tabSize: 2,
                     wordBasedSuggestions: 'off',
                     wordWrap: 'on',
@@ -869,7 +890,12 @@ function publishMonacoDiagnostic(diagnostic: MonacoDiagnostic): void {
     return;
   }
 
-  (window as unknown as { __sourceEditorMonaco?: MonacoDiagnostic }).__sourceEditorMonaco = diagnostic;
+  const diagnosticWindow = window as unknown as {
+    __betterTextMonaco?: MonacoDiagnostic;
+    __sourceEditorMonaco?: MonacoDiagnostic;
+  };
+  diagnosticWindow.__sourceEditorMonaco = diagnostic;
+  diagnosticWindow.__betterTextMonaco = diagnostic;
 }
 
 function copyMonacoDiagnostic(diagnostic: MonacoDiagnostic): void {
@@ -896,7 +922,6 @@ function handleCssEditorMount(
 ): void {
   setCssEditorTargetsForModel(editor.getModel?.(), targetsRef);
   editor.updateOptions?.({ tabFocusMode: false });
-  installTabTraversalGuard(editor);
   if (onCloseShortcut) {
     installCloseShortcutGuard(editor, onCloseShortcut);
   }
@@ -933,24 +958,6 @@ function installCloseShortcutGuard(editor: any, onClose: () => void): void {
 
   editorNode.addEventListener('keydown', closeFloatingEditor, true);
   editor.onDidDispose?.(() => editorNode.removeEventListener('keydown', closeFloatingEditor, true));
-}
-
-function installTabTraversalGuard(editor: any): void {
-  const editorNode: HTMLElement | null | undefined = editor.getDomNode?.();
-  if (!editorNode) {
-    return;
-  }
-
-  const preventBrowserTabTraversal = (event: KeyboardEvent): void => {
-    if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) {
-      return;
-    }
-
-    event.preventDefault();
-  };
-
-  editorNode.addEventListener('keydown', preventBrowserTabTraversal, true);
-  editor.onDidDispose?.(() => editorNode.removeEventListener('keydown', preventBrowserTabTraversal, true));
 }
 
 function appendCssTarget(source: string, target: SourceEditorTarget, targetComment: string): string {
@@ -1173,7 +1180,7 @@ function registerSourceEditorCompletions(monaco: any): void {
   }
   configuredCssIntellisense.add(monaco);
   monaco.languages?.registerCompletionItemProvider?.('scss', {
-    triggerCharacters: ['.', ':', '-', '#', ' ', '\n'],
+    triggerCharacters: [...sourceEditorCompletionTriggerCharacters],
     provideCompletionItems(model: any, position: any) {
       const word = model.getWordUntilPosition(position);
       const range = {
