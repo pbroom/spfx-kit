@@ -43,8 +43,8 @@ test('keeps viewer controls anchored while collapsing the options content', asyn
   const previewAfter = await preview.boundingBox();
   expect(modeTabsAfter).not.toBeNull();
   expect(previewAfter).not.toBeNull();
-  expect(Math.abs((modeTabsAfter?.x || 0) - (modeTabsBefore?.x || 0))).toBeLessThanOrEqual(1);
-  expect((previewAfter?.width || 0) - (previewBefore?.width || 0)).toBeGreaterThan(300);
+  expect(Math.abs(modeTabsAfter!.x - modeTabsBefore!.x)).toBeLessThanOrEqual(1);
+  expect(previewAfter!.width - previewBefore!.width).toBeGreaterThan(300);
 
   await page.getByRole('button', { name: 'Manage apps' }).click();
   await expect(page.getByRole('dialog')).toContainText('Manage Apps');

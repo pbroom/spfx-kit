@@ -39,6 +39,7 @@ textarea {
 .lab-shell {
   --lab-border: #e5e5e5;
   --lab-muted: #616161;
+  --lab-options-panel-width: 312px;
   --lab-panel: #ffffff;
   position: relative;
   display: flex;
@@ -83,7 +84,7 @@ textarea {
 }
 
 .lab-shell--viewer .lab-toolbar--preview {
-  padding-right: 320px;
+  padding-right: calc(var(--lab-options-panel-width) + 8px);
 }
 
 .preview-toolbar__center {
@@ -974,8 +975,8 @@ textarea {
 
 .options-panel {
   position: relative;
-  width: 312px;
-  flex: 0 0 312px;
+  width: var(--lab-options-panel-width);
+  flex: 0 0 var(--lab-options-panel-width);
   height: 100%;
   overflow: hidden;
   border-left: 1px solid var(--lab-border);

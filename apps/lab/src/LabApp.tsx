@@ -167,15 +167,27 @@ export function LabApp(): JSX.Element {
     setThemeMode('custom');
   };
 
+  const selectDisplayMode = (mode: LabDisplayMode): void => {
+    setDisplayMode(mode);
+    setAppMenuOpen(false);
+    setThemeMenuOpen(false);
+    if (mode === 'edit') {
+      setPanelCollapsed(false);
+    }
+    if (mode === 'viewer') {
+      setAddDrawerOpen(false);
+      setManageAppsOpen(false);
+      setExportDrawerOpen(false);
+    }
+  };
+
   const openManageApps = (): void => {
     setManageAppsOpen(true);
   };
 
   const openAddAppDrawer = (mode: AddAppMode): void => {
-    setDisplayMode('edit');
-    setPanelCollapsed(false);
+    selectDisplayMode('edit');
     setAddMode(mode);
-    setAppMenuOpen(false);
     setExportDrawerOpen(false);
     setManageAppsOpen(false);
     setAddDrawerOpen(true);
@@ -193,20 +205,6 @@ export function LabApp(): JSX.Element {
     setPinnedAppId(nextPinnedAppId);
     persistPinnedAppId(getBrowserStorage(), nextPinnedAppId);
     setPinAnnouncement(nextPinnedAppId ? `${webPart.title} pinned as the startup app.` : `${webPart.title} is no longer pinned.`);
-  };
-
-  const selectDisplayMode = (mode: LabDisplayMode): void => {
-    setDisplayMode(mode);
-    setAppMenuOpen(false);
-    setThemeMenuOpen(false);
-    if (mode === 'edit') {
-      setPanelCollapsed(false);
-    }
-    if (mode === 'viewer') {
-      setAddDrawerOpen(false);
-      setManageAppsOpen(false);
-      setExportDrawerOpen(false);
-    }
   };
 
   const expandOptionsPanel = (): void => {
