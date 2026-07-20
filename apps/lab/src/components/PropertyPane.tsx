@@ -299,7 +299,8 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
 
   if (control.type === 'select') {
     const selectedValue = String(value ?? '');
-    const selectedOption = control.options.find((option) => option.value === selectedValue);
+    const options = control.getOptions ? control.getOptions(values) : control.options;
+    const selectedOption = options.find((option) => option.value === selectedValue);
 
     return (
       <Field className="property-field" label={control.label} size="small">
@@ -308,12 +309,12 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
           selectedOptions={selectedValue ? [selectedValue] : []}
           value={selectedOption?.label || selectedValue}
           onOptionSelect={(_event, data) => {
-            if (data.optionValue) {
+            if (data.optionValue !== undefined) {
               onChange(data.optionValue);
             }
           }}
         >
-          {control.options.map((option) => (
+          {options.map((option) => (
             <Option value={option.value} key={option.value}>
               {option.label}
             </Option>

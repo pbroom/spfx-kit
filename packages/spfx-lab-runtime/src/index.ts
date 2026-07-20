@@ -122,6 +122,7 @@ export type LabPropertyControl =
   | (LabPropertyControlBase & {
       type: 'select';
       options: Array<{ label: string; value: string }>;
+      getOptions?: (values: LabPropertyBag) => Array<{ label: string; value: string }>;
     })
   | (LabPropertyControlBase & {
       type: 'combobox';
