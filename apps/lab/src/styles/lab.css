@@ -970,6 +970,88 @@ textarea {
   max-width: 100%;
 }
 
+.webpart-option-row {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
+.webpart-option {
+  width: 100%;
+  min-width: 0;
+  padding-inline-end: 40px;
+}
+
+.webpart-option__label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.webpart-option__pin {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: 8px;
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  color: var(--colorNeutralForeground3);
+  background: transparent;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  cursor: pointer;
+}
+
+.webpart-option-row:hover .webpart-option__pin,
+.webpart-option-row:focus-within .webpart-option__pin,
+.webpart-option[data-activedescendant-focusvisible] + .webpart-option__pin,
+.webpart-option-row--pinned .webpart-option__pin {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.webpart-option__pin:hover {
+  color: var(--colorNeutralForeground1);
+  background: var(--colorNeutralBackground1Hover);
+}
+
+.webpart-option__pin:focus-visible {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: 1px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  white-space: nowrap;
+}
+
+@media (hover: none) {
+  .webpart-option__pin {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+
 .property-pane {
   height: calc(100% - 40px);
   overflow: auto;

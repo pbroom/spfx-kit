@@ -1,6 +1,7 @@
 import * as React from 'react';
 import LayoutRightIcon from '@hugeicons/core-free-icons/LayoutRightIcon';
 import { HugeiconsIcon } from '@hugeicons/react';
+import { Pin16Filled, Pin16Regular } from '@fluentui/react-icons';
 import {
   Button,
   Dropdown,
@@ -49,7 +50,15 @@ import { PropertyPane } from './components/PropertyPane';
 import { AddAppDrawer, AddAppMode } from './components/AddAppDrawer';
 import { ExportDrawer } from './components/ExportDrawer';
 import { ManageAppsDialog } from './components/ManageAppsDialog';
-import { getPrimaryShortcutLabel, slugify } from './lib/text';
+import {
+  getBrowserStorage,
+  getLabAppId,
+  persistPinnedAppId,
+  readPinnedAppId,
+  resolveInitialWebPartId,
+  resolvePinnedAppId
+} from './lib/pinnedApp';
+import { getPrimaryShortcutLabel } from './lib/text';
 
 type PropsByWebPart = Record<string, LabPropertyBag>;
 
@@ -65,8 +74,9 @@ export function LabApp(): JSX.Element {
     registerGeneratedWebParts(next);
     return next;
   }, []);
-  const webParts = registry.list();
-  const [selectedId, setSelectedId] = React.useState<string>(webParts[0]?.id || '');
+  const webParts = React.useMemo(() => registry.list(), [registry]);
+  const [pinnedAppId, setPinnedAppId] = React.useState(() => resolvePinnedAppId(webParts, readPinnedAppId(getBrowserStorage())));
+  const [selectedId, setSelectedId] = React.useState<string>(() => resolveInitialWebPartId(webParts, pinnedAppId));
   const selected = registry.get(selectedId) || webParts[0];
   const [breakpointId, setBreakpointId] = React.useState<LabBreakpoint['id']>('one-column');
   const [boundsVisible, setBoundsVisible] = React.useState(false);
@@ -79,6 +89,9 @@ export function LabApp(): JSX.Element {
   const [manageAppsOpen, setManageAppsOpen] = React.useState(false);
   const [exportDrawerOpen, setExportDrawerOpen] = React.useState(false);
   const [panelCollapsed, setPanelCollapsed] = React.useState(false);
+  const [webPartPickerOpen, setWebPartPickerOpen] = React.useState(false);
+  const [pinAnnouncement, setPinAnnouncement] = React.useState('');
+  const activeWebPartOptionIdRef = React.useRef(selectedId);
   const [propsByWebPart, setPropsByWebPart] = React.useState<PropsByWebPart>(() =>
     Object.fromEntries(webParts.map((webPart) => [webPart.id, { ...webPart.defaultProps }]))
   );
@@ -163,6 +176,14 @@ export function LabApp(): JSX.Element {
     setAppMenuOpen(false);
     setAddDrawerOpen(false);
     setExportDrawerOpen(true);
+  };
+
+  const togglePinnedApp = (webPart: LabWebPart): void => {
+    const appId = getLabAppId(webPart);
+    const nextPinnedAppId = pinnedAppId === appId ? '' : appId;
+    setPinnedAppId(nextPinnedAppId);
+    persistPinnedAppId(getBrowserStorage(), nextPinnedAppId);
+    setPinAnnouncement(nextPinnedAppId ? `${webPart.title} pinned as the startup app.` : `${webPart.title} is no longer pinned.`);
   };
 
   const Preview = selected?.render;
@@ -322,21 +343,83 @@ export function LabApp(): JSX.Element {
                 <Dropdown
                   aria-label="Select web part"
                   className="webpart-select"
+                  open={webPartPickerOpen}
                   selectedOptions={selected?.id ? [selected.id] : []}
                   size="small"
                   value={selected?.title || ''}
+                  onActiveOptionChange={(_event, data) => {
+                    activeWebPartOptionIdRef.current = data.nextOption?.value || selected?.id || '';
+                  }}
+                  onKeyDown={(event) => {
+                    if (!webPartPickerOpen || !event.altKey || event.key.toLowerCase() !== 'p') {
+                      return;
+                    }
+                    const activeWebPart = webParts.find((webPart) => webPart.id === activeWebPartOptionIdRef.current);
+                    if (!activeWebPart) {
+                      return;
+                    }
+                    event.preventDefault();
+                    event.stopPropagation();
+                    togglePinnedApp(activeWebPart);
+                  }}
+                  onOpenChange={(_event, data) => {
+                    setWebPartPickerOpen(data.open);
+                    if (data.open) {
+                      activeWebPartOptionIdRef.current = selected?.id || '';
+                    }
+                  }}
                   onOptionSelect={(_event, data) => {
                     if (data.optionValue) {
                       setSelectedId(data.optionValue);
                     }
                   }}
                 >
-                  {webParts.map((webPart) => (
-                    <Option key={webPart.id} value={webPart.id}>
-                      {webPart.title}
-                    </Option>
-                  ))}
+                  {webParts.map((webPart) => {
+                    const appPinned = pinnedAppId === getLabAppId(webPart);
+                    return (
+                      <div
+                        className={`webpart-option-row ${appPinned ? 'webpart-option-row--pinned' : ''}`}
+                        key={webPart.id}
+                        role="presentation"
+                      >
+                        <Option
+                          aria-label={`${webPart.title}. ${appPinned ? 'Pinned' : 'Not pinned'}. Press Alt+P to ${
+                            appPinned ? 'unpin' : 'pin'
+                          }.`}
+                          className="webpart-option"
+                          text={webPart.title}
+                          value={webPart.id}
+                        >
+                          <span className="webpart-option__label">{webPart.title}</span>
+                        </Option>
+                        <button
+                          aria-label={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
+                          aria-pressed={appPinned}
+                          className="webpart-option__pin"
+                          title={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
+                          type="button"
+                          onPointerDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            togglePinnedApp(webPart);
+                          }}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (event.detail === 0) {
+                              togglePinnedApp(webPart);
+                            }
+                          }}
+                        >
+                          {appPinned ? <Pin16Filled aria-hidden="true" /> : <Pin16Regular aria-hidden="true" />}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </Dropdown>
+                <span aria-live="polite" className="visually-hidden" role="status">
+                  {pinAnnouncement}
+                </span>
                 <IconButton label="Manage apps" onClick={openManageApps}>
                   <Settings size={16} />
                 </IconButton>
@@ -405,7 +488,7 @@ function IconButton(props: IconButtonProps): JSX.Element {
 function groupWebPartsByAppId(webParts: LabWebPart[]): Map<string, LabWebPart[]> {
   const groups = new Map<string, LabWebPart[]>();
   for (const webPart of webParts) {
-    const appId = webPart.appId || slugify(webPart.title || webPart.id);
+    const appId = getLabAppId(webPart);
     groups.set(appId, [...(groups.get(appId) || []), webPart]);
   }
   return groups;
