@@ -22,16 +22,17 @@ import {
 import {
   Moon,
   PanelRight,
-  PanelRightOpen,
   RectangleHorizontal,
   Smartphone,
   Square,
   SquareDashed,
   Columns3,
   Columns2,
+  Eye,
   FolderInput,
   FolderPlus,
   Menu as MenuIcon,
+  Pencil,
   Settings,
   Upload
 } from 'lucide-react';
@@ -39,6 +40,7 @@ import {
   createLabTheme,
   createMockSpfxContext,
   LabBreakpoint,
+  LabDisplayMode,
   LabPropertyBag,
   LabThemeMode,
   LabWebPart,
@@ -79,6 +81,7 @@ export function LabApp(): JSX.Element {
   const [selectedId, setSelectedId] = React.useState<string>(() => resolveInitialWebPartId(webParts, pinnedAppId));
   const selected = registry.get(selectedId) || webParts[0];
   const [breakpointId, setBreakpointId] = React.useState<LabBreakpoint['id']>('one-column');
+  const [displayMode, setDisplayMode] = React.useState<LabDisplayMode>('edit');
   const [boundsVisible, setBoundsVisible] = React.useState(false);
   const [appMenuOpen, setAppMenuOpen] = React.useState(false);
   const [themeMode, setThemeMode] = React.useState<LabThemeMode>('light');
@@ -108,7 +111,7 @@ export function LabApp(): JSX.Element {
       const isAppCommandShortcut =
         (key === 'o' || key === 'n' || key === 'e') && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey;
 
-      if (!isAppCommandShortcut || event.defaultPrevented || event.repeat) {
+      if (displayMode !== 'edit' || !isAppCommandShortcut || event.defaultPrevented || event.repeat) {
         return;
       }
 
@@ -128,7 +131,7 @@ export function LabApp(): JSX.Element {
 
     window.addEventListener('keydown', handleAppCommandShortcut);
     return () => window.removeEventListener('keydown', handleAppCommandShortcut);
-  }, []);
+  }, [displayMode]);
 
   const activeBreakpoint = SHAREPOINT_BREAKPOINTS.find((item) => item.id === breakpointId) || SHAREPOINT_BREAKPOINTS[0];
   const theme = createLabTheme(themeMode, customBackground);
@@ -139,6 +142,10 @@ export function LabApp(): JSX.Element {
   const createShortcutLabel = React.useMemo(() => getPrimaryShortcutLabel('N'), []);
   const exportShortcutLabel = React.useMemo(() => getPrimaryShortcutLabel('E'), []);
   const context = React.useMemo(() => createMockSpfxContext(), []);
+  const viewerMode = displayMode === 'viewer';
+  const panelHeaderOnly = viewerMode || panelCollapsed;
+  const effectiveBoundsVisible = displayMode === 'edit' && boundsVisible;
+  const ignorePropertyUpdate = React.useCallback((): void => undefined, []);
 
   const updateProps = (patch: LabPropertyBag): void => {
     if (!selected) {
@@ -160,13 +167,27 @@ export function LabApp(): JSX.Element {
     setThemeMode('custom');
   };
 
+  const selectDisplayMode = (mode: LabDisplayMode): void => {
+    setDisplayMode(mode);
+    setAppMenuOpen(false);
+    setThemeMenuOpen(false);
+    if (mode === 'edit') {
+      setPanelCollapsed(false);
+    }
+    if (mode === 'viewer') {
+      setAddDrawerOpen(false);
+      setManageAppsOpen(false);
+      setExportDrawerOpen(false);
+    }
+  };
+
   const openManageApps = (): void => {
     setManageAppsOpen(true);
   };
 
   const openAddAppDrawer = (mode: AddAppMode): void => {
+    selectDisplayMode('edit');
     setAddMode(mode);
-    setAppMenuOpen(false);
     setExportDrawerOpen(false);
     setManageAppsOpen(false);
     setAddDrawerOpen(true);
@@ -186,144 +207,178 @@ export function LabApp(): JSX.Element {
     setPinAnnouncement(nextPinnedAppId ? `${webPart.title} pinned as the startup app.` : `${webPart.title} is no longer pinned.`);
   };
 
+  const expandOptionsPanel = (): void => {
+    selectDisplayMode('edit');
+  };
+
   const Preview = selected?.render;
 
   return (
     <FluentProvider theme={fluentTheme}>
       <main
-        className={`lab-shell lab-shell--${themeMode}`}
+        className={`lab-shell lab-shell--${themeMode} lab-shell--${displayMode} ${
+          panelHeaderOnly ? 'lab-shell--panel-header-only' : ''
+        }`}
+        data-display-mode={displayMode}
         style={{ '--lab-section-background': theme.background } as React.CSSProperties}
       >
         <section className="preview-area" aria-label="Web part preview area">
-          <div className="lab-toolbar lab-toolbar--preview">
-            <div className="app-menu-control" aria-label="App menu">
-              <Menu
-                open={appMenuOpen}
-                positioning={{ position: 'below', align: 'start' }}
-                onOpenChange={(_event, data) => setAppMenuOpen(data.open)}
-              >
-                <MenuTrigger disableButtonEnhancement>
-                  <MenuButton
-                    appearance="subtle"
-                    aria-label="Open app menu"
-                    className="app-menu-button"
-                    icon={<MenuIcon size={16} />}
-                    size="small"
-                    title="Open app menu"
-                  />
-                </MenuTrigger>
-                <MenuPopover className="app-menu-popover">
-                  <MenuList>
-                    <MenuItem icon={<FolderInput size={14} />} onClick={() => openAddAppDrawer('import')}>
-                      <span className="app-menu-command">
-                        <span>Import SPFx app</span>
-                        <kbd className="app-menu-shortcut">{importShortcutLabel}</kbd>
-                      </span>
-                    </MenuItem>
-                    <MenuItem icon={<FolderPlus size={14} />} onClick={() => openAddAppDrawer('create')}>
-                      <span className="app-menu-command">
-                        <span>Create SPFx app</span>
-                        <kbd className="app-menu-shortcut">{createShortcutLabel}</kbd>
-                      </span>
-                    </MenuItem>
-                    <MenuItem icon={<Upload size={14} />} onClick={openExportDrawer}>
-                      <span className="app-menu-command">
-                        <span>Export package</span>
-                        <kbd className="app-menu-shortcut">{exportShortcutLabel}</kbd>
-                      </span>
-                    </MenuItem>
-                  </MenuList>
-                </MenuPopover>
-              </Menu>
-            </div>
+          <div className={`lab-toolbar lab-toolbar--preview lab-toolbar--${displayMode}`}>
+            {displayMode === 'edit' ? (
+              <div className="app-menu-control" aria-label="App menu">
+                <Menu
+                  open={appMenuOpen}
+                  positioning={{ position: 'below', align: 'start' }}
+                  onOpenChange={(_event, data) => setAppMenuOpen(data.open)}
+                >
+                  <MenuTrigger disableButtonEnhancement>
+                    <MenuButton
+                      appearance="subtle"
+                      aria-label="Open app menu"
+                      className="app-menu-button"
+                      icon={<MenuIcon size={16} />}
+                      size="small"
+                      title="Open app menu"
+                    />
+                  </MenuTrigger>
+                  <MenuPopover className="app-menu-popover">
+                    <MenuList>
+                      <MenuItem icon={<FolderInput size={14} />} onClick={() => openAddAppDrawer('import')}>
+                        <span className="app-menu-command">
+                          <span>Import SPFx app</span>
+                          <kbd className="app-menu-shortcut">{importShortcutLabel}</kbd>
+                        </span>
+                      </MenuItem>
+                      <MenuItem icon={<FolderPlus size={14} />} onClick={() => openAddAppDrawer('create')}>
+                        <span className="app-menu-command">
+                          <span>Create SPFx app</span>
+                          <kbd className="app-menu-shortcut">{createShortcutLabel}</kbd>
+                        </span>
+                      </MenuItem>
+                      <MenuItem icon={<Upload size={14} />} onClick={openExportDrawer}>
+                        <span className="app-menu-command">
+                          <span>Export package</span>
+                          <kbd className="app-menu-shortcut">{exportShortcutLabel}</kbd>
+                        </span>
+                      </MenuItem>
+                    </MenuList>
+                  </MenuPopover>
+                </Menu>
+                <IconButton label="Export package" onClick={openExportDrawer}>
+                  <Upload size={16} />
+                </IconButton>
+              </div>
+            ) : (
+              <span aria-hidden="true" />
+            )}
 
-            <div className="preview-toolbar__center">
-              <IconButton
-                label={boundsVisible ? 'Hide preview bounds' : 'Show preview bounds'}
-                pressed={boundsVisible}
-                onClick={() => setBoundsVisible((value) => !value)}
-              >
-                <SquareDashed size={16} />
-              </IconButton>
+            {displayMode === 'edit' ? (
+              <div className="preview-toolbar__center">
+                <IconButton
+                  label={boundsVisible ? 'Hide preview bounds' : 'Show preview bounds'}
+                  pressed={boundsVisible}
+                  onClick={() => setBoundsVisible((value) => !value)}
+                >
+                  <SquareDashed size={16} />
+                </IconButton>
 
-              <TabList
-                aria-label="SharePoint breakpoint"
-                className="breakpoint-tabs"
-                selectedValue={breakpointId}
-                size="small"
-                onTabSelect={(_event, data) => setBreakpointId(data.value as LabBreakpoint['id'])}
-              >
-                {SHAREPOINT_BREAKPOINTS.map((breakpoint) => (
-                  <Tab
-                    aria-label={breakpoint.label}
-                    icon={iconForBreakpoint(breakpoint.id)}
-                    key={breakpoint.id}
-                    title={`${breakpoint.label} - ${breakpoint.description}`}
-                    value={breakpoint.id}
-                    onClick={() => setBreakpointId(breakpoint.id)}
-                  />
-                ))}
-              </TabList>
+                <TabList
+                  aria-label="SharePoint breakpoint"
+                  className="breakpoint-tabs"
+                  selectedValue={breakpointId}
+                  size="small"
+                  onTabSelect={(_event, data) => setBreakpointId(data.value as LabBreakpoint['id'])}
+                >
+                  {SHAREPOINT_BREAKPOINTS.map((breakpoint) => (
+                    <Tab
+                      aria-label={breakpoint.label}
+                      icon={iconForBreakpoint(breakpoint.id)}
+                      key={breakpoint.id}
+                      title={`${breakpoint.label} - ${breakpoint.description}`}
+                      value={breakpoint.id}
+                      onClick={() => setBreakpointId(breakpoint.id)}
+                    />
+                  ))}
+                </TabList>
 
-              <Menu
-                checkedValues={{ theme: [themeMode] }}
-                open={themeMenuOpen}
-                positioning={{ position: 'below', align: 'start' }}
-                onOpenChange={(_event, data) => setThemeMenuOpen(data.open)}
-              >
-                <MenuTrigger disableButtonEnhancement>
-                  <MenuButton
-                    appearance="subtle"
-                    aria-label={`Theme: ${themeOptions.find((option) => option.value === themeMode)?.label || themeMode}`}
-                    className="theme-menu-trigger"
-                    icon={<Moon size={16} />}
-                    size="small"
-                  />
-                </MenuTrigger>
-                <MenuPopover className="theme-menu-popover">
-                  <MenuList>
-                    {themeOptions.map((option) => (
-                      <MenuItemRadio
-                        key={option.value}
-                        name="theme"
-                        value={option.value}
-                        onClick={() => selectThemeMode(option.value)}
-                      >
-                        {option.label}
-                      </MenuItemRadio>
-                    ))}
-                    <label className="theme-color-field">
-                      <span>Background</span>
-                      <input
-                        aria-label="Section background"
-                        className="theme-color-input"
-                        type="color"
-                        value={customBackground}
-                        onInput={(event) => selectCustomBackground(event.currentTarget.value)}
-                        onChange={(event) => selectCustomBackground(event.currentTarget.value)}
-                      />
-                    </label>
-                  </MenuList>
-                </MenuPopover>
-              </Menu>
-            </div>
+                <Menu
+                  checkedValues={{ theme: [themeMode] }}
+                  open={themeMenuOpen}
+                  positioning={{ position: 'below', align: 'start' }}
+                  onOpenChange={(_event, data) => setThemeMenuOpen(data.open)}
+                >
+                  <MenuTrigger disableButtonEnhancement>
+                    <MenuButton
+                      appearance="subtle"
+                      aria-label={`Theme: ${themeOptions.find((option) => option.value === themeMode)?.label || themeMode}`}
+                      className="theme-menu-trigger"
+                      icon={<Moon size={16} />}
+                      size="small"
+                    />
+                  </MenuTrigger>
+                  <MenuPopover className="theme-menu-popover">
+                    <MenuList>
+                      {themeOptions.map((option) => (
+                        <MenuItemRadio
+                          key={option.value}
+                          name="theme"
+                          value={option.value}
+                          onClick={() => selectThemeMode(option.value)}
+                        >
+                          {option.label}
+                        </MenuItemRadio>
+                      ))}
+                      <label className="theme-color-field">
+                        <span>Background</span>
+                        <input
+                          aria-label="Section background"
+                          className="theme-color-input"
+                          type="color"
+                          value={customBackground}
+                          onInput={(event) => selectCustomBackground(event.currentTarget.value)}
+                          onChange={(event) => selectCustomBackground(event.currentTarget.value)}
+                        />
+                      </label>
+                    </MenuList>
+                  </MenuPopover>
+                </Menu>
+              </div>
+            ) : (
+              <span aria-hidden="true" />
+            )}
+
+            <TabList
+              aria-label="Lab display mode"
+              className="lab-mode-tabs"
+              selectedValue={displayMode}
+              size="small"
+              onTabSelect={(_event, data) => selectDisplayMode(data.value as LabDisplayMode)}
+            >
+              <Tab icon={<Pencil size={14} />} value="edit">
+                Edit
+              </Tab>
+              <Tab icon={<Eye size={14} />} value="viewer">
+                Viewer
+              </Tab>
+            </TabList>
           </div>
 
           <div className="preview-canvas">
             <div
-              className={`preview-frame ${boundsVisible ? 'preview-frame--bounded' : ''}`}
+              className={`preview-frame ${effectiveBoundsVisible ? 'preview-frame--bounded' : ''}`}
               style={{ width: `min(${activeBreakpoint.width}px, calc(100% - 48px))` }}
             >
               {Preview ? (
                 <Preview
                   props={activeProps}
-                  updateProps={updateProps}
+                  updateProps={displayMode === 'edit' ? updateProps : ignorePropertyUpdate}
                   lab={{
                     breakpoint: activeBreakpoint,
+                    displayMode,
                     theme,
                     spfxContext: context,
                     fixtures: selected.fixtures || {},
-                    boundsVisible
+                    boundsVisible: effectiveBoundsVisible
                   }}
                 />
               ) : (
@@ -336,111 +391,113 @@ export function LabApp(): JSX.Element {
           </div>
         </section>
 
-        <aside className={`options-panel ${panelCollapsed ? 'options-panel--collapsed' : ''}`} aria-label="Options panel">
-          {!panelCollapsed && (
-            <>
-              <div className="lab-toolbar lab-toolbar--panel">
-                <Dropdown
-                  aria-label="Select web part"
-                  className="webpart-select"
-                  open={webPartPickerOpen}
-                  selectedOptions={selected?.id ? [selected.id] : []}
-                  size="small"
-                  value={selected?.title || ''}
-                  onActiveOptionChange={(_event, data) => {
-                    activeWebPartOptionIdRef.current = data.nextOption?.value || selected?.id || '';
-                  }}
-                  onKeyDown={(event) => {
-                    if (!webPartPickerOpen || !event.altKey || event.key.toLowerCase() !== 'p') {
-                      return;
-                    }
-                    const activeWebPart = webParts.find((webPart) => webPart.id === activeWebPartOptionIdRef.current);
-                    if (!activeWebPart) {
-                      return;
-                    }
-                    event.preventDefault();
-                    event.stopPropagation();
-                    togglePinnedApp(activeWebPart);
-                  }}
-                  onOpenChange={(_event, data) => {
-                    setWebPartPickerOpen(data.open);
-                    if (data.open) {
-                      activeWebPartOptionIdRef.current = selected?.id || '';
-                    }
-                  }}
-                  onOptionSelect={(_event, data) => {
-                    if (data.optionValue) {
-                      setSelectedId(data.optionValue);
-                    }
-                  }}
-                >
-                  {webParts.map((webPart) => {
-                    const appPinned = pinnedAppId === getLabAppId(webPart);
-                    return (
-                      <div
-                        className={`webpart-option-row ${appPinned ? 'webpart-option-row--pinned' : ''}`}
-                        key={webPart.id}
-                        role="presentation"
+        <aside
+          aria-label="Options panel"
+          className={`options-panel ${panelHeaderOnly ? 'options-panel--header-only' : ''}`}
+          data-panel-state={panelHeaderOnly ? 'header-only' : 'expanded'}
+        >
+          <>
+            <div className="lab-toolbar lab-toolbar--panel">
+              <Dropdown
+                aria-label="Select web part"
+                className="webpart-select"
+                open={webPartPickerOpen}
+                selectedOptions={selected?.id ? [selected.id] : []}
+                size="small"
+                value={selected?.title || ''}
+                onActiveOptionChange={(_event, data) => {
+                  activeWebPartOptionIdRef.current = data.nextOption?.value || selected?.id || '';
+                }}
+                onKeyDown={(event) => {
+                  if (!webPartPickerOpen || !event.altKey || event.key.toLowerCase() !== 'p') {
+                    return;
+                  }
+                  const activeWebPart = webParts.find((webPart) => webPart.id === activeWebPartOptionIdRef.current);
+                  if (!activeWebPart) {
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  togglePinnedApp(activeWebPart);
+                }}
+                onOpenChange={(_event, data) => {
+                  setWebPartPickerOpen(data.open);
+                  if (data.open) {
+                    activeWebPartOptionIdRef.current = selected?.id || '';
+                  }
+                }}
+                onOptionSelect={(_event, data) => {
+                  if (data.optionValue) {
+                    setSelectedId(data.optionValue);
+                  }
+                }}
+              >
+                {webParts.map((webPart) => {
+                  const appPinned = pinnedAppId === getLabAppId(webPart);
+                  return (
+                    <div
+                      className={`webpart-option-row ${appPinned ? 'webpart-option-row--pinned' : ''}`}
+                      key={webPart.id}
+                      role="presentation"
+                    >
+                      <Option
+                        aria-label={`${webPart.title}. ${appPinned ? 'Pinned' : 'Not pinned'}. Press Alt+P to ${
+                          appPinned ? 'unpin' : 'pin'
+                        }.`}
+                        className="webpart-option"
+                        text={webPart.title}
+                        value={webPart.id}
                       >
-                        <Option
-                          aria-label={`${webPart.title}. ${appPinned ? 'Pinned' : 'Not pinned'}. Press Alt+P to ${
-                            appPinned ? 'unpin' : 'pin'
-                          }.`}
-                          className="webpart-option"
-                          text={webPart.title}
-                          value={webPart.id}
-                        >
-                          <span className="webpart-option__label">{webPart.title}</span>
-                        </Option>
-                        <button
-                          aria-label={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
-                          aria-pressed={appPinned}
-                          className="webpart-option__pin"
-                          title={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
-                          type="button"
-                          onPointerDown={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
+                        <span className="webpart-option__label">{webPart.title}</span>
+                      </Option>
+                      <button
+                        aria-label={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
+                        aria-pressed={appPinned}
+                        className="webpart-option__pin"
+                        title={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
+                        type="button"
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          togglePinnedApp(webPart);
+                        }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (event.detail === 0) {
                             togglePinnedApp(webPart);
-                          }}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            if (event.detail === 0) {
-                              togglePinnedApp(webPart);
-                            }
-                          }}
-                        >
-                          {appPinned ? <Pin16Filled aria-hidden="true" /> : <Pin16Regular aria-hidden="true" />}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </Dropdown>
-                <span aria-live="polite" className="visually-hidden" role="status">
-                  {pinAnnouncement}
-                </span>
-                <IconButton label="Manage apps" onClick={openManageApps}>
-                  <Settings size={16} />
-                </IconButton>
-                <IconButton label="Collapse options panel" onClick={() => setPanelCollapsed(true)}>
-                  <HugeiconsIcon className="huge-icon" icon={LayoutRightIcon} size={16} strokeWidth={1.7} aria-hidden="true" />
-                </IconButton>
-              </div>
-              <PropertyPane webPart={selected} values={activeProps} onChange={updateProps} />
-            </>
-          )}
+                          }
+                        }}
+                      >
+                        {appPinned ? <Pin16Filled aria-hidden="true" /> : <Pin16Regular aria-hidden="true" />}
+                      </button>
+                    </div>
+                  );
+                })}
+              </Dropdown>
+              <span aria-live="polite" className="visually-hidden" role="status">
+                {pinAnnouncement}
+              </span>
+              <IconButton label="Manage apps" onClick={openManageApps}>
+                <Settings size={16} />
+              </IconButton>
+              <IconButton
+                label={
+                  panelHeaderOnly
+                    ? viewerMode
+                      ? 'Expand options panel and switch to edit mode'
+                      : 'Expand options panel'
+                    : 'Collapse options panel'
+                }
+                pressed={panelHeaderOnly}
+                onClick={panelHeaderOnly ? expandOptionsPanel : () => setPanelCollapsed(true)}
+              >
+                <HugeiconsIcon aria-hidden="true" className="huge-icon" icon={LayoutRightIcon} size={16} strokeWidth={1.7} />
+              </IconButton>
+            </div>
+            {!panelHeaderOnly && <PropertyPane webPart={selected} values={activeProps} onChange={updateProps} />}
+          </>
         </aside>
-
-        {panelCollapsed && (
-          <Button
-            appearance="subtle"
-            aria-label="Expand options panel"
-            className="floating-panel-toggle"
-            icon={<PanelRightOpen size={16} />}
-            onClick={() => setPanelCollapsed(false)}
-          />
-        )}
 
         <ManageAppsDialog
           open={manageAppsOpen}
@@ -449,15 +506,19 @@ export function LabApp(): JSX.Element {
           onOpenAddAppDrawer={openAddAppDrawer}
         />
 
-        <AddAppDrawer open={addDrawerOpen} mode={addMode} onOpenChange={setAddDrawerOpen} onModeChange={setAddMode} />
+        {displayMode === 'edit' ? (
+          <>
+            <AddAppDrawer open={addDrawerOpen} mode={addMode} onOpenChange={setAddDrawerOpen} onModeChange={setAddMode} />
 
-        <ExportDrawer
-          open={exportDrawerOpen}
-          onOpenChange={setExportDrawerOpen}
-          webParts={webParts}
-          selected={selected}
-          onSelectApp={setSelectedId}
-        />
+            <ExportDrawer
+              open={exportDrawerOpen}
+              onOpenChange={setExportDrawerOpen}
+              webParts={webParts}
+              selected={selected}
+              onSelectApp={setSelectedId}
+            />
+          </>
+        ) : null}
       </main>
     </FluentProvider>
   );

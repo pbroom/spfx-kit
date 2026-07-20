@@ -39,7 +39,9 @@ textarea {
 .lab-shell {
   --lab-border: #e5e5e5;
   --lab-muted: #616161;
+  --lab-options-panel-width: 312px;
   --lab-panel: #ffffff;
+  position: relative;
   display: flex;
   align-items: stretch;
   width: 100%;
@@ -81,6 +83,10 @@ textarea {
   padding: 0 8px;
 }
 
+.lab-shell--panel-header-only .lab-toolbar--preview {
+  padding-right: calc(var(--lab-options-panel-width) + 8px);
+}
+
 .preview-toolbar__center {
   display: inline-flex;
   grid-column: 2;
@@ -88,6 +94,25 @@ textarea {
   justify-self: center;
   min-width: 0;
   gap: 4px;
+}
+
+.lab-mode-tabs {
+  grid-column: 3;
+  justify-self: end;
+  min-width: 0;
+  padding: 2px;
+  border-radius: 8px;
+  background: #f5f5f5;
+}
+
+.lab-shell--dark .lab-mode-tabs {
+  background: #333333;
+}
+
+.lab-mode-tabs [role='tab'] {
+  min-height: 28px;
+  padding-inline: 8px;
+  font-size: 12px;
 }
 
 .lab-toolbar--panel {
@@ -109,6 +134,24 @@ textarea {
   color: #404040;
   background: transparent;
   cursor: pointer;
+}
+
+.lab-toolbar--panel .icon-button,
+.app-menu-control .app-menu-button,
+.app-menu-control .icon-button {
+  width: 32px;
+  height: 32px;
+  inline-size: 32px;
+  block-size: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  min-inline-size: 32px;
+  min-block-size: 32px;
+  max-width: 32px;
+  max-height: 32px;
+  max-inline-size: 32px;
+  max-block-size: 32px;
+  padding: 0;
 }
 
 .lab-shell--dark .icon-button {
@@ -221,6 +264,7 @@ textarea {
   align-items: center;
   justify-self: start;
   min-width: 0;
+  gap: 4px;
 }
 
 .app-menu-button {
@@ -929,6 +973,10 @@ textarea {
   outline-offset: 8px;
 }
 
+.lab-shell--viewer .preview-canvas {
+  padding-top: 48px;
+}
+
 .empty-preview {
   display: grid;
   place-items: center;
@@ -946,8 +994,8 @@ textarea {
 
 .options-panel {
   position: relative;
-  width: 312px;
-  flex: 0 0 312px;
+  width: var(--lab-options-panel-width);
+  flex: 0 0 var(--lab-options-panel-width);
   height: 100%;
   overflow: hidden;
   border-left: 1px solid var(--lab-border);
@@ -955,10 +1003,12 @@ textarea {
   box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
 }
 
-.options-panel--collapsed {
-  width: 0;
-  flex-basis: 0;
-  border-left: 0;
+.options-panel--header-only {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 8;
+  height: 40px;
 }
 
 .webpart-select {
@@ -1845,24 +1895,6 @@ textarea {
 .css-floating-editor__resize-zone--nw,
 .css-floating-editor__resize-zone--sw {
   left: 0;
-}
-
-.floating-panel-toggle {
-  position: fixed;
-  top: 4px;
-  right: 4px;
-  z-index: 10;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 8px;
-  color: #404040;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
-  cursor: pointer;
 }
 
 @media (max-width: 760px) {

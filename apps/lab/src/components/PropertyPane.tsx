@@ -81,7 +81,7 @@ export function PropertyPane(props: PropertyPaneProps): JSX.Element {
   return (
     <div className="property-pane">
       <section className="property-section">
-        <h2>{props.webPart ? props.webPart.title : 'Property pane'}</h2>
+        {!CustomPropertyPane && <h2>{props.webPart ? props.webPart.title : 'Property pane'}</h2>}
         {CustomPropertyPane && props.webPart ? (
           <CustomPropertyPane
             title={props.webPart.title}
