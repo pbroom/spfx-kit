@@ -364,92 +364,17 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
   };
 
   const sourceToolbar = (
-    <div className="bt-floating-editor__toolbar" aria-label={toolbarLabel}>
-      {sourceEditorTargets.map((target) => {
-        const isEditing = editingTarget?.selector === target.selector;
-
-        if (target.editable) {
-          return (
-            <span
-              className={`bt-floating-editor__target-chip ${isEditing ? 'bt-floating-editor__target-chip--editing' : ''}`}
-              key={target.selector}
-            >
-              {isEditing ? (
-                <input
-                  aria-label={target.renameLabel || `Edit ${target.selector}`}
-                  autoFocus
-                  className="bt-floating-editor__target-input"
-                  value={editingTarget.value}
-                  onBlur={(event) => commitTargetEdit(target, event.currentTarget.value)}
-                  onChange={(event) => setEditingTarget({ selector: target.selector, value: event.currentTarget.value })}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') {
-                      event.preventDefault();
-                      setEditingTarget(null);
-                      return;
-                    }
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      commitTargetEdit(target, event.currentTarget.value);
-                    }
-                  }}
-                  onPointerDown={(event) => event.stopPropagation()}
-                />
-              ) : (
-                <>
-                  <button
-                    className="bt-floating-editor__target-button"
-                    aria-label={`Add or jump to ${target.selector}`}
-                    title={`Add or jump to ${target.selector}`}
-                    type="button"
-                    onClick={() => handleFloatingTarget(target)}
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    {target.label}
-                  </button>
-                  <button
-                    aria-label={target.renameLabel || `Edit ${target.selector}`}
-                    className="bt-floating-editor__target-edit-button"
-                    title={target.renameLabel || `Edit ${target.selector}`}
-                    type="button"
-                    onClick={() => startTargetEdit(target)}
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    <EditIcon />
-                  </button>
-                </>
-              )}
-            </span>
-          );
-        }
-
-        return (
-          <button
-            className="bt-floating-editor__target-button"
-            key={target.selector}
-            aria-label={`Add or jump to ${target.selector}`}
-            title={`Add or jump to ${target.selector}`}
-            type="button"
-            onClick={() => handleFloatingTarget(target)}
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            {target.label}
-          </button>
-        );
-      })}
-      {sourceEditorSnippets.map((snippet) => (
-        <button
-          aria-label={snippet.label}
-          className="bt-floating-editor__target-button"
-          key={`${snippet.label}:${snippet.searchText || snippet.snippet}`}
-          type="button"
-          onClick={() => handleFloatingSnippet(snippet)}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          {snippet.label}
-        </button>
-      ))}
-    </div>
+    <SourceEditorShortcutToolbar
+      ariaLabel={toolbarLabel}
+      editingTarget={editingTarget}
+      snippets={sourceEditorSnippets}
+      targets={sourceEditorTargets}
+      onApplySnippet={handleFloatingSnippet}
+      onApplyTarget={handleFloatingTarget}
+      onCommitTarget={commitTargetEdit}
+      onEditingTargetChange={setEditingTarget}
+      onEditTarget={startTargetEdit}
+    />
   );
 
   return (
@@ -713,6 +638,227 @@ interface MonacoDiagnosticNoticeProps {
   diagnostic: MonacoDiagnostic;
 }
 
+interface SourceEditorShortcutToolbarProps {
+  ariaLabel: string;
+  editingTarget: { selector: string; value: string } | null;
+  snippets: readonly SourceEditorSnippet[];
+  targets: readonly SourceEditorTarget[];
+  onApplySnippet: (snippet: SourceEditorSnippet) => void;
+  onApplyTarget: (target: SourceEditorTarget) => void;
+  onCommitTarget: (target: SourceEditorTarget, value: string) => void;
+  onEditingTargetChange: React.Dispatch<React.SetStateAction<{ selector: string; value: string } | null>>;
+  onEditTarget: (target: SourceEditorTarget) => void;
+}
+
+const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutToolbarProps> = (props) => {
+  const toolbarRef = React.useRef<HTMLDivElement | null>(null);
+  const itemsRef = React.useRef<HTMLDivElement | null>(null);
+  const menuRef = React.useRef<HTMLDetailsElement | null>(null);
+  const shortcutSignature = [
+    ...props.targets.map((target) => `${target.label}:${target.selector}:${target.editable ? 'editable' : 'fixed'}`),
+    ...props.snippets.map((snippet) => `${snippet.label}:${snippet.searchText || snippet.snippet}`)
+  ].join('|');
+  const isCollapsed = useShortcutToolbarOverflow(toolbarRef, itemsRef, shortcutSignature);
+  const shortcutCount = props.targets.length + props.snippets.length;
+
+  if (shortcutCount === 0) {
+    return null;
+  }
+
+  const closeMenu = (): void => {
+    menuRef.current?.removeAttribute('open');
+  };
+
+  const renderTarget = (target: SourceEditorTarget, location: 'inline' | 'menu'): React.ReactNode => {
+    const isEditing = props.editingTarget?.selector === target.selector;
+    const isHiddenMeasurement = location === 'inline' && isCollapsed;
+
+    if (target.editable) {
+      return (
+        <span
+          className={`bt-floating-editor__target-chip ${isEditing ? 'bt-floating-editor__target-chip--editing' : ''} ${
+            location === 'menu' ? 'bt-floating-editor__target-chip--menu' : ''
+          }`}
+          key={`${location}-${target.selector}`}
+        >
+          {isEditing ? (
+            <input
+              aria-label={target.renameLabel || `Edit ${target.selector}`}
+              autoFocus={!isHiddenMeasurement}
+              className="bt-floating-editor__target-input"
+              tabIndex={isHiddenMeasurement ? -1 : undefined}
+              value={props.editingTarget?.value || target.selector}
+              onBlur={(event) => props.onCommitTarget(target, event.currentTarget.value)}
+              onChange={(event) => props.onEditingTargetChange({ selector: target.selector, value: event.currentTarget.value })}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  props.onEditingTargetChange(null);
+                  return;
+                }
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  props.onCommitTarget(target, event.currentTarget.value);
+                }
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            />
+          ) : (
+            <>
+              <button
+                aria-label={`Add or jump to ${target.selector}`}
+                className="bt-floating-editor__target-button"
+                tabIndex={isHiddenMeasurement ? -1 : undefined}
+                title={`Add or jump to ${target.selector}`}
+                type="button"
+                onClick={() => {
+                  props.onApplyTarget(target);
+                  if (location === 'menu') {
+                    closeMenu();
+                  }
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                {target.label}
+              </button>
+              <button
+                aria-label={target.renameLabel || `Edit ${target.selector}`}
+                className="bt-floating-editor__target-edit-button"
+                tabIndex={isHiddenMeasurement ? -1 : undefined}
+                title={target.renameLabel || `Edit ${target.selector}`}
+                type="button"
+                onClick={() => props.onEditTarget(target)}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <EditIcon />
+              </button>
+            </>
+          )}
+        </span>
+      );
+    }
+
+    return (
+      <button
+        aria-label={`Add or jump to ${target.selector}`}
+        className={`bt-floating-editor__target-button ${location === 'menu' ? 'bt-floating-editor__target-button--menu' : ''}`}
+        key={`${location}-${target.selector}`}
+        tabIndex={isHiddenMeasurement ? -1 : undefined}
+        title={`Add or jump to ${target.selector}`}
+        type="button"
+        onClick={() => {
+          props.onApplyTarget(target);
+          if (location === 'menu') {
+            closeMenu();
+          }
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        {target.label}
+      </button>
+    );
+  };
+
+  const renderSnippet = (snippet: SourceEditorSnippet, location: 'inline' | 'menu'): React.ReactNode => {
+    const isHiddenMeasurement = location === 'inline' && isCollapsed;
+
+    return (
+      <button
+        aria-label={snippet.label}
+        className={`bt-floating-editor__target-button ${location === 'menu' ? 'bt-floating-editor__target-button--menu' : ''}`}
+        key={`${location}-${snippet.label}:${snippet.searchText || snippet.snippet}`}
+        tabIndex={isHiddenMeasurement ? -1 : undefined}
+        type="button"
+        onClick={() => {
+          props.onApplySnippet(snippet);
+          if (location === 'menu') {
+            closeMenu();
+          }
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        {snippet.label}
+      </button>
+    );
+  };
+
+  return (
+    <div className="bt-floating-editor__toolbar" aria-label={props.ariaLabel} ref={toolbarRef} role="toolbar">
+      <div
+        aria-hidden={isCollapsed ? 'true' : undefined}
+        className={`bt-floating-editor__toolbar-items-viewport ${
+          isCollapsed ? 'bt-floating-editor__toolbar-items-viewport--measuring' : ''
+        }`}
+      >
+        <div className="bt-floating-editor__toolbar-items" ref={itemsRef}>
+          {props.targets.map((target) => renderTarget(target, 'inline'))}
+          {props.snippets.map((snippet) => renderSnippet(snippet, 'inline'))}
+        </div>
+      </div>
+      {isCollapsed ? (
+        <details className="bt-floating-editor__shortcut-menu" ref={menuRef}>
+          <summary
+            aria-haspopup="true"
+            aria-label={`Open ${props.ariaLabel}`}
+            className="bt-floating-editor__shortcut-menu-trigger"
+            role="button"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <span>Shortcuts</span>
+            <span className="bt-floating-editor__shortcut-menu-count">{shortcutCount}</span>
+            <ChevronDownIcon />
+          </summary>
+          <div aria-label={props.ariaLabel} className="bt-floating-editor__shortcut-menu-list" role="group">
+            {props.targets.map((target) => renderTarget(target, 'menu'))}
+            {props.snippets.map((snippet) => renderSnippet(snippet, 'menu'))}
+          </div>
+        </details>
+      ) : null}
+    </div>
+  );
+};
+
+export function shouldCollapseShortcutToolbar(availableWidth: number, requiredWidth: number): boolean {
+  return requiredWidth > availableWidth;
+}
+
+function useShortcutToolbarOverflow(
+  toolbarRef: React.RefObject<HTMLDivElement>,
+  itemsRef: React.RefObject<HTMLDivElement>,
+  shortcutSignature: string
+): boolean {
+  const [isCollapsed, setIsCollapsed] = React.useState(false);
+
+  React.useEffect(() => {
+    const toolbar = toolbarRef.current;
+    const items = itemsRef.current;
+    if (!toolbar || !items) {
+      return undefined;
+    }
+
+    const measure = (): void => {
+      const computedStyle = window.getComputedStyle(toolbar);
+      const horizontalPadding =
+        Number.parseFloat(computedStyle.paddingLeft || '0') + Number.parseFloat(computedStyle.paddingRight || '0');
+      const availableWidth = Math.max(0, toolbar.clientWidth - horizontalPadding);
+      const nextCollapsed = shouldCollapseShortcutToolbar(availableWidth, items.scrollWidth);
+      setIsCollapsed((current) => (current === nextCollapsed ? current : nextCollapsed));
+    };
+
+    measure();
+    if (typeof ResizeObserver === 'function') {
+      const observer = new ResizeObserver(measure);
+      observer.observe(toolbar);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [itemsRef, shortcutSignature, toolbarRef]);
+
+  return isCollapsed;
+}
+
 const MonacoDiagnosticNotice: React.FunctionComponent<MonacoDiagnosticNoticeProps> = (props) => {
   const diagnostic = props.diagnostic;
   const message =
@@ -737,6 +883,14 @@ function EditIcon(): JSX.Element {
         d="M14.7 2.3a1.1 1.1 0 0 1 1.6 0l1.4 1.4a1.1 1.1 0 0 1 0 1.6l-9.9 9.9-4.1 1.1 1.1-4.1 9.9-9.9Zm-8.8 10.5-.5 1.8 1.8-.5 7.2-7.2-1.3-1.3-7.2 7.2Z"
         fill="currentColor"
       />
+    </svg>
+  );
+}
+
+function ChevronDownIcon(): JSX.Element {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 20 20">
+      <path d="m5.8 7.5 4.2 4.2 4.2-4.2 1.1 1.1-5.3 5.3-5.3-5.3 1.1-1.1Z" fill="currentColor" />
     </svg>
   );
 }
@@ -1739,17 +1893,98 @@ const editorCss = `.bt-css-editor {
 }
 
 .bt-floating-editor__toolbar {
+  position: relative;
+  z-index: 6;
   display: flex;
   align-items: center;
-  gap: 6px;
-  overflow-x: auto;
+  min-width: 0;
+  overflow: visible;
   border-bottom: 1px solid #334155;
   padding: 6px 8px;
   background: #0b1220;
 }
 
+.bt-floating-editor__toolbar-items-viewport {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.bt-floating-editor__toolbar-items {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 6px;
+}
+
+.bt-floating-editor__toolbar-items-viewport--measuring {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.bt-floating-editor__shortcut-menu {
+  position: relative;
+}
+
+.bt-floating-editor__shortcut-menu-trigger {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 3px 8px;
+  color: #dbeafe;
+  background: #1e293b;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.bt-floating-editor__shortcut-menu-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.bt-floating-editor__shortcut-menu-trigger svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 120ms ease;
+}
+
+.bt-floating-editor__shortcut-menu[open] .bt-floating-editor__shortcut-menu-trigger svg {
+  transform: rotate(180deg);
+}
+
+.bt-floating-editor__shortcut-menu-count {
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.bt-floating-editor__shortcut-menu-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  width: max-content;
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 32px));
+  max-height: min(320px, calc(100vh - 180px));
+  gap: 4px;
+  overflow-y: auto;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  padding: 6px;
+  background: #111827;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 32%);
+}
+
 .bt-floating-editor__target-button {
+  display: inline-flex;
   flex: 0 0 auto;
+  align-items: center;
   border: 1px solid #475569;
   border-radius: 6px;
   padding: 3px 8px;
@@ -1761,6 +1996,12 @@ const editorCss = `.bt-css-editor {
   cursor: pointer;
 }
 
+.bt-floating-editor__target-button--menu {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
 .bt-floating-editor__target-chip {
   display: inline-flex;
   flex: 0 0 auto;
@@ -1769,6 +2010,16 @@ const editorCss = `.bt-css-editor {
   border: 1px solid #475569;
   border-radius: 6px;
   background: #1e293b;
+}
+
+.bt-floating-editor__target-chip--menu {
+  width: 100%;
+}
+
+.bt-floating-editor__target-chip--menu .bt-floating-editor__target-button {
+  min-width: 0;
+  flex: 1 1 auto;
+  text-align: left;
 }
 
 .bt-floating-editor__target-chip .bt-floating-editor__target-button {

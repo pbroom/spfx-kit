@@ -524,99 +524,213 @@ interface SourceEditorShortcutToolbarProps {
 }
 
 function SourceEditorShortcutToolbar(props: SourceEditorShortcutToolbarProps): JSX.Element | null {
-  if (props.targets.length === 0 && props.snippets.length === 0) {
+  const toolbarRef = React.useRef<HTMLDivElement | null>(null);
+  const itemsRef = React.useRef<HTMLDivElement | null>(null);
+  const menuRef = React.useRef<HTMLDetailsElement | null>(null);
+  const shortcutSignature = [
+    ...props.targets.map((target) => `${target.label}:${target.selector}:${target.editable ? 'editable' : 'fixed'}`),
+    ...props.snippets.map((snippet) => `${snippet.label}:${snippet.searchText || snippet.snippet}`)
+  ].join('|');
+  const isCollapsed = useShortcutToolbarOverflow(toolbarRef, itemsRef, shortcutSignature);
+  const shortcutCount = props.targets.length + props.snippets.length;
+
+  if (shortcutCount === 0) {
     return null;
   }
 
-  return (
-    <div className="css-floating-editor__toolbar" aria-label={props.ariaLabel}>
-      {props.targets.map((target) => {
-        const isEditing = props.editingTarget?.selector === target.selector;
+  const closeMenu = (): void => {
+    menuRef.current?.removeAttribute('open');
+  };
 
-        if (target.editable) {
-          return (
-            <span
-              className={`css-floating-editor__target-chip ${isEditing ? 'css-floating-editor__target-chip--editing' : ''}`}
-              key={target.selector}
-            >
-              {isEditing ? (
-                <input
-                  aria-label={target.renameLabel || `Edit ${target.selector}`}
-                  autoFocus
-                  className="css-floating-editor__target-input"
-                  value={props.editingTarget?.value || target.selector}
-                  onBlur={(event) => props.onCommitTarget(target, event.currentTarget.value)}
-                  onChange={(event) =>
-                    props.onEditingTargetChange({ selector: target.selector, value: event.currentTarget.value })
+  const renderTarget = (target: CssEditorTarget, location: 'inline' | 'menu'): React.ReactNode => {
+    const isEditing = props.editingTarget?.selector === target.selector;
+    const isHiddenMeasurement = location === 'inline' && isCollapsed;
+    const key = `${location}-${target.selector}`;
+
+    if (target.editable) {
+      return (
+        <span
+          className={`css-floating-editor__target-chip ${isEditing ? 'css-floating-editor__target-chip--editing' : ''} ${
+            location === 'menu' ? 'css-floating-editor__target-chip--menu' : ''
+          }`}
+          key={key}
+        >
+          {isEditing ? (
+            <input
+              aria-label={target.renameLabel || `Edit ${target.selector}`}
+              autoFocus={!isHiddenMeasurement}
+              className="css-floating-editor__target-input"
+              tabIndex={isHiddenMeasurement ? -1 : undefined}
+              value={props.editingTarget?.value || target.selector}
+              onBlur={(event) => props.onCommitTarget(target, event.currentTarget.value)}
+              onChange={(event) => props.onEditingTargetChange({ selector: target.selector, value: event.currentTarget.value })}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  props.onEditingTargetChange(null);
+                  return;
+                }
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  props.onCommitTarget(target, event.currentTarget.value);
+                }
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            />
+          ) : (
+            <>
+              <button
+                aria-label={`Add or jump to ${target.selector}`}
+                className="css-floating-editor__target-button"
+                tabIndex={isHiddenMeasurement ? -1 : undefined}
+                title={`Add or jump to ${target.selector}`}
+                type="button"
+                onClick={() => {
+                  props.onApplyTarget(target);
+                  if (location === 'menu') {
+                    closeMenu();
                   }
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') {
-                      event.preventDefault();
-                      props.onEditingTargetChange(null);
-                      return;
-                    }
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      props.onCommitTarget(target, event.currentTarget.value);
-                    }
-                  }}
-                  onPointerDown={(event) => event.stopPropagation()}
-                />
-              ) : (
-                <>
-                  <button
-                    aria-label={`Add or jump to ${target.selector}`}
-                    className="css-floating-editor__target-button"
-                    title={`Add or jump to ${target.selector}`}
-                    type="button"
-                    onClick={() => props.onApplyTarget(target)}
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    {target.label}
-                  </button>
-                  <button
-                    aria-label={target.renameLabel || `Edit ${target.selector}`}
-                    className="css-floating-editor__target-edit-button"
-                    title={target.renameLabel || `Edit ${target.selector}`}
-                    type="button"
-                    onClick={() => props.onEditTarget(target)}
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    <EditIcon />
-                  </button>
-                </>
-              )}
-            </span>
-          );
-        }
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                {target.label}
+              </button>
+              <button
+                aria-label={target.renameLabel || `Edit ${target.selector}`}
+                className="css-floating-editor__target-edit-button"
+                tabIndex={isHiddenMeasurement ? -1 : undefined}
+                title={target.renameLabel || `Edit ${target.selector}`}
+                type="button"
+                onClick={() => props.onEditTarget(target)}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <EditIcon />
+              </button>
+            </>
+          )}
+        </span>
+      );
+    }
 
-        return (
-          <button
-            aria-label={`Add or jump to ${target.selector}`}
-            className="css-floating-editor__target-button"
-            key={target.selector}
-            title={`Add or jump to ${target.selector}`}
-            type="button"
-            onClick={() => props.onApplyTarget(target)}
+    return (
+      <button
+        aria-label={`Add or jump to ${target.selector}`}
+        className={`css-floating-editor__target-button ${location === 'menu' ? 'css-floating-editor__target-button--menu' : ''}`}
+        key={key}
+        tabIndex={isHiddenMeasurement ? -1 : undefined}
+        title={`Add or jump to ${target.selector}`}
+        type="button"
+        onClick={() => {
+          props.onApplyTarget(target);
+          if (location === 'menu') {
+            closeMenu();
+          }
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        {target.label}
+      </button>
+    );
+  };
+
+  const renderSnippet = (snippet: SourceEditorSnippet, location: 'inline' | 'menu'): React.ReactNode => {
+    const isHiddenMeasurement = location === 'inline' && isCollapsed;
+
+    return (
+      <button
+        className={`css-floating-editor__target-button ${location === 'menu' ? 'css-floating-editor__target-button--menu' : ''}`}
+        key={`${location}-${snippet.label}-${snippet.searchText || snippet.snippet}`}
+        tabIndex={isHiddenMeasurement ? -1 : undefined}
+        type="button"
+        onClick={() => {
+          props.onApplySnippet(snippet);
+          if (location === 'menu') {
+            closeMenu();
+          }
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        {snippet.label}
+      </button>
+    );
+  };
+
+  return (
+    <div className="css-floating-editor__toolbar" aria-label={props.ariaLabel} ref={toolbarRef} role="toolbar">
+      <div
+        aria-hidden={isCollapsed ? 'true' : undefined}
+        className={`css-floating-editor__toolbar-items-viewport ${
+          isCollapsed ? 'css-floating-editor__toolbar-items-viewport--measuring' : ''
+        }`}
+      >
+        <div className="css-floating-editor__toolbar-items" ref={itemsRef}>
+          {props.targets.map((target) => renderTarget(target, 'inline'))}
+          {props.snippets.map((snippet) => renderSnippet(snippet, 'inline'))}
+        </div>
+      </div>
+      {isCollapsed ? (
+        <details className="css-floating-editor__shortcut-menu" ref={menuRef}>
+          <summary
+            aria-haspopup="true"
+            aria-label={`Open ${props.ariaLabel}`}
+            className="css-floating-editor__shortcut-menu-trigger"
+            role="button"
             onPointerDown={(event) => event.stopPropagation()}
           >
-            {target.label}
-          </button>
-        );
-      })}
-      {props.snippets.map((snippet) => (
-        <button
-          className="css-floating-editor__target-button"
-          key={`${snippet.label}-${snippet.searchText || snippet.snippet}`}
-          type="button"
-          onClick={() => props.onApplySnippet(snippet)}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          {snippet.label}
-        </button>
-      ))}
+            <span>Shortcuts</span>
+            <span className="css-floating-editor__shortcut-menu-count">{shortcutCount}</span>
+            <ChevronDownIcon />
+          </summary>
+          <div aria-label={props.ariaLabel} className="css-floating-editor__shortcut-menu-list" role="group">
+            {props.targets.map((target) => renderTarget(target, 'menu'))}
+            {props.snippets.map((snippet) => renderSnippet(snippet, 'menu'))}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
+}
+
+export function shouldCollapseShortcutToolbar(availableWidth: number, requiredWidth: number): boolean {
+  return requiredWidth > availableWidth;
+}
+
+function useShortcutToolbarOverflow(
+  toolbarRef: React.RefObject<HTMLDivElement>,
+  itemsRef: React.RefObject<HTMLDivElement>,
+  shortcutSignature: string
+): boolean {
+  const [isCollapsed, setIsCollapsed] = React.useState(false);
+
+  React.useEffect(() => {
+    const toolbar = toolbarRef.current;
+    const items = itemsRef.current;
+    if (!toolbar || !items) {
+      return undefined;
+    }
+
+    const measure = (): void => {
+      const computedStyle = window.getComputedStyle(toolbar);
+      const horizontalPadding =
+        Number.parseFloat(computedStyle.paddingLeft || '0') + Number.parseFloat(computedStyle.paddingRight || '0');
+      const availableWidth = Math.max(0, toolbar.clientWidth - horizontalPadding);
+      const requiredWidth = items.scrollWidth;
+      const nextCollapsed = shouldCollapseShortcutToolbar(availableWidth, requiredWidth);
+      setIsCollapsed((current) => (current === nextCollapsed ? current : nextCollapsed));
+    };
+
+    measure();
+    if (typeof ResizeObserver === 'function') {
+      const observer = new ResizeObserver(measure);
+      observer.observe(toolbar);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [itemsRef, shortcutSignature, toolbarRef]);
+
+  return isCollapsed;
 }
 
 export interface FloatingRect {
@@ -659,6 +773,14 @@ function EditIcon(): JSX.Element {
         d="M14.7 2.3a1.1 1.1 0 0 1 1.6 0l1.4 1.4a1.1 1.1 0 0 1 0 1.6l-9.9 9.9-4.1 1.1 1.1-4.1 9.9-9.9Zm-8.8 10.5-.5 1.8 1.8-.5 7.2-7.2-1.3-1.3-7.2 7.2Z"
         fill="currentColor"
       />
+    </svg>
+  );
+}
+
+function ChevronDownIcon(): JSX.Element {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 20 20">
+      <path d="m5.8 7.5 4.2 4.2 4.2-4.2 1.1 1.1-5.3 5.3-5.3-5.3 1.1-1.1Z" fill="currentColor" />
     </svg>
   );
 }
