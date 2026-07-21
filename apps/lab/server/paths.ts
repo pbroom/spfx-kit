@@ -11,54 +11,76 @@ export function managedAppsDir(): string {
 }
 
 export function managedAppSourceRoots(appsDir = managedAppsDir()): string[] {
-  return scanManagedAppSourceRoots(appsDir).roots;
+  return [...scanManagedAppSourceRoots(appsDir).entries.values()];
 }
 
 interface ManagedAppSourceRootScan {
-  roots: string[];
+  entries: Map<string, string>;
+  failedEntries: Set<string>;
   successful: boolean;
 }
 
 function scanManagedAppSourceRoots(appsDir: string): ManagedAppSourceRootScan {
   try {
-    return {
-      roots: fs
-        .readdirSync(appsDir, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-        .flatMap((entry) => {
-          try {
-            const sourceRoot = fs.realpathSync(path.join(appsDir, entry.name));
-            return fs.statSync(sourceRoot).isDirectory() ? [sourceRoot] : [];
-          } catch {
-            return [];
-          }
-        }),
-      successful: true
-    };
+    const entries = new Map<string, string>();
+    const failedEntries = new Set<string>();
+    for (const entry of fs
+      .readdirSync(appsDir, { withFileTypes: true })
+      .filter((candidate) => candidate.isDirectory() || candidate.isSymbolicLink())) {
+      try {
+        const sourceRoot = fs.realpathSync(path.join(appsDir, entry.name));
+        if (fs.statSync(sourceRoot).isDirectory()) {
+          entries.set(entry.name, sourceRoot);
+        }
+      } catch {
+        failedEntries.add(entry.name);
+      }
+    }
+    return { entries, failedEntries, successful: true };
   } catch {
-    return { roots: [], successful: false };
+    return { entries: new Map(), failedEntries: new Set(), successful: false };
   }
 }
 
 export interface ManagedAppSourceRootRefresh {
   allowedRoots: string[];
+  managedEntries: Map<string, string>;
   managedRoots: string[];
 }
 
 export function refreshManagedAppSourceRoots(
   allowedRoots: readonly string[],
-  previousManagedRoots: readonly string[] = [],
+  previousManagedEntries: ReadonlyMap<string, string> = new Map(),
   appsDir = managedAppsDir()
 ): ManagedAppSourceRootRefresh {
   const scan = scanManagedAppSourceRoots(appsDir);
   if (!scan.successful) {
-    return { allowedRoots: [...allowedRoots], managedRoots: [...previousManagedRoots] };
+    const managedEntries = new Map(previousManagedEntries);
+    return {
+      allowedRoots: [...allowedRoots],
+      managedEntries,
+      managedRoots: [...new Set(managedEntries.values())]
+    };
   }
 
+  for (const entryName of scan.failedEntries) {
+    const previousRoot = previousManagedEntries.get(entryName);
+    if (previousRoot) {
+      scan.entries.set(entryName, previousRoot);
+    }
+  }
+
+  const previousManagedRoots = [...new Set(previousManagedEntries.values())];
   const previousRoots = new Set(previousManagedRoots);
-  const managedRoots = [...new Set(scan.roots.map((sourceRoot) => sourceRoot.replace(/\\/g, '/')))];
+  const managedEntries = new Map(
+    [...scan.entries]
+      .sort(([leftName], [rightName]) => leftName.localeCompare(rightName))
+      .map(([entryName, sourceRoot]) => [entryName, sourceRoot.replace(/\\/g, '/')])
+  );
+  const managedRoots = [...new Set(managedEntries.values())];
   return {
     allowedRoots: [...new Set([...allowedRoots.filter((allowedRoot) => !previousRoots.has(allowedRoot)), ...managedRoots])],
+    managedEntries,
     managedRoots
   };
 }

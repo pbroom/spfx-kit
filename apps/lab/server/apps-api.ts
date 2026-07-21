@@ -15,11 +15,11 @@ export function spfxAppApi(): Plugin {
   return {
     name: 'spfx-kit-app-api',
     configureServer(server) {
-      let managedSourceRoots: string[] = [];
+      let managedSourceEntries = new Map<string, string>();
       const refreshServerSourceRoots = (): void => {
-        const refreshed = refreshManagedAppSourceRoots(server.config.server.fs.allow, managedSourceRoots);
+        const refreshed = refreshManagedAppSourceRoots(server.config.server.fs.allow, managedSourceEntries);
         server.config.server.fs.allow = refreshed.allowedRoots;
-        managedSourceRoots = refreshed.managedRoots;
+        managedSourceEntries = refreshed.managedEntries;
       };
       refreshServerSourceRoots();
 
