@@ -1743,9 +1743,14 @@ const editorCss = `.bt-css-editor {
   align-items: center;
   gap: 6px;
   overflow-x: auto;
+  scrollbar-width: none;
   border-bottom: 1px solid #334155;
   padding: 6px 8px;
   background: #0b1220;
+}
+
+.bt-floating-editor__toolbar::-webkit-scrollbar {
+  display: none;
 }
 
 .bt-floating-editor__target-button {

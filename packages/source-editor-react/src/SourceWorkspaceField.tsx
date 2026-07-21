@@ -598,7 +598,7 @@ const workspaceCss = `.bt-source-workspace {
 .bt-source-workspace--floating .bt-source-workspace__tabs {
   justify-self: start;
   overflow-x: auto;
-  border-color: #334155;
+  border: 0;
   background: #0b1220;
 }
 

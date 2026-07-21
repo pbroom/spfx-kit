@@ -96,6 +96,8 @@ describe('source editor state', () => {
       })
     );
     expect(productionMarkup).toContain('style="height:100%;width:100%"');
+    expect(productionMarkup).toContain('scrollbar-width: none;');
+    expect(productionMarkup).toContain('.bt-floating-editor__toolbar::-webkit-scrollbar');
   });
 
   it('recognizes the editor close shortcut without intercepting modified variants', () => {
@@ -240,6 +242,8 @@ describe('source editor state', () => {
     expect(markup).toContain('hidden=""');
     expect(markup).toContain('justify-self: start;');
     expect(markup).toContain('width: fit-content;');
+    expect(markup).toContain('.bt-source-workspace--floating .bt-source-workspace__tabs {');
+    expect(markup).toContain('border: 0;');
     expect(markup).toContain('.bt-source-workspace__pane {\n  display: grid;\n  grid-template-rows: minmax(0, 1fr);');
     expect(markup).toContain(
       '.bt-source-workspace__body--split .bt-source-workspace__pane {\n  grid-template-rows: auto minmax(0, 1fr);'
