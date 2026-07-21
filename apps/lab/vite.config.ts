@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { spfxAppApi } from './server/apps-api';
 import { spfxExportApi } from './server/export-api';
-import { managedAppSourceRoots, rootDir } from './server/paths';
+import { rootDir } from './server/paths';
 
 export default defineConfig({
   plugins: [react(), spfxAppApi(), spfxExportApi()],
@@ -12,7 +12,7 @@ export default defineConfig({
   server: {
     strictPort: false,
     fs: {
-      allow: [rootDir, ...managedAppSourceRoots()]
+      allow: [rootDir]
     }
   }
 });

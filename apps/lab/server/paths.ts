@@ -10,22 +10,40 @@ export function managedAppsDir(): string {
   return path.join(rootDir, '.spfx-kit', 'apps');
 }
 
-export function managedAppSourceRoots(): string[] {
-  const appsDir = managedAppsDir();
+export function managedAppSourceRoots(appsDir = managedAppsDir()): string[] {
+  try {
+    return fs
+      .readdirSync(appsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+      .flatMap((entry) => {
+        try {
+          const sourceRoot = fs.realpathSync(path.join(appsDir, entry.name));
+          return fs.statSync(sourceRoot).isDirectory() ? [sourceRoot] : [];
+        } catch {
+          return [];
+        }
+      });
+  } catch {
+    return [];
+  }
+}
 
-  if (!fs.existsSync(appsDir)) return [];
+export interface ManagedAppSourceRootRefresh {
+  allowedRoots: string[];
+  managedRoots: string[];
+}
 
-  return fs
-    .readdirSync(appsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-    .flatMap((entry) => {
-      try {
-        const sourceRoot = fs.realpathSync(path.join(appsDir, entry.name));
-        return fs.statSync(sourceRoot).isDirectory() ? [sourceRoot] : [];
-      } catch {
-        return [];
-      }
-    });
+export function refreshManagedAppSourceRoots(
+  allowedRoots: readonly string[],
+  previousManagedRoots: readonly string[] = [],
+  appsDir = managedAppsDir()
+): ManagedAppSourceRootRefresh {
+  const previousRoots = new Set(previousManagedRoots);
+  const managedRoots = [...new Set(managedAppSourceRoots(appsDir).map((sourceRoot) => sourceRoot.replace(/\\/g, '/')))];
+  return {
+    allowedRoots: [...new Set([...allowedRoots.filter((allowedRoot) => !previousRoots.has(allowedRoot)), ...managedRoots])],
+    managedRoots
+  };
 }
 
 export function legacyAppsDir(): string {

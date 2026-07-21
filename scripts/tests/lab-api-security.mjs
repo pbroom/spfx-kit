@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,9 +12,12 @@ const validationDir = path.join(repoRoot, '.tmp-lab-security-validation');
 const workspaceFilePath = path.join(validationDir, 'not-an-export.tar.gz');
 const exportsValidationDir = path.join(repoRoot, '.spfx-kit', 'exports', '.tmp-lab-security-validation');
 const archivePath = path.join(exportsValidationDir, 'sample-export.tar.gz');
+const managedAppsDir = path.join(repoRoot, '.spfx-kit', 'apps');
+const managedAppLinkPath = path.join(managedAppsDir, `.tmp-vite-fs-allow-${process.pid}`);
 const requestTimeoutMs = 10_000;
 
 let server;
+let externalManagedAppDir;
 
 try {
   await mkdir(validationDir, { recursive: true });
@@ -99,11 +103,39 @@ try {
     500
   );
 
+  externalManagedAppDir = await mkdtemp(path.join(os.tmpdir(), 'spfx-kit-vite-fs-allow-'));
+  const externalAssetPath = path.join(externalManagedAppDir, 'runtime-app-asset.txt');
+  await Promise.all([
+    mkdir(managedAppsDir, { recursive: true }),
+    writeFile(path.join(externalManagedAppDir, 'package.json'), '{"name":"runtime-fs-allow-fixture"}\n'),
+    writeFile(externalAssetPath, 'runtime-app-asset\n')
+  ]);
+  await symlink(externalManagedAppDir, managedAppLinkPath, 'dir');
+  const externalAssetUrl = `${baseUrl}/@fs/${encodeURI(await realpath(externalAssetPath))}`;
+
+  await expectStatus('runtime managed app asset is blocked before registry sync', fetchWithTimeout(externalAssetUrl), 403);
+  await expectStatus(
+    'same-origin registry sync refreshes Vite managed app roots',
+    post('/api/spfx-apps/sync', {
+      origin: baseUrl,
+      intent: true,
+      contentType: 'application/json',
+      body: {}
+    }),
+    200
+  );
+  await expectStatus('runtime managed app asset is served after registry sync', fetchWithTimeout(externalAssetUrl), 200);
+
   console.log('lab API security validation passed');
 } finally {
   await stopLabServer(server);
+  await rm(managedAppLinkPath, { force: true });
+  if (externalManagedAppDir) {
+    await rm(externalManagedAppDir, { recursive: true, force: true });
+  }
   await rm(validationDir, { recursive: true, force: true });
   await rm(exportsValidationDir, { recursive: true, force: true });
+  await runCommand('npm', ['run', 'sync:lab']);
 }
 
 function post(route, options) {
