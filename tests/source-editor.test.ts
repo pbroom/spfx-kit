@@ -17,6 +17,7 @@ import {
 } from '../apps/lab/src/components/SourceEditor';
 import { SourceWorkspace } from '../apps/lab/src/components/SourceWorkspace';
 import {
+  SourceEditorField as ProductionSourceEditor,
   createSourceEditorSuggestions as createProductionSourceEditorSuggestions,
   getCssEditorTargetsForModel as getProductionCssEditorTargetsForModel,
   setCssEditorTargetsForModel as setProductionCssEditorTargetsForModel,
@@ -83,6 +84,18 @@ describe('source editor state', () => {
 
     expect(markup).not.toContain('Inline-only guidance.');
     expect(markup).toContain('css-editor-field--fill');
+
+    const productionMarkup = renderToStaticMarkup(
+      React.createElement(ProductionSourceEditor, {
+        embedded: true,
+        fillHeight: true,
+        label: 'Template HTML',
+        language: 'html',
+        value: '<article>{{item.title}}</article>',
+        onChange: () => undefined
+      })
+    );
+    expect(productionMarkup).toContain('style="height:100%;width:100%"');
   });
 
   it('recognizes the editor close shortcut without intercepting modified variants', () => {
@@ -225,6 +238,12 @@ describe('source editor state', () => {
     expect(markup).toContain('bt-source-workspace__tab--split');
     expect(markup).toContain('aria-selected="true"');
     expect(markup).toContain('hidden=""');
+    expect(markup).toContain('justify-self: start;');
+    expect(markup).toContain('width: fit-content;');
+    expect(markup).toContain('.bt-source-workspace__pane {\n  display: grid;\n  grid-template-rows: minmax(0, 1fr);');
+    expect(markup).toContain(
+      '.bt-source-workspace__body--split .bt-source-workspace__pane {\n  grid-template-rows: auto minmax(0, 1fr);'
+    );
   });
 
   it('keeps floating drag and resize geometry inside viewport bounds', () => {
