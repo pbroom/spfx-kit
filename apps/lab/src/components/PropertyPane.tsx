@@ -34,6 +34,7 @@ import {
 } from '@spfx-kit/code-workbench-runtime';
 import { createMockSpfxContext } from '@spfx-kit/spfx-lab-runtime';
 import { CssEditor } from './CssEditor';
+import { resolveSelectControlState } from './propertyPaneSelectState';
 import { SourceEditor } from './SourceEditor';
 import { SourceWorkspace } from './SourceWorkspace';
 import type { SourceWorkspaceDocument } from './SourceWorkspace';
@@ -277,11 +278,12 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
   }
 
   if (control.type === 'number') {
+    const unit = control.getUnit ? control.getUnit(values) : control.unit;
     return (
       <Field className="property-field" label={control.label} size="small">
         <Input
-          aria-label={control.unit ? `${control.label} (${control.unit})` : control.label}
-          contentAfter={control.unit ? <span className="property-number-unit">{control.unit}</span> : undefined}
+          aria-label={unit ? `${control.label} (${unit})` : control.label}
+          contentAfter={unit ? <span className="property-number-unit">{unit}</span> : undefined}
           type="number"
           min={control.min}
           max={control.max}
@@ -297,22 +299,22 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
   }
 
   if (control.type === 'select') {
-    const selectedValue = String(value ?? '');
-    const selectedOption = control.options.find((option) => option.value === selectedValue);
+    const options = control.getOptions ? control.getOptions(values) : control.options;
+    const { selectedOption, selectedOptions, selectedValue } = resolveSelectControlState(value, options);
 
     return (
       <Field className="property-field" label={control.label} size="small">
         <Dropdown
           aria-label={control.label}
-          selectedOptions={selectedValue ? [selectedValue] : []}
+          selectedOptions={selectedOptions}
           value={selectedOption?.label || selectedValue}
           onOptionSelect={(_event, data) => {
-            if (data.optionValue) {
+            if (data.optionValue !== undefined) {
               onChange(data.optionValue);
             }
           }}
         >
-          {control.options.map((option) => (
+          {options.map((option) => (
             <Option value={option.value} key={option.value}>
               {option.label}
             </Option>

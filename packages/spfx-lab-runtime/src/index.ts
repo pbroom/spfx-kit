@@ -112,6 +112,7 @@ export type LabPropertyControl =
       max?: number;
       step?: number;
       unit?: string;
+      getUnit?: (values: LabPropertyBag) => string;
     })
   | (LabPropertyControlBase & {
       type: 'toggle';
@@ -121,6 +122,7 @@ export type LabPropertyControl =
   | (LabPropertyControlBase & {
       type: 'select';
       options: Array<{ label: string; value: string }>;
+      getOptions?: (values: LabPropertyBag) => Array<{ label: string; value: string }>;
     })
   | (LabPropertyControlBase & {
       type: 'combobox';
