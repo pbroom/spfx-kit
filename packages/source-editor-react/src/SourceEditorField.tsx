@@ -33,7 +33,11 @@ export interface SourceEditorFieldProps {
   targets?: readonly SourceEditorTarget[];
   targetComment?: string;
   onChange: (value: string) => void;
+  onDraftChange?: (value: string) => void;
   onTargetRename?: (target: SourceEditorTarget, nextSelector: string, nextValue: string) => void;
+  embedded?: boolean;
+  fillHeight?: boolean;
+  showShortcuts?: boolean;
 }
 
 export interface SourceEditorFieldConfig {
@@ -139,6 +143,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
   const [editingTarget, setEditingTarget] = React.useState<{ selector: string; value: string } | null>(null);
   const [monacoDiagnostic, setMonacoDiagnostic] = React.useState<MonacoDiagnostic>(() => createMonacoDiagnostic('loading'));
   const floatingPanelRef = React.useRef<HTMLDivElement | null>(null);
+  const inlineEditorRef = React.useRef<any>(null);
   const floatingEditorRef = React.useRef<any>(null);
   const closeShortcutLabel = React.useMemo(() => getCloseShortcutLabel(), []);
   const markMonacoReady = React.useCallback((): void => {
@@ -246,6 +251,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
   const updateValue = (value: string): void => {
     const diagnostics = getSourceDiagnostics(value, maxBytes, validate);
     setDraft(value);
+    props.onDraftChange?.(value);
     if (shouldCommitSource(commitMode, diagnostics)) {
       props.onChange(value);
     }
@@ -270,7 +276,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
 
   const handleFloatingTarget = (target: SourceEditorTarget): void => {
     setEditingTarget(null);
-    const editor = floatingEditorRef.current;
+    const editor = floatingEditorRef.current || inlineEditorRef.current;
     const currentValue = editor?.getValue?.() || draft || '';
     const existingLine = findCssTargetLine(currentValue, target.selector);
 
@@ -287,7 +293,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
   };
 
   const handleFloatingSnippet = (snippet: SourceEditorSnippet): void => {
-    const editor = floatingEditorRef.current;
+    const editor = floatingEditorRef.current || inlineEditorRef.current;
     const currentValue = editor?.getValue?.() || draft || '';
     const searchText = snippet.searchText || snippet.snippet;
     const existingIndex = currentValue.indexOf(searchText);
@@ -339,7 +345,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
       return;
     }
 
-    const editor = floatingEditorRef.current;
+    const editor = floatingEditorRef.current || inlineEditorRef.current;
     const currentValue = editor?.getValue?.() || draft || '';
     const nextValue = replaceCssTargetSelector(currentValue, target.selector, nextSelector);
 
@@ -349,6 +355,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
         return;
       }
       setDraft(nextValue);
+      props.onDraftChange?.(nextValue);
       onTargetRename(target, nextSelector, nextValue);
       return;
     }
@@ -356,16 +363,111 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
     updateValue(nextValue);
   };
 
-  return (
-    <div className="bt-css-editor">
-      <style>{editorCss}</style>
-      <div className="bt-css-editor__header">
-        <label className="bt-css-editor__label">{props.label}</label>
-        <button aria-expanded={floatingOpen} className="bt-css-editor__popout" type="button" onClick={toggleFloatingEditor}>
-          Pop out
+  const sourceToolbar = (
+    <div className="bt-floating-editor__toolbar" aria-label={toolbarLabel}>
+      {sourceEditorTargets.map((target) => {
+        const isEditing = editingTarget?.selector === target.selector;
+
+        if (target.editable) {
+          return (
+            <span
+              className={`bt-floating-editor__target-chip ${isEditing ? 'bt-floating-editor__target-chip--editing' : ''}`}
+              key={target.selector}
+            >
+              {isEditing ? (
+                <input
+                  aria-label={target.renameLabel || `Edit ${target.selector}`}
+                  autoFocus
+                  className="bt-floating-editor__target-input"
+                  value={editingTarget.value}
+                  onBlur={(event) => commitTargetEdit(target, event.currentTarget.value)}
+                  onChange={(event) => setEditingTarget({ selector: target.selector, value: event.currentTarget.value })}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      setEditingTarget(null);
+                      return;
+                    }
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      commitTargetEdit(target, event.currentTarget.value);
+                    }
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                />
+              ) : (
+                <>
+                  <button
+                    className="bt-floating-editor__target-button"
+                    aria-label={`Add or jump to ${target.selector}`}
+                    title={`Add or jump to ${target.selector}`}
+                    type="button"
+                    onClick={() => handleFloatingTarget(target)}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    {target.label}
+                  </button>
+                  <button
+                    aria-label={target.renameLabel || `Edit ${target.selector}`}
+                    className="bt-floating-editor__target-edit-button"
+                    title={target.renameLabel || `Edit ${target.selector}`}
+                    type="button"
+                    onClick={() => startTargetEdit(target)}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <EditIcon />
+                  </button>
+                </>
+              )}
+            </span>
+          );
+        }
+
+        return (
+          <button
+            className="bt-floating-editor__target-button"
+            key={target.selector}
+            aria-label={`Add or jump to ${target.selector}`}
+            title={`Add or jump to ${target.selector}`}
+            type="button"
+            onClick={() => handleFloatingTarget(target)}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            {target.label}
+          </button>
+        );
+      })}
+      {sourceEditorSnippets.map((snippet) => (
+        <button
+          aria-label={snippet.label}
+          className="bt-floating-editor__target-button"
+          key={`${snippet.label}:${snippet.searchText || snippet.snippet}`}
+          type="button"
+          onClick={() => handleFloatingSnippet(snippet)}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          {snippet.label}
         </button>
-      </div>
-      {props.description && <p className="bt-css-editor__description">{props.description}</p>}
+      ))}
+    </div>
+  );
+
+  return (
+    <div
+      className={`bt-css-editor ${props.embedded ? 'bt-css-editor--embedded' : ''} ${
+        props.fillHeight ? 'bt-css-editor--fill' : ''
+      }`}
+    >
+      <style>{editorCss}</style>
+      {!props.embedded && (
+        <div className="bt-css-editor__header">
+          <label className="bt-css-editor__label">{props.label}</label>
+          <button aria-expanded={floatingOpen} className="bt-css-editor__popout" type="button" onClick={toggleFloatingEditor}>
+            Pop out
+          </button>
+        </div>
+      )}
+      {!props.embedded && props.description && <p className="bt-css-editor__description">{props.description}</p>}
       {sourceDiagnostics.length > 0 && (
         <div aria-live="polite" className="bt-css-editor__source-diagnostics">
           {sourceDiagnostics.map((diagnostic, index) => (
@@ -379,12 +481,13 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
         </div>
       )}
       {shouldShowMonacoDiagnostic(monacoDiagnostic) && <MonacoDiagnosticNotice diagnostic={monacoDiagnostic} />}
+      {props.showShortcuts ? sourceToolbar : null}
       <div
         className="bt-css-editor__frame"
         onClick={stopEditorEventPropagation}
         onMouseDown={stopEditorEventPropagation}
         onPointerDown={stopEditorEventPropagation}
-        style={{ height: inlineHeight, minHeight: inlineHeight }}
+        style={props.fillHeight ? { height: '100%', minHeight: inlineHeight } : { height: inlineHeight, minHeight: inlineHeight }}
       >
         {!editorReady && (
           <FallbackSourceEditor
@@ -404,12 +507,13 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
             theme="vs-dark"
             value={draft}
             beforeMount={(monaco) => configureSourceEditorMonaco(monaco, props.language)}
-            onMount={(editor) =>
+            onMount={(editor) => {
+              inlineEditorRef.current = editor;
               handleCssEditorMount(editor, sourceEditorTargetsRef, () => {
                 setEditorReady(true);
                 markMonacoReady();
-              })
-            }
+              });
+            }}
             onChange={(value) => {
               const nextValue = value || '';
               updateValue(nextValue);
@@ -476,92 +580,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
                 <kbd className="bt-floating-editor__close-shortcut">{closeShortcutLabel}</kbd>
               </button>
             </div>
-            <div className="bt-floating-editor__toolbar" aria-label={toolbarLabel}>
-              {sourceEditorTargets.map((target) => {
-                const isEditing = editingTarget?.selector === target.selector;
-
-                if (target.editable) {
-                  return (
-                    <span
-                      className={`bt-floating-editor__target-chip ${isEditing ? 'bt-floating-editor__target-chip--editing' : ''}`}
-                      key={target.selector}
-                    >
-                      {isEditing ? (
-                        <input
-                          aria-label={target.renameLabel || `Edit ${target.selector}`}
-                          autoFocus
-                          className="bt-floating-editor__target-input"
-                          value={editingTarget.value}
-                          onBlur={(event) => commitTargetEdit(target, event.currentTarget.value)}
-                          onChange={(event) => setEditingTarget({ selector: target.selector, value: event.currentTarget.value })}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Escape') {
-                              event.preventDefault();
-                              setEditingTarget(null);
-                              return;
-                            }
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              commitTargetEdit(target, event.currentTarget.value);
-                            }
-                          }}
-                          onPointerDown={(event) => event.stopPropagation()}
-                        />
-                      ) : (
-                        <>
-                          <button
-                            className="bt-floating-editor__target-button"
-                            aria-label={`Add or jump to ${target.selector}`}
-                            title={`Add or jump to ${target.selector}`}
-                            type="button"
-                            onClick={() => handleFloatingTarget(target)}
-                            onPointerDown={(event) => event.stopPropagation()}
-                          >
-                            {target.label}
-                          </button>
-                          <button
-                            aria-label={target.renameLabel || `Edit ${target.selector}`}
-                            className="bt-floating-editor__target-edit-button"
-                            title={target.renameLabel || `Edit ${target.selector}`}
-                            type="button"
-                            onClick={() => startTargetEdit(target)}
-                            onPointerDown={(event) => event.stopPropagation()}
-                          >
-                            <EditIcon />
-                          </button>
-                        </>
-                      )}
-                    </span>
-                  );
-                }
-
-                return (
-                  <button
-                    className="bt-floating-editor__target-button"
-                    key={target.selector}
-                    aria-label={`Add or jump to ${target.selector}`}
-                    title={`Add or jump to ${target.selector}`}
-                    type="button"
-                    onClick={() => handleFloatingTarget(target)}
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    {target.label}
-                  </button>
-                );
-              })}
-              {sourceEditorSnippets.map((snippet) => (
-                <button
-                  aria-label={snippet.label}
-                  className="bt-floating-editor__target-button"
-                  key={`${snippet.label}:${snippet.searchText || snippet.snippet}`}
-                  type="button"
-                  onClick={() => handleFloatingSnippet(snippet)}
-                  onPointerDown={(event) => event.stopPropagation()}
-                >
-                  {snippet.label}
-                </button>
-              ))}
-            </div>
+            {sourceToolbar}
             <div className="bt-floating-editor__body">
               {!floatingEditorReady && (
                 <FallbackSourceEditor
@@ -643,14 +662,14 @@ function renderFloatingEditorLayer(element: JSX.Element): React.ReactNode {
   return ReactDom.createPortal(element, document.body);
 }
 
-interface FloatingRect {
+export interface FloatingRect {
   left: number;
   top: number;
   width: number;
   height: number;
 }
 
-type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+export type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
 interface PointerInteraction {
   mode: 'drag' | 'resize';
@@ -929,7 +948,7 @@ function handleCssEditorMount(
   onReady();
 }
 
-function isCloseShortcut(event: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>): boolean {
+export function isCloseShortcut(event: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>): boolean {
   return (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's';
 }
 
@@ -1339,7 +1358,12 @@ function createPointerInteraction(
   };
 }
 
-function resizeFloatingRect(startRect: FloatingRect, deltaX: number, deltaY: number, direction: ResizeDirection): FloatingRect {
+export function resizeFloatingRect(
+  startRect: FloatingRect,
+  deltaX: number,
+  deltaY: number,
+  direction: ResizeDirection
+): FloatingRect {
   const next = { ...startRect };
 
   if (direction.includes('e')) {
@@ -1368,7 +1392,7 @@ function resizeFloatingRect(startRect: FloatingRect, deltaX: number, deltaY: num
   return constrainFloatingRect(next);
 }
 
-function constrainFloatingRect(rect: FloatingRect): FloatingRect {
+export function constrainFloatingRect(rect: FloatingRect): FloatingRect {
   const viewport = getViewportSize();
   const width = Math.min(Math.max(rect.width, minFloatingWidth), Math.max(minFloatingWidth, viewport.width - 16));
   const height = Math.min(Math.max(rect.height, minFloatingHeight), Math.max(minFloatingHeight, viewport.height - 16));
@@ -1445,6 +1469,20 @@ const editorCss = `.bt-css-editor {
   display: grid;
   gap: 6px;
   font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.bt-css-editor--embedded {
+  min-width: 0;
+}
+
+.bt-css-editor--fill {
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.bt-css-editor--fill .bt-css-editor__frame {
+  min-height: 0 !important;
 }
 
 .bt-css-editor__header {

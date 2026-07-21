@@ -18,6 +18,12 @@ export const SOURCE_EDITOR_VENDOR_FILES = [
     sourcePath: 'packages/source-editor-react/src/SourceEditorField.tsx',
     packagePath: 'packages/source-editor-react/package.json',
     vendorPath: 'src/vendor/source-editor/SourceEditorField.tsx'
+  },
+  {
+    packageName: '@spfx-kit/source-editor-react',
+    sourcePath: 'packages/source-editor-react/src/SourceWorkspaceField.tsx',
+    packagePath: 'packages/source-editor-react/package.json',
+    vendorPath: 'src/vendor/source-editor/SourceWorkspaceField.tsx'
   }
 ];
 

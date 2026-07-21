@@ -222,7 +222,7 @@ describe('source editor state', () => {
     expect(markup).toContain('>HTML template</button>');
     expect(markup).toContain('aria-label="Split"');
     expect(markup).toContain('title="Split view"');
-    expect(markup).toContain('source-workspace__tab--split');
+    expect(markup).toContain('bt-source-workspace__tab--split');
     expect(markup).toContain('aria-selected="true"');
     expect(markup).toContain('hidden=""');
   });
