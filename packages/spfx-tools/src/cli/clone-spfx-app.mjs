@@ -56,6 +56,13 @@ async function main() {
       source,
       ref: args.ref || null,
       fork: args.fork || null,
+      versionPolicy:
+        args.ref && String(args.ref).match(/^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/)
+          ? `tag:${args.ref}`
+          : !args.ref || args.ref === 'main'
+            ? 'latest'
+            : 'current',
+      autoUpdate: !args.ref || args.ref === 'main',
       clonedAt: new Date().toISOString()
     });
 

@@ -322,7 +322,7 @@ textarea {
 
 .manage-apps-dialog__subtitle {
   margin: 0;
-  color: var(--colorNeutralForeground3, #616161);
+  color: var(--colorNeutralForeground2, #424242);
   font-size: 13px;
   line-height: 18px;
 }
@@ -464,6 +464,13 @@ textarea {
   white-space: nowrap;
 }
 
+.manage-app-row__version-detail {
+  min-width: 0;
+  color: var(--colorNeutralForeground2, #424242);
+  font-size: 11px;
+  line-height: 16px;
+}
+
 .manage-app-row__main strong {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -473,7 +480,7 @@ textarea {
 }
 
 .manage-app-row__path {
-  color: var(--colorNeutralForeground3, #616161);
+  color: var(--colorNeutralForeground2, #424242);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
   font-size: 11px;
   line-height: 16px;
@@ -498,9 +505,16 @@ textarea {
 }
 
 .manage-app-row__actions {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: minmax(132px, 168px) auto;
   align-items: center;
   justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.manage-app-row__version {
+  width: 100%;
   min-width: 0;
 }
 
@@ -531,7 +545,8 @@ textarea {
 
   .manage-app-row__actions {
     grid-column: 1 / -1;
-    justify-content: flex-start;
+    grid-template-columns: minmax(0, 1fr) auto;
+    justify-content: stretch;
   }
 }
 

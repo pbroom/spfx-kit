@@ -46,6 +46,17 @@ try {
   );
 
   await expectStatus(
+    'cross-origin app version write is rejected',
+    post('/api/spfx-apps/version', {
+      origin: 'http://evil.example',
+      intent: true,
+      contentType: 'application/json',
+      body: { appId: 'fixture-spfx', versionId: 'latest' }
+    }),
+    403
+  );
+
+  await expectStatus(
     'same-origin JSON write without intent header is rejected',
     post('/api/export-spfx-app', {
       origin: baseUrl,
@@ -79,6 +90,17 @@ try {
   const passThroughBody = await guardedPassThrough.text();
   if (guardedPassThrough.status !== 500 || !passThroughBody.includes('Invalid app slug.')) {
     throw new Error(`same-origin guarded write did not reach API validation: ${guardedPassThrough.status} ${passThroughBody}`);
+  }
+
+  const invalidVersion = await post('/api/spfx-apps/version', {
+    origin: baseUrl,
+    intent: true,
+    contentType: 'application/json',
+    body: { appId: 'fixture-spfx', versionId: '../main' }
+  });
+  const invalidVersionBody = await invalidVersion.text();
+  if (invalidVersion.status !== 500 || !invalidVersionBody.includes('Invalid app version.')) {
+    throw new Error(`invalid app version was not rejected: ${invalidVersion.status} ${invalidVersionBody}`);
   }
 
   await expectStatus(

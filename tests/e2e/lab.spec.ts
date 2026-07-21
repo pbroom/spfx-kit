@@ -106,6 +106,112 @@ test('has no automatically detectable WCAG A or AA violations', async ({ page })
   expect(results.violations).toEqual([]);
 });
 
+test('tracks app versions, defaults to Latest, and can pin a release', async ({ page }) => {
+  let selectedVersion = 'latest';
+  let latestVersion = '1.2.0';
+  let updateAvailable = true;
+  let releaseLatestUpdate!: () => void;
+  const latestUpdateGate = new Promise<void>((resolve) => {
+    releaseLatestUpdate = resolve;
+  });
+  const requests: Array<{ appId: string; versionId: string }> = [];
+  await page.route('**/api/spfx-apps/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === 'POST' && url.pathname.endsWith('/version')) {
+      const body = route.request().postDataJSON() as { appId: string; versionId: string };
+      requests.push(body);
+      selectedVersion = body.versionId;
+      if (body.versionId === 'latest') {
+        await latestUpdateGate;
+        latestVersion = '1.3.0';
+        updateAvailable = false;
+      }
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          appId: body.appId,
+          message: 'Updated fixture app.',
+          syncedAdapters: 1,
+          apps: managedAppFixtures(selectedVersion, latestVersion, updateAvailable)
+        })
+      });
+      return;
+    }
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ apps: managedAppFixtures(selectedVersion, latestVersion, updateAvailable) })
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Manage apps' }).click();
+  const dialog = page.getByRole('dialog');
+  const versionDropdown = dialog.getByRole('combobox', { name: 'Version for Fixture App' });
+  await expect(versionDropdown).toBeDisabled();
+  await expect(dialog.getByRole('switch', { name: 'Connected: Fixture App' })).toBeDisabled();
+  releaseLatestUpdate();
+  await expect(versionDropdown).toContainText('Latest · v1.3.0');
+  await expect(versionDropdown).toBeEnabled();
+  await expect.poll(() => requests).toEqual([{ appId: 'fixture-app-spfx', versionId: 'latest' }]);
+  await expect(dialog.getByText('Update paused because this app has local changes.')).toBeVisible();
+  await expect(dialog.getByRole('combobox', { name: 'Version for Dirty App' })).toBeDisabled();
+
+  const accessibility = await new AxeBuilder({ page })
+    .include('.manage-apps-dialog')
+    .exclude('.manage-apps-dialog__toolbar-primary .fui-Button')
+    .exclude('.manage-apps-dialog__actions .fui-Button')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
+
+  await versionDropdown.click();
+  await page.getByRole('option', { name: 'v1.0.0' }).click();
+  await expect
+    .poll(() => requests)
+    .toEqual([
+      { appId: 'fixture-app-spfx', versionId: 'latest' },
+      { appId: 'fixture-app-spfx', versionId: 'tag:v1.0.0' }
+    ]);
+  await expect(versionDropdown).toContainText('v1.0.0');
+  await expect(dialog.getByText('Updated fixture app.')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Reload lab' })).toBeVisible();
+});
+
+test('keeps the version dropdown left of Connected on a narrow screen', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/spfx-apps/**', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ apps: managedAppFixtures('latest') }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Manage apps' }).click();
+
+  const dialog = page.getByRole('dialog');
+  const row = dialog.locator('[data-app-id="fixture-app-spfx"]');
+  const dropdownBox = await row.getByRole('combobox', { name: 'Version for Fixture App' }).boundingBox();
+  const switchBox = await row.getByRole('switch', { name: 'Connected: Fixture App' }).boundingBox();
+  const mainBox = await row.locator('.manage-app-row__main').boundingBox();
+  const actionsBox = await row.locator('.manage-app-row__actions').boundingBox();
+  const dialogBox = await dialog.boundingBox();
+  expect(dropdownBox).not.toBeNull();
+  expect(switchBox).not.toBeNull();
+  expect(dialogBox).not.toBeNull();
+  expect(mainBox).not.toBeNull();
+  expect(actionsBox).not.toBeNull();
+  expect(dropdownBox!.x).toBeLessThan(switchBox!.x);
+  expect(actionsBox!.y).toBeGreaterThan(mainBox!.y);
+  expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
+  expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(390);
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+});
+
 test('pins one startup app and restores it after refresh', async ({ page }) => {
   await page.goto('/');
 
@@ -144,3 +250,42 @@ test('pins one startup app and restores it after refresh', async ({ page }) => {
   await appPicker.press('Alt+p');
   await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
 });
+
+function managedAppFixtures(selectedVersion: string, latestVersion = '1.2.0', updateAvailable = false) {
+  return [
+    {
+      id: 'fixture-app-spfx',
+      packageName: 'fixture-app-spfx',
+      relativeDir: '.spfx-kit/apps/fixture-app-spfx',
+      status: 'connected',
+      version: {
+        autoUpdate: true,
+        current: selectedVersion === 'tag:v1.0.0' ? '1.0.0' : latestVersion,
+        selected: selectedVersion,
+        options: [
+          { id: 'latest', label: 'Latest' },
+          { id: 'tag:v1.0.0', label: 'v1.0.0' }
+        ],
+        canSelect: true,
+        updateAvailable,
+        source: 'clone'
+      }
+    },
+    {
+      id: 'dirty-app-spfx',
+      packageName: 'dirty-app-spfx',
+      relativeDir: '.spfx-kit/apps/dirty-app-spfx',
+      status: 'connected',
+      version: {
+        autoUpdate: true,
+        current: '2.0.0',
+        selected: 'latest',
+        options: [{ id: 'latest', label: 'Latest' }],
+        canSelect: false,
+        updateAvailable: true,
+        source: 'clone',
+        detail: 'Update paused because this app has local changes.'
+      }
+    }
+  ];
+}

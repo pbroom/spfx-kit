@@ -7,7 +7,9 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
+  Dropdown,
   Input,
+  Option,
   Switch
 } from '@fluentui/react-components';
 import { Check, FolderInput, FolderPlus, RefreshCw, Search, X } from 'lucide-react';
@@ -38,24 +40,76 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
   const [manageAppsStatus, setManageAppsStatus] = React.useState<ManageAppsStatus>({ phase: 'idle', message: '' });
   const [manageAppsBusyAppId, setManageAppsBusyAppId] = React.useState('');
   const [appFilter, setAppFilter] = React.useState('');
+  const refreshInFlightRef = React.useRef(false);
+  const mutationInFlightRef = React.useRef(false);
 
   const refreshManagedApps = React.useCallback(async (options: { quiet?: boolean } = {}): Promise<void> => {
+    if (refreshInFlightRef.current || mutationInFlightRef.current) {
+      return;
+    }
+    refreshInFlightRef.current = true;
+    setManageAppsBusyAppId('__all__');
     if (!options.quiet) {
       setManageAppsStatus({ phase: 'loading', message: 'Loading apps' });
     }
+    let autoUpdating = false;
+    let updatedCount = 0;
     try {
       const response = await fetch('/api/spfx-apps/');
       const result = await readApiJson<ManagedLabAppsApiResult>(response);
-      setManagedApps(result.apps);
-      if (!options.quiet) {
+      let apps = result.apps;
+      setManagedApps(apps);
+      const updates = apps.filter(
+        (app) =>
+          app.version.selected === 'latest' && app.version.autoUpdate && app.version.canSelect && app.version.updateAvailable
+      );
+      if (updates.length) {
+        autoUpdating = true;
+        mutationInFlightRef.current = true;
+        setManageAppsStatus({
+          phase: 'running',
+          message: updates.length === 1 ? 'Updating app' : 'Updating apps',
+          detail: 'Fetching the newest tracked versions.'
+        });
+        for (const app of updates) {
+          const updateResult = await requestAppVersion(app.id, 'latest');
+          apps = updateResult.apps;
+          updatedCount += 1;
+          setManagedApps(apps);
+        }
+        setManageAppsStatus({
+          phase: 'complete',
+          message: updates.length === 1 ? 'App updated' : `${updates.length} apps updated`,
+          detail: 'Reload the lab to apply the updated source.',
+          reloadRecommended: true
+        });
+      } else if (!options.quiet) {
         setManageAppsStatus({ phase: 'idle', message: '' });
       }
     } catch (error) {
-      setManageAppsStatus({
+      const nextStatus: ManageAppsStatus = {
         phase: 'error',
-        message: 'Could not load apps',
-        detail: error instanceof Error ? error.message : 'Unknown error.'
-      });
+        message: updatedCount ? 'Some apps were updated' : autoUpdating ? 'Apps were not updated' : 'Could not load apps',
+        detail: updatedCount
+          ? `${updatedCount} ${updatedCount === 1 ? 'app was' : 'apps were'} updated before another update failed. ${
+              error instanceof Error ? error.message : 'Unknown error.'
+            }`
+          : error instanceof Error
+            ? error.message
+            : 'Unknown error.',
+        reloadRecommended: updatedCount > 0
+      };
+      if (options.quiet && !updatedCount) {
+        setManageAppsStatus((current) => (current.reloadRecommended ? current : nextStatus));
+      } else {
+        setManageAppsStatus(nextStatus);
+      }
+    } finally {
+      if (autoUpdating) {
+        mutationInFlightRef.current = false;
+      }
+      refreshInFlightRef.current = false;
+      setManageAppsBusyAppId('');
     }
   }, []);
 
@@ -65,6 +119,16 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
       setManageAppsStatus({ phase: 'idle', message: '' });
       void refreshManagedApps();
     }
+  }, [open, refreshManagedApps]);
+
+  React.useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      void refreshManagedApps({ quiet: true });
+    }, 60_000);
+    return () => window.clearInterval(timer);
   }, [open, refreshManagedApps]);
 
   const managedAppRows = React.useMemo(
@@ -90,6 +154,10 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
   }, [appFilter, managedAppRows]);
 
   const runManageAppsAction = async (appId: string, action: 'unlink' | 'sync'): Promise<void> => {
+    if (mutationInFlightRef.current || refreshInFlightRef.current) {
+      return;
+    }
+    mutationInFlightRef.current = true;
     setManageAppsBusyAppId(appId);
     setManageAppsStatus({
       phase: 'running',
@@ -118,11 +186,16 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
         detail: error instanceof Error ? error.message : 'Unknown error.'
       });
     } finally {
+      mutationInFlightRef.current = false;
       setManageAppsBusyAppId('');
     }
   };
 
   const syncManagedApps = async (): Promise<void> => {
+    if (mutationInFlightRef.current || refreshInFlightRef.current) {
+      return;
+    }
+    mutationInFlightRef.current = true;
     setManageAppsBusyAppId('__all__');
     setManageAppsStatus({
       phase: 'running',
@@ -150,6 +223,39 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
         detail: error instanceof Error ? error.message : 'Unknown error.'
       });
     } finally {
+      mutationInFlightRef.current = false;
+      setManageAppsBusyAppId('');
+    }
+  };
+
+  const runAppVersionAction = async (appId: string, versionId: string): Promise<void> => {
+    if (mutationInFlightRef.current || refreshInFlightRef.current) {
+      return;
+    }
+    mutationInFlightRef.current = true;
+    setManageAppsBusyAppId(appId);
+    setManageAppsStatus({
+      phase: 'running',
+      message: 'Changing app version',
+      detail: managedAppPath(appId)
+    });
+    try {
+      const result = await requestAppVersion(appId, versionId);
+      setManagedApps(result.apps);
+      setManageAppsStatus({
+        phase: 'complete',
+        message: result.message,
+        detail: 'Reload the lab to apply the updated source.',
+        reloadRecommended: true
+      });
+    } catch (error) {
+      setManageAppsStatus({
+        phase: 'error',
+        message: 'App version needs attention',
+        detail: error instanceof Error ? error.message : 'Unknown error.'
+      });
+    } finally {
+      mutationInFlightRef.current = false;
       setManageAppsBusyAppId('');
     }
   };
@@ -184,16 +290,26 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
             </p>
             <div className="manage-apps-dialog__toolbar">
               <div className="manage-apps-dialog__toolbar-primary">
-                <Button appearance="primary" icon={<FolderPlus size={14} />} onClick={() => onOpenAddAppDrawer('create')}>
+                <Button
+                  appearance="primary"
+                  disabled={Boolean(manageAppsBusyAppId)}
+                  icon={<FolderPlus size={14} />}
+                  onClick={() => onOpenAddAppDrawer('create')}
+                >
                   Create
                 </Button>
-                <Button appearance="secondary" icon={<FolderInput size={14} />} onClick={() => onOpenAddAppDrawer('import')}>
+                <Button
+                  appearance="secondary"
+                  disabled={Boolean(manageAppsBusyAppId)}
+                  icon={<FolderInput size={14} />}
+                  onClick={() => onOpenAddAppDrawer('import')}
+                >
                   Import
                 </Button>
               </div>
               <Button
                 appearance="subtle"
-                disabled={manageAppsBusyAppId === '__all__' || manageAppsStatus.phase === 'loading'}
+                disabled={Boolean(manageAppsBusyAppId) || manageAppsStatus.phase === 'loading'}
                 icon={<RefreshCw size={14} />}
                 onClick={() => void syncManagedApps()}
               >
@@ -247,17 +363,48 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
                       className={`manage-app-row ${canToggleConnection ? '' : 'manage-app-row--has-badge'}`}
                       data-app-id={app.id}
                       key={app.id}
+                      aria-busy={busy}
                     >
                       <div className="manage-app-row__main">
                         <strong>{app.title}</strong>
                         <span className="manage-app-row__path" title={app.relativeDir}>
                           {middleTruncatePath(app.relativeDir)}
                         </span>
+                        {app.version.detail && (
+                          <span className="manage-app-row__version-detail" id={`app-version-detail-${app.id}`}>
+                            {app.version.detail}
+                          </span>
+                        )}
                       </div>
                       {!canToggleConnection && (
                         <span className="manage-app-row__badge manage-app-row__badge--missing">No adapter</span>
                       )}
                       <div className="manage-app-row__actions">
+                        <Dropdown
+                          aria-describedby={app.version.detail ? `app-version-detail-${app.id}` : undefined}
+                          aria-label={`Version for ${app.title}`}
+                          className="manage-app-row__version"
+                          disabled={busy || !app.version.canSelect}
+                          onOptionSelect={(_event, data) => {
+                            if (
+                              data.optionValue &&
+                              (data.optionValue !== app.version.selected ||
+                                app.version.updateAvailable ||
+                                (data.optionValue === 'latest' && !app.version.autoUpdate))
+                            ) {
+                              void runAppVersionAction(app.id, data.optionValue);
+                            }
+                          }}
+                          selectedOptions={[app.version.selected]}
+                          size="small"
+                          value={versionDropdownLabel(app)}
+                        >
+                          {app.version.options.map((option) => (
+                            <Option key={option.id} text={option.label} value={option.id}>
+                              {option.label}
+                            </Option>
+                          ))}
+                        </Dropdown>
                         {canToggleConnection ? (
                           <Switch
                             aria-label={`Connected: ${app.title}`}
@@ -306,4 +453,21 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
 function titleForManagedApp(app: ManagedLabApp, webPartsByAppId: Map<string, LabWebPart[]>): string {
   const registeredTitle = webPartsByAppId.get(app.id)?.[0]?.title;
   return registeredTitle || titleFromSlug(app.id);
+}
+
+function versionDropdownLabel(app: ManagedLabApp): string {
+  const selected = app.version.options.find((option) => option.id === app.version.selected)?.label || 'Version';
+  if (app.version.current === 'Unknown' || selected.replace(/^v/, '') === app.version.current) {
+    return selected;
+  }
+  return `${selected} · v${app.version.current}`;
+}
+
+async function requestAppVersion(appId: string, versionId: string): Promise<ManageAppsApiResult> {
+  const response = await fetch('/api/spfx-apps/version', {
+    method: 'POST',
+    headers: labApiWriteHeaders,
+    body: JSON.stringify({ appId, versionId })
+  });
+  return readApiJson<ManageAppsApiResult>(response);
 }

@@ -5,6 +5,7 @@ import {
   sanitizeOptionalRef,
   sanitizeRequiredText,
   sanitizeSlug,
+  sanitizeVersionId,
   sanitizeWebPartName
 } from '../apps/lab/server/sanitize';
 
@@ -57,6 +58,19 @@ describe('sanitizeOptionalRef', () => {
   it('rejects shell metacharacters', () => {
     expect(() => sanitizeOptionalRef('main; rm -rf /')).toThrow();
     expect(() => sanitizeOptionalRef('$(evil)')).toThrow();
+  });
+});
+
+describe('sanitizeVersionId', () => {
+  it('accepts Latest and opaque tag identifiers', () => {
+    expect(sanitizeVersionId('latest')).toBe('latest');
+    expect(sanitizeVersionId('tag:v1.2.3-beta.1')).toBe('tag:v1.2.3-beta.1');
+    expect(sanitizeVersionId('tag:v1.2.3+build.4')).toBe('tag:v1.2.3+build.4');
+  });
+
+  it('rejects paths and arbitrary Git refs', () => {
+    expect(() => sanitizeVersionId('../main')).toThrow();
+    expect(() => sanitizeVersionId('refs/heads/main')).toThrow();
   });
 });
 
