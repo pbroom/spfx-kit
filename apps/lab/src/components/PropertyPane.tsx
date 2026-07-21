@@ -34,6 +34,7 @@ import {
 } from '@spfx-kit/code-workbench-runtime';
 import { createMockSpfxContext } from '@spfx-kit/spfx-lab-runtime';
 import { CssEditor } from './CssEditor';
+import { resolveSelectControlState } from './propertyPaneSelectState';
 import { SourceEditor } from './SourceEditor';
 import { SourceWorkspace } from './SourceWorkspace';
 import type { SourceWorkspaceDocument } from './SourceWorkspace';
@@ -298,15 +299,14 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
   }
 
   if (control.type === 'select') {
-    const selectedValue = String(value ?? '');
     const options = control.getOptions ? control.getOptions(values) : control.options;
-    const selectedOption = options.find((option) => option.value === selectedValue);
+    const { selectedOption, selectedOptions, selectedValue } = resolveSelectControlState(value, options);
 
     return (
       <Field className="property-field" label={control.label} size="small">
         <Dropdown
           aria-label={control.label}
-          selectedOptions={selectedValue ? [selectedValue] : []}
+          selectedOptions={selectedOptions}
           value={selectedOption?.label || selectedValue}
           onOptionSelect={(_event, data) => {
             if (data.optionValue !== undefined) {
