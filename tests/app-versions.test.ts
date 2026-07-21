@@ -66,14 +66,23 @@ describe('managed app versions', () => {
     expect(await readPackageVersion(fixture.appDir)).toBe('1.2.0');
   });
 
-  it('refuses to change a dirty app or a feature-branch checkout', async () => {
+  it('stashes a dirty app before a manual version change and refuses a feature-branch checkout', async () => {
     const fixture = await createGitAppFixture();
     await writeFile(path.join(fixture.appDir, 'local-change.txt'), 'keep me\n', 'utf8');
 
-    await expect(selectManagedAppVersion(fixture.appDir, 'tag:v1.0.0')).rejects.toThrow('local changes');
-    expect(await readPackageVersion(fixture.appDir)).toBe('1.1.0');
+    expect(await describeManagedAppVersion(fixture.appDir)).toMatchObject({
+      canAutoUpdate: false,
+      canSelect: true,
+      detail: 'Automatic updates are paused because this app has local changes. Manual version changes save them to a Git stash.'
+    });
+    await expect(selectManagedAppVersion(fixture.appDir, 'tag:v1.0.0')).resolves.toMatchObject({
+      stashedLocalChanges: true
+    });
+    expect(await readPackageVersion(fixture.appDir)).toBe('1.0.0');
+    expect(git(fixture.appDir, 'stash', 'list')).toContain('spfx-kit: before switching to tag:v1.0.0');
+    expect(git(fixture.appDir, 'stash', 'show', '--include-untracked', '--name-only', 'stash@{0}')).toContain('local-change.txt');
 
-    await rm(path.join(fixture.appDir, 'local-change.txt'));
+    await selectManagedAppVersion(fixture.appDir, 'latest');
     git(fixture.appDir, 'switch', '-c', 'feature/work');
     await expect(selectManagedAppVersion(fixture.appDir, 'tag:v1.0.0')).rejects.toThrow('feature branch');
   });
@@ -118,9 +127,13 @@ describe('managed app versions', () => {
     git(fixture.sourceDir, 'commit', '-m', 'remote main commit');
     git(fixture.sourceDir, 'push', 'origin', 'main');
 
+    await writeFile(path.join(fixture.appDir, 'local-change.txt'), 'restore me\n', 'utf8');
+
     await expect(selectManagedAppVersion(fixture.appDir, 'latest')).rejects.toThrow('fast-forward');
     expect(git(fixture.appDir, 'branch', '--show-current')).toBe('');
     expect(git(fixture.appDir, 'rev-parse', 'HEAD')).toBe(pinnedHead);
+    expect(await readFile(path.join(fixture.appDir, 'local-change.txt'), 'utf8')).toBe('restore me\n');
+    expect(git(fixture.appDir, 'stash', 'list')).toBe('');
     expect(await describeManagedAppVersion(fixture.appDir)).toMatchObject({ selected: 'tag:v1.0.0' });
   });
 });

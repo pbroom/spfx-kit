@@ -157,8 +157,12 @@ test('tracks app versions, defaults to Latest, and can pin a release', async ({ 
   await expect(versionDropdown).toContainText('Latest · v1.3.0');
   await expect(versionDropdown).toBeEnabled();
   await expect.poll(() => requests).toEqual([{ appId: 'fixture-app-spfx', versionId: 'latest' }]);
-  await expect(dialog.getByText('Update paused because this app has local changes.')).toBeVisible();
-  await expect(dialog.getByRole('combobox', { name: 'Version for Dirty App' })).toBeDisabled();
+  await expect(
+    dialog.getByText(
+      'Automatic updates are paused because this app has local changes. Manual version changes save them to a Git stash.'
+    )
+  ).toBeVisible();
+  await expect(dialog.getByRole('combobox', { name: 'Version for Dirty App' })).toBeEnabled();
 
   const accessibility = await new AxeBuilder({ page })
     .include('.manage-apps-dialog')
@@ -251,19 +255,62 @@ test('keeps the version dropdown left of Connected on a narrow screen', async ({
   const row = dialog.locator('[data-app-id="fixture-app-spfx"]');
   const dropdownBox = await row.getByRole('combobox', { name: 'Version for Fixture App' }).boundingBox();
   const switchBox = await row.getByRole('switch', { name: 'Connected: Fixture App' }).boundingBox();
+  const connectionBox = await row.locator('.manage-app-row__connection').boundingBox();
   const mainBox = await row.locator('.manage-app-row__main').boundingBox();
   const actionsBox = await row.locator('.manage-app-row__actions').boundingBox();
   const dialogBox = await dialog.boundingBox();
   expect(dropdownBox).not.toBeNull();
   expect(switchBox).not.toBeNull();
+  expect(connectionBox).not.toBeNull();
   expect(dialogBox).not.toBeNull();
   expect(mainBox).not.toBeNull();
   expect(actionsBox).not.toBeNull();
   expect(dropdownBox!.x).toBeLessThan(switchBox!.x);
+  expect(dropdownBox!.x + dropdownBox!.width).toBeLessThanOrEqual(connectionBox!.x);
   expect(actionsBox!.y).toBeGreaterThan(mainBox!.y);
   expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
   expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(390);
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+});
+
+test('keeps the Manage Apps list width stable as its scrollbar appears and disappears', async ({ page }) => {
+  const apps = Array.from({ length: 8 }, (_value, index) => ({
+    ...managedAppFixtures('latest')[0],
+    id: `fixture-app-${index}`,
+    packageName: `fixture-app-${index}`,
+    relativeDir: `.spfx-kit/apps/fixture-app-${index}`,
+    title: `Fixture App ${index}`
+  }));
+  await page.route('**/api/spfx-apps/**', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ apps }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Manage apps' }).click();
+
+  const dialog = page.getByRole('dialog');
+  const list = dialog.locator('.manage-apps-list');
+  const before = await list.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    overflowing: element.scrollHeight > element.clientHeight,
+    scrollbarGutter: getComputedStyle(element).scrollbarGutter
+  }));
+  await dialog.getByPlaceholder('Filter by name or path').fill('Fixture App 0');
+  await expect(list.locator('.manage-app-row')).toHaveCount(1);
+  const after = await list.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    overflowing: element.scrollHeight > element.clientHeight,
+    scrollbarGutter: getComputedStyle(element).scrollbarGutter
+  }));
+  expect(before.overflowing).toBe(true);
+  expect(after.overflowing).toBe(false);
+  expect(before.scrollbarGutter).toBe('stable');
+  expect(after.scrollbarGutter).toBe('stable');
+  expect(after.clientWidth).toBe(before.clientWidth);
+  expect(await list.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 });
 
 test('pins one startup app and restores it after refresh', async ({ page }) => {
@@ -320,6 +367,7 @@ function managedAppFixtures(selectedVersion: string, latestVersion = '1.2.0', up
           { id: 'latest', label: 'Latest' },
           { id: 'tag:v1.0.0', label: 'v1.0.0' }
         ],
+        canAutoUpdate: true,
         canSelect: true,
         updateAvailable,
         source: 'clone'
@@ -335,10 +383,12 @@ function managedAppFixtures(selectedVersion: string, latestVersion = '1.2.0', up
         current: '2.0.0',
         selected: 'latest',
         options: [{ id: 'latest', label: 'Latest' }],
-        canSelect: false,
+        canAutoUpdate: false,
+        canSelect: true,
         updateAvailable: true,
         source: 'clone',
-        detail: 'Update paused because this app has local changes.'
+        detail:
+          'Automatic updates are paused because this app has local changes. Manual version changes save them to a Git stash.'
       }
     }
   ];

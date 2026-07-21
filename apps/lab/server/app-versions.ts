@@ -12,6 +12,7 @@ export interface ManagedAppVersionInfo {
   current: string;
   selected: string;
   options: ManagedAppVersionOption[];
+  canAutoUpdate: boolean;
   canSelect: boolean;
   updateAvailable: boolean;
   source: 'clone' | 'import' | 'local';
@@ -51,6 +52,7 @@ export async function describeManagedAppVersion(appDir: string): Promise<Managed
       autoUpdate: false,
       selected: 'local',
       options: [{ id: 'local', label: 'Unavailable' }],
+      canAutoUpdate: false,
       canSelect: false,
       updateAvailable: false,
       source: 'local',
@@ -69,6 +71,7 @@ async function describeManagedAppVersionUnsafe(appDir: string): Promise<ManagedA
       autoUpdate: false,
       selected: imported ? 'imported' : 'local',
       options: [{ id: imported ? 'imported' : 'local', label: imported ? 'Imported' : 'Local' }],
+      canAutoUpdate: false,
       canSelect: false,
       updateAvailable: false,
       source: imported ? 'import' : 'local',
@@ -83,6 +86,7 @@ async function describeManagedAppVersionUnsafe(appDir: string): Promise<ManagedA
       autoUpdate: false,
       selected: 'local',
       options: [{ id: 'local', label: 'Local' }],
+      canAutoUpdate: false,
       canSelect: false,
       updateAvailable: false,
       source: 'local',
@@ -107,7 +111,7 @@ async function describeManagedAppVersionUnsafe(appDir: string): Promise<ManagedA
         ? await describeLatestRelationship(appDir, head, remote.latest.sha, source, remote.latest.ref)
         : 'not-applicable';
     const safeRelationship = latestRelationship !== 'ahead' && latestRelationship !== 'diverged';
-    const canSelect = clean && onSafeCheckout && safeRelationship;
+    const canSelect = onSafeCheckout && safeRelationship;
     const currentLabel =
       typeof cloneMetadata.versionPolicy === 'string' && cloneMetadata.versionPolicy.startsWith('tag:')
         ? cloneMetadata.versionPolicy.slice(4)
@@ -123,24 +127,28 @@ async function describeManagedAppVersionUnsafe(appDir: string): Promise<ManagedA
       autoUpdate: cloneMetadata.autoUpdate === true,
       selected,
       options,
+      canAutoUpdate: clean && canSelect,
       canSelect,
       updateAvailable:
         selected === 'latest' ? latestRelationship === 'behind' : Boolean(selectedVersion && head !== selectedVersion.sha),
       source: 'clone',
-      ...(!clean
-        ? { detail: 'Update paused because this app has local changes.' }
-        : selected === 'current'
-          ? {
-              detail: branch
-                ? `Version changes are paused on tracked ref ${String(cloneMetadata.ref || branch)}.`
-                : 'The pinned version is no longer available. Choose Latest or another version.'
-            }
-          : !onSafeCheckout
-            ? { detail: `Update paused on feature branch ${branch || 'unknown'}.` }
-            : latestRelationship === 'ahead'
-              ? { detail: 'Update paused because this branch has local commits ahead of Latest.' }
-              : latestRelationship === 'diverged'
-                ? { detail: 'Update paused because this branch has diverged from Latest.' }
+      ...(selected === 'current'
+        ? {
+            detail: branch
+              ? `Version changes are paused on tracked ref ${String(cloneMetadata.ref || branch)}.`
+              : 'The pinned version is no longer available. Choose Latest or another version.'
+          }
+        : !onSafeCheckout
+          ? { detail: `Update paused on feature branch ${branch || 'unknown'}.` }
+          : latestRelationship === 'ahead'
+            ? { detail: 'Update paused because this branch has local commits ahead of Latest.' }
+            : latestRelationship === 'diverged'
+              ? { detail: 'Update paused because this branch has diverged from Latest.' }
+              : !clean
+                ? {
+                    detail:
+                      'Automatic updates are paused because this app has local changes. Manual version changes save them to a Git stash.'
+                  }
                 : selected === 'latest' && cloneMetadata.autoUpdate !== true
                   ? { detail: 'Select Latest to enable automatic updates.' }
                   : {})
@@ -151,6 +159,7 @@ async function describeManagedAppVersionUnsafe(appDir: string): Promise<ManagedA
       autoUpdate: false,
       selected: 'latest',
       options: [{ id: 'latest', label: 'Latest' }],
+      canAutoUpdate: false,
       canSelect: false,
       updateAvailable: false,
       source: 'clone',
@@ -159,7 +168,10 @@ async function describeManagedAppVersionUnsafe(appDir: string): Promise<ManagedA
   }
 }
 
-export async function selectManagedAppVersion(appDir: string, versionId: string): Promise<{ label: string; version: string }> {
+export async function selectManagedAppVersion(
+  appDir: string,
+  versionId: string
+): Promise<{ label: string; version: string; stashedLocalChanges: boolean }> {
   const canonicalAppDir = await realpath(appDir);
   if (appVersionUpdates.has(canonicalAppDir)) {
     throw new Error('A version update is already running for this app.');
@@ -172,7 +184,10 @@ export async function selectManagedAppVersion(appDir: string, versionId: string)
   }
 }
 
-async function selectManagedAppVersionUnlocked(appDir: string, versionId: string): Promise<{ label: string; version: string }> {
+async function selectManagedAppVersionUnlocked(
+  appDir: string,
+  versionId: string
+): Promise<{ label: string; version: string; stashedLocalChanges: boolean }> {
   const metadataPath = path.join(appDir, '.spfx-kit', 'clone.json');
   const metadata = await readJsonIfPresent<CloneMetadata>(metadataPath);
   const source = metadata ? await resolveCloneSource(appDir, metadata) : '';
@@ -186,10 +201,6 @@ async function selectManagedAppVersionUnlocked(appDir: string, versionId: string
     runGit(appDir, ['branch', '--show-current']),
     runGit(appDir, ['rev-parse', 'HEAD'])
   ]);
-  if (dirty) {
-    throw new Error('This app has local changes. Commit or stash them before changing versions.');
-  }
-
   const previousSelection = selectedVersionId(metadata, remote);
   const expectedBranch = remote.latest.ref.replace(/^refs\/heads\//, '');
   if (branch && branch !== expectedBranch) {
@@ -211,6 +222,7 @@ async function selectManagedAppVersionUnlocked(appDir: string, versionId: string
     throw new Error('That app version is no longer available. Refresh the list and try again.');
   }
 
+  const stashRef = dirty ? await stashLocalChanges(appDir, versionId) : '';
   let checkoutChanged = false;
   try {
     if (versionId === 'latest') {
@@ -243,9 +255,16 @@ async function selectManagedAppVersionUnlocked(appDir: string, versionId: string
     if (checkoutChanged) {
       await restoreCheckout(appDir, branch, head).catch(() => undefined);
     }
+    if (stashRef) {
+      await restoreStashedChanges(appDir, stashRef).catch(() => undefined);
+    }
     throw error;
   }
-  return { label: requested.label, version: await readPackageVersion(appDir) };
+  return {
+    label: requested.label,
+    version: await readPackageVersion(appDir),
+    stashedLocalChanges: Boolean(stashRef)
+  };
 }
 
 export function sortVersionTags(tags: string[]): string[] {
@@ -399,6 +418,24 @@ async function restoreCheckout(appDir: string, branch: string, sha: string): Pro
     return;
   }
   await runGit(appDir, ['switch', '--detach', sha], 0);
+}
+
+async function stashLocalChanges(appDir: string, versionId: string): Promise<string> {
+  const previousStash = await runGit(appDir, ['rev-parse', '--verify', '--quiet', 'refs/stash']).catch(() => '');
+  await runGit(appDir, ['stash', 'push', '--include-untracked', '--message', `spfx-kit: before switching to ${versionId}`], 0);
+  const stashRef = await runGit(appDir, ['rev-parse', '--verify', 'refs/stash']);
+  if (!stashRef || stashRef === previousStash) {
+    throw new Error('Local changes could not be saved before changing versions.');
+  }
+  return stashRef;
+}
+
+async function restoreStashedChanges(appDir: string, stashRef: string): Promise<void> {
+  await runGit(appDir, ['stash', 'apply', '--index', stashRef], 0);
+  const currentStash = await runGit(appDir, ['rev-parse', '--verify', 'refs/stash']);
+  if (currentStash === stashRef) {
+    await runGit(appDir, ['stash', 'drop', 'stash@{0}'], 0);
+  }
 }
 
 async function gitSucceeds(cwd: string, args: string[]): Promise<boolean> {
