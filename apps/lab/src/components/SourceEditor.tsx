@@ -44,6 +44,7 @@ let nextSourceEditorInstanceId = 0;
 const configuredCssIntellisense = new WeakSet<object>();
 const cssEditorTargetsByModel = new WeakMap<object, React.MutableRefObject<readonly CssEditorTarget[]>>();
 export const sourceEditorAcceptSuggestionOnEnter = 'on' as const;
+// Newlines stay excluded so completion does not reopen after every authored line break.
 export const sourceEditorCompletionTriggerCharacters = ['.', ':', '-', '#', ' '] as const;
 export const sourceEditorTabCompletion = 'on' as const;
 const labMonacoAdapter: SourceEditorMonacoAdapter = {
