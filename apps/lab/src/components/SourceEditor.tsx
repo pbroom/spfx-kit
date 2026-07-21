@@ -43,6 +43,10 @@ let configuredMonacoBaseUrl = '';
 let nextSourceEditorInstanceId = 0;
 const configuredCssIntellisense = new WeakSet<object>();
 const cssEditorTargetsByModel = new WeakMap<object, React.MutableRefObject<readonly CssEditorTarget[]>>();
+export const sourceEditorAcceptSuggestionOnEnter = 'on' as const;
+// Newlines stay excluded so completion does not reopen after every authored line break.
+export const sourceEditorCompletionTriggerCharacters = ['.', ':', '-', '#', ' '] as const;
+export const sourceEditorTabCompletion = 'on' as const;
 const labMonacoAdapter: SourceEditorMonacoAdapter = {
   async load(_baseUrl) {
     await import(
@@ -357,7 +361,7 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
               }}
               onChange={(value: string | undefined) => updateValue(value || '')}
               options={{
-                acceptSuggestionOnEnter: 'off',
+                acceptSuggestionOnEnter: sourceEditorAcceptSuggestionOnEnter,
                 autoClosingBrackets: 'always',
                 autoClosingQuotes: 'always',
                 automaticLayout: true,
@@ -376,7 +380,7 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
                 snippetSuggestions: 'top',
                 showFoldingControls: props.fillHeight ? 'always' : 'never',
                 suggestOnTriggerCharacters: true,
-                tabCompletion: 'on',
+                tabCompletion: sourceEditorTabCompletion,
                 tabSize: 2,
                 wordBasedSuggestions: 'off',
                 wordWrap: 'on',
@@ -465,7 +469,7 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
                   }}
                   onChange={(value: string | undefined) => updateValue(value || '')}
                   options={{
-                    acceptSuggestionOnEnter: 'off',
+                    acceptSuggestionOnEnter: sourceEditorAcceptSuggestionOnEnter,
                     autoClosingBrackets: 'always',
                     autoClosingQuotes: 'always',
                     automaticLayout: true,
@@ -482,7 +486,7 @@ export function SourceEditor(props: SourceEditorProps): JSX.Element {
                     snippetSuggestions: 'top',
                     showFoldingControls: 'always',
                     suggestOnTriggerCharacters: true,
-                    tabCompletion: 'on',
+                    tabCompletion: sourceEditorTabCompletion,
                     tabSize: 2,
                     wordBasedSuggestions: 'off',
                     wordWrap: 'on',
@@ -752,7 +756,6 @@ function handleSourceEditorMount(
 ): void {
   setCssEditorTargetsForModel(editor.getModel?.(), targetsRef);
   editor.updateOptions?.({ tabFocusMode: false });
-  installTabTraversalGuard(editor);
   if (onCloseShortcut) {
     installCloseShortcutGuard(editor, onCloseShortcut);
   }
@@ -789,24 +792,6 @@ function installCloseShortcutGuard(editor: any, onClose: () => void): void {
 
   editorNode.addEventListener('keydown', closeFloatingEditor, true);
   editor.onDidDispose?.(() => editorNode.removeEventListener('keydown', closeFloatingEditor, true));
-}
-
-function installTabTraversalGuard(editor: any): void {
-  const editorNode: HTMLElement | null | undefined = editor.getDomNode?.();
-  if (!editorNode) {
-    return;
-  }
-
-  const preventBrowserTabTraversal = (event: KeyboardEvent): void => {
-    if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) {
-      return;
-    }
-
-    event.preventDefault();
-  };
-
-  editorNode.addEventListener('keydown', preventBrowserTabTraversal, true);
-  editor.onDidDispose?.(() => editorNode.removeEventListener('keydown', preventBrowserTabTraversal, true));
 }
 
 export function appendCssTarget(source: string, target: CssEditorTarget, targetComment: string): string {
@@ -1042,7 +1027,7 @@ function registerSourceEditorCompletions(monaco: any): void {
   }
   configuredCssIntellisense.add(monaco);
   monaco.languages?.registerCompletionItemProvider?.('scss', {
-    triggerCharacters: ['.', ':', '-', '#', ' '],
+    triggerCharacters: [...sourceEditorCompletionTriggerCharacters],
     provideCompletionItems(model: any, position: any) {
       const word = model.getWordUntilPosition(position);
       const range = {

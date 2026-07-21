@@ -10,13 +10,19 @@ import {
   isCloseShortcut,
   replaceCssTargetSelector,
   resizeFloatingRect,
-  setCssEditorTargetsForModel
+  setCssEditorTargetsForModel,
+  sourceEditorAcceptSuggestionOnEnter,
+  sourceEditorCompletionTriggerCharacters,
+  sourceEditorTabCompletion
 } from '../apps/lab/src/components/SourceEditor';
 import { SourceWorkspace } from '../apps/lab/src/components/SourceWorkspace';
 import {
   createSourceEditorSuggestions as createProductionSourceEditorSuggestions,
   getCssEditorTargetsForModel as getProductionCssEditorTargetsForModel,
-  setCssEditorTargetsForModel as setProductionCssEditorTargetsForModel
+  setCssEditorTargetsForModel as setProductionCssEditorTargetsForModel,
+  sourceEditorAcceptSuggestionOnEnter as productionSourceEditorAcceptSuggestionOnEnter,
+  sourceEditorCompletionTriggerCharacters as productionSourceEditorCompletionTriggerCharacters,
+  sourceEditorTabCompletion as productionSourceEditorTabCompletion
 } from '../packages/source-editor-react/src/SourceEditorField';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -83,6 +89,15 @@ describe('source editor state', () => {
     expect(isCloseShortcut({ altKey: false, ctrlKey: true, key: 's', metaKey: false, shiftKey: false })).toBe(true);
     expect(isCloseShortcut({ altKey: false, ctrlKey: false, key: 'S', metaKey: true, shiftKey: false })).toBe(true);
     expect(isCloseShortcut({ altKey: false, ctrlKey: true, key: 's', metaKey: false, shiftKey: true })).toBe(false);
+  });
+
+  it('accepts visible completions without triggering suggestions on every newline', () => {
+    expect(sourceEditorAcceptSuggestionOnEnter).toBe('on');
+    expect(sourceEditorCompletionTriggerCharacters).not.toContain('\n');
+    expect(sourceEditorTabCompletion).toBe('on');
+    expect(productionSourceEditorAcceptSuggestionOnEnter).toBe('on');
+    expect(productionSourceEditorCompletionTriggerCharacters).not.toContain('\n');
+    expect(productionSourceEditorTabCompletion).toBe('on');
   });
 
   it('inserts and renames SCSS targets without changing similarly named selectors', () => {
