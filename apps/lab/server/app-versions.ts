@@ -252,11 +252,27 @@ async function selectManagedAppVersionUnlocked(
       autoUpdate: versionId === 'latest'
     });
   } catch (error) {
+    let recoveryError: unknown;
     if (checkoutChanged) {
-      await restoreCheckout(appDir, branch, head).catch(() => undefined);
+      try {
+        await restoreCheckout(appDir, branch, head);
+      } catch (restoreError) {
+        recoveryError = restoreError;
+      }
     }
-    if (stashRef) {
-      await restoreStashedChanges(appDir, stashRef).catch(() => undefined);
+    if (!recoveryError && stashRef) {
+      try {
+        await restoreStashedChanges(appDir, stashRef);
+      } catch (restoreError) {
+        recoveryError = restoreError;
+      }
+    }
+    if (recoveryError) {
+      const savedChangesMessage = stashRef ? ' Local changes remain saved in the Git stash.' : '';
+      throw new Error(
+        `Version update failed: ${errorMessage(error)} Recovery also failed: ${errorMessage(recoveryError)}${savedChangesMessage}`,
+        { cause: error }
+      );
     }
     throw error;
   }
@@ -436,6 +452,10 @@ async function restoreStashedChanges(appDir: string, stashRef: string): Promise<
   if (currentStash === stashRef) {
     await runGit(appDir, ['stash', 'drop', 'stash@{0}'], 0);
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function gitSucceeds(cwd: string, args: string[]): Promise<boolean> {

@@ -1,11 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { describeManagedAppVersion, selectManagedAppVersion, sortVersionTags } from '../apps/lab/server/app-versions';
 
 const temporaryDirectories: string[] = [];
+const gitExecutable = execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
@@ -136,6 +137,43 @@ describe('managed app versions', () => {
     expect(git(fixture.appDir, 'stash', 'list')).toBe('');
     expect(await describeManagedAppVersion(fixture.appDir)).toMatchObject({ selected: 'tag:v1.0.0' });
   });
+
+  it('reports a checkout recovery failure without applying saved changes to the wrong commit', async () => {
+    const fixture = await createDivergedPinnedFixture();
+    const pinnedHead = git(fixture.appDir, 'rev-parse', 'HEAD');
+    await writeFile(path.join(fixture.appDir, 'local-change.txt'), 'keep stashed\n', 'utf8');
+
+    await expect(
+      withFailingGitCommand(fixture.root, ['switch', '--detach', pinnedHead], 'simulated checkout recovery failure', () =>
+        selectManagedAppVersion(fixture.appDir, 'latest')
+      )
+    ).rejects.toThrow(
+      /Version update failed: .*fast-forward.*Recovery also failed: simulated checkout recovery failure.*Git stash/s
+    );
+
+    expect(git(fixture.appDir, 'branch', '--show-current')).toBe('main');
+    await expect(readFile(path.join(fixture.appDir, 'local-change.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(git(fixture.appDir, 'stash', 'list')).toContain('spfx-kit: before switching to latest');
+  });
+
+  it('reports a stash recovery failure and preserves the stash for manual recovery', async () => {
+    const fixture = await createDivergedPinnedFixture();
+    const pinnedHead = git(fixture.appDir, 'rev-parse', 'HEAD');
+    await writeFile(path.join(fixture.appDir, 'local-change.txt'), 'keep stashed\n', 'utf8');
+
+    await expect(
+      withFailingGitCommand(fixture.root, ['stash', 'apply'], 'simulated stash recovery failure', () =>
+        selectManagedAppVersion(fixture.appDir, 'latest')
+      )
+    ).rejects.toThrow(
+      /Version update failed: .*fast-forward.*Recovery also failed: simulated stash recovery failure.*Git stash/s
+    );
+
+    expect(git(fixture.appDir, 'branch', '--show-current')).toBe('');
+    expect(git(fixture.appDir, 'rev-parse', 'HEAD')).toBe(pinnedHead);
+    await expect(readFile(path.join(fixture.appDir, 'local-change.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(git(fixture.appDir, 'stash', 'list')).toContain('spfx-kit: before switching to latest');
+  });
 });
 
 async function createGitAppFixture() {
@@ -169,7 +207,47 @@ async function createGitAppFixture() {
     `${JSON.stringify({ source: remoteDir, ref: 'main', clonedAt: new Date().toISOString() }, null, 2)}\n`,
     'utf8'
   );
-  return { appDir, remoteDir, sourceDir };
+  return { appDir, remoteDir, root, sourceDir };
+}
+
+async function createDivergedPinnedFixture() {
+  const fixture = await createGitAppFixture();
+  await writePackageVersion(fixture.appDir, '1.1.1');
+  git(fixture.appDir, 'add', 'package.json');
+  git(fixture.appDir, 'commit', '-m', 'local main commit');
+  await selectManagedAppVersion(fixture.appDir, 'tag:v1.0.0');
+
+  await writePackageVersion(fixture.sourceDir, '1.2.0');
+  git(fixture.sourceDir, 'add', 'package.json');
+  git(fixture.sourceDir, 'commit', '-m', 'remote main commit');
+  git(fixture.sourceDir, 'push', 'origin', 'main');
+  return fixture;
+}
+
+async function withFailingGitCommand<T>(
+  root: string,
+  commandPrefix: string[],
+  message: string,
+  callback: () => Promise<T>
+): Promise<T> {
+  const shimDirectory = path.join(root, 'git-shim');
+  const shimPath = path.join(shimDirectory, 'git');
+  await mkdir(shimDirectory);
+  const condition = commandPrefix.map((argument, index) => `[ "$${index + 1}" = "${argument}" ]`).join(' && ');
+  await writeFile(
+    shimPath,
+    `#!/bin/sh\nif ${condition}; then\n  echo "${message}" >&2\n  exit 1\nfi\nexec "${gitExecutable}" "$@"\n`,
+    'utf8'
+  );
+  await chmod(shimPath, 0o755);
+
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${shimDirectory}:${previousPath || ''}`;
+  try {
+    return await callback();
+  } finally {
+    process.env.PATH = previousPath;
+  }
 }
 
 async function writePackageVersion(directory: string, version: string) {
