@@ -599,7 +599,7 @@ const workspaceCss = `.bt-source-workspace {
   justify-self: start;
   overflow-x: auto;
   border: 0;
-  background: #0b1220;
+  background: transparent;
 }
 
 .bt-source-workspace--floating .bt-source-workspace__tab {
@@ -623,6 +623,10 @@ const workspaceCss = `.bt-source-workspace {
 .bt-source-workspace--floating .bt-css-editor {
   min-height: 0;
   height: 100%;
+}
+
+.bt-source-workspace--floating .bt-css-editor--fill > .bt-floating-editor__toolbar {
+  margin-block-end: -6px;
 }
 
 .bt-source-workspace--floating .bt-source-workspace__body--split {

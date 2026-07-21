@@ -15,7 +15,7 @@ import {
   sourceEditorCompletionTriggerCharacters,
   sourceEditorTabCompletion
 } from '../apps/lab/src/components/SourceEditor';
-import { SourceWorkspace } from '../apps/lab/src/components/SourceWorkspace';
+import { SourceWorkspaceField as ProductionSourceWorkspace } from '../packages/source-editor-react/src/SourceWorkspaceField';
 import {
   SourceEditorField as ProductionSourceEditor,
   createSourceEditorSuggestions as createProductionSourceEditorSuggestions,
@@ -209,7 +209,7 @@ describe('source editor state', () => {
 
   it('renders one source workspace with CSS, HTML, and split views', () => {
     const markup = renderToStaticMarkup(
-      React.createElement(SourceWorkspace, {
+      React.createElement(ProductionSourceWorkspace, {
         label: 'Styles & template',
         description: 'Edit both sources together.',
         documents: [
@@ -244,6 +244,10 @@ describe('source editor state', () => {
     expect(markup).toContain('width: fit-content;');
     expect(markup).toContain('.bt-source-workspace--floating .bt-source-workspace__tabs {');
     expect(markup).toContain('border: 0;');
+    expect(markup).toContain('background: transparent;');
+    expect(markup).toContain(
+      '.bt-source-workspace--floating .bt-css-editor--fill &gt; .bt-floating-editor__toolbar {\n  margin-block-end: -6px;'
+    );
     expect(markup).toContain('.bt-source-workspace__pane {\n  display: grid;\n  grid-template-rows: minmax(0, 1fr);');
     expect(markup).toContain(
       '.bt-source-workspace__body--split .bt-source-workspace__pane {\n  grid-template-rows: auto minmax(0, 1fr);'
