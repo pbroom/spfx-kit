@@ -269,7 +269,7 @@ async function estimateAppExports(app: string) {
   };
 }
 
-async function describeConfiguredStandalonePackage(appRoot: string, targetDir: string) {
+export async function describeConfiguredStandalonePackage(appRoot: string, targetDir: string) {
   const configPath = path.join(appRoot, 'config', 'package-solution.json');
   const config = JSON.parse(await readFile(configPath, 'utf8')) as { paths?: { zippedPackage?: unknown } };
   const configuredPath = config.paths?.zippedPackage;
@@ -280,7 +280,11 @@ async function describeConfiguredStandalonePackage(appRoot: string, targetDir: s
   const sharepointDir = path.resolve(appRoot, 'sharepoint');
   const packagePath = path.resolve(sharepointDir, configuredPath);
   const relativePackagePath = path.relative(sharepointDir, packagePath);
-  if (relativePackagePath.startsWith('..') || path.isAbsolute(relativePackagePath) || path.extname(packagePath) !== '.sppkg') {
+  if (
+    relativePackagePath.startsWith('..') ||
+    path.isAbsolute(relativePackagePath) ||
+    path.extname(packagePath).toLowerCase() !== '.sppkg'
+  ) {
     throw new Error(`Invalid paths.zippedPackage in ${configPath}.`);
   }
 
