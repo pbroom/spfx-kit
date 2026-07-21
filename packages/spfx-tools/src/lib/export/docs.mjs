@@ -6,7 +6,8 @@ export async function writeExportReadme(outDir, slug, targets) {
     .map((target) => {
       const entryName = path.relative(outDir, target.dir).replace(/\\/g, '/');
       if (target.id === 'single') {
-        return `- \`${entryName}/\`: upload \`${slug}-standalone.sppkg\` to the SharePoint tenant app catalog. This package embeds its assets and does not need a CDN upload.`;
+        const packageFileName = target.files.find((file) => file.relativePath.endsWith('.sppkg'))?.relativePath || `${slug}.sppkg`;
+        return `- \`${entryName}/\`: upload \`${packageFileName}\` to the SharePoint tenant app catalog. This package embeds its assets and does not need a CDN upload.`;
       }
       if (target.id === 'cdn') {
         return `- \`${entryName}/\`: upload \`release/assets/\` to the configured CDN path, then upload the .sppkg in \`sharepoint/solution/\` to the SharePoint tenant app catalog.`;

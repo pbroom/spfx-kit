@@ -40,6 +40,7 @@ export interface ManageAppsApiResult extends ManagedLabAppsApiResult {
 
 export interface ExportEstimate {
   totalSize?: string;
+  packageFileName?: string;
   files?: Array<{ name: string; size: string }>;
 }
 

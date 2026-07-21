@@ -26,10 +26,10 @@ export async function exportSingleBundle(appDir, outDir, slug) {
   reportTargetProgress('single', 'assembling', 0.82, 'Copying SharePoint package into export.');
   const targetDir = path.join(outDir, exportDirNameForTarget('single', slug));
   await mkdir(targetDir, { recursive: true });
-  const packageFile = await copyExpectedSppkg(appDir, targetDir, `${slug}-standalone.sppkg`);
+  const packageFile = await copyExpectedSppkg(appDir, targetDir);
   const readmeFile = await writeSingleBundleReadme(targetDir, slug, path.basename(packageFile));
   reportTargetProgress('single', 'packaging', 0.94, 'Reading embedded bundle package contents.');
-  const target = await describeTarget('single', `${slug}-standalone`, targetDir, [packageFile, readmeFile]);
+  const target = await describeTarget('single', path.basename(packageFile), targetDir, [packageFile, readmeFile]);
   reportTargetProgress('single', 'complete', 1, 'Single bundle package assembled.');
   return target;
 }
@@ -96,7 +96,7 @@ function runShip(appDir) {
 
 async function copyExpectedSppkg(appDir, targetDir, targetName) {
   const { packagePath } = await verifySppkg(appDir);
-  const target = path.join(targetDir, targetName);
+  const target = path.join(targetDir, targetName || path.basename(packagePath));
   await cp(packagePath, target);
   return target;
 }

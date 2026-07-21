@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isSlugInput, middleTruncatePath, slugInputValue, slugify, titleFromSlug } from '../apps/lab/src/lib/text';
+import {
+  isSlugInput,
+  middleTruncatePath,
+  slugInputValue,
+  slugify,
+  sppkgFileNameFromAppId,
+  titleFromSlug
+} from '../apps/lab/src/lib/text';
 
 describe('slugify', () => {
   it('normalizes titles into slugs', () => {
@@ -15,6 +22,17 @@ describe('slugify', () => {
 describe('titleFromSlug', () => {
   it('drops the -spfx suffix and title-cases words', () => {
     expect(titleFromSlug('team-dashboard-spfx')).toBe('Team Dashboard');
+  });
+});
+
+describe('sppkgFileNameFromAppId', () => {
+  it('drops only a terminal -spfx suffix', () => {
+    expect(sppkgFileNameFromAppId('better-list-spfx')).toBe('better-list.sppkg');
+    expect(sppkgFileNameFromAppId('team-spfx-preview')).toBe('team-spfx-preview.sppkg');
+  });
+
+  it('provides a safe fallback for an empty app id', () => {
+    expect(sppkgFileNameFromAppId('')).toBe('spfx-web-part.sppkg');
   });
 });
 

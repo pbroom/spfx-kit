@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
 import { writeAppRepoFiles } from '../packages/spfx-tools/src/lib/app-repo-files.mjs';
 // @ts-expect-error plain .mjs module without type declarations
+import { writeExportReadme } from '../packages/spfx-tools/src/lib/export/docs.mjs';
+// @ts-expect-error plain .mjs module without type declarations
 import { parseArgs, required } from '../packages/spfx-tools/src/lib/args.mjs';
 // @ts-expect-error plain .mjs module without type declarations
 import {
@@ -97,5 +99,35 @@ describe('writeAppRepoFiles', () => {
     expect(await readFile(path.join(appDir, '.nvmrc'), 'utf8')).toBe('custom\n');
 
     expect(await writeAppRepoFiles(appDir)).toEqual([]);
+  });
+});
+
+describe('writeExportReadme', () => {
+  let exportDir = '';
+
+  afterEach(async () => {
+    if (exportDir) {
+      await rm(exportDir, { recursive: true, force: true });
+      exportDir = '';
+    }
+  });
+
+  it('documents the configured package filename from the export target', async () => {
+    exportDir = await mkdtemp(path.join(tmpdir(), 'spfx-kit-export-readme-'));
+    const targetDir = path.join(exportDir, 'better-list-spfx-standalone');
+    await writeExportReadme(exportDir, 'better-list-spfx', [
+      {
+        id: 'single',
+        dir: targetDir,
+        files: [
+          { relativePath: 'README.md', size: '1 KB' },
+          { relativePath: 'better-list.sppkg', size: '420 KB' }
+        ]
+      }
+    ]);
+
+    const readme = await readFile(path.join(exportDir, 'README.md'), 'utf8');
+    expect(readme).toContain('upload `better-list.sppkg`');
+    expect(readme).not.toContain('better-list-spfx-standalone.sppkg');
   });
 });
