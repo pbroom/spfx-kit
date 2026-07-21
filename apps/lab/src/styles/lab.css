@@ -341,8 +341,22 @@ textarea {
   gap: 8px;
 }
 
-.manage-apps-dialog__toolbar > :last-child {
+.manage-apps-dialog__sync-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
+}
+
+.manage-apps-dialog__last-synced {
+  color: var(--colorNeutralForeground2, #424242);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.manage-apps-dialog__sync-success-icon {
+  color: var(--colorPaletteGreenForeground1, #107c10);
 }
 
 .manage-apps-dialog__filter {
@@ -534,7 +548,7 @@ textarea {
 }
 
 @media (max-width: 640px) {
-  .manage-apps-dialog__toolbar > :last-child {
+  .manage-apps-dialog__sync-control {
     margin-left: 0;
   }
 

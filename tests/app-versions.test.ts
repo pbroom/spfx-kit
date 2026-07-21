@@ -103,6 +103,26 @@ describe('managed app versions', () => {
       detail: 'Update paused because this branch has diverged from Latest.'
     });
   });
+
+  it('restores a pinned checkout when returning to a diverged Latest branch fails', async () => {
+    const fixture = await createGitAppFixture();
+    await writePackageVersion(fixture.appDir, '1.1.1');
+    git(fixture.appDir, 'add', 'package.json');
+    git(fixture.appDir, 'commit', '-m', 'local main commit');
+
+    await selectManagedAppVersion(fixture.appDir, 'tag:v1.0.0');
+    const pinnedHead = git(fixture.appDir, 'rev-parse', 'HEAD');
+
+    await writePackageVersion(fixture.sourceDir, '1.2.0');
+    git(fixture.sourceDir, 'add', 'package.json');
+    git(fixture.sourceDir, 'commit', '-m', 'remote main commit');
+    git(fixture.sourceDir, 'push', 'origin', 'main');
+
+    await expect(selectManagedAppVersion(fixture.appDir, 'latest')).rejects.toThrow('fast-forward');
+    expect(git(fixture.appDir, 'branch', '--show-current')).toBe('');
+    expect(git(fixture.appDir, 'rev-parse', 'HEAD')).toBe(pinnedHead);
+    expect(await describeManagedAppVersion(fixture.appDir)).toMatchObject({ selected: 'tag:v1.0.0' });
+  });
 });
 
 async function createGitAppFixture() {

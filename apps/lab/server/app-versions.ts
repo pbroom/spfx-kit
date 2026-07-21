@@ -219,6 +219,7 @@ async function selectManagedAppVersionUnlocked(appDir: string, versionId: string
       await assertFetchedVersion(appDir, trackingRef, requested.sha);
       if (!branch) {
         await runGit(appDir, ['switch', expectedBranch], 0);
+        checkoutChanged = true;
       }
       await runGit(appDir, ['merge', '--ff-only', trackingRef], 0);
       checkoutChanged = true;

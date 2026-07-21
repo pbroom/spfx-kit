@@ -181,6 +181,60 @@ test('tracks app versions, defaults to Latest, and can pin a release', async ({ 
   await expect(dialog.getByRole('button', { name: 'Reload lab' })).toBeVisible();
 });
 
+test('shows compact feedback after re-syncing the app registry', async ({ page }) => {
+  let syncAttempts = 0;
+  await page.route('**/api/spfx-apps/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === 'POST' && url.pathname.endsWith('/sync')) {
+      syncAttempts += 1;
+      if (syncAttempts > 1) {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Sync failed.' }) });
+        return;
+      }
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          message: 'Synced the lab app registry.',
+          syncedAdapters: 1,
+          apps: managedAppFixtures('latest')
+        })
+      });
+      return;
+    }
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ apps: managedAppFixtures('latest') }) });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Manage apps' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Re-sync' }).click();
+
+  await expect(dialog.locator('.manage-apps-dialog__sync-success-icon')).toBeVisible();
+  await expect(dialog.getByText('Synced the lab app registry.')).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Reload lab' })).toHaveCount(0);
+  const timestamp = dialog.getByText(/^Last synced /);
+  await expect(timestamp).toBeVisible({ timeout: 3_000 });
+  await expect(dialog.locator('.manage-apps-dialog__sync-success-icon')).toHaveCount(0);
+  await expect(dialog.locator('.lucide-refresh-cw')).toBeVisible();
+
+  const timestampText = await timestamp.textContent();
+  const timestampBox = await timestamp.boundingBox();
+  const syncButtonBox = await dialog.getByRole('button', { name: 'Re-sync' }).boundingBox();
+  expect(timestampBox).not.toBeNull();
+  expect(syncButtonBox).not.toBeNull();
+  expect(timestampBox!.x + timestampBox!.width).toBeLessThanOrEqual(syncButtonBox!.x);
+
+  await dialog.getByRole('button', { name: 'Re-sync' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Apps were not re-synced');
+  await expect(dialog.getByRole('alert')).toContainText('Sync failed.');
+  await expect(timestamp).toHaveText(timestampText || '');
+  await expect(dialog.locator('.manage-apps-dialog__sync-success-icon')).toHaveCount(0);
+});
+
 test('keeps the version dropdown left of Connected on a narrow screen', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('**/api/spfx-apps/**', async (route) => {

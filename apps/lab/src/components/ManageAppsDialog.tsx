@@ -34,14 +34,19 @@ interface ManageAppsDialogProps {
   onOpenAddAppDrawer: (mode: AddAppMode) => void;
 }
 
+const SYNC_SUCCESS_DURATION_MS = 1_500;
+
 export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
   const { open, onOpenChange, webPartsByAppId, onOpenAddAppDrawer } = props;
   const [managedApps, setManagedApps] = React.useState<ManagedLabApp[]>([]);
   const [manageAppsStatus, setManageAppsStatus] = React.useState<ManageAppsStatus>({ phase: 'idle', message: '' });
   const [manageAppsBusyAppId, setManageAppsBusyAppId] = React.useState('');
+  const [lastSyncedAt, setLastSyncedAt] = React.useState<Date | null>(null);
+  const [showSyncSuccess, setShowSyncSuccess] = React.useState(false);
   const [appFilter, setAppFilter] = React.useState('');
   const refreshInFlightRef = React.useRef(false);
   const mutationInFlightRef = React.useRef(false);
+  const syncSuccessTimerRef = React.useRef<number | undefined>(undefined);
 
   const refreshManagedApps = React.useCallback(async (options: { quiet?: boolean } = {}): Promise<void> => {
     if (refreshInFlightRef.current || mutationInFlightRef.current) {
@@ -121,6 +126,15 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
     }
   }, [open, refreshManagedApps]);
 
+  React.useEffect(
+    () => () => {
+      if (syncSuccessTimerRef.current !== undefined) {
+        window.clearTimeout(syncSuccessTimerRef.current);
+      }
+    },
+    []
+  );
+
   React.useEffect(() => {
     if (!open) {
       return undefined;
@@ -197,11 +211,12 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
     }
     mutationInFlightRef.current = true;
     setManageAppsBusyAppId('__all__');
-    setManageAppsStatus({
-      phase: 'running',
-      message: 'Re-syncing apps',
-      detail: 'Regenerating the lab registry.'
-    });
+    if (syncSuccessTimerRef.current !== undefined) {
+      window.clearTimeout(syncSuccessTimerRef.current);
+      syncSuccessTimerRef.current = undefined;
+    }
+    setShowSyncSuccess(false);
+    setManageAppsStatus({ phase: 'idle', message: '' });
     try {
       const response = await fetch('/api/spfx-apps/sync', {
         method: 'POST',
@@ -210,12 +225,14 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
       });
       const result = await readApiJson<ManageAppsApiResult>(response);
       setManagedApps(result.apps);
-      setManageAppsStatus({
-        phase: 'complete',
-        message: result.message,
-        detail: `Synced ${result.syncedAdapters ?? 'the'} lab adapter${result.syncedAdapters === 1 ? '' : 's'}. Reload the lab to apply registry changes.`,
-        reloadRecommended: true
-      });
+      const syncedAt = new Date();
+      setLastSyncedAt(null);
+      setShowSyncSuccess(true);
+      syncSuccessTimerRef.current = window.setTimeout(() => {
+        setShowSyncSuccess(false);
+        setLastSyncedAt(syncedAt);
+        syncSuccessTimerRef.current = undefined;
+      }, SYNC_SUCCESS_DURATION_MS);
     } catch (error) {
       setManageAppsStatus({
         phase: 'error',
@@ -307,14 +324,32 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
                   Import
                 </Button>
               </div>
-              <Button
-                appearance="subtle"
-                disabled={Boolean(manageAppsBusyAppId) || manageAppsStatus.phase === 'loading'}
-                icon={<RefreshCw size={14} />}
-                onClick={() => void syncManagedApps()}
-              >
-                Re-sync
-              </Button>
+              <div className="manage-apps-dialog__sync-control">
+                {lastSyncedAt && (
+                  <time
+                    aria-live="polite"
+                    className="manage-apps-dialog__last-synced"
+                    dateTime={lastSyncedAt.toISOString()}
+                    title={lastSyncedAt.toLocaleString()}
+                  >
+                    Last synced {formatSyncTimestamp(lastSyncedAt)}
+                  </time>
+                )}
+                <Button
+                  appearance="subtle"
+                  disabled={Boolean(manageAppsBusyAppId) || manageAppsStatus.phase === 'loading'}
+                  icon={
+                    showSyncSuccess ? (
+                      <Check aria-hidden="true" className="manage-apps-dialog__sync-success-icon" size={14} />
+                    ) : (
+                      <RefreshCw aria-hidden="true" size={14} />
+                    )
+                  }
+                  onClick={() => void syncManagedApps()}
+                >
+                  Re-sync
+                </Button>
+              </div>
             </div>
 
             <Input
@@ -461,6 +496,14 @@ function versionDropdownLabel(app: ManagedLabApp): string {
     return selected;
   }
   return `${selected} · v${app.version.current}`;
+}
+
+function formatSyncTimestamp(value: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit'
+  }).format(value);
 }
 
 async function requestAppVersion(appId: string, versionId: string): Promise<ManageAppsApiResult> {
