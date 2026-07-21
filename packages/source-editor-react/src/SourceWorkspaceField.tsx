@@ -370,7 +370,10 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
 };
 
 function createSourceWorkspaceState(documents: readonly SourceWorkspaceDocument[]): SourceWorkspaceState {
-  const values = Object.fromEntries(documents.map((document) => [document.id, document.value || '']));
+  const values = documents.reduce<Record<string, string>>((result, document) => {
+    result[document.id] = document.value || '';
+    return result;
+  }, {});
   return {
     committedValues: values,
     drafts: { ...values },
