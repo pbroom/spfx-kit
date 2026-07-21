@@ -33,6 +33,7 @@ export interface SourceEditorFieldProps {
   targets?: readonly SourceEditorTarget[];
   targetComment?: string;
   onChange: (value: string) => void;
+  onDraftChange?: (value: string) => void;
   onTargetRename?: (target: SourceEditorTarget, nextSelector: string, nextValue: string) => void;
   embedded?: boolean;
   fillHeight?: boolean;
@@ -250,6 +251,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
   const updateValue = (value: string): void => {
     const diagnostics = getSourceDiagnostics(value, maxBytes, validate);
     setDraft(value);
+    props.onDraftChange?.(value);
     if (shouldCommitSource(commitMode, diagnostics)) {
       props.onChange(value);
     }
@@ -353,6 +355,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
         return;
       }
       setDraft(nextValue);
+      props.onDraftChange?.(nextValue);
       onTargetRename(target, nextSelector, nextValue);
       return;
     }

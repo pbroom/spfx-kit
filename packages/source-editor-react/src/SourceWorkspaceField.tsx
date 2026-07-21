@@ -5,7 +5,10 @@ import * as ReactDom from 'react-dom';
 import { SourceEditorField, constrainFloatingRect, isCloseShortcut, resizeFloatingRect } from './SourceEditorField';
 import type { FloatingRect, ResizeDirection, SourceEditorFieldProps } from './SourceEditorField';
 
-export interface SourceWorkspaceDocument extends Omit<SourceEditorFieldProps, 'embedded' | 'fillHeight' | 'showShortcuts'> {
+export interface SourceWorkspaceDocument extends Omit<
+  SourceEditorFieldProps,
+  'embedded' | 'fillHeight' | 'onDraftChange' | 'showShortcuts'
+> {
   id: string;
 }
 
@@ -17,6 +20,17 @@ export interface SourceWorkspaceFieldProps {
 }
 
 type WorkspaceView = string | 'split';
+
+interface SourceWorkspaceState {
+  committedValues: Record<string, string>;
+  drafts: Record<string, string>;
+  floatingOpen: boolean;
+}
+
+type SourceWorkspaceAction =
+  | { type: 'set-floating'; open: boolean }
+  | { type: 'sync-documents'; documents: readonly SourceWorkspaceDocument[] }
+  | { type: 'update-draft'; documentId: string; value: string };
 
 interface PointerInteraction {
   direction?: ResizeDirection;
@@ -52,7 +66,12 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
   const [view, setView] = React.useState<WorkspaceView>(() =>
     props.defaultView === 'split' && props.documents.length > 1 ? 'split' : firstDocumentId || 'split'
   );
-  const [floatingOpen, setFloatingOpen] = React.useState(false);
+  const [workspaceState, dispatchWorkspaceAction] = React.useReducer(
+    reduceSourceWorkspaceState,
+    props.documents,
+    createSourceWorkspaceState
+  );
+  const floatingOpen = workspaceState.floatingOpen;
   const [floatingRect, setFloatingRect] = React.useState<FloatingRect>(() => createInitialWorkspaceRect());
   const [pointerState, setPointerState] = React.useState<PointerInteraction | null>(null);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
@@ -69,6 +88,10 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
     }
     setView(firstDocumentId || 'split');
   }, [firstDocumentId, props.documents, view]);
+
+  React.useEffect(() => {
+    dispatchWorkspaceAction({ type: 'sync-documents', documents: props.documents });
+  }, [props.documents]);
 
   React.useEffect(() => {
     if (!pointerState) {
@@ -113,7 +136,7 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
   }, []);
 
   const closeFloatingWorkspace = React.useCallback((): void => {
-    setFloatingOpen(false);
+    dispatchWorkspaceAction({ type: 'set-floating', open: false });
     window.requestAnimationFrame(() => popoutButtonRef.current?.focus());
   }, []);
 
@@ -254,7 +277,7 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
             type="button"
             onClick={() => {
               setFloatingRect((current) => constrainFloatingRect(current));
-              setFloatingOpen(true);
+              dispatchWorkspaceAction({ type: 'set-floating', open: true });
               focusVisibleEditor();
             }}
           >
@@ -286,6 +309,8 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
                 fillHeight={floatingOpen}
                 height={document.height || 190}
                 showShortcuts={floatingOpen}
+                value={workspaceState.drafts[document.id] ?? document.value}
+                onDraftChange={(value) => dispatchWorkspaceAction({ type: 'update-draft', documentId: document.id, value })}
               />
             </section>
           );
@@ -307,6 +332,38 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
 
   return floatingOpen ? renderFloatingEditorLayer(workspace) : workspace;
 };
+
+function createSourceWorkspaceState(documents: readonly SourceWorkspaceDocument[]): SourceWorkspaceState {
+  const values = Object.fromEntries(documents.map((document) => [document.id, document.value || '']));
+  return {
+    committedValues: values,
+    drafts: { ...values },
+    floatingOpen: false
+  };
+}
+
+function reduceSourceWorkspaceState(state: SourceWorkspaceState, action: SourceWorkspaceAction): SourceWorkspaceState {
+  if (action.type === 'set-floating') {
+    return state.floatingOpen === action.open ? state : { ...state, floatingOpen: action.open };
+  }
+  if (action.type === 'update-draft') {
+    return state.drafts[action.documentId] === action.value
+      ? state
+      : { ...state, drafts: { ...state.drafts, [action.documentId]: action.value } };
+  }
+
+  const nextCommittedValues: Record<string, string> = {};
+  const nextDrafts: Record<string, string> = {};
+  let changed = Object.keys(state.committedValues).length !== action.documents.length;
+  for (const document of action.documents) {
+    const nextValue = document.value || '';
+    const previousCommittedValue = state.committedValues[document.id];
+    nextCommittedValues[document.id] = nextValue;
+    nextDrafts[document.id] = previousCommittedValue === nextValue ? (state.drafts[document.id] ?? nextValue) : nextValue;
+    changed ||= previousCommittedValue !== nextValue || state.drafts[document.id] !== nextDrafts[document.id];
+  }
+  return changed ? { ...state, committedValues: nextCommittedValues, drafts: nextDrafts } : state;
+}
 
 function handleTabKeyDown(
   event: React.KeyboardEvent<HTMLButtonElement>,
