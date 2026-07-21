@@ -723,6 +723,7 @@ function useShortcutToolbarOverflow(
     if (typeof ResizeObserver === 'function') {
       const observer = new ResizeObserver(measure);
       observer.observe(toolbar);
+      observer.observe(items);
       return () => observer.disconnect();
     }
 
