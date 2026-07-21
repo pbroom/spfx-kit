@@ -7,9 +7,17 @@ import {
   sanitizeOptionalRef,
   sanitizeRequiredText,
   sanitizeSlug,
+  sanitizeVersionId,
   sanitizeWebPartName
 } from './sanitize';
-import { listManagedLabApps, reconnectLabApp, runWorkspaceNodeCommand, syncLabRegistry, unlinkLabApp } from './workspace';
+import {
+  listManagedLabApps,
+  reconnectLabApp,
+  runWorkspaceNodeCommand,
+  syncLabRegistry,
+  unlinkLabApp,
+  updateManagedLabAppVersion
+} from './workspace';
 
 export function spfxAppApi(): Plugin {
   return {
@@ -69,6 +77,23 @@ export function spfxAppApi(): Plugin {
               appId: appId || undefined,
               message: reconnected ? `Reconnected ${appPathForMessage(appId)} to the lab.` : 'Synced the lab app registry.',
               syncedAdapters: sync.syncedAdapters,
+              apps: await listManagedLabApps()
+            });
+            return;
+          }
+
+          if (req.method === 'POST' && url.pathname === '/version') {
+            if (!verifyStateChangingLabRequest(req, res)) {
+              return;
+            }
+            const body = await readJsonBody(req);
+            const appId = sanitizeSlug(String(body.appId || ''));
+            const versionId = sanitizeVersionId(body.versionId);
+            const result = await updateManagedLabAppVersion(appId, versionId);
+            sendJson(res, {
+              appId,
+              message: result.message,
+              syncedAdapters: result.syncedAdapters,
               apps: await listManagedLabApps()
             });
             return;

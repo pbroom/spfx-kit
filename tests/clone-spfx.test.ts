@@ -99,7 +99,13 @@ describe('clone:spfx third-party flow', () => {
     expect(adapter).toContain('Their web part');
 
     const metadata = JSON.parse(await readFile(path.join(appDir, '.spfx-kit', 'clone.json'), 'utf8'));
-    expect(metadata).toMatchObject({ source: sourceRepoDir, ref: null, fork: forkUrl });
+    expect(metadata).toMatchObject({
+      source: sourceRepoDir,
+      ref: null,
+      fork: forkUrl,
+      versionPolicy: 'latest',
+      autoUpdate: true
+    });
   });
 
   it('keeps kit-generated files out of the clone git status', async () => {

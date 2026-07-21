@@ -39,6 +39,14 @@ export function sanitizeOptionalRef(value: unknown) {
   return trimmed;
 }
 
+export function sanitizeVersionId(value: unknown) {
+  const trimmed = String(value || '').trim();
+  if (trimmed === 'latest' || /^tag:[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(trimmed)) {
+    return trimmed;
+  }
+  throw new Error('Invalid app version.');
+}
+
 export function sanitizeWebPartName(value: unknown) {
   const trimmed = sanitizeRequiredText(value, 'Web part name is required.');
   if (!/^[A-Za-z][A-Za-z0-9 _-]*$/.test(trimmed)) {

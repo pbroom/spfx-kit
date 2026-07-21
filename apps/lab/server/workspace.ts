@@ -2,6 +2,9 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, readdir, realpath, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { appPathForMessage, legacyAppsDir, managedAppsDir, rootDir } from './paths';
+import { describeManagedAppVersion, ManagedAppVersionInfo, selectManagedAppVersion } from './app-versions';
+
+const managedAppVersionUpdates = new Set<string>();
 
 export interface ManagedLabApp {
   id: string;
@@ -10,6 +13,7 @@ export interface ManagedLabApp {
   status: 'connected' | 'disconnected' | 'missing';
   adapterPath?: string;
   disabledAdapterPath?: string;
+  version: ManagedAppVersionInfo;
 }
 
 export interface WorkspaceApp {
@@ -64,28 +68,59 @@ export async function syncLabRegistry() {
 }
 
 export async function listManagedLabApps(): Promise<ManagedLabApp[]> {
-  const apps: ManagedLabApp[] = [];
+  const apps = await Promise.all(
+    (await listManagedAppEntries()).map(async (entry): Promise<ManagedLabApp | undefined> => {
+      const app = await readWorkspaceApp(entry.id);
+      if (!app || app.packageName === '@spfx-kit/lab') {
+        return undefined;
+      }
 
-  for (const entry of await listManagedAppEntries()) {
-    const app = await readWorkspaceApp(entry.id);
-    if (!app || app.packageName === '@spfx-kit/lab') {
-      continue;
-    }
+      const [adapter, version] = await Promise.all([describeLabAdapter(app.dir), describeManagedAppVersion(app.dir)]);
+      return {
+        id: app.id,
+        packageName: app.packageName,
+        relativeDir: app.relativeDir,
+        status: adapter.status,
+        version,
+        ...(adapter.activePath ? { adapterPath: path.relative(rootDir, adapter.activePath).replace(/\\/g, '/') } : {}),
+        ...((await exists(adapter.disabledPath))
+          ? { disabledAdapterPath: path.relative(rootDir, adapter.disabledPath).replace(/\\/g, '/') }
+          : {})
+      };
+    })
+  );
 
-    const adapter = await describeLabAdapter(app.dir);
-    apps.push({
-      id: app.id,
-      packageName: app.packageName,
-      relativeDir: app.relativeDir,
-      status: adapter.status,
-      ...(adapter.activePath ? { adapterPath: path.relative(rootDir, adapter.activePath).replace(/\\/g, '/') } : {}),
-      ...((await exists(adapter.disabledPath))
-        ? { disabledAdapterPath: path.relative(rootDir, adapter.disabledPath).replace(/\\/g, '/') }
-        : {})
-    });
+  return apps.filter((app): app is ManagedLabApp => Boolean(app)).sort((a, b) => a.id.localeCompare(b.id));
+}
+
+export async function updateManagedLabAppVersion(
+  appId: string,
+  versionId: string
+): Promise<{ message: string; syncedAdapters?: number }> {
+  if (managedAppVersionUpdates.has(appId)) {
+    throw new Error('A version update is already running for this app.');
   }
-
-  return apps.sort((a, b) => a.id.localeCompare(b.id));
+  managedAppVersionUpdates.add(appId);
+  try {
+    const app = await requireWorkspaceApp(appId);
+    const selected = await selectManagedAppVersion(app.dir, versionId);
+    try {
+      const sync = await syncLabRegistry();
+      return {
+        message: `Updated ${app.relativeDir} to ${selected.label} (v${selected.version}).`,
+        syncedAdapters: sync.syncedAdapters
+      };
+    } catch (error) {
+      throw new Error(
+        `Updated ${app.relativeDir} to ${selected.label}, but the lab registry did not sync. Re-sync before reloading. ${
+          error instanceof Error ? error.message : ''
+        }`.trim(),
+        { cause: error }
+      );
+    }
+  } finally {
+    managedAppVersionUpdates.delete(appId);
+  }
 }
 
 export async function unlinkLabApp(appId: string): Promise<{ message: string; syncedAdapters?: number }> {

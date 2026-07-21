@@ -15,6 +15,16 @@ export interface ManagedLabApp {
   status: 'connected' | 'disconnected' | 'missing';
   adapterPath?: string;
   disabledAdapterPath?: string;
+  version: {
+    autoUpdate: boolean;
+    current: string;
+    selected: string;
+    options: Array<{ id: string; label: string }>;
+    canSelect: boolean;
+    updateAvailable: boolean;
+    source: 'clone' | 'import' | 'local';
+    detail?: string;
+  };
 }
 
 export interface ManagedLabAppsApiResult {
