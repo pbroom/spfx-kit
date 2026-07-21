@@ -44,9 +44,21 @@ describe('managed app source roots', () => {
       managedRoots: [firstAppRoot, secondAppRoot]
     });
 
+    const failedScan = refreshManagedAppSourceRoots(
+      refreshed.allowedRoots,
+      refreshed.managedRoots,
+      path.join(fixtureDir, 'missing')
+    );
+    expect(failedScan).toEqual(refreshed);
+
     await rm(path.join(appsDir, 'first-app'));
     await symlink(secondApp, path.join(appsDir, 'first-app'), 'dir');
     const repointed = refreshManagedAppSourceRoots(refreshed.allowedRoots, refreshed.managedRoots, appsDir);
     expect(repointed).toEqual({ allowedRoots: ['/workspace', secondAppRoot], managedRoots: [secondAppRoot] });
+
+    await rm(appsDir, { recursive: true });
+    await mkdir(appsDir);
+    const emptied = refreshManagedAppSourceRoots(repointed.allowedRoots, repointed.managedRoots, appsDir);
+    expect(emptied).toEqual({ allowedRoots: ['/workspace'], managedRoots: [] });
   });
 });

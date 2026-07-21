@@ -11,20 +11,32 @@ export function managedAppsDir(): string {
 }
 
 export function managedAppSourceRoots(appsDir = managedAppsDir()): string[] {
+  return scanManagedAppSourceRoots(appsDir).roots;
+}
+
+interface ManagedAppSourceRootScan {
+  roots: string[];
+  successful: boolean;
+}
+
+function scanManagedAppSourceRoots(appsDir: string): ManagedAppSourceRootScan {
   try {
-    return fs
-      .readdirSync(appsDir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-      .flatMap((entry) => {
-        try {
-          const sourceRoot = fs.realpathSync(path.join(appsDir, entry.name));
-          return fs.statSync(sourceRoot).isDirectory() ? [sourceRoot] : [];
-        } catch {
-          return [];
-        }
-      });
+    return {
+      roots: fs
+        .readdirSync(appsDir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+        .flatMap((entry) => {
+          try {
+            const sourceRoot = fs.realpathSync(path.join(appsDir, entry.name));
+            return fs.statSync(sourceRoot).isDirectory() ? [sourceRoot] : [];
+          } catch {
+            return [];
+          }
+        }),
+      successful: true
+    };
   } catch {
-    return [];
+    return { roots: [], successful: false };
   }
 }
 
@@ -38,8 +50,13 @@ export function refreshManagedAppSourceRoots(
   previousManagedRoots: readonly string[] = [],
   appsDir = managedAppsDir()
 ): ManagedAppSourceRootRefresh {
+  const scan = scanManagedAppSourceRoots(appsDir);
+  if (!scan.successful) {
+    return { allowedRoots: [...allowedRoots], managedRoots: [...previousManagedRoots] };
+  }
+
   const previousRoots = new Set(previousManagedRoots);
-  const managedRoots = [...new Set(managedAppSourceRoots(appsDir).map((sourceRoot) => sourceRoot.replace(/\\/g, '/')))];
+  const managedRoots = [...new Set(scan.roots.map((sourceRoot) => sourceRoot.replace(/\\/g, '/')))];
   return {
     allowedRoots: [...new Set([...allowedRoots.filter((allowedRoot) => !previousRoots.has(allowedRoot)), ...managedRoots])],
     managedRoots
