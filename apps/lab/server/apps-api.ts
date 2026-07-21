@@ -1,6 +1,6 @@
 import type { Plugin } from 'vite';
 import { readJsonBody, sendJson, verifyStateChangingLabRequest } from './http';
-import { appPathForMessage } from './paths';
+import { appPathForMessage, refreshManagedAppSourceRoots } from './paths';
 import {
   normalizeSpfxSlug,
   sanitizeAppName,
@@ -15,6 +15,21 @@ export function spfxAppApi(): Plugin {
   return {
     name: 'spfx-kit-app-api',
     configureServer(server) {
+      let managedSourceEntries = new Map<string, string>();
+      const refreshServerSourceRoots = (): void => {
+        const refreshed = refreshManagedAppSourceRoots(server.config.server.fs.allow, managedSourceEntries);
+        server.config.server.fs.allow = refreshed.allowedRoots;
+        managedSourceEntries = refreshed.managedEntries;
+      };
+      refreshServerSourceRoots();
+
+      const syncLabRegistryAndRefreshSourceRoots = async () => {
+        refreshServerSourceRoots();
+        const sync = await syncLabRegistry();
+        refreshServerSourceRoots();
+        return sync;
+      };
+
       server.middlewares.use('/api/spfx-apps', async (req, res, next) => {
         try {
           const url = new URL(req.url || '/', 'http://127.0.0.1');
@@ -29,7 +44,9 @@ export function spfxAppApi(): Plugin {
             }
             const body = await readJsonBody(req);
             const appId = sanitizeSlug(String(body.appId || ''));
+            refreshServerSourceRoots();
             const result = await unlinkLabApp(appId);
+            refreshServerSourceRoots();
             sendJson(res, {
               appId,
               message: result.message,
@@ -47,7 +64,7 @@ export function spfxAppApi(): Plugin {
             const requestedAppId = String(body.appId || '').trim();
             const appId = requestedAppId ? sanitizeSlug(requestedAppId) : '';
             const reconnected = appId ? await reconnectLabApp(appId) : false;
-            const sync = await syncLabRegistry();
+            const sync = await syncLabRegistryAndRefreshSourceRoots();
             sendJson(res, {
               appId: appId || undefined,
               message: reconnected ? `Reconnected ${appPathForMessage(appId)} to the lab.` : 'Synced the lab app registry.',
@@ -76,7 +93,7 @@ export function spfxAppApi(): Plugin {
               ...(force ? ['--force'] : [])
             ];
             const command = await runWorkspaceNodeCommand(args);
-            const sync = await syncLabRegistry();
+            const sync = await syncLabRegistryAndRefreshSourceRoots();
             const appId = normalizeSpfxSlug(name);
             sendJson(res, {
               appId,
@@ -106,7 +123,7 @@ export function spfxAppApi(): Plugin {
               ...(force ? ['--force'] : [])
             ];
             const command = await runWorkspaceNodeCommand(args);
-            const sync = await syncLabRegistry();
+            const sync = await syncLabRegistryAndRefreshSourceRoots();
             const appId = normalizeSpfxSlug(name);
             sendJson(res, {
               appId,
