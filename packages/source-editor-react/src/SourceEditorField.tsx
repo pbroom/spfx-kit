@@ -2,6 +2,7 @@
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import type * as BundledMonaco from 'monaco-editor/esm/vs/editor/editor.api';
+import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from '@fluentui/react-components';
 import { getSourceDiagnostics, shouldCommitSource } from './sourceEditorCore';
 import type {
   SourceEditorCommitMode,
@@ -653,7 +654,8 @@ interface SourceEditorShortcutToolbarProps {
 const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutToolbarProps> = (props) => {
   const toolbarRef = React.useRef<HTMLDivElement | null>(null);
   const itemsRef = React.useRef<HTMLDivElement | null>(null);
-  const menuRef = React.useRef<HTMLDetailsElement | null>(null);
+  const menuTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const [menuOpen, setMenuOpen] = React.useState(false);
   const shortcutSignature = [
     ...props.targets.map((target) => `${target.label}:${target.selector}:${target.editable ? 'editable' : 'fixed'}`),
     ...props.snippets.map((snippet) => `${snippet.label}:${snippet.searchText || snippet.snippet}`)
@@ -661,12 +663,54 @@ const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutT
   const isCollapsed = useShortcutToolbarOverflow(toolbarRef, itemsRef, shortcutSignature);
   const shortcutCount = props.targets.length + props.snippets.length;
 
+  React.useEffect(() => {
+    if (!isCollapsed && menuOpen) {
+      setMenuOpen(false);
+    }
+  }, [isCollapsed, menuOpen]);
+
   if (shortcutCount === 0) {
     return null;
   }
 
-  const closeMenu = (): void => {
-    menuRef.current?.removeAttribute('open');
+  const closeMenu = (restoreFocus = false): void => {
+    setMenuOpen(false);
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => menuTriggerRef.current?.focus());
+    }
+  };
+
+  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+      return;
+    }
+    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].indexOf(event.key) < 0) {
+      return;
+    }
+
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])'));
+    if (items.length === 0) {
+      return;
+    }
+
+    const currentItem = (event.target as HTMLElement).closest<HTMLElement>('[role="menuitem"]');
+    const currentIndex = currentItem ? items.indexOf(currentItem) : -1;
+    const nextIndex =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? items.length - 1
+          : event.key === 'ArrowUp'
+            ? currentIndex <= 0
+              ? items.length - 1
+              : currentIndex - 1
+            : currentIndex < 0 || currentIndex === items.length - 1
+              ? 0
+              : currentIndex + 1;
+
+    event.preventDefault();
+    event.stopPropagation();
+    items[nextIndex].focus();
   };
 
   const renderTarget = (target: SourceEditorTarget, location: 'inline' | 'menu'): React.ReactNode => {
@@ -782,6 +826,71 @@ const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutT
     );
   };
 
+  const renderMenuTarget = (target: SourceEditorTarget): React.ReactNode => {
+    const isEditing = props.editingTarget?.selector === target.selector;
+
+    return (
+      <React.Fragment key={`menu-${target.selector}`}>
+        <MenuItem aria-label={`Add or jump to ${target.selector}`} onClick={() => props.onApplyTarget(target)}>
+          {target.label}
+        </MenuItem>
+        {target.editable ? (
+          isEditing ? (
+            <MenuItem
+              aria-label={target.renameLabel || `Edit ${target.selector}`}
+              className="bt-floating-editor__shortcut-menu-edit-item"
+              persistOnClick
+            >
+              <input
+                aria-label={target.renameLabel || `Edit ${target.selector}`}
+                autoFocus
+                className="bt-floating-editor__target-input bt-floating-editor__target-input--menu"
+                value={props.editingTarget?.value || target.selector}
+                onBlur={(event) => props.onCommitTarget(target, event.currentTarget.value)}
+                onChange={(event) => props.onEditingTargetChange({ selector: target.selector, value: event.currentTarget.value })}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    props.onEditingTargetChange(null);
+                    closeMenu(true);
+                    return;
+                  }
+                  event.stopPropagation();
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    props.onCommitTarget(target, event.currentTarget.value);
+                    closeMenu(true);
+                  }
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+              />
+            </MenuItem>
+          ) : (
+            <MenuItem
+              aria-label={target.renameLabel || `Edit ${target.selector}`}
+              persistOnClick
+              onClick={() => props.onEditTarget(target)}
+            >
+              {target.renameLabel || `Edit ${target.label}`}
+            </MenuItem>
+          )
+        ) : null}
+      </React.Fragment>
+    );
+  };
+
+  const renderMenuSnippet = (snippet: SourceEditorSnippet): React.ReactNode => (
+    <MenuItem
+      aria-label={snippet.label}
+      key={`menu-${snippet.label}:${snippet.searchText || snippet.snippet}`}
+      onClick={() => props.onApplySnippet(snippet)}
+    >
+      {snippet.label}
+    </MenuItem>
+  );
+
   return (
     <div className="bt-floating-editor__toolbar" aria-label={props.ariaLabel} ref={toolbarRef} role="toolbar">
       <div
@@ -796,23 +905,33 @@ const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutT
         </div>
       </div>
       {isCollapsed ? (
-        <details className="bt-floating-editor__shortcut-menu" ref={menuRef}>
-          <summary
-            aria-haspopup="true"
-            aria-label={`Open ${props.ariaLabel}`}
-            className="bt-floating-editor__shortcut-menu-trigger"
-            role="button"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <span>Shortcuts</span>
-            <span className="bt-floating-editor__shortcut-menu-count">{shortcutCount}</span>
-            <ChevronDownIcon />
-          </summary>
-          <div aria-label={props.ariaLabel} className="bt-floating-editor__shortcut-menu-list" role="group">
-            {props.targets.map((target) => renderTarget(target, 'menu'))}
-            {props.snippets.map((snippet) => renderSnippet(snippet, 'menu'))}
-          </div>
-        </details>
+        <Menu
+          open={menuOpen}
+          positioning={{ align: 'start', position: 'below' }}
+          onOpenChange={(_event, data) => setMenuOpen(data.open)}
+        >
+          <MenuTrigger disableButtonEnhancement>
+            <button
+              aria-label={`Open ${props.ariaLabel}`}
+              className={`bt-floating-editor__shortcut-menu-trigger ${
+                menuOpen ? 'bt-floating-editor__shortcut-menu-trigger--open' : ''
+              }`}
+              ref={menuTriggerRef}
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <span>Shortcuts</span>
+              <span className="bt-floating-editor__shortcut-menu-count">{shortcutCount}</span>
+              <ChevronDownIcon />
+            </button>
+          </MenuTrigger>
+          <MenuPopover className="bt-floating-editor__shortcut-menu-popover">
+            <MenuList aria-label={props.ariaLabel} onKeyDown={handleMenuKeyDown}>
+              {props.targets.map(renderMenuTarget)}
+              {props.snippets.map(renderMenuSnippet)}
+            </MenuList>
+          </MenuPopover>
+        </Menu>
       ) : null}
     </div>
   );
@@ -1923,10 +2042,6 @@ const editorCss = `.bt-css-editor {
   pointer-events: none;
 }
 
-.bt-floating-editor__shortcut-menu {
-  position: relative;
-}
-
 .bt-floating-editor__shortcut-menu-trigger {
   display: inline-flex;
   min-height: 24px;
@@ -1941,11 +2056,6 @@ const editorCss = `.bt-css-editor {
   font-weight: 600;
   line-height: 16px;
   cursor: pointer;
-  list-style: none;
-}
-
-.bt-floating-editor__shortcut-menu-trigger::-webkit-details-marker {
-  display: none;
 }
 
 .bt-floating-editor__shortcut-menu-trigger svg {
@@ -1954,7 +2064,7 @@ const editorCss = `.bt-css-editor {
   transition: transform 120ms ease;
 }
 
-.bt-floating-editor__shortcut-menu[open] .bt-floating-editor__shortcut-menu-trigger svg {
+.bt-floating-editor__shortcut-menu-trigger--open svg {
   transform: rotate(180deg);
 }
 
@@ -1963,23 +2073,35 @@ const editorCss = `.bt-css-editor {
   font-variant-numeric: tabular-nums;
 }
 
-.bt-floating-editor__shortcut-menu-list {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 4px);
-  left: 0;
-  display: grid;
-  width: max-content;
+.bt-floating-editor__shortcut-menu-popover {
   min-width: 220px;
   max-width: min(360px, calc(100vw - 32px));
-  max-height: min(320px, calc(100vh - 180px));
-  gap: 4px;
+  max-height: min(320px, calc(100vh - 32px));
   overflow-y: auto;
-  border: 1px solid #475569;
-  border-radius: 8px;
-  padding: 6px;
-  background: #111827;
-  box-shadow: 0 12px 28px rgb(0 0 0 / 32%);
+  overscroll-behavior: contain;
+  scrollbar-color: #64748b transparent;
+  scrollbar-width: thin;
+}
+
+.bt-floating-editor__shortcut-menu-popover::-webkit-scrollbar {
+  width: 6px;
+}
+
+.bt-floating-editor__shortcut-menu-popover::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bt-floating-editor__shortcut-menu-popover::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #64748b;
+}
+
+.bt-floating-editor__shortcut-menu-edit-item {
+  min-width: 220px;
+}
+
+.bt-floating-editor__target-input--menu {
+  width: 100%;
 }
 
 .bt-floating-editor__target-button {
