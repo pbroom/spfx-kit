@@ -11,6 +11,7 @@ import {
   replaceCssTargetSelector,
   resizeFloatingRect,
   setCssEditorTargetsForModel,
+  shouldCollapseShortcutToolbar,
   sourceEditorAcceptSuggestionOnEnter,
   sourceEditorCompletionTriggerCharacters,
   sourceEditorTabCompletion
@@ -21,6 +22,7 @@ import {
   createSourceEditorSuggestions as createProductionSourceEditorSuggestions,
   getCssEditorTargetsForModel as getProductionCssEditorTargetsForModel,
   setCssEditorTargetsForModel as setProductionCssEditorTargetsForModel,
+  shouldCollapseShortcutToolbar as shouldCollapseProductionShortcutToolbar,
   sourceEditorAcceptSuggestionOnEnter as productionSourceEditorAcceptSuggestionOnEnter,
   sourceEditorCompletionTriggerCharacters as productionSourceEditorCompletionTriggerCharacters,
   sourceEditorTabCompletion as productionSourceEditorTabCompletion
@@ -29,6 +31,12 @@ import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 describe('source editor state', () => {
+  it('collapses shortcut tokens only when their measured width exceeds the toolbar', () => {
+    expect(shouldCollapseShortcutToolbar(640, 640)).toBe(false);
+    expect(shouldCollapseShortcutToolbar(640, 641)).toBe(true);
+    expect(shouldCollapseProductionShortcutToolbar(640, 641)).toBe(true);
+  });
+
   it('adds a UTF-8 byte limit diagnostic', () => {
     expect(getSourceDiagnostics('éé', 3)).toEqual([
       {
@@ -96,8 +104,10 @@ describe('source editor state', () => {
       })
     );
     expect(productionMarkup).toContain('style="height:100%;width:100%"');
-    expect(productionMarkup).toContain('scrollbar-width: none;');
-    expect(productionMarkup).toContain('.bt-floating-editor__toolbar::-webkit-scrollbar');
+    expect(productionMarkup).toContain(
+      '.bt-floating-editor__toolbar-items-viewport {\n  min-width: 0;\n  overflow: hidden;'
+    );
+    expect(productionMarkup).not.toContain('overflow-x: auto;');
   });
 
   it('recognizes the editor close shortcut without intercepting modified variants', () => {

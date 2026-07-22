@@ -66,7 +66,7 @@ export function ManageAppsDialog(props: ManageAppsDialogProps): JSX.Element {
       setManagedApps(apps);
       const updates = apps.filter(
         (app) =>
-          app.version.selected === 'latest' && app.version.autoUpdate && app.version.canSelect && app.version.updateAvailable
+          app.version.selected === 'latest' && app.version.autoUpdate && app.version.canAutoUpdate && app.version.updateAvailable
       );
       if (updates.length) {
         autoUpdating = true;

@@ -20,6 +20,7 @@ export interface ManagedLabApp {
     current: string;
     selected: string;
     options: Array<{ id: string; label: string }>;
+    canAutoUpdate: boolean;
     canSelect: boolean;
     updateAvailable: boolean;
     source: 'clone' | 'import' | 'local';
