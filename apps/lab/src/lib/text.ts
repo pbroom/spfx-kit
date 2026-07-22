@@ -20,6 +20,10 @@ export function titleFromSlug(value: string): string {
     .join(' ') || value;
 }
 
+export function sppkgFileNameFromAppId(value: string): string {
+  return `${value.replace(/-spfx$/, '') || 'spfx-web-part'}.sppkg`;
+}
+
 export function slugInputValue(value: string): string {
   return value
     .trimStart()

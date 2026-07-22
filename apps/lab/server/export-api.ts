@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import type { ServerResponse } from 'node:http';
 import path from 'node:path';
 import type { Plugin } from 'vite';
@@ -240,12 +240,11 @@ async function estimateAppExports(app: string) {
   const solutionDir = path.join(appRoot, 'sharepoint', 'solution');
   const releaseAssetsDir = path.join(appRoot, 'release', 'assets');
   const releaseManifestsDir = path.join(appRoot, 'release', 'manifests');
+  const standalonePackage = await describeConfiguredStandalonePackage(appRoot, `${app}-standalone`);
   return {
     single: {
-      files: [
-        ...(await describeExportPackageFile(solutionDir, `${app}-standalone/${app}-standalone.sppkg`)),
-        { name: `${app}-standalone/README.md`, size: 'generated' }
-      ],
+      packageFileName: standalonePackage.packageFileName,
+      files: [standalonePackage.file, { name: `${app}-standalone/README.md`, size: 'generated' }],
       totalSize: await describeDirSize(solutionDir)
     },
     cdn: {
@@ -267,6 +266,36 @@ async function estimateAppExports(app: string) {
       ],
       totalSize: 'Calculated on export'
     }
+  };
+}
+
+export async function describeConfiguredStandalonePackage(appRoot: string, targetDir: string) {
+  const configPath = path.join(appRoot, 'config', 'package-solution.json');
+  const config = JSON.parse(await readFile(configPath, 'utf8')) as { paths?: { zippedPackage?: unknown } };
+  const configuredPath = config.paths?.zippedPackage;
+  if (typeof configuredPath !== 'string' || !configuredPath.trim()) {
+    throw new Error(`Missing paths.zippedPackage in ${configPath}.`);
+  }
+
+  const sharepointDir = path.resolve(appRoot, 'sharepoint');
+  const packagePath = path.resolve(sharepointDir, configuredPath);
+  const relativePackagePath = path.relative(sharepointDir, packagePath);
+  if (
+    relativePackagePath.startsWith('..') ||
+    path.isAbsolute(relativePackagePath) ||
+    path.extname(packagePath).toLowerCase() !== '.sppkg'
+  ) {
+    throw new Error(`Invalid paths.zippedPackage in ${configPath}.`);
+  }
+
+  const packageFileName = path.basename(packagePath);
+  let size = 'from latest build';
+  try {
+    size = formatBytes((await stat(packagePath)).size);
+  } catch {}
+  return {
+    packageFileName,
+    file: { name: `${targetDir}/${packageFileName}`, size }
   };
 }
 

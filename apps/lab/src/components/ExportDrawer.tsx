@@ -20,7 +20,7 @@ import {
   ExportPackageFormat,
   ExportProgressPhase
 } from '../api/labApi';
-import { slugify } from '../lib/text';
+import { slugify, sppkgFileNameFromAppId } from '../lib/text';
 
 type ExportSelections = Record<ExportPackageFormat, boolean>;
 
@@ -518,16 +518,17 @@ function getExportOptionStatus(
 }
 
 function createExportPackageOptions(slug: string, estimates: ExportEstimates): ExportPackageOption[] {
+  const singlePackageFileName = estimates.single?.packageFileName || sppkgFileNameFromAppId(slug);
   return [
     {
       id: 'single',
-      label: `${slug}-standalone`,
+      label: singlePackageFileName,
       description: 'Exports one SharePoint package with the web part bundle embedded for tenant app catalog upload.',
       totalSize: estimates.single?.totalSize || 'Calculated on export',
       files: estimates.single?.files?.length
         ? estimates.single.files
         : [
-            { name: `${slug}-standalone/${slug}-standalone.sppkg`, size: '~420 KB' },
+            { name: `${slug}-standalone/${singlePackageFileName}`, size: '~420 KB' },
             { name: `${slug}-standalone/README.md`, size: 'generated' }
           ]
     },
