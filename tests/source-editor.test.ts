@@ -104,9 +104,7 @@ describe('source editor state', () => {
       })
     );
     expect(productionMarkup).toContain('style="height:100%;width:100%"');
-    expect(productionMarkup).toContain(
-      '.bt-floating-editor__toolbar-items-viewport {\n  min-width: 0;\n  overflow: hidden;'
-    );
+    expect(productionMarkup).toContain('.bt-floating-editor__toolbar-items-viewport {\n  min-width: 0;\n  overflow: hidden;');
     expect(productionMarkup).not.toContain('overflow-x: auto;');
   });
 
