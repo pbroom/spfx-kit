@@ -106,6 +106,17 @@ describe('source editor state', () => {
     expect(productionMarkup).toContain('style="height:100%;width:100%"');
     expect(productionMarkup).toContain('.bt-floating-editor__toolbar-items-viewport {\n  min-width: 0;\n  overflow: hidden;');
     expect(productionMarkup).not.toContain('overflow-x: auto;');
+    expect(productionMarkup).not.toContain('max-height: min(320px, calc(100vh - 32px));');
+    expect(productionMarkup).not.toContain('overflow-y: auto;');
+    expect(productionMarkup).toContain('overflow: visible;');
+    expect(productionMarkup).toContain('background: #0f172a;');
+    expect(productionMarkup).toContain(
+      '.bt-floating-editor__shortcut-menu-trigger {\n  min-width: 0;\n  min-height: 28px;\n  column-gap: 6px;'
+    );
+    expect(productionMarkup).toContain('border-radius: 6px;\n  padding: 4px 8px;');
+    expect(productionMarkup).toContain('.bt-floating-editor__shortcut-menu-trigger.fui-MenuButton:hover:active,');
+    expect(productionMarkup).toContain('border-radius: 4px;\n  padding: 4px 8px;\n  color: #f8fafc;');
+    expect(productionMarkup).toContain('font-size: 12px;\n  line-height: 16px;\n  opacity: 1;');
   });
 
   it('recognizes the editor close shortcut without intercepting modified variants', () => {

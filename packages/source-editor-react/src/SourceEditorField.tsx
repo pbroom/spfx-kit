@@ -2,7 +2,7 @@
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import type * as BundledMonaco from 'monaco-editor/esm/vs/editor/editor.api';
-import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from '@fluentui/react-components';
+import { Menu, MenuButton, MenuItem, MenuList, MenuPopover, MenuTrigger } from '@fluentui/react-components';
 import { getSourceDiagnostics, shouldCommitSource } from './sourceEditorCore';
 import type {
   SourceEditorCommitMode,
@@ -906,24 +906,24 @@ const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutT
       </div>
       {isCollapsed ? (
         <Menu
+          inline
           open={menuOpen}
           positioning={{ align: 'start', position: 'below' }}
+          surfaceMotion={null}
           onOpenChange={(_event, data) => setMenuOpen(data.open)}
         >
           <MenuTrigger disableButtonEnhancement>
-            <button
+            <MenuButton
+              appearance="secondary"
               aria-label={`Open ${props.ariaLabel}`}
-              className={`bt-floating-editor__shortcut-menu-trigger ${
-                menuOpen ? 'bt-floating-editor__shortcut-menu-trigger--open' : ''
-              }`}
+              className="bt-floating-editor__shortcut-menu-trigger"
               ref={menuTriggerRef}
-              type="button"
+              size="small"
               onPointerDown={(event) => event.stopPropagation()}
             >
               <span>Shortcuts</span>
               <span className="bt-floating-editor__shortcut-menu-count">{shortcutCount}</span>
-              <ChevronDownIcon />
-            </button>
+            </MenuButton>
           </MenuTrigger>
           <MenuPopover className="bt-floating-editor__shortcut-menu-popover">
             <MenuList aria-label={props.ariaLabel} onKeyDown={handleMenuKeyDown}>
@@ -1015,14 +1015,6 @@ function EditIcon(): JSX.Element {
         d="M14.7 2.3a1.1 1.1 0 0 1 1.6 0l1.4 1.4a1.1 1.1 0 0 1 0 1.6l-9.9 9.9-4.1 1.1 1.1-4.1 9.9-9.9Zm-8.8 10.5-.5 1.8 1.8-.5 7.2-7.2-1.3-1.3-7.2 7.2Z"
         fill="currentColor"
       />
-    </svg>
-  );
-}
-
-function ChevronDownIcon(): JSX.Element {
-  return (
-    <svg aria-hidden="true" focusable="false" viewBox="0 0 20 20">
-      <path d="m5.8 7.5 4.2 4.2 4.2-4.2 1.1 1.1-5.3 5.3-5.3-5.3 1.1-1.1Z" fill="currentColor" />
     </svg>
   );
 }
@@ -2054,58 +2046,97 @@ const editorCss = `.bt-css-editor {
   pointer-events: none;
 }
 
-.bt-floating-editor__shortcut-menu-trigger {
-  display: inline-flex;
-  min-height: 24px;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid #475569;
-  border-radius: 6px;
-  padding: 3px 8px;
-  color: #dbeafe;
-  background: #1e293b;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
-  cursor: pointer;
-}
-
-.bt-floating-editor__shortcut-menu-trigger svg {
-  width: 14px;
-  height: 14px;
-  transition: transform 120ms ease;
-}
-
-.bt-floating-editor__shortcut-menu-trigger--open svg {
-  transform: rotate(180deg);
-}
-
 .bt-floating-editor__shortcut-menu-count {
   color: #94a3b8;
   font-variant-numeric: tabular-nums;
 }
 
+.bt-floating-editor__shortcut-menu-trigger {
+  min-width: 0;
+  min-height: 28px;
+  column-gap: 6px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: #dbeafe;
+  background: #1e293b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  opacity: 1;
+  transition:
+    background-color 50ms ease,
+    border-color 50ms ease,
+    color 50ms ease;
+}
+
+.bt-floating-editor__shortcut-menu-trigger:hover,
+.bt-floating-editor__shortcut-menu-trigger:focus-visible,
+.bt-floating-editor__shortcut-menu-trigger:active,
+.bt-floating-editor__shortcut-menu-trigger[aria-expanded='true'] {
+  border-color: #64748b;
+  color: #f8fafc;
+  background: #273449;
+  opacity: 1;
+}
+
+.bt-floating-editor__shortcut-menu-trigger.fui-MenuButton:hover:active,
+.bt-floating-editor__shortcut-menu-trigger.fui-MenuButton:active:focus-visible {
+  border-color: #64748b;
+  color: #f8fafc;
+  background: #273449;
+  opacity: 1;
+}
+
+.bt-floating-editor__shortcut-menu-trigger:hover .bt-floating-editor__shortcut-menu-count,
+.bt-floating-editor__shortcut-menu-trigger:focus-visible .bt-floating-editor__shortcut-menu-count,
+.bt-floating-editor__shortcut-menu-trigger:active .bt-floating-editor__shortcut-menu-count,
+.bt-floating-editor__shortcut-menu-trigger[aria-expanded='true'] .bt-floating-editor__shortcut-menu-count {
+  color: #cbd5e1;
+}
+
+.bt-floating-editor__shortcut-menu-trigger .fui-MenuButton__menuIcon {
+  margin-left: 0;
+}
+
 .bt-floating-editor__shortcut-menu-popover {
+  z-index: 7;
   min-width: 220px;
   max-width: min(360px, calc(100vw - 32px));
-  max-height: min(320px, calc(100vh - 32px));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: #64748b transparent;
-  scrollbar-width: thin;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 4px;
+  color: #f8fafc;
+  background: #0f172a;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 35%);
+  overflow: visible;
 }
 
-.bt-floating-editor__shortcut-menu-popover::-webkit-scrollbar {
-  width: 6px;
-}
-
-.bt-floating-editor__shortcut-menu-popover::-webkit-scrollbar-track {
+.bt-floating-editor__shortcut-menu-popover .fui-MenuItem {
+  min-height: 28px;
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: #f8fafc;
   background: transparent;
+  font-size: 12px;
+  line-height: 16px;
+  opacity: 1;
+  transition:
+    background-color 50ms ease,
+    color 50ms ease;
 }
 
-.bt-floating-editor__shortcut-menu-popover::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: #64748b;
+.bt-floating-editor__shortcut-menu-popover .fui-MenuItem__content {
+  padding-inline: 0;
+}
+
+.bt-floating-editor__shortcut-menu-popover .fui-MenuItem:hover,
+.bt-floating-editor__shortcut-menu-popover .fui-MenuItem:focus,
+.bt-floating-editor__shortcut-menu-popover .fui-MenuItem:focus-visible,
+.bt-floating-editor__shortcut-menu-popover .fui-MenuItem:active {
+  color: #ffffff;
+  background: #1e293b;
+  opacity: 1;
 }
 
 .bt-floating-editor__shortcut-menu-edit-item {
