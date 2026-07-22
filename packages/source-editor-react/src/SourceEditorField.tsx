@@ -972,8 +972,20 @@ function useShortcutToolbarOverflow(
       return () => observer.disconnect();
     }
 
+    const workspace = toolbar.closest<HTMLElement>('.bt-source-workspace');
+    let mutationObserver: MutationObserver | undefined;
+    if (workspace && typeof MutationObserver === 'function') {
+      mutationObserver = new MutationObserver(measure);
+      mutationObserver.observe(workspace, {
+        attributeFilter: ['class', 'style'],
+        attributes: true
+      });
+    }
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    return () => {
+      mutationObserver?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, [itemsRef, shortcutSignature, toolbarRef]);
 
   return isCollapsed;

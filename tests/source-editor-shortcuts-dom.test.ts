@@ -152,6 +152,52 @@ describe('SourceEditorField shortcut overflow menu', () => {
     expect(document.body.querySelector('[role="menu"]')).toBeNull();
   });
 
+  it('remeasures workspace style mutations without ResizeObserver and disconnects on cleanup', async () => {
+    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+    const NativeMutationObserver = MutationObserver;
+    const workspaceDisconnect = vi.fn();
+    class TrackingMutationObserver extends NativeMutationObserver {
+      private observesWorkspace = false;
+
+      public observe(target: Node, options?: MutationObserverInit): void {
+        this.observesWorkspace = target instanceof Element && target.classList.contains('bt-source-workspace');
+        super.observe(target, options);
+      }
+
+      public disconnect(): void {
+        if (this.observesWorkspace) {
+          workspaceDisconnect();
+        }
+        super.disconnect();
+      }
+    }
+    vi.stubGlobal('MutationObserver', TrackingMutationObserver);
+    await renderEditor({
+      snippets: [
+        { label: 'Web part', snippet: '.better-list {}' },
+        { label: 'Header', snippet: '.better-list__header {}' }
+      ]
+    });
+
+    expect(getMenuTrigger()).not.toBeNull();
+
+    toolbarWidth = 800;
+    const workspace = container.querySelector<HTMLElement>('.bt-source-workspace');
+    expect(workspace).not.toBeNull();
+    act(() => {
+      (workspace as HTMLElement).style.width = '800px';
+    });
+    await settleMutationObserver();
+
+    expect(container.querySelector('button[aria-label="Open SCSS editor shortcuts"]')).toBeNull();
+
+    act(() => {
+      ReactDom.unmountComponentAtNode(container);
+    });
+    expect(workspaceDisconnect).toHaveBeenCalledTimes(1);
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
+  });
+
   async function renderEditor(
     options: Pick<React.ComponentProps<typeof SourceEditorField>, 'onChange' | 'snippets' | 'targets'>
   ): Promise<void> {
@@ -160,16 +206,20 @@ describe('SourceEditorField shortcut overflow menu', () => {
         React.createElement(
           FluentProvider,
           { theme: webLightTheme },
-          React.createElement(SourceEditorField, {
-            config: { monacoAdapter: unavailableMonaco },
-            label: 'Custom CSS/SCSS',
-            language: 'scss',
-            onChange: options.onChange || (() => undefined),
-            showShortcuts: true,
-            snippets: options.snippets,
-            targets: options.targets,
-            value: ''
-          })
+          React.createElement(
+            'div',
+            { className: 'bt-source-workspace' },
+            React.createElement(SourceEditorField, {
+              config: { monacoAdapter: unavailableMonaco },
+              label: 'Custom CSS/SCSS',
+              language: 'scss',
+              onChange: options.onChange || (() => undefined),
+              showShortcuts: true,
+              snippets: options.snippets,
+              targets: options.targets,
+              value: ''
+            })
+          )
         ),
         container
       );
@@ -210,4 +260,9 @@ function pressKey(target: HTMLElement, key: string): void {
 async function settleMenu(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
+}
+
+async function settleMutationObserver(): Promise<void> {
+  await new Promise((resolve) => window.setTimeout(resolve, 0));
+  await settleMenu();
 }
