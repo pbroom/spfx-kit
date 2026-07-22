@@ -20,11 +20,13 @@
     "@spfx-kit/source-editor-core": "file:../source-editor-core"
   },
   "peerDependencies": {
+    "@fluentui/react-components": ">=9.74.3 <10.0.0",
     "monaco-editor": ">=0.50.0 <1.0.0",
     "react": ">=17.0.0 <18.0.0",
     "react-dom": ">=17.0.0 <18.0.0"
   },
   "devDependencies": {
+    "@fluentui/react-components": "9.74.3",
     "@types/react": "17.0.45",
     "@types/react-dom": "17.0.17",
     "monaco-editor": "0.53.0",
