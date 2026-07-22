@@ -61,7 +61,6 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
   }
 
   const idPrefix = `source-workspace-${instanceIdRef.current}`;
-  const panelId = `${idPrefix}-panel`;
   const firstDocumentId = props.documents[0]?.id;
   const [view, setView] = React.useState<WorkspaceView>(() =>
     props.defaultView === 'split' && props.documents.length > 1 ? 'split' : firstDocumentId || 'split'
@@ -74,7 +73,8 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
   const floatingOpen = workspaceState.floatingOpen;
   const [floatingRect, setFloatingRect] = React.useState<FloatingRect>(() => createInitialWorkspaceRect());
   const [pointerState, setPointerState] = React.useState<PointerInteraction | null>(null);
-  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const inlineRootRef = React.useRef<HTMLDivElement | null>(null);
+  const floatingRootRef = React.useRef<HTMLDivElement | null>(null);
   const popoutButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const closeShortcutLabel = React.useMemo(() => getCloseShortcutLabel(), []);
   const viewIds = React.useMemo(
@@ -126,9 +126,9 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
     };
   }, [pointerState]);
 
-  const focusVisibleEditor = React.useCallback((): void => {
+  const focusVisibleEditor = React.useCallback((floating: boolean): void => {
     window.requestAnimationFrame(() => {
-      const editor = rootRef.current?.querySelector<HTMLElement>(
+      const editor = (floating ? floatingRootRef.current : inlineRootRef.current)?.querySelector<HTMLElement>(
         '.bt-source-workspace__pane:not([hidden]) textarea.ime-text-area, .bt-source-workspace__pane:not([hidden]) .bt-css-editor__textarea'
       );
       editor?.focus();
@@ -160,9 +160,9 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
     return null;
   }
 
-  const selectView = (nextView: WorkspaceView): void => {
+  const selectView = (nextView: WorkspaceView, floating: boolean): void => {
     setView(nextView);
-    focusVisibleEditor();
+    focusVisibleEditor(floating);
   };
 
   const startPointerInteraction = (
@@ -184,157 +184,196 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
     });
   };
 
-  const viewTabs = (
-    <div
-      aria-label={`${props.label} views`}
-      className="bt-source-workspace__tabs"
-      role="tablist"
-      onPointerDown={(event) => event.stopPropagation()}
-    >
-      {props.documents.map((document, index) => (
-        <button
-          aria-controls={panelId}
-          aria-selected={view === document.id}
-          className="bt-source-workspace__tab"
-          id={`${idPrefix}-${document.id}-tab`}
-          key={document.id}
-          role="tab"
-          tabIndex={view === document.id ? 0 : -1}
-          type="button"
-          onClick={() => selectView(document.id)}
-          onKeyDown={(event) => handleTabKeyDown(event, index, viewIds, selectView)}
-        >
-          {document.label}
-        </button>
-      ))}
-      {props.documents.length > 1 ? (
-        <button
-          aria-controls={panelId}
-          aria-label="Split"
-          aria-selected={view === 'split'}
-          className="bt-source-workspace__tab bt-source-workspace__tab--split"
-          id={`${idPrefix}-split-tab`}
-          role="tab"
-          tabIndex={view === 'split' ? 0 : -1}
-          title="Split view"
-          type="button"
-          onClick={() => selectView('split')}
-          onKeyDown={(event) => handleTabKeyDown(event, viewIds.length - 1, viewIds, selectView)}
-        >
-          <svg aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M6 3a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3H6ZM4 6c0-1.1.9-2 2-2h3.5v12H6a2 2 0 0 1-2-2V6Zm6.5 10V4H14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3.5Z" />
-          </svg>
-        </button>
-      ) : null}
-    </div>
-  );
+  const renderViewTabs = (floating: boolean): JSX.Element => {
+    const surfaceId = floating ? 'floating' : 'inline';
+    const panelId = `${idPrefix}-${surfaceId}-panel`;
 
-  const activeTabId = `${idPrefix}-${view}-tab`;
-  const workspace = (
-    <div
-      aria-label={floatingOpen ? `${props.label} source workspace` : undefined}
-      aria-modal={floatingOpen ? 'false' : undefined}
-      className={`bt-source-workspace ${floatingOpen ? 'bt-source-workspace--floating' : ''} ${
-        pointerState?.mode === 'resize' ? 'bt-source-workspace--resizing' : ''
-      }`}
-      ref={rootRef}
-      role={floatingOpen ? 'dialog' : undefined}
-      style={
-        floatingOpen
-          ? {
-              height: floatingRect.height,
-              left: floatingRect.left,
-              top: floatingRect.top,
-              width: floatingRect.width
-            }
-          : undefined
-      }
-      onClick={(event) => event.stopPropagation()}
-      onMouseDown={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
-    >
-      <style>{workspaceCss}</style>
-      <div className="bt-source-workspace__titlebar" onPointerDown={(event) => startPointerInteraction('drag', event)}>
-        {!floatingOpen ? <span className="bt-source-workspace__label">{props.label}</span> : null}
-        {floatingOpen ? viewTabs : null}
-        {floatingOpen ? (
-          <button
-            aria-label="Close source workspace"
-            className="bt-floating-editor__close"
-            title={`Close (${closeShortcutLabel})`}
-            type="button"
-            onClick={closeFloatingWorkspace}
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <span>Close</span>
-            <kbd className="bt-floating-editor__close-shortcut">{closeShortcutLabel}</kbd>
-          </button>
-        ) : (
-          <button
-            aria-expanded="false"
-            className="bt-css-editor__popout"
-            ref={popoutButtonRef}
-            type="button"
-            onClick={() => {
-              setFloatingRect((current) => constrainFloatingRect(current));
-              dispatchWorkspaceAction({ type: 'set-floating', open: true });
-              focusVisibleEditor();
-            }}
-          >
-            Pop out
-          </button>
-        )}
-      </div>
-      {props.description && !floatingOpen ? <p className="bt-source-workspace__description">{props.description}</p> : null}
-      {!floatingOpen ? viewTabs : null}
+    return (
       <div
-        aria-labelledby={activeTabId}
-        className={`bt-source-workspace__body ${view === 'split' ? 'bt-source-workspace__body--split' : ''}`}
-        id={panelId}
-        role="tabpanel"
+        aria-label={`${props.label} views`}
+        className="bt-source-workspace__tabs"
+        role="tablist"
+        onPointerDown={(event) => event.stopPropagation()}
       >
-        {props.documents.map((document) => {
-          const visible = view === 'split' || view === document.id;
-          return (
-            <section
-              aria-label={`${document.label} editor`}
-              className="bt-source-workspace__pane"
-              hidden={!visible}
-              key={document.id}
-            >
-              {view === 'split' ? <h3 className="bt-source-workspace__pane-label">{document.label}</h3> : null}
-              <SourceEditorField
-                {...document}
-                embedded
-                fillHeight={floatingOpen}
-                height={document.height || 190}
-                showShortcuts={floatingOpen}
-                value={workspaceState.drafts[document.id] ?? document.value}
-                onDraftChange={(value) => dispatchWorkspaceAction({ type: 'update-draft', documentId: document.id, value })}
-              />
-            </section>
-          );
-        })}
+        {props.documents.map((document, index) => (
+          <button
+            aria-controls={panelId}
+            aria-selected={view === document.id}
+            className="bt-source-workspace__tab"
+            id={`${idPrefix}-${surfaceId}-${document.id}-tab`}
+            key={document.id}
+            role="tab"
+            tabIndex={view === document.id ? 0 : -1}
+            type="button"
+            onClick={() => selectView(document.id, floating)}
+            onKeyDown={(event) => handleTabKeyDown(event, index, viewIds, (nextView) => selectView(nextView, floating))}
+          >
+            {document.label}
+          </button>
+        ))}
+        {props.documents.length > 1 ? (
+          <button
+            aria-controls={panelId}
+            aria-label="Split"
+            aria-selected={view === 'split'}
+            className="bt-source-workspace__tab bt-source-workspace__tab--split"
+            id={`${idPrefix}-${surfaceId}-split-tab`}
+            role="tab"
+            tabIndex={view === 'split' ? 0 : -1}
+            title="Split view"
+            type="button"
+            onClick={() => selectView('split', floating)}
+            onKeyDown={(event) =>
+              handleTabKeyDown(event, viewIds.length - 1, viewIds, (nextView) => selectView(nextView, floating))
+            }
+          >
+            <svg aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M6 3a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3H6ZM4 6c0-1.1.9-2 2-2h3.5v12H6a2 2 0 0 1-2-2V6Zm6.5 10V4H14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3.5Z" />
+            </svg>
+          </button>
+        ) : null}
       </div>
-      {floatingOpen
-        ? resizeZones.map((handle) => (
-            <div
-              aria-label={handle.label}
-              className={`bt-floating-editor__resize-zone bt-floating-editor__resize-zone--${handle.direction}`}
-              key={handle.direction}
-              role="separator"
-              onPointerDown={(event) => startPointerInteraction('resize', event, handle.direction)}
-            />
-          ))
-        : null}
-    </div>
-  );
+    );
+  };
 
-  return floatingOpen ? renderFloatingEditorLayer(workspace) : workspace;
+  const renderWorkspace = (floating: boolean): JSX.Element => {
+    const surfaceId = floating ? 'floating' : 'inline';
+    const panelId = `${idPrefix}-${surfaceId}-panel`;
+    const activeTabId = `${idPrefix}-${surfaceId}-${view}-tab`;
+
+    return (
+      <div
+        aria-label={floating ? `${props.label} source workspace` : undefined}
+        aria-modal={floating ? 'false' : undefined}
+        className={`bt-source-workspace ${floating ? 'bt-source-workspace--floating' : ''} ${
+          floating && pointerState?.mode === 'resize' ? 'bt-source-workspace--resizing' : ''
+        }`}
+        ref={floating ? floatingRootRef : inlineRootRef}
+        role={floating ? 'dialog' : undefined}
+        style={
+          floating
+            ? {
+                height: floatingRect.height,
+                left: floatingRect.left,
+                top: floatingRect.top,
+                width: floatingRect.width
+              }
+            : undefined
+        }
+        onClick={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <style>{workspaceCss}</style>
+        <div
+          className="bt-source-workspace__titlebar"
+          onPointerDown={(event) => floating && startPointerInteraction('drag', event)}
+        >
+          {!floating ? <span className="bt-source-workspace__label">{props.label}</span> : null}
+          {floating ? renderViewTabs(true) : null}
+          {floating ? (
+            <button
+              aria-label="Close source workspace"
+              className="bt-floating-editor__close"
+              title={`Close (${closeShortcutLabel})`}
+              type="button"
+              onClick={closeFloatingWorkspace}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <span>Close</span>
+              <kbd className="bt-floating-editor__close-shortcut">{closeShortcutLabel}</kbd>
+            </button>
+          ) : (
+            <button
+              aria-expanded={floatingOpen}
+              className="bt-css-editor__popout"
+              ref={popoutButtonRef}
+              type="button"
+              onClick={() => {
+                if (floatingOpen) {
+                  focusVisibleEditor(true);
+                  return;
+                }
+                setFloatingRect((current) => constrainFloatingRect(current));
+                dispatchWorkspaceAction({ type: 'set-floating', open: true });
+                focusVisibleEditor(true);
+              }}
+            >
+              {floatingOpen ? 'Focus pop-out' : 'Pop out'}
+            </button>
+          )}
+        </div>
+        {props.description && !floating ? <p className="bt-source-workspace__description">{props.description}</p> : null}
+        {!floating ? renderViewTabs(false) : null}
+        <div
+          aria-labelledby={activeTabId}
+          className={`bt-source-workspace__body ${view === 'split' ? 'bt-source-workspace__body--split' : ''}`}
+          id={panelId}
+          role="tabpanel"
+        >
+          {props.documents.map((document) => {
+            const visible = view === 'split' || view === document.id;
+            const baseConfig = document.configuration || document.config || {};
+            const modelPathPrefix = `${idPrefix}.${surfaceId}.${document.id}`;
+            return (
+              <section
+                aria-label={`${document.label} editor`}
+                className="bt-source-workspace__pane"
+                hidden={!visible}
+                key={`${surfaceId}-${document.id}`}
+              >
+                {view === 'split' ? <h3 className="bt-source-workspace__pane-label">{document.label}</h3> : null}
+                <SourceEditorField
+                  {...document}
+                  config={{
+                    ...baseConfig,
+                    inlineModelPath: baseConfig.inlineModelPath
+                      ? `${baseConfig.inlineModelPath}.${surfaceId}`
+                      : `${modelPathPrefix}.inline`,
+                    floatingModelPath: baseConfig.floatingModelPath
+                      ? `${baseConfig.floatingModelPath}.${surfaceId}`
+                      : `${modelPathPrefix}.floating`
+                  }}
+                  configuration={undefined}
+                  embedded
+                  fillHeight={floating}
+                  height={document.height || 190}
+                  showShortcuts={floating}
+                  value={workspaceState.drafts[document.id] ?? document.value}
+                  onDraftChange={(value) => dispatchWorkspaceAction({ type: 'update-draft', documentId: document.id, value })}
+                />
+              </section>
+            );
+          })}
+        </div>
+        {floating
+          ? resizeZones.map((handle) => (
+              <div
+                aria-label={handle.label}
+                className={`bt-floating-editor__resize-zone bt-floating-editor__resize-zone--${handle.direction}`}
+                key={handle.direction}
+                role="separator"
+                onPointerDown={(event) => startPointerInteraction('resize', event, handle.direction)}
+              />
+            ))
+          : null}
+      </div>
+    );
+  };
+
+  return (
+    <>
+      {renderWorkspace(false)}
+      {floatingOpen ? renderFloatingEditorLayer(renderWorkspace(true)) : null}
+    </>
+  );
 };
 
 function createSourceWorkspaceState(documents: readonly SourceWorkspaceDocument[]): SourceWorkspaceState {
-  const values = Object.fromEntries(documents.map((document) => [document.id, document.value || '']));
+  const values = documents.reduce<Record<string, string>>((result, document) => {
+    result[document.id] = document.value || '';
+    return result;
+  }, {});
   return {
     committedValues: values,
     drafts: { ...values },
@@ -445,8 +484,12 @@ const workspaceCss = `.bt-source-workspace {
 .bt-source-workspace__tabs {
   display: flex;
   align-items: center;
+  justify-self: start;
   gap: 2px;
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
+  overflow-x: auto;
   border: 1px solid #d1d1d1;
   border-radius: 4px;
   padding: 2px;
@@ -503,9 +546,13 @@ const workspaceCss = `.bt-source-workspace {
 
 .bt-source-workspace__pane {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
+}
+
+.bt-source-workspace__body--split .bt-source-workspace__pane {
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .bt-source-workspace__pane[hidden] {
@@ -551,8 +598,8 @@ const workspaceCss = `.bt-source-workspace {
 .bt-source-workspace--floating .bt-source-workspace__tabs {
   justify-self: start;
   overflow-x: auto;
-  border-color: #334155;
-  background: #0b1220;
+  border: 0;
+  background: transparent;
 }
 
 .bt-source-workspace--floating .bt-source-workspace__tab {
@@ -576,6 +623,10 @@ const workspaceCss = `.bt-source-workspace {
 .bt-source-workspace--floating .bt-css-editor {
   min-height: 0;
   height: 100%;
+}
+
+.bt-source-workspace--floating .bt-css-editor--fill > .bt-floating-editor__toolbar {
+  margin-block-end: -6px;
 }
 
 .bt-source-workspace--floating .bt-source-workspace__body--split {

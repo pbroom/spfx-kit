@@ -29,9 +29,12 @@ describe('SourceWorkspaceField', () => {
   it('preserves a deferred draft while moving the workspace in and out of its portal', async () => {
     const committedValue = '<article>Committed</article>';
     const deferredDraft = '<article>Deferred';
+    const floatingDraft = '<article>Floating draft';
     const onChange = vi.fn();
     const validate = (value: string): SourceEditorDiagnostic[] =>
-      value === deferredDraft ? [{ level: 'error', message: 'Close the article element.' }] : [];
+      value.startsWith('<article>') && !value.endsWith('</article>')
+        ? [{ level: 'error', message: 'Close the article element.' }]
+        : [];
     const documents = [
       {
         commitMode: 'valid' as const,
@@ -75,6 +78,13 @@ describe('SourceWorkspaceField', () => {
     const dialog = document.body.querySelector<HTMLElement>('[role="dialog"][aria-label="Styles & template source workspace"]');
     expect(dialog).not.toBeNull();
     expect(getTextarea(dialog as HTMLElement).value).toBe(deferredDraft);
+    expect(getTextarea(container).value).toBe(deferredDraft);
+    expect(popOut?.textContent).toBe('Focus pop-out');
+    expect(onChange).not.toHaveBeenCalled();
+
+    changeTextarea(getTextarea(dialog as HTMLElement), floatingDraft);
+    expect(getTextarea(dialog as HTMLElement).value).toBe(floatingDraft);
+    expect(getTextarea(container).value).toBe(floatingDraft);
     expect(onChange).not.toHaveBeenCalled();
 
     const close = dialog?.querySelector<HTMLButtonElement>('button[aria-label="Close source workspace"]');
@@ -84,7 +94,7 @@ describe('SourceWorkspaceField', () => {
     });
 
     expect(document.body.querySelector('[role="dialog"][aria-label="Styles & template source workspace"]')).toBeNull();
-    expect(getTextarea(container).value).toBe(deferredDraft);
+    expect(getTextarea(container).value).toBe(floatingDraft);
     expect(onChange).not.toHaveBeenCalled();
 
     const externallyCommittedValue = '<article>Externally committed</article>';

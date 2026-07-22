@@ -426,7 +426,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
         <div className={`bt-css-editor__monaco ${editorReady ? 'bt-css-editor__monaco--ready' : ''}`}>
           <BundledMonacoEditor
             adapter={monacoAdapter}
-            height={`${inlineHeight}px`}
+            height={props.fillHeight ? '100%' : `${inlineHeight}px`}
             language={props.language}
             path={inlineModelPath}
             theme="vs-dark"
