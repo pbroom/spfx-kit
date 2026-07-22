@@ -11,6 +11,7 @@ import {
   replaceCssTargetSelector,
   resizeFloatingRect,
   setCssEditorTargetsForModel,
+  shouldCollapseShortcutToolbar,
   sourceEditorAcceptSuggestionOnEnter,
   sourceEditorCompletionTriggerCharacters,
   sourceEditorTabCompletion
@@ -20,6 +21,7 @@ import {
   createSourceEditorSuggestions as createProductionSourceEditorSuggestions,
   getCssEditorTargetsForModel as getProductionCssEditorTargetsForModel,
   setCssEditorTargetsForModel as setProductionCssEditorTargetsForModel,
+  shouldCollapseShortcutToolbar as shouldCollapseProductionShortcutToolbar,
   sourceEditorAcceptSuggestionOnEnter as productionSourceEditorAcceptSuggestionOnEnter,
   sourceEditorCompletionTriggerCharacters as productionSourceEditorCompletionTriggerCharacters,
   sourceEditorTabCompletion as productionSourceEditorTabCompletion
@@ -28,6 +30,12 @@ import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 describe('source editor state', () => {
+  it('collapses shortcut tokens only when their measured width exceeds the toolbar', () => {
+    expect(shouldCollapseShortcutToolbar(640, 640)).toBe(false);
+    expect(shouldCollapseShortcutToolbar(640, 641)).toBe(true);
+    expect(shouldCollapseProductionShortcutToolbar(640, 641)).toBe(true);
+  });
+
   it('adds a UTF-8 byte limit diagnostic', () => {
     expect(getSourceDiagnostics('éé', 3)).toEqual([
       {

@@ -1748,10 +1748,12 @@ textarea {
 }
 
 .css-floating-editor__toolbar {
+  position: relative;
+  z-index: 6;
   display: flex;
   align-items: center;
-  gap: 6px;
-  overflow-x: auto;
+  min-width: 0;
+  overflow: visible;
   border-bottom: 1px solid #334155;
   padding: 6px 8px;
   background: #0b1220;
@@ -1761,8 +1763,103 @@ textarea {
   border-bottom: 0;
 }
 
+.css-floating-editor__toolbar-items-viewport {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.css-floating-editor__toolbar-items {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 6px;
+}
+
+.css-floating-editor__toolbar-items-viewport--measuring {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.css-floating-editor__shortcut-menu {
+  position: relative;
+}
+
+.css-floating-editor__shortcut-menu-trigger {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 3px 8px;
+  color: #dbeafe;
+  background: #1e293b;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.css-floating-editor__shortcut-menu-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.css-floating-editor__shortcut-menu-trigger svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 120ms ease;
+}
+
+.css-floating-editor__shortcut-menu[open] .css-floating-editor__shortcut-menu-trigger svg {
+  transform: rotate(180deg);
+}
+
+.css-floating-editor__shortcut-menu-count {
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.css-floating-editor__shortcut-menu-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  width: max-content;
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 32px));
+  max-height: min(320px, calc(100vh - 180px));
+  gap: 4px;
+  overflow-y: auto;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  padding: 6px;
+  background: #111827;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 32%);
+}
+
+.css-floating-editor__target-button--menu {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.css-floating-editor__target-chip--menu {
+  width: 100%;
+}
+
+.css-floating-editor__target-chip--menu .css-floating-editor__target-button {
+  min-width: 0;
+  flex: 1 1 auto;
+  text-align: left;
+}
+
 .css-floating-editor__target-button {
+  display: inline-flex;
   flex: 0 0 auto;
+  align-items: center;
   border: 1px solid #475569;
   border-radius: 6px;
   padding: 3px 8px;
