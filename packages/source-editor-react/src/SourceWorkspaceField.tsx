@@ -145,15 +145,15 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
       return undefined;
     }
     const closeOnShortcut = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' && !isCloseShortcut(event)) {
+      if (event.defaultPrevented || (event.key !== 'Escape' && !isCloseShortcut(event))) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
       closeFloatingWorkspace();
     };
-    window.addEventListener('keydown', closeOnShortcut, true);
-    return () => window.removeEventListener('keydown', closeOnShortcut, true);
+    window.addEventListener('keydown', closeOnShortcut);
+    return () => window.removeEventListener('keydown', closeOnShortcut);
   }, [closeFloatingWorkspace, floatingOpen]);
 
   if (!firstDocumentId) {
