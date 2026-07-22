@@ -440,8 +440,27 @@ textarea {
   gap: 0;
   min-width: 0;
   max-height: min(52vh, 440px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-right: 2px;
+  scrollbar-color: var(--colorNeutralStroke1, #b3b3b3) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.manage-apps-list::-webkit-scrollbar {
+  width: 10px;
+}
+
+.manage-apps-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.manage-apps-list::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--colorNeutralStroke1, #b3b3b3);
+  background-clip: padding-box;
 }
 
 .manage-app-row {
@@ -527,9 +546,11 @@ textarea {
   min-width: 0;
 }
 
-.manage-app-row__version {
+.manage-app-row__actions > .manage-app-row__version,
+.manage-app-row__actions > .manage-app-row__version .fui-Dropdown__button {
   width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 
 .manage-app-row__connection {

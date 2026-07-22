@@ -107,14 +107,16 @@ export async function updateManagedLabAppVersion(
     try {
       const sync = await syncLabRegistry();
       return {
-        message: `Updated ${app.relativeDir} to ${selected.label} (v${selected.version}).`,
+        message: `Updated ${app.relativeDir} to ${selected.label} (v${selected.version}).${
+          selected.stashedLocalChanges ? ' Local changes were saved to a Git stash.' : ''
+        }`,
         syncedAdapters: sync.syncedAdapters
       };
     } catch (error) {
       throw new Error(
-        `Updated ${app.relativeDir} to ${selected.label}, but the lab registry did not sync. Re-sync before reloading. ${
-          error instanceof Error ? error.message : ''
-        }`.trim(),
+        `Updated ${app.relativeDir} to ${selected.label}${
+          selected.stashedLocalChanges ? ' after saving local changes to a Git stash' : ''
+        }, but the lab registry did not sync. Re-sync before reloading. ${error instanceof Error ? error.message : ''}`.trim(),
         { cause: error }
       );
     }
