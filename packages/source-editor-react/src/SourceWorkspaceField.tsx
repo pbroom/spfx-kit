@@ -65,6 +65,7 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
   const [view, setView] = React.useState<WorkspaceView>(() =>
     props.defaultView === 'split' && props.documents.length > 1 ? 'split' : firstDocumentId || 'split'
   );
+  const [lastDocumentView, setLastDocumentView] = React.useState<string>(() => firstDocumentId || 'split');
   const [workspaceState, dispatchWorkspaceAction] = React.useReducer(
     reduceSourceWorkspaceState,
     props.documents,
@@ -77,10 +78,7 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
   const floatingRootRef = React.useRef<HTMLDivElement | null>(null);
   const popoutButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const closeShortcutLabel = React.useMemo(() => getCloseShortcutLabel(), []);
-  const viewIds = React.useMemo(
-    () => [...props.documents.map((document) => document.id), ...(props.documents.length > 1 ? ['split'] : [])],
-    [props.documents]
-  );
+  const documentViewIds = React.useMemo(() => props.documents.map((document) => document.id), [props.documents]);
 
   React.useEffect(() => {
     if (view === 'split' ? props.documents.length > 1 : props.documents.some((document) => document.id === view)) {
@@ -88,6 +86,13 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
     }
     setView(firstDocumentId || 'split');
   }, [firstDocumentId, props.documents, view]);
+
+  React.useEffect(() => {
+    if (props.documents.some((document) => document.id === lastDocumentView)) {
+      return;
+    }
+    setLastDocumentView(firstDocumentId || 'split');
+  }, [firstDocumentId, lastDocumentView, props.documents]);
 
   React.useEffect(() => {
     dispatchWorkspaceAction({ type: 'sync-documents', documents: props.documents });
@@ -136,9 +141,10 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
   }, []);
 
   const closeFloatingWorkspace = React.useCallback((): void => {
+    setView((currentView) => (currentView === 'split' ? lastDocumentView : currentView));
     dispatchWorkspaceAction({ type: 'set-floating', open: false });
     window.requestAnimationFrame(() => popoutButtonRef.current?.focus());
-  }, []);
+  }, [lastDocumentView]);
 
   React.useEffect(() => {
     if (!floatingOpen) {
@@ -161,6 +167,9 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
   }
 
   const selectView = (nextView: WorkspaceView, floating: boolean): void => {
+    if (nextView !== 'split') {
+      setLastDocumentView(nextView);
+    }
     setView(nextView);
     focusVisibleEditor(floating);
   };
@@ -187,6 +196,8 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
   const renderViewTabs = (floating: boolean): JSX.Element => {
     const surfaceId = floating ? 'floating' : 'inline';
     const panelId = `${idPrefix}-${surfaceId}-panel`;
+    const selectedView = floating || view !== 'split' ? view : lastDocumentView;
+    const viewIds = floating && props.documents.length > 1 ? [...documentViewIds, 'split'] : documentViewIds;
 
     return (
       <div
@@ -198,12 +209,12 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
         {props.documents.map((document, index) => (
           <button
             aria-controls={panelId}
-            aria-selected={view === document.id}
+            aria-selected={selectedView === document.id}
             className="bt-source-workspace__tab"
             id={`${idPrefix}-${surfaceId}-${document.id}-tab`}
             key={document.id}
             role="tab"
-            tabIndex={view === document.id ? 0 : -1}
+            tabIndex={selectedView === document.id ? 0 : -1}
             type="button"
             onClick={() => selectView(document.id, floating)}
             onKeyDown={(event) => handleTabKeyDown(event, index, viewIds, (nextView) => selectView(nextView, floating))}
@@ -211,7 +222,7 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
             {document.label}
           </button>
         ))}
-        {props.documents.length > 1 ? (
+        {floating && props.documents.length > 1 ? (
           <button
             aria-controls={panelId}
             aria-label="Split"
@@ -239,7 +250,8 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
   const renderWorkspace = (floating: boolean): JSX.Element => {
     const surfaceId = floating ? 'floating' : 'inline';
     const panelId = `${idPrefix}-${surfaceId}-panel`;
-    const activeTabId = `${idPrefix}-${surfaceId}-${view}-tab`;
+    const selectedView = floating || view !== 'split' ? view : lastDocumentView;
+    const activeTabId = `${idPrefix}-${surfaceId}-${selectedView}-tab`;
 
     return (
       <div
@@ -307,12 +319,12 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
         {!floating ? renderViewTabs(false) : null}
         <div
           aria-labelledby={activeTabId}
-          className={`bt-source-workspace__body ${view === 'split' ? 'bt-source-workspace__body--split' : ''}`}
+          className={`bt-source-workspace__body ${selectedView === 'split' ? 'bt-source-workspace__body--split' : ''}`}
           id={panelId}
           role="tabpanel"
         >
           {props.documents.map((document) => {
-            const visible = view === 'split' || view === document.id;
+            const visible = selectedView === 'split' || selectedView === document.id;
             const baseConfig = document.configuration || document.config || {};
             const modelPathPrefix = `${idPrefix}.${surfaceId}.${document.id}`;
             return (
@@ -322,7 +334,7 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
                 hidden={!visible}
                 key={`${surfaceId}-${document.id}`}
               >
-                {view === 'split' ? <h3 className="bt-source-workspace__pane-label">{document.label}</h3> : null}
+                {selectedView === 'split' ? <h3 className="bt-source-workspace__pane-label">{document.label}</h3> : null}
                 <SourceEditorField
                   {...document}
                   config={{
