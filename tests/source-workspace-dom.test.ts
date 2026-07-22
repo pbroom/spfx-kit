@@ -113,6 +113,86 @@ describe('SourceWorkspaceField', () => {
     });
     expect(getTextarea(container).value).toBe(committedValue);
   });
+
+  it('offers split view only in the pop-out and restores an accessible inline document view on close', async () => {
+    const requestAnimationFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback: FrameRequestCallback): number => {
+        callback(0);
+        return 1;
+      });
+    const documents = [
+      {
+        config: { monacoAdapter: unavailableMonaco },
+        id: 'scss',
+        label: 'CSS/SCSS',
+        language: 'scss' as const,
+        onChange: () => undefined,
+        value: '.better-list {}'
+      },
+      {
+        config: { monacoAdapter: unavailableMonaco },
+        id: 'html',
+        label: 'HTML template',
+        language: 'html' as const,
+        onChange: () => undefined,
+        value: '<template data-bl-fragment="item"></template>'
+      }
+    ];
+
+    await act(async () => {
+      ReactDom.render(
+        React.createElement(SourceWorkspaceField, {
+          defaultView: 'split',
+          documents,
+          label: 'Styles & template'
+        }),
+        container
+      );
+      await settleEditorFallback();
+    });
+
+    const inlineTablist = container.querySelector<HTMLElement>('[role="tablist"]');
+    expect(inlineTablist).not.toBeNull();
+    expect(inlineTablist?.querySelector('[aria-label="Split"]')).toBeNull();
+    expect(inlineTablist?.querySelector('[aria-selected="true"]')?.textContent).toBe('CSS/SCSS');
+    expect(container.querySelector('.bt-source-workspace__body--split')).toBeNull();
+    expect(container.querySelector<HTMLElement>('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toContain(
+      '-inline-scss-tab'
+    );
+    expect(getWorkspacePanes(container).map((pane) => pane.hidden)).toEqual([false, true]);
+
+    const popOut = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Pop out');
+    expect(popOut).toBeDefined();
+    act(() => {
+      Simulate.click(popOut as HTMLButtonElement);
+    });
+
+    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"][aria-label="Styles & template source workspace"]');
+    expect(dialog).not.toBeNull();
+    const floatingSplit = dialog?.querySelector<HTMLButtonElement>('[role="tab"][aria-label="Split"]');
+    expect(floatingSplit).not.toBeNull();
+    expect(floatingSplit?.getAttribute('aria-selected')).toBe('true');
+    expect(floatingSplit?.tabIndex).toBe(0);
+    expect(dialog?.querySelector('.bt-source-workspace__body--split')).not.toBeNull();
+    expect(dialog?.querySelector<HTMLElement>('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toContain(
+      '-floating-split-tab'
+    );
+    expect(getWorkspacePanes(dialog as HTMLElement).map((pane) => pane.hidden)).toEqual([false, false]);
+
+    const close = dialog?.querySelector<HTMLButtonElement>('button[aria-label="Close source workspace"]');
+    expect(close).not.toBeNull();
+    act(() => {
+      Simulate.click(close as HTMLButtonElement);
+    });
+
+    expect(document.body.querySelector('[role="dialog"][aria-label="Styles & template source workspace"]')).toBeNull();
+    expect(container.querySelector('.bt-source-workspace__body--split')).toBeNull();
+    expect(inlineTablist?.querySelector('[aria-selected="true"]')?.textContent).toBe('CSS/SCSS');
+    expect(getWorkspacePanes(container).map((pane) => pane.hidden)).toEqual([false, true]);
+    expect(document.activeElement).toBe(popOut);
+    requestAnimationFrame.mockRestore();
+  });
 });
 
 function getTextarea(root: ParentNode): HTMLTextAreaElement {
@@ -126,6 +206,10 @@ function changeTextarea(textarea: HTMLTextAreaElement, value: string): void {
     textarea.value = value;
     Simulate.change(textarea);
   });
+}
+
+function getWorkspacePanes(root: ParentNode): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>('.bt-source-workspace__pane'));
 }
 
 async function settleEditorFallback(): Promise<void> {

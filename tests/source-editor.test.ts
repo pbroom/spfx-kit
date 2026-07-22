@@ -215,7 +215,7 @@ describe('source editor state', () => {
     );
   });
 
-  it('renders one source workspace with CSS, HTML, and split views', () => {
+  it('renders one inline source workspace without exposing the pop-out-only split view', () => {
     const markup = renderToStaticMarkup(
       React.createElement(ProductionSourceWorkspace, {
         label: 'Styles & template',
@@ -243,9 +243,8 @@ describe('source editor state', () => {
     expect(markup).toContain('role="tablist"');
     expect(markup).toContain('>CSS/SCSS</button>');
     expect(markup).toContain('>HTML template</button>');
-    expect(markup).toContain('aria-label="Split"');
-    expect(markup).toContain('title="Split view"');
-    expect(markup).toContain('bt-source-workspace__tab--split');
+    expect(markup).not.toContain('aria-label="Split"');
+    expect(markup).not.toContain('title="Split view"');
     expect(markup).toContain('aria-selected="true"');
     expect(markup).toContain('hidden=""');
     expect(markup).toContain('justify-self: start;');
