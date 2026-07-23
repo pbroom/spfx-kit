@@ -155,7 +155,7 @@ describe('SourceWorkspaceField', () => {
     const inlineTablist = container.querySelector<HTMLElement>('[role="tablist"]');
     expect(inlineTablist).not.toBeNull();
     expect(inlineTablist?.querySelector('[aria-label="Split"]')).toBeNull();
-    expect(inlineTablist?.querySelector('[aria-selected="true"]')?.textContent).toBe('CSS/SCSS');
+    expect(inlineTablist?.querySelector('[aria-selected="true"]')?.textContent).toContain('CSS/SCSS');
     expect(container.querySelector('.bt-source-workspace__body--split')).toBeNull();
     expect(container.querySelector<HTMLElement>('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toContain(
       '-inline-scss-tab'
@@ -170,8 +170,10 @@ describe('SourceWorkspaceField', () => {
 
     const dialog = document.body.querySelector<HTMLElement>('[role="dialog"][aria-label="Styles & template source workspace"]');
     expect(dialog).not.toBeNull();
+    expect(dialog?.closest('.fui-FluentProvider')).not.toBeNull();
     const floatingSplit = dialog?.querySelector<HTMLButtonElement>('[role="tab"][aria-label="Split"]');
     expect(floatingSplit).not.toBeNull();
+    expect(floatingSplit?.querySelector('.fui-Tab__icon svg')).not.toBeNull();
     expect(floatingSplit?.getAttribute('aria-selected')).toBe('true');
     expect(floatingSplit?.tabIndex).toBe(0);
     expect(dialog?.querySelector('.bt-source-workspace__body--split')).not.toBeNull();
@@ -188,7 +190,7 @@ describe('SourceWorkspaceField', () => {
 
     expect(document.body.querySelector('[role="dialog"][aria-label="Styles & template source workspace"]')).toBeNull();
     expect(container.querySelector('.bt-source-workspace__body--split')).toBeNull();
-    expect(inlineTablist?.querySelector('[aria-selected="true"]')?.textContent).toBe('CSS/SCSS');
+    expect(inlineTablist?.querySelector('[aria-selected="true"]')?.textContent).toContain('CSS/SCSS');
     expect(getWorkspacePanes(container).map((pane) => pane.hidden)).toEqual([false, true]);
     expect(document.activeElement).toBe(popOut);
     requestAnimationFrame.mockRestore();

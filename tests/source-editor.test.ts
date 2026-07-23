@@ -252,17 +252,17 @@ describe('source editor state', () => {
 
     expect(markup.match(/>Pop out</g)).toHaveLength(1);
     expect(markup).toContain('role="tablist"');
-    expect(markup).toContain('>CSS/SCSS</button>');
-    expect(markup).toContain('>HTML template</button>');
+    expect(markup).toContain('fui-TabList');
+    expect(markup).toContain('fui-Tab');
+    expect(markup).toContain('>CSS/SCSS</span>');
+    expect(markup).toContain('>HTML template</span>');
     expect(markup).not.toContain('aria-label="Split"');
     expect(markup).not.toContain('title="Split view"');
     expect(markup).toContain('aria-selected="true"');
     expect(markup).toContain('hidden=""');
     expect(markup).toContain('justify-self: start;');
-    expect(markup).toContain('width: fit-content;');
+    expect(markup).toContain('max-width: 100%;');
     expect(markup).toContain('.bt-source-workspace--floating .bt-source-workspace__tabs {');
-    expect(markup).toContain('border: 0;');
-    expect(markup).toContain('background: transparent;');
     expect(markup).toContain(
       '.bt-source-workspace--floating .bt-css-editor--fill &gt; .bt-floating-editor__toolbar {\n  margin-block-end: -6px;'
     );
