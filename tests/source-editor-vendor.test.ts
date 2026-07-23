@@ -28,6 +28,7 @@ describe('sync:source-editor', () => {
     await writeFile(path.join(reactDir, 'package.json'), '{"name":"@spfx-kit/source-editor-react","version":"3.0.0"}\n');
     await writeFile(path.join(reactDir, 'src', 'SourceEditorField.tsx'), 'export const editor = "react";\n');
     await writeFile(path.join(reactDir, 'src', 'SourceWorkspaceField.tsx'), 'export const workspace = "react";\n');
+    await writeFile(path.join(reactDir, 'spfx-monaco-webpack.cjs'), 'module.exports = function configure() {};\n');
     await writeFile(path.join(appDir, 'package.json'), '{"name":"better-divider-spfx"}\n');
 
     const syncResult = runCli(fixture);
@@ -38,12 +39,15 @@ describe('sync:source-editor', () => {
     const coreVendorPath = path.join(appDir, 'src', 'vendor', 'source-editor', 'sourceEditorCore.ts');
     const reactVendorPath = path.join(appDir, 'src', 'vendor', 'source-editor', 'SourceEditorField.tsx');
     const workspaceVendorPath = path.join(appDir, 'src', 'vendor', 'source-editor', 'SourceWorkspaceField.tsx');
+    const webpackVendorPath = path.join(appDir, 'src', 'vendor', 'source-editor', 'spfx-monaco-webpack.cjs');
     const coreVendor = await readFile(coreVendorPath, 'utf8');
     const reactVendor = await readFile(reactVendorPath, 'utf8');
     const workspaceVendor = await readFile(workspaceVendorPath, 'utf8');
+    const webpackVendor = await readFile(webpackVendorPath, 'utf8');
     expect(coreVendor).toContain('Vendored from @spfx-kit/source-editor-core@2.0.0');
     expect(reactVendor).toContain('Vendored from @spfx-kit/source-editor-react@3.0.0');
     expect(workspaceVendor).toContain('Vendored from @spfx-kit/source-editor-react@3.0.0');
+    expect(webpackVendor).toContain('Vendored from @spfx-kit/source-editor-react@3.0.0');
     expect(runCli(fixture, ['--check']).status).toBe(0);
 
     await writeFile(reactVendorPath, `${reactVendor}// local edit\n`);

@@ -39,7 +39,8 @@ describe('source editor vendor', () => {
     expect(SOURCE_EDITOR_VENDOR_FILES.map((file) => file.vendorPath)).toEqual([
       'src/vendor/source-editor/sourceEditorCore.ts',
       'src/vendor/source-editor/SourceEditorField.tsx',
-      'src/vendor/source-editor/SourceWorkspaceField.tsx'
+      'src/vendor/source-editor/SourceWorkspaceField.tsx',
+      'src/vendor/source-editor/spfx-monaco-webpack.cjs'
     ]);
     expect(vendor.digest).toBe(sourceEditorDigest(canonical));
     expect(vendor.source).toContain('Vendored from @spfx-kit/source-editor-react@1.2.3');
