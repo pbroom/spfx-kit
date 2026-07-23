@@ -50,11 +50,16 @@ describe('SourceEditorField shortcut overflow menu', () => {
     });
 
     const trigger = getMenuTrigger();
+    expect(trigger.classList.contains('fui-MenuButton')).toBe(true);
     expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
-    expect(trigger.getAttribute('aria-expanded')).toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
 
     await openMenu(trigger);
     let menu = getMenu();
+    expect(container.contains(menu)).toBe(true);
+    expect(menu.closest('.bt-floating-editor__shortcut-menu-popover')?.parentElement).toBe(
+      container.querySelector('.bt-floating-editor__toolbar')
+    );
     let items = getMenuItems(menu);
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
     expect(items.map((item) => item.textContent)).toEqual(['Web part', 'Header', 'Tabs']);
@@ -148,7 +153,7 @@ describe('SourceEditorField shortcut overflow menu', () => {
       window.dispatchEvent(new Event('resize'));
     });
     await settleMenu();
-    expect(getMenuTrigger().getAttribute('aria-expanded')).toBeNull();
+    expect(getMenuTrigger().getAttribute('aria-expanded')).toBe('false');
     expect(document.body.querySelector('[role="menu"]')).toBeNull();
   });
 
