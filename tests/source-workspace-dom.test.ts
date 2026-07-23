@@ -170,8 +170,10 @@ describe('SourceWorkspaceField', () => {
 
     const dialog = document.body.querySelector<HTMLElement>('[role="dialog"][aria-label="Styles & template source workspace"]');
     expect(dialog).not.toBeNull();
+    expect(dialog?.closest('.fui-FluentProvider')).not.toBeNull();
     const floatingSplit = dialog?.querySelector<HTMLButtonElement>('[role="tab"][aria-label="Split"]');
     expect(floatingSplit).not.toBeNull();
+    expect(floatingSplit?.querySelector('.fui-Tab__icon svg')).not.toBeNull();
     expect(floatingSplit?.getAttribute('aria-selected')).toBe('true');
     expect(floatingSplit?.tabIndex).toBe(0);
     expect(dialog?.querySelector('.bt-source-workspace__body--split')).not.toBeNull();

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
-import { Tab, TabList } from '@fluentui/react-components';
+import { FluentProvider, Tab, TabList, webDarkTheme } from '@fluentui/react-components';
 import { SourceEditorField, constrainFloatingRect, isCloseShortcut, resizeFloatingRect } from './SourceEditorField';
 import type { FloatingRect, ResizeDirection, SourceEditorFieldProps } from './SourceEditorField';
 
@@ -202,6 +202,7 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
       <TabList
         aria-label={`${props.label} views`}
         className="bt-source-workspace__tabs"
+        reserveSelectedTabSpace={false}
         selectedValue={selectedView}
         size="small"
         onPointerDown={(event) => event.stopPropagation()}
@@ -224,13 +225,14 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
             aria-label="Split"
             className="bt-source-workspace__tab bt-source-workspace__tab--split"
             id={`${idPrefix}-${surfaceId}-split-tab`}
+            icon={(
+              <svg aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M6 3a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3H6ZM4 6c0-1.1.9-2 2-2h3.5v12H6a2 2 0 0 1-2-2V6Zm6.5 10V4H14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3.5Z" />
+              </svg>
+            )}
             title="Split view"
             value="split"
-          >
-            <svg aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M6 3a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3H6ZM4 6c0-1.1.9-2 2-2h3.5v12H6a2 2 0 0 1-2-2V6Zm6.5 10V4H14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3.5Z" />
-            </svg>
-          </Tab>
+          />
         ) : null}
       </TabList>
     );
@@ -426,7 +428,10 @@ function renderFloatingEditorLayer(element: JSX.Element): JSX.Element {
   if (typeof document === 'undefined' || !document.body) {
     return element;
   }
-  return ReactDom.createPortal(element, document.body) as unknown as JSX.Element;
+  return ReactDom.createPortal(
+    <FluentProvider theme={webDarkTheme}>{element}</FluentProvider>,
+    document.body
+  ) as unknown as JSX.Element;
 }
 
 const workspaceCss = `.bt-source-workspace {
@@ -466,10 +471,6 @@ const workspaceCss = `.bt-source-workspace {
 
 .bt-source-workspace__tab {
   min-width: 0;
-}
-
-.bt-source-workspace__tab--split {
-  min-width: 32px;
 }
 
 .bt-source-workspace__tab--split svg {
@@ -544,19 +545,7 @@ const workspaceCss = `.bt-source-workspace {
 }
 
 .bt-source-workspace--floating .bt-source-workspace__tab {
-  color: #dbeafe;
   white-space: nowrap;
-}
-
-.bt-source-workspace--floating .bt-source-workspace__tab:hover,
-.bt-source-workspace--floating .bt-source-workspace__tab:focus-visible {
-  color: #ffffff;
-  background: #24324a;
-}
-
-.bt-source-workspace--floating .bt-source-workspace__tab[aria-selected='true'] {
-  color: #ffffff;
-  background: #1d4ed8;
 }
 
 .bt-source-workspace--floating .bt-source-workspace__body,
