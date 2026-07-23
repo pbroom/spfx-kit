@@ -2103,13 +2103,15 @@ const editorCss = `.bt-css-editor {
   z-index: 7;
   min-width: 220px;
   max-width: min(360px, calc(100vw - 32px));
+  max-height: min(320px, calc(100vh - 32px));
   border: 1px solid #475569;
   border-radius: 6px;
   padding: 4px;
   color: #f8fafc;
   background: #0f172a;
   box-shadow: 0 12px 28px rgb(0 0 0 / 35%);
-  overflow: visible;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .bt-floating-editor__shortcut-menu-popover .fui-MenuItem {

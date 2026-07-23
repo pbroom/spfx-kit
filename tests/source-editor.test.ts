@@ -106,9 +106,9 @@ describe('source editor state', () => {
     expect(productionMarkup).toContain('style="height:100%;width:100%"');
     expect(productionMarkup).toContain('.bt-floating-editor__toolbar-items-viewport {\n  min-width: 0;\n  overflow: hidden;');
     expect(productionMarkup).not.toContain('overflow-x: auto;');
-    expect(productionMarkup).not.toContain('max-height: min(320px, calc(100vh - 32px));');
-    expect(productionMarkup).not.toContain('overflow-y: auto;');
-    expect(productionMarkup).toContain('overflow: visible;');
+    expect(productionMarkup).toContain('max-height: min(320px, calc(100vh - 32px));');
+    expect(productionMarkup).toContain('overflow-y: auto;');
+    expect(productionMarkup).toContain('overscroll-behavior: contain;');
     expect(productionMarkup).toContain('background: #0f172a;');
     expect(productionMarkup).toContain(
       '.bt-floating-editor__shortcut-menu-trigger {\n  min-width: 0;\n  min-height: 28px;\n  column-gap: 6px;'
