@@ -42,6 +42,7 @@ describe('SPFx Monaco webpack configuration', () => {
     configureSpfxMonacoCss(webpackConfiguration);
 
     expect(webpackConfiguration.module.rules).toHaveLength(3);
+    expect(moduleRule.exclude).toHaveLength(2);
     expect(matches(moduleRule.exclude, '/repo/node_modules/legacy-package/file.css')).toBe(true);
     expect(matches(moduleRule.exclude, '/repo/node_modules/monaco-editor/editor.css')).toBe(true);
   });

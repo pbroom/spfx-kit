@@ -21,7 +21,9 @@ module.exports = function configureSpfxMonacoCss(webpackConfiguration) {
     throw new Error('Could not find the SPFx module and global CSS loader rules.');
   }
 
-  moduleRule.exclude = appendCondition(moduleRule.exclude, MONACO_CSS_RULE);
+  if (!containsCondition(moduleRule.exclude, MONACO_CSS_RULE)) {
+    moduleRule.exclude = appendCondition(moduleRule.exclude, MONACO_CSS_RULE);
+  }
 
   if (!rules.some((rule) => String(rule && rule.test) === String(MONACO_CSS_RULE))) {
     const globalRuleIndex = rules.indexOf(globalRule);
@@ -49,4 +51,11 @@ function appendCondition(current, condition) {
     return condition;
   }
   return Array.isArray(current) ? [...current, condition] : [current, condition];
+}
+
+function containsCondition(current, condition) {
+  if (Array.isArray(current)) {
+    return current.some((entry) => containsCondition(entry, condition));
+  }
+  return String(current) === String(condition);
 }
