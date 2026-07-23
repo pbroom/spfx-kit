@@ -10,7 +10,8 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./spfx-webpack": "./spfx-monaco-webpack.cjs"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
