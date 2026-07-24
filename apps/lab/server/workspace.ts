@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, readdir, realpath, rename, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { access, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { appPathForMessage, legacyAppsDir, managedAppsDir, rootDir } from './paths';
 import { describeManagedAppVersion, ManagedAppVersionInfo, selectManagedAppVersion } from './app-versions';
@@ -105,6 +106,9 @@ export async function updateManagedLabAppVersion(
     const app = await requireWorkspaceApp(appId);
     const selected = await selectManagedAppVersion(app.dir, versionId);
     try {
+      if (await managedAppDependenciesNeedRefresh(app.dir)) {
+        await installManagedAppDependencies(app);
+      }
       const sync = await syncLabRegistry();
       return {
         message: `Updated ${app.relativeDir} to ${selected.label} (v${selected.version}).${
@@ -122,6 +126,58 @@ export async function updateManagedLabAppVersion(
     }
   } finally {
     managedAppVersionUpdates.delete(appId);
+  }
+}
+
+async function managedAppDependenciesNeedRefresh(appDir: string): Promise<boolean> {
+  const [current, installed] = await Promise.all([
+    readDependencyManifestDigest(appDir),
+    readFile(path.join(appDir, '.spfx-kit', 'dependency-manifest.sha256'), 'utf8').catch((error) => {
+      if (isMissingFile(error)) {
+        return '';
+      }
+      throw error;
+    })
+  ]);
+  return current !== installed.trim();
+}
+
+async function readDependencyManifestDigest(appDir: string): Promise<string> {
+  const files = ['package.json', 'package-lock.json'];
+  const contents = await Promise.all(
+    files.map(async (file) => {
+      const fullPath = path.join(appDir, file);
+      try {
+        return await readFile(fullPath, 'utf8');
+      } catch (error) {
+        if (isMissingFile(error)) {
+          return '';
+        }
+        throw error;
+      }
+    })
+  );
+  return createHash('sha256').update(contents.join('\u0000')).digest('hex');
+}
+
+async function installManagedAppDependencies(app: WorkspaceApp): Promise<void> {
+  const lockfile = path.join(app.dir, 'package-lock.json');
+  try {
+    await access(lockfile);
+  } catch {
+    throw new Error(
+      `Updated ${app.relativeDir}, but its dependency manifest changed without a package-lock.json. Add a lockfile before selecting this version.`
+    );
+  }
+
+  try {
+    await runAppNpmCommand(app.dir, ['ci']);
+    await mkdir(path.join(app.dir, '.spfx-kit'), { recursive: true });
+    await writeFile(path.join(app.dir, '.spfx-kit', 'dependency-manifest.sha256'), `${await readDependencyManifestDigest(app.dir)}\n`);
+  } catch (error) {
+    throw new Error(
+      `Updated ${app.relativeDir}, but npm ci could not refresh its dependencies. The lab registry was not synced; fix the install and select the version again. ${errorMessage(error)}`
+    );
   }
 }
 
@@ -249,6 +305,32 @@ export function runWorkspaceNodeCommand(args: string[]): Promise<{ stdout: strin
       resolve({ stdout, stderr });
     });
   });
+}
+
+function runAppNpmCommand(cwd: string, args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('npm', args, { cwd, env: process.env });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `npm ${args.join(' ')} failed with status ${code}.`));
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+function isMissingFile(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function listManagedAppEntries(): Promise<Array<{ id: string; dir: string }>> {
