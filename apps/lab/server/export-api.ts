@@ -111,7 +111,7 @@ function streamExport(res: ServerResponse, app: string, targets: string[]) {
           '--json',
           '--progress-json'
         ],
-        { cwd: rootDir, env: process.env }
+        { cwd: rootDir, env: exportProcessEnv() }
       );
 
       wireExportChild(child);
@@ -192,7 +192,7 @@ async function runExport(app: string, targets: string[]) {
         targets.join(','),
         '--json'
       ],
-      { cwd: rootDir, env: process.env }
+      { cwd: rootDir, env: exportProcessEnv() }
     );
     let stdout = '';
     let stderr = '';
@@ -217,6 +217,15 @@ async function runExport(app: string, targets: string[]) {
       }
     });
   });
+}
+
+// Vite sets NODE_ENV=development for the lab server. Export runs an app's
+// production test/build pipeline, which must not inherit that development-only
+// value (Jest treats it as a non-test environment).
+function exportProcessEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.NODE_ENV;
+  return env;
 }
 
 // export-spfx-app --json guarantees stdout carries only the JSON summary,
