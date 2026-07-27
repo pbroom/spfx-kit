@@ -14,6 +14,7 @@
     "sync-lab": "./src/cli/sync-lab.mjs",
     "sync-source-editor": "./src/cli/sync-source-editor.mjs",
     "validate-spfx-app": "./src/cli/validate-spfx-app.mjs",
+    "verify-cdn-stage": "./src/cli/verify-cdn-stage.mjs",
     "verify-sppkg": "./src/cli/verify-sppkg.mjs"
   },
   "scripts": {

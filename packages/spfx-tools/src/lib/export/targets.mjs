@@ -8,9 +8,17 @@ import { cdnBasePathForSlug, standalonePackageName, setCdnBasePath, setIncludeCl
 import { detectSpfxToolchain, standaloneScriptsForToolchain } from '../spfx-toolchain.mjs';
 import { verifySppkg } from '../sppkg.mjs';
 import {
+  createImmutableCdnReleaseId,
+  createCdnStageManifest,
+  mergeCdnAssetTree,
+  stagingCdnBasePath,
+  verifyCdnStage
+} from '../cdn-stage.mjs';
+import {
   defaultClaude,
   writeCdnHandoffReadme,
   writeCdnPackageReadme,
+  writeCdnStageReadme,
   writeReleaseReadme,
   writeRepoExportReadme,
   writeSingleBundleReadme
@@ -66,6 +74,72 @@ export async function exportCdnPackage(appDir, outDir, slug) {
   reportTargetProgress('cdn', 'packaging', 0.94, 'Reading CDN package contents.');
   const target = await describeTarget('cdn', 'SPFx + CDN JS package', targetDir, files);
   reportTargetProgress('cdn', 'complete', 1, 'SPFx + CDN JS package assembled.');
+  return target;
+}
+
+export async function exportStagingCdnPackage(appDir, outDir, slug, options) {
+  const releaseLabel = options?.releaseId;
+  const releaseId = createImmutableCdnReleaseId(releaseLabel);
+  const cdnBasePath = stagingCdnBasePath(options?.stagingCdnRoot, slug, releaseId);
+  reportTargetProgress('staging-cdn', 'configuring', 0.08, 'Configuring immutable staging CDN package.');
+  await setIncludeClientSideAssets(appDir, false);
+  await setCdnBasePath(appDir, cdnBasePath);
+  reportTargetProgress('staging-cdn', 'building', 0.18, 'Running ship build for staging CDN assets.');
+  runShip(appDir);
+
+  reportTargetProgress('staging-cdn', 'assembling', 0.68, 'Collecting the exact staging CDN upload tree.');
+  const targetDir = path.join(outDir, 'staging-cdn');
+  const solutionDir = path.join(targetDir, 'sharepoint', 'solution');
+  const uploadDir = path.join(targetDir, 'upload');
+  const manifestDir = path.join(targetDir, 'manifests');
+  await mkdir(solutionDir, { recursive: true });
+  await mkdir(uploadDir, { recursive: true });
+
+  const packageFile = await copyExpectedSppkg(appDir, solutionDir, `${slug}.staging.cdn.sppkg`);
+  await mergeCdnAssetTree(path.join(appDir, 'release', 'assets'), uploadDir);
+  await mergeCdnAssetTree(path.join(appDir, 'temp', 'deploy'), uploadDir);
+  await copyIfExists(path.join(appDir, 'release', 'manifests'), manifestDir);
+  const stagedManifestDir = (await exists(manifestDir)) ? manifestDir : undefined;
+
+  reportTargetProgress('staging-cdn', 'validating', 0.84, 'Validating package URLs and staging asset hashes.');
+  const deploymentManifest = await createCdnStageManifest({
+    cdnBasePath,
+    packageFile,
+    releaseLabel,
+    releaseId,
+    releaseManifestDir: stagedManifestDir,
+    slug,
+    stageDir: targetDir,
+    uploadDir
+  });
+  const deploymentManifestFile = path.join(targetDir, 'deployment-manifest.json');
+  await writeJson(deploymentManifestFile, deploymentManifest);
+  await verifyCdnStage(targetDir, deploymentManifest);
+  const readmeFile = await writeCdnStageReadme(
+    targetDir,
+    slug,
+    cdnBasePath,
+    releaseId,
+    path.basename(packageFile)
+  );
+
+  const files = [
+    readmeFile,
+    packageFile,
+    deploymentManifestFile,
+    ...(await listFilesRecursive(uploadDir)),
+    ...(await listFilesRecursive(manifestDir))
+  ];
+  reportTargetProgress('staging-cdn', 'packaging', 0.94, 'Recording staging CDN proof artifact.');
+  const target = await describeTarget('staging-cdn', 'Validated staging CDN package', targetDir, files);
+  target.cdnBasePath = cdnBasePath;
+  target.releaseLabel = releaseLabel;
+  target.releaseId = releaseId;
+  target.deploymentManifest = path.basename(deploymentManifestFile);
+  target.localValidation = 'passed';
+  target.remoteValidation = 'not-run';
+  target.appCatalogProof = 'not-run';
+  reportTargetProgress('staging-cdn', 'complete', 1, 'Staging CDN package assembled and locally validated.');
   return target;
 }
 

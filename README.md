@@ -190,6 +190,38 @@ To export a managed app:
 npm run export:spfx -- --app .spfx-kit/apps/<app-slug> --target single,cdn,standalone
 ```
 
+To create a staging-first CDN proof package, use a configured HTTPS staging
+root and a human-readable release label:
+
+```sh
+npm run export:spfx -- \
+  --app .spfx-kit/apps/<app-slug> \
+  --target staging-cdn \
+  --staging-cdn-base-url https://staging-cdn.contoso.com/spfx \
+  --cdn-release 1.2.3-rc.1
+```
+
+The exporter appends a UTC timestamp and random nonce to the release label, so
+each build receives a non-reusable prefix. The resulting
+`staging-cdn/upload/` directory is the one exact upload tree for
+`<root>/<app-slug>/versions/<release-label>-<build-id>/`. The adjacent
+`deployment-manifest.json` records every URL, byte count, and SHA-256 hash.
+Local verification runs during export and can be repeated after transfer:
+
+```sh
+npm run verify:cdn-stage -- --stage <export-dir>/staging-cdn
+npm run verify:cdn-stage -- \
+  --stage <export-dir>/staging-cdn \
+  --remote \
+  --expected-cdn-base-url <exact-versioned-prefix>
+```
+
+For a protected staging CDN, `--authorization-env <ENV_NAME>` reads an
+Authorization header value from that environment variable without writing it
+to the artifact or command arguments. The expected prefix must come from
+trusted deployment configuration; it prevents a tampered artifact from
+redirecting credentials or remote checks to another host.
+
 The import tool excludes repository metadata, dependencies, build outputs, and
 generated packages. If a source project contains a lockfile, it is preserved
 under `.spfx-kit/original-package-lock.json` inside the imported app for audit
@@ -212,6 +244,10 @@ Exports are profile-specific:
 
 - `single` produces an `.sppkg` with `includeClientSideAssets=true`.
 - `cdn` produces an `.sppkg`, `release/`, and `cdn-handoff/` assets for `SPFX_KIT_CDN_BASE_URL`.
+- `staging-cdn` produces an `.sppkg` pinned to a generated immutable staging prefix, one
+  exact `upload/` tree, and a locally verified deployment manifest. It requires
+  `--staging-cdn-base-url` plus `--cdn-release` (or
+  `SPFX_KIT_STAGING_CDN_BASE_URL` plus `SPFX_KIT_CDN_RELEASE`).
 - `standalone` produces a clean standalone repo with root-level `config/`,
   `src/`, `sharepoint/`, `release/`, `cdn-handoff/`, `tsconfig.json`,
   `package.json`, `package-lock.json`, `CLAUDE.md`, `.spfx-kit` import metadata,
@@ -391,11 +427,14 @@ the smallest relevant build or validate command.
 Prepare the selected SPFx app for export from SPFx Kit.
 
 Validate the app first. Check `config/package-solution.json` and
-`config/write-manifests.json`. Set `SPFX_KIT_CDN_BASE_URL` if a CDN package is
-needed.
+`config/write-manifests.json`. For staging CDN proof, configure an HTTPS
+staging root and a unique immutable release id.
 
 Run:
 `npm run export:spfx -- --app .spfx-kit/apps/<app-slug> --target single,cdn,standalone`
+
+Or stage CDN mode:
+`npm run export:spfx -- --app .spfx-kit/apps/<app-slug> --target staging-cdn --staging-cdn-base-url https://staging-cdn.contoso.com/spfx --cdn-release 1.2.3-rc.1`
 
 Confirm the archive path plus generated target contents.
 ```

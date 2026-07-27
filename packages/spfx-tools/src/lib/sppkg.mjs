@@ -27,6 +27,20 @@ export async function expectedSppkgPath(appDir) {
 
 export async function verifySppkg(appDir) {
   const packagePath = await expectedSppkgPath(appDir);
+  const inspected = await readSppkgEntries(packagePath);
+  const missingParts = REQUIRED_PACKAGE_PARTS.filter((entry) => !Object.hasOwn(inspected.entries, entry));
+  if (missingParts.length) {
+    throw new Error(`SPFx package is missing required parts: ${missingParts.join(', ')}`);
+  }
+
+  return {
+    packagePath,
+    bytes: inspected.bytes,
+    entries: Object.keys(inspected.entries).length
+  };
+}
+
+export async function readSppkgEntries(packagePath) {
   let packageStats;
   try {
     packageStats = await stat(packagePath);
@@ -52,14 +66,8 @@ export async function verifySppkg(appDir) {
   if (unsafeEntry) {
     throw new Error(`SPFx package contains an unsafe archive path: ${unsafeEntry}`);
   }
-  const missingParts = REQUIRED_PACKAGE_PARTS.filter((entry) => !Object.hasOwn(entries, entry));
-  if (missingParts.length) {
-    throw new Error(`SPFx package is missing required parts: ${missingParts.join(', ')}`);
-  }
-
   return {
-    packagePath,
     bytes: packageStats.size,
-    entries: entryNames.length
+    entries
   };
 }
