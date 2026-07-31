@@ -92,6 +92,7 @@ export async function exportStagingCdnPackage(appDir, outDir, slug, options) {
   const solutionDir = path.join(targetDir, 'sharepoint', 'solution');
   const uploadDir = path.join(targetDir, 'upload');
   const manifestDir = path.join(targetDir, 'manifests');
+  await rm(targetDir, { recursive: true, force: true });
   await mkdir(solutionDir, { recursive: true });
   await mkdir(uploadDir, { recursive: true });
 
