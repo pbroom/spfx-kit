@@ -8,6 +8,7 @@ import { cdnBasePathForSlug, standalonePackageName, setCdnBasePath, setIncludeCl
 import { detectSpfxToolchain, standaloneScriptsForToolchain } from '../spfx-toolchain.mjs';
 import { verifySppkg } from '../sppkg.mjs';
 import {
+  clearGeneratedCdnOutputs,
   createImmutableCdnReleaseId,
   createCdnStageManifest,
   mergeCdnAssetTree,
@@ -85,6 +86,7 @@ export async function exportStagingCdnPackage(appDir, outDir, slug, options) {
   await setIncludeClientSideAssets(appDir, false);
   await setCdnBasePath(appDir, cdnBasePath);
   reportTargetProgress('staging-cdn', 'building', 0.18, 'Running ship build for staging CDN assets.');
+  await clearGeneratedCdnOutputs(appDir);
   runShip(appDir);
 
   reportTargetProgress('staging-cdn', 'assembling', 0.68, 'Collecting the exact staging CDN upload tree.');

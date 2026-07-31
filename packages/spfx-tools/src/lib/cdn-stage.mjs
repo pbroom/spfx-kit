@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { copyFile, lstat, mkdir, readFile, readdir, realpath, stat } from 'node:fs/promises';
+import { copyFile, lstat, mkdir, readFile, readdir, realpath, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { readSppkgEntries } from './sppkg.mjs';
 
@@ -69,6 +69,16 @@ export function stagingCdnBasePath(root, slug, releaseId) {
     `${encodeURIComponent(normalizedSlug)}/versions/${encodeURIComponent(normalizedRelease)}/`,
     normalizedRoot
   ).href;
+}
+
+export async function clearGeneratedCdnOutputs(appDir) {
+  await Promise.all(
+    [
+      path.join(appDir, 'release', 'assets'),
+      path.join(appDir, 'release', 'manifests'),
+      path.join(appDir, 'temp', 'deploy')
+    ].map((outputDir) => rm(outputDir, { recursive: true, force: true }))
+  );
 }
 
 export async function mergeCdnAssetTree(sourceDir, uploadDir) {

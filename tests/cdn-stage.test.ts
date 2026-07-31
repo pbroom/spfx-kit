@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
 // @ts-expect-error plain .mjs module without type declarations
 import {
+  clearGeneratedCdnOutputs,
   createCdnStageManifest,
   createImmutableCdnReleaseId,
   mergeCdnAssetTree,
@@ -49,6 +50,23 @@ describe('staging CDN release paths', () => {
 });
 
 describe('staging CDN asset assembly', () => {
+  it('clears generated CDN outputs without deleting sibling release files', async () => {
+    const appDir = await temporaryDirectory();
+    const generatedFiles = [
+      path.join(appDir, 'release', 'assets', 'stale.js'),
+      path.join(appDir, 'release', 'manifests', 'stale.manifest.json'),
+      path.join(appDir, 'temp', 'deploy', 'stale.js')
+    ];
+    const releaseReadme = path.join(appDir, 'release', 'README.md');
+    await Promise.all(generatedFiles.map((file) => mkdir(path.dirname(file), { recursive: true })));
+    await Promise.all([...generatedFiles.map((file) => writeFile(file, 'stale')), writeFile(releaseReadme, 'keep')]);
+
+    await clearGeneratedCdnOutputs(appDir);
+
+    await Promise.all(generatedFiles.map((file) => expect(access(file)).rejects.toMatchObject({ code: 'ENOENT' })));
+    await expect(readFile(releaseReadme, 'utf8')).resolves.toBe('keep');
+  });
+
   it('allows identical overlaps and rejects conflicting bytes', async () => {
     const root = await temporaryDirectory();
     const first = path.join(root, 'first');
