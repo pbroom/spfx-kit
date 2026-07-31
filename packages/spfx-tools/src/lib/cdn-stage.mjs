@@ -1,75 +1,20 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { copyFile, lstat, mkdir, readFile, readdir, realpath, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { readSppkgEntries } from './sppkg.mjs';
+import { deterministicManifestCore, parseCdnStageManifestV1 } from './cdn-stage-contract.mjs';
+import {
+  assetUrl,
+  createImmutableCdnReleaseId,
+  normalizeCdnReleaseId,
+  normalizeExactCdnBasePath,
+  normalizeStagingCdnRoot,
+  safeLocalPath,
+  stagingCdnBasePath
+} from './cdn-stage-paths.mjs';
+import { readSppkgComponentManifests } from './sppkg.mjs';
 
-const MUTABLE_RELEASE_IDS = new Set(['current', 'development', 'latest', 'production', 'staging']);
-const RELEASE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-
-export function normalizeStagingCdnRoot(value) {
-  let url;
-  try {
-    url = new URL(String(value));
-  } catch {
-    throw new Error(`Staging CDN root must be a valid HTTPS URL: ${value}`);
-  }
-  const hostname = url.hostname.toLowerCase();
-  if (url.protocol !== 'https:') {
-    throw new Error('Staging CDN root must use HTTPS');
-  }
-  if (url.username || url.password) {
-    throw new Error('Staging CDN root may not contain credentials');
-  }
-  if (url.search || url.hash) {
-    throw new Error('Staging CDN root may not contain a query string or fragment');
-  }
-  if (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '::1' ||
-    hostname === 'example.com' ||
-    hostname.endsWith('.example.com') ||
-    hostname.endsWith('.invalid')
-  ) {
-    throw new Error(`Staging CDN root must name a configured non-placeholder HTTPS host: ${value}`);
-  }
-  url.pathname = `${url.pathname.replace(/\/+$/, '')}/`;
-  return url.href;
-}
-
-export function normalizeCdnReleaseId(value) {
-  const releaseId = String(value || '').trim();
-  if (!RELEASE_ID_PATTERN.test(releaseId) || !/\d/.test(releaseId)) {
-    throw new Error(
-      'CDN release id must contain a digit and use only letters, digits, dots, underscores, and hyphens'
-    );
-  }
-  if (MUTABLE_RELEASE_IDS.has(releaseId.toLowerCase())) {
-    throw new Error(`CDN release id must be immutable, not "${releaseId}"`);
-  }
-  return releaseId;
-}
-
-export function createImmutableCdnReleaseId(releaseLabel, options = {}) {
-  const normalizedLabel = normalizeCdnReleaseId(releaseLabel);
-  const now = options.now || new Date();
-  const nonce = String(options.nonce || randomBytes(6).toString('hex'));
-  if (!/^[A-Za-z0-9]+$/.test(nonce)) {
-    throw new Error('CDN release nonce must use only letters and digits');
-  }
-  const timestamp = now.toISOString().replace(/[-:.]/g, '');
-  return normalizeCdnReleaseId(`${normalizedLabel}-${timestamp}-${nonce}`);
-}
-
-export function stagingCdnBasePath(root, slug, releaseId) {
-  const normalizedRoot = normalizeStagingCdnRoot(root);
-  const normalizedSlug = normalizePathSegment(slug, 'app slug');
-  const normalizedRelease = normalizeCdnReleaseId(releaseId);
-  return new URL(
-    `${encodeURIComponent(normalizedSlug)}/versions/${encodeURIComponent(normalizedRelease)}/`,
-    normalizedRoot
-  ).href;
-}
+export { verifyRemoteCdnFiles } from './cdn-stage-remote.mjs';
+export { createImmutableCdnReleaseId, normalizeCdnReleaseId, normalizeStagingCdnRoot, stagingCdnBasePath };
 
 export async function clearGeneratedCdnOutputs(appDir) {
   await Promise.all(
@@ -194,101 +139,33 @@ export async function createCdnStageManifest({
 }
 
 export async function verifyCdnStage(stageDir, manifest) {
-  if (manifest?.schemaVersion !== 1) {
-    throw new Error('Unsupported or missing CDN stage manifest schemaVersion');
-  }
-  const packageFile = safeLocalPath(stageDir, manifest.package?.path);
+  const persisted = parseCdnStageManifestV1(manifest);
+  const packageFile = safeLocalPath(stageDir, persisted.package.path);
   await assertRealPathWithin(stageDir, packageFile, 'staged SPFx package');
   const packageStats = await lstat(packageFile);
   if (!packageStats.isFile() || packageStats.isSymbolicLink()) {
-    throw new Error(`Staged SPFx package must be a real file: ${manifest.package?.path}`);
+    throw new Error(`Staged SPFx package must be a real file: ${persisted.package.path}`);
   }
-  const uploadDir = safeLocalPath(stageDir, manifest.uploadRoot);
+  const uploadDir = safeLocalPath(stageDir, persisted.uploadRoot);
   await assertRealPathWithin(stageDir, uploadDir, 'CDN upload root');
-  const releaseManifestDir = manifest.manifests?.root
-    ? safeLocalPath(stageDir, manifest.manifests.root)
+  const releaseManifestDir = persisted.manifests.root
+    ? safeLocalPath(stageDir, persisted.manifests.root)
     : undefined;
   if (releaseManifestDir) {
     await assertRealPathWithin(stageDir, releaseManifestDir, 'generated manifest root');
   }
   const rebuilt = await createCdnStageManifest({
-    cdnBasePath: manifest.cdnBasePath,
+    cdnBasePath: persisted.cdnBasePath,
     packageFile,
-    releaseLabel: manifest.releaseLabel,
-    releaseId: manifest.releaseId,
+    releaseLabel: persisted.releaseLabel,
+    releaseId: persisted.releaseId,
     releaseManifestDir,
-    slug: manifest.slug,
+    slug: persisted.slug,
     stageDir,
     uploadDir
   });
-  assertEqualJson('staged package', rebuilt.package, manifest.package);
-  assertEqualJson('upload file inventory', rebuilt.files, manifest.files);
-  assertEqualJson('package component manifests', rebuilt.manifests.packageComponents, manifest.manifests?.packageComponents);
-  assertEqualJson(
-    'generated component manifests',
-    rebuilt.manifests.generatedComponents,
-    manifest.manifests?.generatedComponents
-  );
+  assertEqualJson('deterministic manifest core', deterministicManifestCore(rebuilt), deterministicManifestCore(persisted));
   return rebuilt;
-}
-
-export async function verifyRemoteCdnFiles(files, { authorization, expectedCdnBasePath } = {}) {
-  const expectedBasePath = normalizeExactCdnBasePath(expectedCdnBasePath);
-  for (const file of files) {
-    assertExpectedRemoteUrl(file.url, expectedBasePath);
-  }
-  const headers = { 'Accept-Encoding': 'identity' };
-  if (authorization) {
-    headers.Authorization = authorization;
-  }
-  const results = new Array(files.length);
-  let nextIndex = 0;
-  const workers = Array.from({ length: Math.min(6, files.length) }, async () => {
-    while (nextIndex < files.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      const file = files[index];
-      await verifyRemoteFile(file, headers);
-      results[index] = { path: file.path, url: file.url, bytes: file.bytes, sha256: file.sha256 };
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
-function assertExpectedRemoteUrl(value, expectedCdnBasePath) {
-  const url = new URL(value);
-  const expected = new URL(expectedCdnBasePath);
-  if (
-    url.protocol !== 'https:' ||
-    url.origin !== expected.origin ||
-    !url.pathname.startsWith(expected.pathname) ||
-    url.search ||
-    url.hash
-  ) {
-    throw new Error(`Remote CDN URL is outside the trusted staging prefix: ${value}`);
-  }
-}
-
-async function verifyRemoteFile(file, headers) {
-  let response;
-  try {
-    response = await fetch(file.url, {
-      headers,
-      redirect: 'manual',
-      signal: AbortSignal.timeout(30_000)
-    });
-  } catch (error) {
-    throw new Error(`Remote CDN request failed: ${file.url}`, { cause: error });
-  }
-  if (!response.ok) {
-    throw new Error(`Remote CDN check failed with HTTP ${response.status}: ${file.url}`);
-  }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  const actualHash = sha256(bytes);
-  if (bytes.length !== file.bytes || actualHash !== file.sha256) {
-    throw new Error(`Remote CDN bytes do not match the staged artifact: ${file.url}`);
-  }
 }
 
 async function visitAssetDirectory(rootDir, relativeDir, onFile) {
@@ -340,26 +217,8 @@ async function describeUploadTree(uploadDir, cdnBasePath) {
 }
 
 async function readPackageComponentManifests(packageFile) {
-  const { entries } = await readSppkgEntries(packageFile);
-  const manifests = [];
-  for (const [entryName, bytes] of Object.entries(entries)) {
-    if (!entryName.toLowerCase().endsWith('.xml')) {
-      continue;
-    }
-    const xml = Buffer.from(bytes).toString('utf8');
-    for (const match of xml.matchAll(/\bComponentManifest\s*=\s*(["'])([\s\S]*?)\1/g)) {
-      let manifest;
-      try {
-        manifest = JSON.parse(decodeXmlAttribute(match[2]));
-      } catch (error) {
-        throw new Error(`SPFx package contains an invalid ComponentManifest in ${entryName}`, { cause: error });
-      }
-      if (manifest?.loaderConfig) {
-        manifests.push(normalizeComponentManifest(manifest, entryName));
-      }
-    }
-  }
-  return manifests;
+  const extracted = await readSppkgComponentManifests(packageFile);
+  return extracted.map(({ manifest, source }) => normalizeComponentManifest(manifest, source));
 }
 
 async function readReleaseComponentManifests(manifestDir) {
@@ -574,59 +433,6 @@ function mergeReferences(references) {
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
-function decodeXmlAttribute(value) {
-  return value.replace(/&(#x[0-9a-f]+|#[0-9]+|quot|apos|lt|gt|amp);/gi, (_entity, body) => {
-    const normalized = body.toLowerCase();
-    if (normalized === 'quot') return '"';
-    if (normalized === 'apos') return "'";
-    if (normalized === 'lt') return '<';
-    if (normalized === 'gt') return '>';
-    if (normalized === 'amp') return '&';
-    const codePoint = normalized.startsWith('#x')
-      ? Number.parseInt(normalized.slice(2), 16)
-      : Number.parseInt(normalized.slice(1), 10);
-    return String.fromCodePoint(codePoint);
-  });
-}
-
-function normalizeExactCdnBasePath(value) {
-  const url = new URL(String(value));
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
-    throw new Error(`CDN base path must be a credential-free HTTPS URL: ${value}`);
-  }
-  url.pathname = `${url.pathname.replace(/\/+$/, '')}/`;
-  return url.href;
-}
-
-function assetUrl(cdnBasePath, relativePath) {
-  const encodedPath = relativePath
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/');
-  return new URL(encodedPath, cdnBasePath).href;
-}
-
-function safeLocalPath(rootDir, relativePath) {
-  if (typeof relativePath !== 'string') {
-    throw new Error('CDN stage path must be a string');
-  }
-  const portablePath = relativePath.replace(/\\/g, '/');
-  if (
-    portablePath.startsWith('/') ||
-    portablePath.split('/').some((segment) => segment === '..') ||
-    /^[A-Za-z]:/.test(portablePath)
-  ) {
-    throw new Error(`CDN stage path escapes its root: ${relativePath}`);
-  }
-  const resolvedRoot = path.resolve(rootDir);
-  const resolvedPath = path.resolve(resolvedRoot, portablePath || '.');
-  const relative = path.relative(resolvedRoot, resolvedPath);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error(`CDN stage path escapes its root: ${relativePath}`);
-  }
-  return resolvedPath;
-}
-
 function relativePortablePath(rootDir, filePath) {
   const relative = path.relative(rootDir, filePath).replace(/\\/g, '/');
   safeLocalPath(rootDir, relative);
@@ -639,14 +445,6 @@ async function assertRealPathWithin(rootDir, filePath, label) {
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error(`${label} resolves outside the staging artifact`);
   }
-}
-
-function normalizePathSegment(value, label) {
-  const segment = String(value || '').trim();
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(segment)) {
-    throw new Error(`Invalid ${label}: ${value}`);
-  }
-  return segment;
 }
 
 function sha256(bytes) {

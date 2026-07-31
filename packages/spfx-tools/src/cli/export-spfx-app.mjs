@@ -83,7 +83,7 @@ async function runExport({ appDir, args, cdnRelease, stagingCdnRoot, targets }) 
       summary.targets.push(
         await exportStagingCdnPackage(appDir, outDir, slug, {
           stagingCdnRoot,
-          releaseId: cdnRelease
+          releaseLabel: cdnRelease
         })
       );
     }

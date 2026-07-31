@@ -28,10 +28,7 @@ export async function expectedSppkgPath(appDir) {
 export async function verifySppkg(appDir) {
   const packagePath = await expectedSppkgPath(appDir);
   const inspected = await readSppkgEntries(packagePath);
-  const missingParts = REQUIRED_PACKAGE_PARTS.filter((entry) => !Object.hasOwn(inspected.entries, entry));
-  if (missingParts.length) {
-    throw new Error(`SPFx package is missing required parts: ${missingParts.join(', ')}`);
-  }
+  assertRequiredPackageParts(inspected.entries);
 
   return {
     packagePath,
@@ -46,7 +43,7 @@ export async function readSppkgEntries(packagePath) {
     packageStats = await stat(packagePath);
   } catch (error) {
     if (error?.code === 'ENOENT') {
-      throw new Error(`Expected SPFx package was not produced: ${packagePath}`);
+      throw new Error(`Expected SPFx package was not produced: ${packagePath}`, { cause: error });
     }
     throw error;
   }
@@ -70,4 +67,52 @@ export async function readSppkgEntries(packagePath) {
     bytes: packageStats.size,
     entries
   };
+}
+
+export async function readSppkgComponentManifests(packagePath) {
+  const { entries } = await readSppkgEntries(packagePath);
+  assertRequiredPackageParts(entries);
+  const manifests = [];
+  for (const [entryName, bytes] of Object.entries(entries)) {
+    if (!entryName.toLowerCase().endsWith('.xml')) {
+      continue;
+    }
+    const xml = Buffer.from(bytes).toString('utf8');
+    for (const match of xml.matchAll(/\bComponentManifest\s*=\s*(["'])([\s\S]*?)\1/g)) {
+      let manifest;
+      try {
+        manifest = JSON.parse(decodeXmlAttribute(match[2]));
+      } catch (error) {
+        throw new Error(`SPFx package contains an invalid ComponentManifest in ${entryName}`, {
+          cause: error
+        });
+      }
+      if (manifest?.loaderConfig) {
+        manifests.push({ manifest, source: entryName });
+      }
+    }
+  }
+  return manifests;
+}
+
+function assertRequiredPackageParts(entries) {
+  const missingParts = REQUIRED_PACKAGE_PARTS.filter((entry) => !Object.hasOwn(entries, entry));
+  if (missingParts.length) {
+    throw new Error(`SPFx package is missing required parts: ${missingParts.join(', ')}`);
+  }
+}
+
+function decodeXmlAttribute(value) {
+  return value.replace(/&(#x[0-9a-f]+|#[0-9]+|quot|apos|lt|gt|amp);/gi, (_entity, body) => {
+    const normalized = body.toLowerCase();
+    if (normalized === 'quot') return '"';
+    if (normalized === 'apos') return "'";
+    if (normalized === 'lt') return '<';
+    if (normalized === 'gt') return '>';
+    if (normalized === 'amp') return '&';
+    const codePoint = normalized.startsWith('#x')
+      ? Number.parseInt(normalized.slice(2), 16)
+      : Number.parseInt(normalized.slice(1), 10);
+    return String.fromCodePoint(codePoint);
+  });
 }

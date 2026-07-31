@@ -28,7 +28,7 @@ async function main() {
       );
     }
     const authorization = readAuthorization(args['authorization-env']);
-    const files = await verifyRemoteCdnFiles(rebuilt.files, { authorization, expectedCdnBasePath });
+    const files = await verifyRemoteCdnFiles(rebuilt, { authorization, expectedCdnBasePath });
     remote = { status: 'passed', files: files.length };
   }
 

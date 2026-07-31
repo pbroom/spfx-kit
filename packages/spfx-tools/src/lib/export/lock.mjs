@@ -1,53 +1,143 @@
-import { createHash } from 'node:crypto';
-import { mkdir, open, readFile, realpath, rm } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, open, readdir, readFile, realpath, rename, rm, rmdir, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const LOCK_ROOT = path.join(tmpdir(), 'spfx-kit-export-locks');
+const MAX_ACQUIRE_ATTEMPTS = 8;
 
 export async function acquireAppExportLock(appDir) {
   const appRoot = await realpath(appDir);
   const key = createHash('sha256').update(appRoot).digest('hex');
-  const lockFile = path.join(LOCK_ROOT, `${key}.lock`);
+  const lockDir = path.join(LOCK_ROOT, `${key}.lock`);
   await mkdir(LOCK_ROOT, { recursive: true });
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < MAX_ACQUIRE_ATTEMPTS; attempt += 1) {
+    const owner = {
+      token: randomUUID(),
+      pid: process.pid,
+      appRoot,
+      acquiredAt: new Date().toISOString(),
+    };
+    const candidateDir = `${lockDir}.${owner.token}.candidate`;
+    const ownerFileName = `${owner.token}.json`;
+    await mkdir(candidateDir);
+    await writeOwner(path.join(candidateDir, ownerFileName), owner);
+
     try {
-      const handle = await open(lockFile, 'wx');
-      try {
-        await handle.writeFile(
-          `${JSON.stringify({ pid: process.pid, appRoot, acquiredAt: new Date().toISOString() })}\n`
-        );
-      } finally {
-        await handle.close();
-      }
-      let released = false;
-      return async () => {
-        if (!released) {
-          released = true;
-          await rm(lockFile, { force: true });
-        }
-      };
+      await rename(candidateDir, lockDir);
+      return createReleaseLock(lockDir, ownerFileName);
     } catch (error) {
-      if (error?.code !== 'EEXIST') {
+      if (error?.code !== 'EEXIST' && error?.code !== 'ENOTEMPTY') {
         throw error;
       }
-      const owner = await readLockOwner(lockFile);
-      if (!owner || isProcessAlive(owner.pid)) {
-        throw new Error(`Another SPFx export is already running for ${appRoot}`);
-      }
-      await rm(lockFile, { force: true });
+    } finally {
+      await rm(candidateDir, { recursive: true, force: true });
     }
+
+    const existingLock = await readLock(lockDir);
+    if (!existingLock) {
+      continue;
+    }
+    if (existingLock.owner && isProcessAlive(existingLock.owner.pid)) {
+      throw new Error(`Another SPFx export is already running for ${appRoot}`);
+    }
+    await removeObservedLock(lockDir, existingLock.ownerFileName);
   }
+
   throw new Error(`Could not acquire SPFx export lock for ${appRoot}`);
 }
 
-async function readLockOwner(lockFile) {
+async function writeOwner(ownerFile, owner) {
+  const handle = await open(ownerFile, 'wx', 0o600);
   try {
-    const owner = JSON.parse(await readFile(lockFile, 'utf8'));
-    return Number.isInteger(owner?.pid) && owner.pid > 0 ? owner : null;
+    await handle.writeFile(`${JSON.stringify(owner)}\n`);
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+function createReleaseLock(lockDir, ownerFileName) {
+  let released = false;
+  return async () => {
+    if (released) {
+      return;
+    }
+
+    try {
+      await unlink(path.join(lockDir, ownerFileName));
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        released = true;
+        return;
+      }
+      throw error;
+    }
+    released = true;
+    await removeEmptyLockDir(lockDir);
+  };
+}
+
+async function readLock(lockDir) {
+  let entries;
+  try {
+    entries = await readdir(lockDir, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+
+  if (entries.length === 0) {
+    return { owner: null, ownerFileName: null };
+  }
+  if (entries.length !== 1 || !entries[0].isFile()) {
+    return { owner: null, ownerFileName: null };
+  }
+
+  const ownerFileName = entries[0].name;
+  try {
+    const owner = JSON.parse(await readFile(path.join(lockDir, ownerFileName), 'utf8'));
+    const expectedFileName = `${owner?.token}.json`;
+    return {
+      owner:
+        Number.isInteger(owner?.pid) && owner.pid > 0 && ownerFileName === expectedFileName
+          ? owner
+          : null,
+      ownerFileName,
+    };
   } catch {
-    return null;
+    return { owner: null, ownerFileName };
+  }
+}
+
+async function removeObservedLock(lockDir, ownerFileName) {
+  if (ownerFileName) {
+    try {
+      await unlink(path.join(lockDir, ownerFileName));
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+  return removeEmptyLockDir(lockDir);
+}
+
+async function removeEmptyLockDir(lockDir) {
+  try {
+    await rmdir(lockDir);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return true;
+    }
+    if (error?.code === 'ENOTEMPTY' || error?.code === 'EEXIST') {
+      return false;
+    }
+    throw error;
   }
 }
 

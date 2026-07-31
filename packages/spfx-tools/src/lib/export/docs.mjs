@@ -97,14 +97,14 @@ SharePoint upload:
   return file;
 }
 
-export async function writeCdnStageReadme(dir, slug, cdnBasePath, releaseId, packageFileName) {
+export async function writeCdnStageReadme(dir, slug, cdnBasePath, releaseLabel, releaseId, packageFileName) {
   await mkdir(dir, { recursive: true });
   const file = path.join(dir, 'README.md');
   await writeFile(
     file,
     `# ${slug} Staging CDN Proof Package
 
-This artifact is pinned to immutable release id \`${releaseId}\`.
+This artifact was created for release label \`${releaseLabel}\` and is pinned to immutable release id \`${releaseId}\`.
 
 Staging CDN upload:
 

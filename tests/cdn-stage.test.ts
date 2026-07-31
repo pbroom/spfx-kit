@@ -99,10 +99,13 @@ describe('remote staging CDN verification', () => {
     ];
 
     await expect(
-      verifyRemoteCdnFiles(files, {
-        authorization: 'Bearer hidden',
-        expectedCdnBasePath: 'https://staging.contoso.test/'
-      })
+      verifyRemoteCdnFiles(
+        { cdnBasePath: 'https://staging.contoso.test/', files },
+        {
+          authorization: 'Bearer hidden',
+          expectedCdnBasePath: 'https://staging.contoso.test/'
+        }
+      )
     ).resolves.toEqual(files);
     expect(fetchMock).toHaveBeenCalledWith(
       files[0].url,
@@ -120,17 +123,83 @@ describe('remote staging CDN verification', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 302 })));
     await expect(
       verifyRemoteCdnFiles(
-        [
-          {
-            path: 'asset.js',
-            url: 'https://staging.contoso.test/asset.js',
-            bytes: 1,
-            sha256: 'unused'
-          }
-        ],
+        {
+          cdnBasePath: 'https://staging.contoso.test/',
+          files: [
+            {
+              path: 'asset.js',
+              url: 'https://staging.contoso.test/asset.js',
+              bytes: 1,
+              sha256: 'unused'
+            }
+          ]
+        },
         { expectedCdnBasePath: 'https://staging.contoso.test/' }
       )
     ).rejects.toThrow('HTTP 302');
+  });
+
+  it('requires the trusted prefix to equal the artifact release base', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(
+      verifyRemoteCdnFiles(
+        {
+          cdnBasePath: 'https://staging.contoso.test/trusted/other-release/',
+          files: [
+            {
+              path: 'asset.js',
+              url: 'https://staging.contoso.test/trusted/other-release/asset.js',
+              bytes: 1,
+              sha256: 'unused'
+            }
+          ]
+        },
+        { expectedCdnBasePath: 'https://staging.contoso.test/trusted/' }
+      )
+    ).rejects.toThrow('does not match the trusted staging prefix');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('requires every remote URL to be derived exactly from its staged path', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(
+      verifyRemoteCdnFiles(
+        {
+          cdnBasePath: 'https://staging.contoso.test/release/',
+          files: [
+            {
+              path: 'asset.js',
+              url: 'https://staging.contoso.test/release/different.js',
+              bytes: 1,
+              sha256: 'unused'
+            }
+          ]
+        },
+        { expectedCdnBasePath: 'https://staging.contoso.test/release/' }
+      )
+    ).rejects.toThrow('does not match its staged file path');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('encodes each path segment when deriving its exact remote URL', async () => {
+    const bytes = Buffer.from('asset');
+    const fetchMock = vi.fn().mockResolvedValue(new Response(bytes, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const file = {
+      path: 'chunks/a file.js',
+      url: 'https://staging.contoso.test/release/chunks/a%20file.js',
+      bytes: bytes.length,
+      sha256: createHash('sha256').update(bytes).digest('hex')
+    };
+
+    await expect(
+      verifyRemoteCdnFiles(
+        { cdnBasePath: 'https://staging.contoso.test/release/', files: [file] },
+        { expectedCdnBasePath: 'https://staging.contoso.test/release/' }
+      )
+    ).resolves.toEqual([file]);
   });
 
   it('refuses untrusted URLs before attaching authorization', async () => {
@@ -138,20 +207,23 @@ describe('remote staging CDN verification', () => {
     vi.stubGlobal('fetch', fetchMock);
     await expect(
       verifyRemoteCdnFiles(
-        [
-          {
-            path: 'asset.js',
-            url: 'https://attacker.test/asset.js',
-            bytes: 1,
-            sha256: 'unused'
-          }
-        ],
+        {
+          cdnBasePath: 'https://staging.contoso.test/release/',
+          files: [
+            {
+              path: 'asset.js',
+              url: 'https://attacker.test/asset.js',
+              bytes: 1,
+              sha256: 'unused'
+            }
+          ]
+        },
         {
           authorization: 'Bearer hidden',
           expectedCdnBasePath: 'https://staging.contoso.test/release/'
         }
       )
-    ).rejects.toThrow('outside the trusted staging prefix');
+    ).rejects.toThrow('does not match its staged file path');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
@@ -194,7 +266,52 @@ describe('staging CDN proof manifest', () => {
       files: expect.any(Array)
     });
     await writeFile(path.join(fixture.uploadDir, 'unexpected.js'), 'unexpected');
-    await expect(verifyCdnStage(fixture.stageDir, manifest)).rejects.toThrow('upload file inventory');
+    await expect(verifyCdnStage(fixture.stageDir, manifest)).rejects.toThrow('deterministic manifest core');
+  });
+
+  it('rejects malformed or extended version 1 manifest shapes', async () => {
+    const fixture = await createStageFixture();
+    const manifest = await createCdnStageManifest(fixture);
+    const withUnknownField = { ...manifest, unversionedExtension: true };
+    await expect(verifyCdnStage(fixture.stageDir, withUnknownField)).rejects.toThrow('unsupported or missing fields');
+
+    const malformedPackage = { ...manifest, package: { ...manifest.package, bytes: '1' } };
+    await expect(verifyCdnStage(fixture.stageDir, malformedPackage)).rejects.toThrow(
+      'package bytes must be a positive safe integer'
+    );
+  });
+
+  it('rejects forged proof status and deterministic manifest metadata', async () => {
+    const fixture = await createStageFixture();
+    const manifest = await createCdnStageManifest(fixture);
+    const forgedProof = {
+      ...manifest,
+      proof: { ...manifest.proof, remoteCdn: 'passed' }
+    };
+    await expect(verifyCdnStage(fixture.stageDir, forgedProof)).rejects.toThrow('proof remoteCdn must be not-run');
+
+    const forgedReferenceCount = {
+      ...manifest,
+      manifests: { ...manifest.manifests, referencedFiles: manifest.manifests.referencedFiles + 1 }
+    };
+    await expect(verifyCdnStage(fixture.stageDir, forgedReferenceCount)).rejects.toThrow('deterministic manifest core');
+  });
+
+  it('pins version 1 manifests to the canonical staging layout', async () => {
+    const fixture = await createStageFixture();
+    const manifest = await createCdnStageManifest(fixture);
+    await expect(verifyCdnStage(fixture.stageDir, { ...manifest, releaseLabel: 'latest' })).rejects.toThrow(
+      'releaseLabel must be normalized and immutable'
+    );
+    await expect(verifyCdnStage(fixture.stageDir, { ...manifest, uploadRoot: 'alternate-upload' })).rejects.toThrow(
+      'uploadRoot must be upload'
+    );
+    await expect(
+      verifyCdnStage(fixture.stageDir, {
+        ...manifest,
+        manifests: { ...manifest.manifests, root: 'alternate-manifests' }
+      })
+    ).rejects.toThrow('manifests root must be manifests');
   });
 
   it('fails when a package manifest path is absent locally', async () => {
@@ -238,7 +355,7 @@ async function createStageFixture() {
   const stageDir = await temporaryDirectory();
   const uploadDir = path.join(stageDir, 'upload');
   const releaseManifestDir = path.join(stageDir, 'manifests');
-  const packageFile = path.join(stageDir, 'sharepoint', 'solution', 'team.staging.cdn.sppkg');
+  const packageFile = path.join(stageDir, 'sharepoint', 'solution', 'team-spfx.staging.cdn.sppkg');
   const cdnBasePath = 'https://staging.contoso.test/spfx/team-spfx/versions/1.2.3-rc.4/';
   const componentManifest = {
     id: 'component-id',

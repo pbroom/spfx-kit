@@ -46,10 +46,8 @@ export async function exportSingleBundle(appDir, outDir, slug) {
 export async function exportCdnPackage(appDir, outDir, slug) {
   reportTargetProgress('cdn', 'configuring', 0.08, 'Configuring CDN package and manifest path.');
   const cdnBasePath = cdnBasePathForSlug(slug, process.env.SPFX_KIT_CDN_BASE_URL || 'https://cdn.example.com/spfx');
-  await setIncludeClientSideAssets(appDir, false);
-  await setCdnBasePath(appDir, cdnBasePath);
   reportTargetProgress('cdn', 'building', 0.18, 'Running ship build for CDN assets.');
-  runShip(appDir);
+  const build = await buildExternalAssetsPackage(appDir, cdnBasePath);
 
   reportTargetProgress('cdn', 'assembling', 0.68, 'Collecting package, assets, and manifests.');
   const targetDir = path.join(outDir, 'cdn');
@@ -60,10 +58,10 @@ export async function exportCdnPackage(appDir, outDir, slug) {
   await mkdir(releaseDir, { recursive: true });
   await mkdir(handoffDir, { recursive: true });
 
-  const packageFile = await copyExpectedSppkg(appDir, solutionDir, `${slug}.cdn.sppkg`);
-  await copyIfExists(path.join(appDir, 'release', 'assets'), path.join(releaseDir, 'assets'));
-  await copyIfExists(path.join(appDir, 'release', 'manifests'), path.join(releaseDir, 'manifests'));
-  await copyContentsIfExists(path.join(appDir, 'temp', 'deploy'), path.join(releaseDir, 'assets'));
+  const packageFile = await copySppkg(build.packageFile, solutionDir, `${slug}.cdn.sppkg`);
+  await copyIfExists(build.releaseAssetsDir, path.join(releaseDir, 'assets'));
+  await copyIfExists(build.releaseManifestDir, path.join(releaseDir, 'manifests'));
+  await copyContentsIfExists(build.deployAssetsDir, path.join(releaseDir, 'assets'));
   await copyIfExists(path.join(releaseDir, 'assets'), path.join(handoffDir, 'assets'));
   await copyIfExists(path.join(releaseDir, 'manifests'), path.join(handoffDir, 'manifests'));
   reportTargetProgress('cdn', 'assembling', 0.86, 'Writing CDN handoff and release notes.');
@@ -79,16 +77,21 @@ export async function exportCdnPackage(appDir, outDir, slug) {
 }
 
 export async function exportStagingCdnPackage(appDir, outDir, slug, options) {
-  const releaseLabel = options?.releaseId;
+  const releaseLabel = options?.releaseLabel;
   const releaseId = createImmutableCdnReleaseId(releaseLabel);
   const cdnBasePath = stagingCdnBasePath(options?.stagingCdnRoot, slug, releaseId);
   reportTargetProgress('staging-cdn', 'configuring', 0.08, 'Configuring immutable staging CDN package.');
-  await setIncludeClientSideAssets(appDir, false);
-  await setCdnBasePath(appDir, cdnBasePath);
   reportTargetProgress('staging-cdn', 'building', 0.18, 'Running ship build for staging CDN assets.');
-  await clearGeneratedCdnOutputs(appDir);
-  runShip(appDir);
+  const build = await buildExternalAssetsPackage(appDir, cdnBasePath, { clearGeneratedOutputs: true });
 
+  return assembleStagingCdnPackage(build, outDir, slug, {
+    cdnBasePath,
+    releaseId,
+    releaseLabel
+  });
+}
+
+export async function assembleStagingCdnPackage(build, outDir, slug, { cdnBasePath, releaseId, releaseLabel }) {
   reportTargetProgress('staging-cdn', 'assembling', 0.68, 'Collecting the exact staging CDN upload tree.');
   const targetDir = path.join(outDir, 'staging-cdn');
   const solutionDir = path.join(targetDir, 'sharepoint', 'solution');
@@ -98,10 +101,10 @@ export async function exportStagingCdnPackage(appDir, outDir, slug, options) {
   await mkdir(solutionDir, { recursive: true });
   await mkdir(uploadDir, { recursive: true });
 
-  const packageFile = await copyExpectedSppkg(appDir, solutionDir, `${slug}.staging.cdn.sppkg`);
-  await mergeCdnAssetTree(path.join(appDir, 'release', 'assets'), uploadDir);
-  await mergeCdnAssetTree(path.join(appDir, 'temp', 'deploy'), uploadDir);
-  await copyIfExists(path.join(appDir, 'release', 'manifests'), manifestDir);
+  const packageFile = await copySppkg(build.packageFile, solutionDir, `${slug}.staging.cdn.sppkg`);
+  await mergeCdnAssetTree(build.releaseAssetsDir, uploadDir);
+  await mergeCdnAssetTree(build.deployAssetsDir, uploadDir);
+  await copyIfExists(build.releaseManifestDir, manifestDir);
   const stagedManifestDir = (await exists(manifestDir)) ? manifestDir : undefined;
 
   reportTargetProgress('staging-cdn', 'validating', 0.84, 'Validating package URLs and staging asset hashes.');
@@ -116,12 +119,13 @@ export async function exportStagingCdnPackage(appDir, outDir, slug, options) {
     uploadDir
   });
   const deploymentManifestFile = path.join(targetDir, 'deployment-manifest.json');
-  await writeJson(deploymentManifestFile, deploymentManifest);
   await verifyCdnStage(targetDir, deploymentManifest);
+  await writeJson(deploymentManifestFile, deploymentManifest);
   const readmeFile = await writeCdnStageReadme(
     targetDir,
     slug,
     cdnBasePath,
+    releaseLabel,
     releaseId,
     path.basename(packageFile)
   );
@@ -139,11 +143,25 @@ export async function exportStagingCdnPackage(appDir, outDir, slug, options) {
   target.releaseLabel = releaseLabel;
   target.releaseId = releaseId;
   target.deploymentManifest = path.basename(deploymentManifestFile);
-  target.localValidation = 'passed';
-  target.remoteValidation = 'not-run';
-  target.appCatalogProof = 'not-run';
+  target.proof = deploymentManifest.proof;
   reportTargetProgress('staging-cdn', 'complete', 1, 'Staging CDN package assembled and locally validated.');
   return target;
+}
+
+export async function buildExternalAssetsPackage(appDir, cdnBasePath, options = {}) {
+  await setIncludeClientSideAssets(appDir, false);
+  await setCdnBasePath(appDir, cdnBasePath);
+  if (options.clearGeneratedOutputs) {
+    await clearGeneratedCdnOutputs(appDir);
+  }
+  await (options.ship || runShip)(appDir);
+  const { packagePath } = await verifySppkg(appDir);
+  return {
+    packageFile: packagePath,
+    releaseAssetsDir: path.join(appDir, 'release', 'assets'),
+    releaseManifestDir: path.join(appDir, 'release', 'manifests'),
+    deployAssetsDir: path.join(appDir, 'temp', 'deploy')
+  };
 }
 
 export async function exportStandaloneRepo(appDir, outDir, slug) {
@@ -173,6 +191,10 @@ function runShip(appDir) {
 
 async function copyExpectedSppkg(appDir, targetDir, targetName) {
   const { packagePath } = await verifySppkg(appDir);
+  return copySppkg(packagePath, targetDir, targetName);
+}
+
+async function copySppkg(packagePath, targetDir, targetName) {
   const target = path.join(targetDir, targetName || path.basename(packagePath));
   await cp(packagePath, target);
   return target;
