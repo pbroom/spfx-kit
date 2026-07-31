@@ -5,15 +5,20 @@ import { parseArgs, required } from '../lib/args.mjs';
 import { appSlugFromDir } from '../lib/spfx.mjs';
 import { archiveSegmentForTarget, createArchive } from '../lib/export/archive.mjs';
 import { writeExportReadme } from '../lib/export/docs.mjs';
+import { acquireAppExportLock } from '../lib/export/lock.mjs';
 import { configureExportOutput, isJsonOutput, reportExportProgress } from '../lib/export/output.mjs';
-import { exportCdnPackage, exportSingleBundle, exportStandaloneRepo } from '../lib/export/targets.mjs';
+import { exportCdnPackage, exportSingleBundle, exportStagingCdnPackage, exportStandaloneRepo } from '../lib/export/targets.mjs';
 
 const usage = `Usage:
-  export-spfx-app --app .spfx-kit/apps/<slug>-spfx --target single,cdn,standalone [--out <dir>] [--json] [--progress-json]
+  export-spfx-app --app .spfx-kit/apps/<slug>-spfx --target single,cdn,staging-cdn,standalone [--out <dir>] [--json] [--progress-json]
+
+Staging CDN target:
+  --staging-cdn-base-url <https-url> --cdn-release <release-label>
+  (or SPFX_KIT_STAGING_CDN_BASE_URL and SPFX_KIT_CDN_RELEASE)
 
 With --json, stdout carries only the final JSON summary; all build logs go to stderr.`;
 
-const allowedTargets = new Set(['single', 'cdn', 'standalone']);
+const allowedTargets = new Set(['single', 'cdn', 'staging-cdn', 'standalone']);
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -28,11 +33,27 @@ async function main() {
     .filter(Boolean);
   for (const target of targets) {
     if (!allowedTargets.has(target)) {
-      throw new Error(`Unsupported export target "${target}". Use single, cdn, or standalone.`);
+      throw new Error(`Unsupported export target "${target}". Use single, cdn, staging-cdn, or standalone.`);
     }
+  }
+  const stagingCdnRoot = String(args['staging-cdn-base-url'] || process.env.SPFX_KIT_STAGING_CDN_BASE_URL || '').trim();
+  const cdnRelease = String(args['cdn-release'] || process.env.SPFX_KIT_CDN_RELEASE || '').trim();
+  if (targets.includes('staging-cdn') && (!stagingCdnRoot || !cdnRelease)) {
+    throw new Error(
+      'staging-cdn requires --staging-cdn-base-url and --cdn-release (or SPFX_KIT_STAGING_CDN_BASE_URL and SPFX_KIT_CDN_RELEASE).'
+    );
   }
 
   const appDir = path.resolve(app);
+  const releaseExportLock = await acquireAppExportLock(appDir);
+  try {
+    await runExport({ appDir, args, cdnRelease, stagingCdnRoot, targets });
+  } finally {
+    await releaseExportLock();
+  }
+}
+
+async function runExport({ appDir, args, cdnRelease, stagingCdnRoot, targets }) {
   const slug = appSlugFromDir(appDir);
   const outDir = path.resolve(args.out || path.join(process.cwd(), '.spfx-kit', 'exports', slug, timestamp()));
   const packageSolutionPath = path.join(appDir, 'config', 'package-solution.json');
@@ -58,8 +79,16 @@ async function main() {
     if (targets.includes('cdn')) {
       summary.targets.push(await exportCdnPackage(appDir, outDir, slug));
     }
+    if (targets.includes('staging-cdn')) {
+      summary.targets.push(
+        await exportStagingCdnPackage(appDir, outDir, slug, {
+          stagingCdnRoot,
+          releaseLabel: cdnRelease
+        })
+      );
+    }
     if (targets.includes('standalone')) {
-      // single/cdn mutate config in place; restore the originals so the
+      // Package targets mutate config in place; restore the originals so the
       // standalone repo copies pristine configuration.
       await writeFile(packageSolutionPath, originalPackageSolution);
       await writeFile(writeManifestPath, originalWriteManifest);

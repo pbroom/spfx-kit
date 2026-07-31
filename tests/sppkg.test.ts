@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
 // @ts-expect-error plain .mjs module without type declarations
-import { expectedSppkgPath, verifySppkg } from '../packages/spfx-tools/src/lib/sppkg.mjs';
+import { expectedSppkgPath, readSppkgComponentManifests, verifySppkg } from '../packages/spfx-tools/src/lib/sppkg.mjs';
 
 const temporaryDirectories: string[] = [];
 
@@ -41,6 +41,30 @@ describe('SPFx package verification', () => {
     await writeFile(packagePath, zipSync({ 'readme.txt': strToU8('not an SPFx package') }));
 
     await expect(verifySppkg(appDir)).rejects.toThrow('missing required parts');
+  });
+
+  it('extracts and decodes embedded client-side component manifests', async () => {
+    const appDir = await createFixture('solution/canary.sppkg');
+    const packagePath = path.join(appDir, 'sharepoint', 'solution', 'canary.sppkg');
+    const componentManifest = {
+      id: 'component-id',
+      loaderConfig: { entryModuleId: 'main' }
+    };
+    const encoded = JSON.stringify(componentManifest).replaceAll('"', '&quot;');
+    await mkdir(path.dirname(packagePath), { recursive: true });
+    await writeFile(
+      packagePath,
+      zipSync({
+        '[Content_Types].xml': strToU8('<Types />'),
+        '_rels/.rels': strToU8('<Relationships />'),
+        'AppManifest.xml': strToU8('<App />'),
+        'feature/WebPart.xml': strToU8(`<Elements><ClientSideComponent ComponentManifest="${encoded}" /></Elements>`)
+      })
+    );
+
+    await expect(readSppkgComponentManifests(packagePath)).resolves.toEqual([
+      { manifest: componentManifest, source: 'feature/WebPart.xml' }
+    ]);
   });
 });
 

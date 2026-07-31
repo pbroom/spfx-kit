@@ -12,6 +12,9 @@ export async function writeExportReadme(outDir, slug, targets) {
       if (target.id === 'cdn') {
         return `- \`${entryName}/\`: upload \`release/assets/\` to the configured CDN path, then upload the .sppkg in \`sharepoint/solution/\` to the SharePoint tenant app catalog.`;
       }
+      if (target.id === 'staging-cdn') {
+        return `- \`${entryName}/\`: locally validated immutable staging package. Upload exactly \`upload/\` to the recorded staging prefix, optionally verify the remote bytes, then perform the separate SharePoint App Catalog proof.`;
+      }
       if (target.id === 'standalone') {
         return `- \`${entryName}/\`: portable SPFx source repo. Run \`npm ci\` and \`npm run ship\`, then upload the generated \`sharepoint/solution/*.sppkg\` package and any generated CDN assets.`;
       }
@@ -89,6 +92,42 @@ SharePoint upload:
 3. Upload \`sharepoint/solution/${packageFileName}\`.
 4. Deploy or trust the app when prompted.
 5. Add or update the app on the target SharePoint site after the CDN assets are available.
+`
+  );
+  return file;
+}
+
+export async function writeCdnStageReadme(dir, slug, cdnBasePath, releaseLabel, releaseId, packageFileName) {
+  await mkdir(dir, { recursive: true });
+  const file = path.join(dir, 'README.md');
+  await writeFile(
+    file,
+    `# ${slug} Staging CDN Proof Package
+
+This artifact was created for release label \`${releaseLabel}\` and is pinned to immutable release id \`${releaseId}\`.
+
+Staging CDN upload:
+
+1. Upload exactly the contents of \`upload/\` to:
+
+\`${cdnBasePath}\`
+
+2. Do not merge this tree into another release prefix or overwrite an existing release.
+3. After upload, run the shared verifier with \`--remote --expected-cdn-base-url ${cdnBasePath}\`. Supply that expected prefix from trusted deployment configuration.
+
+SharePoint proof:
+
+1. Only after the remote CDN bytes pass, upload \`sharepoint/solution/${packageFileName}\` to a test App Catalog.
+2. Deploy or trust the app, install or update it on a test site, and exercise its runtime and lazy-loaded paths.
+3. Confirm browser requests use the immutable staging prefix with no CDN, CSP, CORS, MIME, or cache failures.
+
+Proof boundary:
+
+- Local artifact validation: passed during export.
+- Remote CDN byte validation: not run by export.
+- SharePoint App Catalog/runtime proof: not run by export.
+
+\`deployment-manifest.json\` is the exact inventory: every upload path, resolved URL, byte count, and SHA-256 hash. The \`manifests/\` directory is for inspection and is not part of the CDN upload tree.
 `
   );
   return file;

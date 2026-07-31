@@ -76,6 +76,26 @@ Deploying to a tenant (App Catalog upload, CDN asset sync via
 `SPFX_KIT_CDN_BASE_URL` and `npm run sync:cdn`) stays a deliberate manual or
 separately-credentialed step.
 
+Before a production CDN upload, create an immutable staging proof package with
+the shared export target:
+
+```sh
+npm run export:spfx -- \
+  --app .spfx-kit/apps/<slug> \
+  --target staging-cdn \
+  --staging-cdn-base-url https://staging-cdn.contoso.com/spfx \
+  --cdn-release 1.2.3-rc.1
+```
+
+Upload only `staging-cdn/upload/`, then run
+`npm run verify:cdn-stage -- --stage <export-dir>/staging-cdn --remote --expected-cdn-base-url <exact-versioned-prefix>`.
+The exporter appends a UTC timestamp and nonce to `--cdn-release`, preventing
+two builds from sharing the same remote prefix.
+That proves the staged bytes match the package inventory; it does not prove
+SharePoint deployment. App Catalog upload, trust/deploy, site installation,
+runtime exercise, and browser network checks remain a separate test-tenant
+gate.
+
 ## Third-party apps (repos shared with you)
 
 Use `clone:spfx` instead of `import:spfx` when you plan to send changes or
