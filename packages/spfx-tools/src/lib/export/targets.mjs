@@ -43,11 +43,14 @@ export async function exportSingleBundle(appDir, outDir, slug) {
   return target;
 }
 
-export async function exportCdnPackage(appDir, outDir, slug) {
+export async function exportCdnPackage(appDir, outDir, slug, options = {}) {
   reportTargetProgress('cdn', 'configuring', 0.08, 'Configuring CDN package and manifest path.');
-  const cdnBasePath = cdnBasePathForSlug(slug, process.env.SPFX_KIT_CDN_BASE_URL || 'https://cdn.example.com/spfx');
+  const cdnBasePath =
+    options.cdnBasePath || cdnBasePathForSlug(slug, process.env.SPFX_KIT_CDN_BASE_URL || 'https://cdn.example.com/spfx');
   reportTargetProgress('cdn', 'building', 0.18, 'Running ship build for CDN assets.');
-  const build = await buildExternalAssetsPackage(appDir, cdnBasePath);
+  const build = options.build
+    ? await options.build(appDir, cdnBasePath)
+    : await buildExternalAssetsPackage(appDir, cdnBasePath);
 
   reportTargetProgress('cdn', 'assembling', 0.68, 'Collecting package, assets, and manifests.');
   const targetDir = path.join(outDir, 'cdn');
@@ -257,17 +260,22 @@ async function rewriteStandaloneTsconfig(targetDir) {
 }
 
 async function ensureHouseStandardDocs(targetDir, slug) {
+  const writeManifests = await readJson(path.join(targetDir, 'config', 'write-manifests.json'));
+  const cdnBasePath =
+    typeof writeManifests.cdnBasePath === 'string' && writeManifests.cdnBasePath.trim()
+      ? writeManifests.cdnBasePath.trim()
+      : cdnBasePathForSlug(slug);
   if (!(await exists(path.join(targetDir, 'CLAUDE.md')))) {
     const packageJson = await readJson(path.join(targetDir, 'package.json'));
     await writeFile(path.join(targetDir, 'CLAUDE.md'), defaultClaude(slug, detectSpfxToolchain(packageJson)));
   }
   await mkdir(path.join(targetDir, 'cdn-handoff'), { recursive: true });
   if (!(await exists(path.join(targetDir, 'cdn-handoff', 'README.md')))) {
-    await writeCdnHandoffReadme(path.join(targetDir, 'cdn-handoff'), slug, cdnBasePathForSlug(slug));
+    await writeCdnHandoffReadme(path.join(targetDir, 'cdn-handoff'), slug, cdnBasePath);
   }
   await mkdir(path.join(targetDir, 'release'), { recursive: true });
   if (!(await exists(path.join(targetDir, 'release', 'README.md')))) {
-    await writeReleaseReadme(path.join(targetDir, 'release'), slug, cdnBasePathForSlug(slug));
+    await writeReleaseReadme(path.join(targetDir, 'release'), slug, cdnBasePath);
   }
   await mkdir(path.join(targetDir, 'sharepoint', 'solution'), { recursive: true });
 }

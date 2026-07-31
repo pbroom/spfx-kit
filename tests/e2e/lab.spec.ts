@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
 const pinnedAppStorageKey = 'spfx-kit.lab.pinned-app.v1';
 
@@ -11,9 +11,14 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(preview.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Select web part' })).toHaveText('Hello Card');
 
-  await page.getByRole('button', { name: 'Export package' }).click();
-  await expect(page.getByRole('combobox', { name: 'Select app to export' })).toBeVisible();
-  await page.getByRole('button', { name: 'Close export package drawer' }).click();
+  await expect(page.getByRole('button', { name: 'Manage apps' })).toHaveCount(0);
+  const appMenuButton = page.getByRole('button', { name: 'Open app menu' });
+  await appMenuButton.click();
+  const sidebar = page.locator('#app-management-sidebar');
+  await expect(sidebar).toBeVisible();
+  await expect(sidebar.getByText('App settings')).toBeVisible();
+  await expect(appMenuButton).toHaveAttribute('aria-expanded', 'true');
+  await sidebar.getByRole('button', { name: 'Close app settings sidebar' }).click();
 
   await page.getByRole('button', { name: 'Theme: Light' }).click();
   await page.getByRole('menuitemradio', { name: 'Dark' }).click();
@@ -35,21 +40,17 @@ test('keeps viewer controls anchored while collapsing the options content', asyn
   expect(previewBefore).not.toBeNull();
 
   const collapsePanelButton = page.getByRole('button', { name: 'Collapse options panel' });
-  const manageAppsButtonBox = await page.getByRole('button', { name: 'Manage apps' }).boundingBox();
   const collapsePanelButtonBox = await collapsePanelButton.boundingBox();
-  expect(manageAppsButtonBox).not.toBeNull();
   expect(collapsePanelButtonBox).not.toBeNull();
-  expect(manageAppsButtonBox!.width).toBe(32);
-  expect(manageAppsButtonBox!.height).toBe(32);
-  expect(collapsePanelButtonBox!.width).toBe(manageAppsButtonBox!.width);
-  expect(collapsePanelButtonBox!.height).toBe(manageAppsButtonBox!.height);
+  expect(collapsePanelButtonBox!.width).toBe(32);
+  expect(collapsePanelButtonBox!.height).toBe(32);
   await expect(collapsePanelButton).toHaveAttribute('aria-pressed', 'false');
   await collapsePanelButton.click();
 
   await expect(shell).toHaveAttribute('data-display-mode', 'edit');
   await expect(optionsPanel).toHaveAttribute('data-panel-state', 'header-only');
   await expect(appPicker).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Manage apps' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Manage apps' })).toHaveCount(0);
   const expandPanelButton = page.getByRole('button', { name: 'Expand options panel' });
   await expect(expandPanelButton).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.property-pane')).toHaveCount(0);
@@ -65,7 +66,7 @@ test('keeps viewer controls anchored while collapsing the options content', asyn
   await expect(page.getByRole('tab', { name: 'Viewer' })).toHaveAttribute('aria-selected', 'true');
   await expect(optionsPanel).toHaveAttribute('data-panel-state', 'header-only');
   await expect(appPicker).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Manage apps' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Manage apps' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Expand options panel and switch to edit mode' })).toHaveAttribute(
     'aria-pressed',
     'true'
@@ -78,10 +79,6 @@ test('keeps viewer controls anchored while collapsing the options content', asyn
   expect(previewAfter).not.toBeNull();
   expect(Math.abs(modeTabsAfter!.x - modeTabsBefore!.x)).toBeLessThanOrEqual(1);
   expect(previewAfter!.width - previewBefore!.width).toBeGreaterThan(300);
-
-  await page.getByRole('button', { name: 'Manage apps' }).click();
-  await expect(page.getByRole('dialog')).toContainText('Manage Apps');
-  await page.getByRole('button', { name: 'Close manage apps' }).click();
 
   await page.getByRole('button', { name: 'Expand options panel and switch to edit mode' }).click();
   await expect(shell).toHaveAttribute('data-display-mode', 'edit');
@@ -106,7 +103,7 @@ test('has no automatically detectable WCAG A or AA violations', async ({ page })
   expect(results.violations).toEqual([]);
 });
 
-test('tracks app versions, defaults to Latest, and can pin a release', async ({ page }) => {
+test('shows selected app state, saves export config, and can pin a source release', async ({ page }) => {
   let selectedVersion = 'latest';
   let latestVersion = '1.2.0';
   let updateAvailable = true;
@@ -115,8 +112,26 @@ test('tracks app versions, defaults to Latest, and can pin a release', async ({ 
     releaseLatestUpdate = resolve;
   });
   const requests: Array<{ appId: string; versionId: string }> = [];
+  const exportConfigRequests: Array<{ appId: string; exportConfig: ManagedAppFixture['exportConfig'] }> = [];
   await page.route('**/api/spfx-apps/**', async (route) => {
     const url = new URL(route.request().url());
+    if (route.request().method() === 'POST' && url.pathname.endsWith('/export-config')) {
+      const body = route.request().postDataJSON() as {
+        appId: string;
+        exportConfig: ManagedAppFixture['exportConfig'];
+      };
+      exportConfigRequests.push(body);
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          appId: body.appId,
+          message: 'Saved fixture export config.',
+          exportConfig: body.exportConfig,
+          apps: managedAppFixtures(selectedVersion, latestVersion, updateAvailable, body.exportConfig)
+        })
+      });
+      return;
+    }
     if (route.request().method() === 'POST' && url.pathname.endsWith('/version')) {
       const body = route.request().postDataJSON() as { appId: string; versionId: string };
       requests.push(body);
@@ -148,41 +163,113 @@ test('tracks app versions, defaults to Latest, and can pin a release', async ({ 
   });
 
   await page.goto('/');
-  await page.getByRole('button', { name: 'Manage apps' }).click();
-  const dialog = page.getByRole('dialog');
-  const versionDropdown = dialog.getByRole('combobox', { name: 'Version for Fixture App' });
+  await page.getByRole('button', { name: 'Open app menu' }).click();
+  const sidebar = page.locator('#app-management-sidebar');
+  await expect(sidebar.getByRole('combobox', { name: 'Selected app' })).toHaveText('Hello Card');
+  await expect(sidebar.getByRole('switch', { name: 'Active: Hello Card' })).toBeChecked();
+  await expect(sidebar.getByRole('switch', { name: 'Not pinned: Hello Card' })).not.toBeChecked();
+
+  const versionDropdown = sidebar.getByRole('combobox', { name: 'Source version for Hello Card' });
   await expect(versionDropdown).toBeDisabled();
-  await expect(dialog.getByRole('switch', { name: 'Connected: Fixture App' })).toBeDisabled();
+  await expect(sidebar.getByRole('switch', { name: 'Active: Hello Card' })).toBeDisabled();
   releaseLatestUpdate();
   await expect(versionDropdown).toContainText('Latest · v1.3.0');
   await expect(versionDropdown).toBeEnabled();
-  await expect.poll(() => requests).toEqual([{ appId: 'fixture-app-spfx', versionId: 'latest' }]);
-  await expect(
-    dialog.getByText(
-      'Automatic updates are paused because this app has local changes. Manual version changes save them to a Git stash.'
-    )
-  ).toBeVisible();
-  await expect(dialog.getByRole('combobox', { name: 'Version for Dirty App' })).toBeEnabled();
+  await expect.poll(() => requests).toEqual([{ appId: 'hello-card-spfx', versionId: 'latest' }]);
+
+  await expect(sidebar.getByRole('textbox', { name: 'Export app name' })).toHaveValue('Hello Card');
+  const fileNameInput = sidebar.getByRole('textbox', { name: 'Export file name' });
+  const fileNameControl = sidebar.locator('.app-management-sidebar__file-name-control');
+  const fileNameOverlay = sidebar.locator('.app-management-sidebar__file-name-overlay');
+  const fileNameMirror = sidebar.locator('.app-management-sidebar__file-name-mirror');
+  const fileNameSuffix = sidebar.locator('.app-management-sidebar__file-name-suffix');
+  await expect(fileNameInput).toHaveValue('hello-card');
+  await expect(fileNameInput).toHaveAttribute('aria-describedby', 'export-file-name-description');
+  await expect(fileNameMirror).toHaveText('hello-card');
+  await expect(fileNameSuffix).toHaveText('.sppkg');
+  await expect(fileNameOverlay).toHaveCSS('pointer-events', 'none');
+  await expect(fileNameSuffix).not.toHaveAttribute('tabindex', /.+/);
+  await expectFileNameSuffixToTrail(fileNameControl, fileNameMirror, fileNameSuffix);
+  await expect(sidebar.getByRole('textbox', { name: 'Export description' })).toHaveValue('A friendly card web part.');
+  await expect(sidebar.getByRole('textbox', { name: 'Export app icon' })).toHaveValue('Page');
+  await expect(sidebar.getByRole('textbox', { name: 'Export version' })).toHaveValue('1.3.0');
+  await expect(sidebar.getByRole('textbox', { name: 'Export CDN URL' })).toHaveValue('https://cdn.example.com/spfx/hello-card/');
 
   const accessibility = await new AxeBuilder({ page })
-    .include('.manage-apps-dialog')
-    .exclude('.manage-apps-dialog__toolbar-primary .fui-Button')
-    .exclude('.manage-apps-dialog__actions .fui-Button')
+    .include('#app-management-sidebar')
+    .exclude('[aria-label="Save app export config"]')
+    .exclude('.app-management-sidebar__footer .fui-Button')
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();
   expect(accessibility.violations).toEqual([]);
 
-  await versionDropdown.click();
+  const savedConfig: ManagedAppFixture['exportConfig'] = {
+    appName: 'Hello Card Enterprise',
+    fileName: 'hello-card-enterprise.sppkg',
+    description: 'Enterprise-ready card web part.',
+    appIcon: 'AppGeneric',
+    version: '2.0.0',
+    cdnUrl: 'https://cdn.example.com/spfx/hello-card-enterprise/'
+  };
+  await sidebar.getByRole('textbox', { name: 'Export app name' }).fill(savedConfig.appName);
+  await fileNameInput.fill(savedConfig.fileName);
+  await expect(fileNameInput).toHaveValue('hello-card-enterprise');
+  await expect(fileNameMirror).toHaveText('hello-card-enterprise');
+  await expectFileNameSuffixToTrail(fileNameControl, fileNameMirror, fileNameSuffix);
+  await sidebar.getByRole('textbox', { name: 'Export description' }).fill(savedConfig.description);
+  await sidebar.getByRole('textbox', { name: 'Export app icon' }).fill(savedConfig.appIcon);
+  await sidebar.getByRole('textbox', { name: 'Export version' }).fill(savedConfig.version);
+  await sidebar.getByRole('textbox', { name: 'Export CDN URL' }).fill(savedConfig.cdnUrl);
+  await sidebar.getByRole('button', { name: 'Save app export config' }).click();
+  await expect.poll(() => exportConfigRequests).toEqual([{ appId: 'hello-card-spfx', exportConfig: savedConfig }]);
+  await expect(sidebar.getByText('Saved fixture export config.')).toBeVisible();
+
+  await sidebar.getByRole('combobox', { name: 'Source version for Hello Card Enterprise' }).click();
   await page.getByRole('option', { name: 'v1.0.0' }).click();
   await expect
     .poll(() => requests)
     .toEqual([
-      { appId: 'fixture-app-spfx', versionId: 'latest' },
-      { appId: 'fixture-app-spfx', versionId: 'tag:v1.0.0' }
+      { appId: 'hello-card-spfx', versionId: 'latest' },
+      { appId: 'hello-card-spfx', versionId: 'tag:v1.0.0' }
     ]);
   await expect(versionDropdown).toContainText('v1.0.0');
-  await expect(dialog.getByText('Updated fixture app.')).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Reload lab' })).toBeVisible();
+  await expect(sidebar.getByText('Updated fixture app.')).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'Reload lab' })).toBeVisible();
+});
+
+test('opens export downloads with the requested package target selected', async ({ page }) => {
+  await page.route('**/api/spfx-apps/**', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ apps: managedAppFixtures('latest') }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.route('**/api/export-spfx-app/estimate?**', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ single: { packageFileName: 'hello-card.sppkg' }, cdn: {}, standalone: {} })
+    });
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open app menu' }).click();
+  let sidebar = page.locator('#app-management-sidebar');
+  await sidebar.getByRole('button', { name: 'Download standalone' }).click();
+
+  await expect(page.getByRole('combobox', { name: 'Select app to export' })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Include hello-card.sppkg' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Include SPFx + CDN JS package' })).not.toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Include hello-card-spfx-repo' })).not.toBeChecked();
+  await page.getByRole('button', { name: 'Close export package drawer' }).click();
+
+  await page.getByRole('button', { name: 'Open app menu' }).click();
+  sidebar = page.locator('#app-management-sidebar');
+  await sidebar.getByRole('button', { name: 'Download CDN-ready' }).click();
+
+  await expect(page.getByRole('checkbox', { name: 'Include hello-card.sppkg' })).not.toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Include SPFx + CDN JS package' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Include hello-card-spfx-repo' })).not.toBeChecked();
 });
 
 test('shows compact feedback after re-syncing the app registry', async ({ page }) => {
@@ -213,33 +300,29 @@ test('shows compact feedback after re-syncing the app registry', async ({ page }
   });
 
   await page.goto('/');
-  await page.getByRole('button', { name: 'Manage apps' }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByRole('button', { name: 'Re-sync' }).click();
+  await page.getByRole('button', { name: 'Open app menu' }).click();
+  const sidebar = page.locator('#app-management-sidebar');
+  await sidebar.getByRole('button', { name: 'Re-sync apps' }).click();
 
-  await expect(dialog.locator('.manage-apps-dialog__sync-success-icon')).toBeVisible();
-  await expect(dialog.getByText('Synced the lab app registry.')).toHaveCount(0);
-  await expect(dialog.getByRole('button', { name: 'Reload lab' })).toHaveCount(0);
-  const timestamp = dialog.getByText(/^Last synced /);
+  await expect(sidebar.getByText('Synced the lab app registry.')).toHaveCount(0);
+  await expect(sidebar.getByRole('button', { name: 'Reload lab' })).toHaveCount(0);
+  const timestamp = sidebar.getByText(/^Last synced /);
   await expect(timestamp).toBeVisible({ timeout: 3_000 });
-  await expect(dialog.locator('.manage-apps-dialog__sync-success-icon')).toHaveCount(0);
-  await expect(dialog.locator('.lucide-refresh-cw')).toBeVisible();
 
   const timestampText = await timestamp.textContent();
   const timestampBox = await timestamp.boundingBox();
-  const syncButtonBox = await dialog.getByRole('button', { name: 'Re-sync' }).boundingBox();
+  const syncButtonBox = await sidebar.getByRole('button', { name: 'Re-sync apps' }).boundingBox();
   expect(timestampBox).not.toBeNull();
   expect(syncButtonBox).not.toBeNull();
   expect(timestampBox!.x + timestampBox!.width).toBeLessThanOrEqual(syncButtonBox!.x);
 
-  await dialog.getByRole('button', { name: 'Re-sync' }).click();
-  await expect(dialog.getByRole('alert')).toContainText('Apps were not re-synced');
-  await expect(dialog.getByRole('alert')).toContainText('Sync failed.');
+  await sidebar.getByRole('button', { name: 'Re-sync apps' }).click();
+  await expect(sidebar.getByRole('alert')).toContainText('Apps were not re-synced');
+  await expect(sidebar.getByRole('alert')).toContainText('Sync failed.');
   await expect(timestamp).toHaveText(timestampText || '');
-  await expect(dialog.locator('.manage-apps-dialog__sync-success-icon')).toHaveCount(0);
 });
 
-test('keeps the version dropdown left of Connected on a narrow screen', async ({ page }) => {
+test('keeps the app settings sidebar within a narrow viewport without horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('**/api/spfx-apps/**', async (route) => {
     if (route.request().method() === 'GET') {
@@ -249,116 +332,114 @@ test('keeps the version dropdown left of Connected on a narrow screen', async ({
     await route.continue();
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Manage apps' }).click();
+  await page.getByRole('button', { name: 'Open app menu' }).click();
 
-  const dialog = page.getByRole('dialog');
-  const row = dialog.locator('[data-app-id="fixture-app-spfx"]');
-  const dropdownBox = await row.getByRole('combobox', { name: 'Version for Fixture App' }).boundingBox();
-  const switchBox = await row.getByRole('switch', { name: 'Connected: Fixture App' }).boundingBox();
-  const connectionBox = await row.locator('.manage-app-row__connection').boundingBox();
-  const mainBox = await row.locator('.manage-app-row__main').boundingBox();
-  const actionsBox = await row.locator('.manage-app-row__actions').boundingBox();
-  const dialogBox = await dialog.boundingBox();
-  expect(dropdownBox).not.toBeNull();
-  expect(switchBox).not.toBeNull();
-  expect(connectionBox).not.toBeNull();
-  expect(dialogBox).not.toBeNull();
-  expect(mainBox).not.toBeNull();
-  expect(actionsBox).not.toBeNull();
-  expect(dropdownBox!.x).toBeLessThan(switchBox!.x);
-  expect(dropdownBox!.x + dropdownBox!.width).toBeLessThanOrEqual(connectionBox!.x);
-  expect(actionsBox!.y).toBeGreaterThan(mainBox!.y);
-  expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
-  expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(390);
-  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  const sidebar = page.locator('#app-management-sidebar');
+  await expect(sidebar).toBeVisible();
+  await expect.poll(async () => (await sidebar.boundingBox())?.x ?? -1).toBeGreaterThanOrEqual(0);
+  const sidebarBox = await sidebar.boundingBox();
+  expect(sidebarBox).not.toBeNull();
+  expect(sidebarBox!.x).toBeGreaterThanOrEqual(0);
+  expect(sidebarBox!.x + sidebarBox!.width).toBeLessThanOrEqual(390);
+  expect(await sidebar.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
-test('keeps the Manage Apps list width stable as its scrollbar appears and disappears', async ({ page }) => {
-  const apps = Array.from({ length: 8 }, (_value, index) => ({
-    ...managedAppFixtures('latest')[0],
-    id: `fixture-app-${index}`,
-    packageName: `fixture-app-${index}`,
-    relativeDir: `.spfx-kit/apps/fixture-app-${index}`,
-    title: `Fixture App ${index}`
-  }));
-  await page.route('**/api/spfx-apps/**', async (route) => {
-    if (route.request().method() === 'GET') {
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ apps }) });
-      return;
-    }
-    await route.continue();
+async function expectFileNameSuffixToTrail(control: Locator, mirror: Locator, suffix: Locator): Promise<void> {
+  const textMetrics = await control.evaluate((element) => {
+    const input = element.querySelector('input');
+    const overlay = element.querySelector('.app-management-sidebar__file-name-overlay');
+    const inputStyle = window.getComputedStyle(input!);
+    const overlayStyle = window.getComputedStyle(overlay!);
+    const inputBox = input!.getBoundingClientRect();
+    const overlayBox = overlay!.getBoundingClientRect();
+    return {
+      inputFont: inputStyle.font,
+      overlayFont: overlayStyle.font,
+      textStartDelta: overlayBox.left - (inputBox.left + Number.parseFloat(inputStyle.paddingLeft))
+    };
   });
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Manage apps' }).click();
-
-  const dialog = page.getByRole('dialog');
-  const list = dialog.locator('.manage-apps-list');
-  const before = await list.evaluate((element) => ({
-    clientWidth: element.clientWidth,
-    overflowing: element.scrollHeight > element.clientHeight,
-    scrollbarGutter: getComputedStyle(element).scrollbarGutter
-  }));
-  await dialog.getByPlaceholder('Filter by name or path').fill('Fixture App 0');
-  await expect(list.locator('.manage-app-row')).toHaveCount(1);
-  const after = await list.evaluate((element) => ({
-    clientWidth: element.clientWidth,
-    overflowing: element.scrollHeight > element.clientHeight,
-    scrollbarGutter: getComputedStyle(element).scrollbarGutter
-  }));
-  expect(before.overflowing).toBe(true);
-  expect(after.overflowing).toBe(false);
-  expect(before.scrollbarGutter).toBe('stable');
-  expect(after.scrollbarGutter).toBe('stable');
-  expect(after.clientWidth).toBe(before.clientWidth);
-  expect(await list.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-});
+  const [controlBox, mirrorBox, suffixBox] = await Promise.all([
+    control.boundingBox(),
+    mirror.boundingBox(),
+    suffix.boundingBox()
+  ]);
+  expect(textMetrics.overlayFont).toBe(textMetrics.inputFont);
+  expect(Math.abs(textMetrics.textStartDelta)).toBeLessThanOrEqual(0.5);
+  expect(controlBox).not.toBeNull();
+  expect(mirrorBox).not.toBeNull();
+  expect(suffixBox).not.toBeNull();
+  expect(Math.abs(suffixBox!.x - (mirrorBox!.x + mirrorBox!.width))).toBeLessThanOrEqual(1);
+  expect(suffixBox!.x + suffixBox!.width).toBeLessThanOrEqual(controlBox!.x + controlBox!.width);
+}
 
 test('pins one startup app and restores it after refresh', async ({ page }) => {
   await page.goto('/');
 
-  const appPicker = page.getByRole('combobox', { name: 'Select web part' });
-  await appPicker.click();
-
-  const helloCardOption = page.getByRole('option', {
-    name: 'Hello Card. Not pinned. Press Alt+P to pin.'
-  });
-  const helloCardRow = page.locator('.webpart-option-row').filter({ hasText: 'Hello Card' });
-  const pinButton = helloCardRow.getByRole('button', { name: 'Pin Hello Card as startup app' });
-  await expect(pinButton).toBeHidden();
-  await helloCardOption.hover();
-  await expect(pinButton).toBeVisible();
-  await pinButton.click();
-
-  await expect(
-    page.getByRole('option', {
-      name: 'Hello Card. Pinned. Press Alt+P to unpin.'
-    })
-  ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Unpin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Open app menu' }).click();
+  let sidebar = page.locator('#app-management-sidebar');
+  const pinSwitch = sidebar.getByRole('switch', { name: 'Not pinned: Hello Card' });
+  await expect(pinSwitch).not.toBeChecked();
+  await pinSwitch.click();
+  await expect(sidebar.getByRole('switch', { name: 'Pinned: Hello Card' })).toBeChecked();
   await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBe('hello-card-spfx');
 
   await page.reload();
-  await expect(appPicker).toHaveText('Hello Card');
-
-  await appPicker.click();
-  const unpinButton = page.getByRole('button', { name: 'Unpin Hello Card as startup app' });
-  await expect(unpinButton).toBeVisible();
-  await unpinButton.click();
-  await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
-
-  await appPicker.press('Alt+p');
-  await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBe('hello-card-spfx');
-  await appPicker.press('Alt+p');
+  await expect(page.getByRole('combobox', { name: 'Select web part' })).toHaveText('Hello Card');
+  await page.getByRole('button', { name: 'Open app menu' }).click();
+  sidebar = page.locator('#app-management-sidebar');
+  const unpinSwitch = sidebar.getByRole('switch', { name: 'Pinned: Hello Card' });
+  await expect(unpinSwitch).toBeChecked();
+  await unpinSwitch.click();
   await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
 });
 
-function managedAppFixtures(selectedVersion: string, latestVersion = '1.2.0', updateAvailable = false) {
+interface ManagedAppFixture {
+  id: string;
+  packageName: string;
+  relativeDir: string;
+  status: 'connected';
+  exportConfig: {
+    appName: string;
+    fileName: string;
+    description: string;
+    appIcon: string;
+    version: string;
+    cdnUrl: string;
+  };
+  version: {
+    autoUpdate: boolean;
+    current: string;
+    selected: string;
+    options: Array<{ id: string; label: string }>;
+    canAutoUpdate: boolean;
+    canSelect: boolean;
+    updateAvailable: boolean;
+    source: 'clone';
+    detail?: string;
+  };
+}
+
+function managedAppFixtures(
+  selectedVersion: string,
+  latestVersion = '1.2.0',
+  updateAvailable = false,
+  exportConfig: ManagedAppFixture['exportConfig'] = {
+    appName: 'Hello Card',
+    fileName: 'hello-card.sppkg',
+    description: 'A friendly card web part.',
+    appIcon: 'Page',
+    version: latestVersion,
+    cdnUrl: 'https://cdn.example.com/spfx/hello-card/'
+  }
+): ManagedAppFixture[] {
   return [
     {
-      id: 'fixture-app-spfx',
-      packageName: 'fixture-app-spfx',
-      relativeDir: '.spfx-kit/apps/fixture-app-spfx',
+      id: 'hello-card-spfx',
+      packageName: 'hello-card-spfx',
+      relativeDir: 'examples/hello-card-spfx',
       status: 'connected',
+      exportConfig,
       version: {
         autoUpdate: true,
         current: selectedVersion === 'tag:v1.0.0' ? '1.0.0' : latestVersion,
@@ -378,6 +459,14 @@ function managedAppFixtures(selectedVersion: string, latestVersion = '1.2.0', up
       packageName: 'dirty-app-spfx',
       relativeDir: '.spfx-kit/apps/dirty-app-spfx',
       status: 'connected',
+      exportConfig: {
+        appName: 'Dirty App',
+        fileName: 'dirty-app.sppkg',
+        description: 'A dirty fixture app.',
+        appIcon: 'Page',
+        version: '2.0.0',
+        cdnUrl: 'https://cdn.example.com/spfx/dirty-app/'
+      },
       version: {
         autoUpdate: true,
         current: '2.0.0',

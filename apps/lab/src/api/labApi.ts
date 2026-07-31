@@ -8,6 +8,15 @@ export interface AddSpfxAppApiResult {
   syncedAdapters?: number;
 }
 
+export interface ManagedAppExportConfig {
+  appName: string;
+  fileName: string;
+  description: string;
+  appIcon: string;
+  version: string;
+  cdnUrl: string;
+}
+
 export interface ManagedLabApp {
   id: string;
   packageName: string;
@@ -15,6 +24,7 @@ export interface ManagedLabApp {
   status: 'connected' | 'disconnected' | 'missing';
   adapterPath?: string;
   disabledAdapterPath?: string;
+  exportConfig: ManagedAppExportConfig;
   version: {
     autoUpdate: boolean;
     current: string;
