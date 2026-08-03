@@ -113,6 +113,55 @@ describe('export configuration application', () => {
     await expect(readTrackedSource(fixture)).resolves.toEqual(originals);
   });
 
+  it('applies and restores sidecar overrides for extension-only projects', async () => {
+    const root = await makeTemporaryDirectory('spfx-export-config-extension-');
+    const appDir = path.join(root, 'extension-app-spfx');
+    const packageJsonPath = path.join(appDir, 'package.json');
+    const packageSolutionPath = path.join(appDir, 'config', 'package-solution.json');
+    const writeManifestsPath = path.join(appDir, 'config', 'write-manifests.json');
+    await Promise.all([
+      mkdir(path.dirname(packageSolutionPath), { recursive: true }),
+      mkdir(path.join(appDir, '.spfx-kit'), { recursive: true })
+    ]);
+    await Promise.all([
+      writeJson(packageJsonPath, { name: 'extension-app-spfx', version: '1.0.0', description: 'Original description' }),
+      writeJson(packageSolutionPath, {
+        solution: { name: 'Original Extension', version: '1.0.0.0' },
+        paths: { zippedPackage: 'sharepoint/solution/original-extension.sppkg' }
+      }),
+      writeJson(writeManifestsPath, { cdnBasePath: 'https://cdn.original.test/extension/' }),
+      writeJson(path.join(appDir, '.spfx-kit', 'export-config.json'), configuredOverrides)
+    ]);
+    const originals = await Promise.all([
+      readFile(packageJsonPath, 'utf8'),
+      readFile(packageSolutionPath, 'utf8'),
+      readFile(writeManifestsPath, 'utf8')
+    ]);
+
+    await withAppliedExportConfig(appDir, async ({ exportConfig }) => {
+      expect(exportConfig).toEqual(configuredOverrides);
+      await expect(readJson(packageJsonPath)).resolves.toMatchObject({
+        version: '2.4.6',
+        description: 'Configured export description'
+      });
+      await expect(readJson(packageSolutionPath)).resolves.toMatchObject({
+        solution: { name: 'Configured Export App', version: '2.4.6.0' },
+        paths: { zippedPackage: 'sharepoint/solution/configured-export.sppkg' }
+      });
+      await expect(readJson(writeManifestsPath)).resolves.toMatchObject({
+        cdnBasePath: 'https://cdn.configured.test/apps/export/'
+      });
+    });
+
+    await expect(
+      Promise.all([
+        readFile(packageJsonPath, 'utf8'),
+        readFile(packageSolutionPath, 'utf8'),
+        readFile(writeManifestsPath, 'utf8')
+      ])
+    ).resolves.toEqual(originals);
+  });
+
   it('uses the configured CDN URL exactly for the CDN build and handoff', async () => {
     const fixture = await createFixture();
     const originals = await readTrackedSource(fixture);

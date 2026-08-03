@@ -258,9 +258,9 @@ test('opens export downloads with the requested package target selected', async 
   await sidebar.getByRole('button', { name: 'Download standalone' }).click();
 
   await expect(page.getByRole('combobox', { name: 'Select app to export' })).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: 'Include hello-card.sppkg' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Include hello-card.sppkg' })).not.toBeChecked();
   await expect(page.getByRole('checkbox', { name: 'Include SPFx + CDN JS package' })).not.toBeChecked();
-  await expect(page.getByRole('checkbox', { name: 'Include hello-card-spfx-repo' })).not.toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Include hello-card-spfx-repo' })).toBeChecked();
   await page.getByRole('button', { name: 'Close export package drawer' }).click();
 
   await page.getByRole('button', { name: 'Open app menu' }).click();

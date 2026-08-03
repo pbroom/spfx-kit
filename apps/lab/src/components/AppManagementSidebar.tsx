@@ -562,7 +562,11 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
             <Button disabled={busy} icon={<FolderInput size={14} />} onClick={onOpenImport}>
               Import
             </Button>
-            <Button disabled={!selectedAppLoaded || busy} icon={<Download size={14} />} onClick={() => onOpenExport(['single'])}>
+            <Button
+              disabled={!selectedAppLoaded || busy}
+              icon={<Download size={14} />}
+              onClick={() => onOpenExport(['standalone'])}
+            >
               Download standalone
             </Button>
             <Button disabled={!selectedAppLoaded || busy} icon={<Download size={14} />} onClick={() => onOpenExport(['cdn'])}>

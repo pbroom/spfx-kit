@@ -39,7 +39,10 @@ async function exportSourcePaths(appDir, includeSidecarTargets) {
   };
   if (includeSidecarTargets) {
     sourcePaths.packageJson = path.join(appDir, 'package.json');
-    sourcePaths.webPartManifest = await findPrimaryWebPartManifest(appDir);
+    const webPartManifest = await findPrimaryWebPartManifest(appDir);
+    if (webPartManifest) {
+      sourcePaths.webPartManifest = webPartManifest;
+    }
   }
   return sourcePaths;
 }
@@ -49,7 +52,7 @@ async function applyExportConfig(appDir, sourcePaths, exportConfig) {
     readJsonObject(sourcePaths.packageJson),
     readJsonObject(sourcePaths.packageSolution),
     readJsonObject(sourcePaths.writeManifests),
-    readJsonObject(sourcePaths.webPartManifest)
+    sourcePaths.webPartManifest ? readJsonObject(sourcePaths.webPartManifest) : undefined
   ]);
 
   packageJson.version = exportConfig.version;
@@ -75,27 +78,32 @@ async function applyExportConfig(appDir, sourcePaths, exportConfig) {
 
   writeManifests.cdnBasePath = exportConfig.cdnUrl;
 
-  const entries = Array.isArray(webPartManifest.preconfiguredEntries) ? webPartManifest.preconfiguredEntries : [];
-  if (!entries.length || !asObject(entries[0])) {
-    throw new Error(`Primary web part manifest has no preconfigured entry: ${path.relative(appDir, sourcePaths.webPartManifest)}`);
+  if (webPartManifest) {
+    const entries = Array.isArray(webPartManifest.preconfiguredEntries) ? webPartManifest.preconfiguredEntries : [];
+    if (!entries.length || !asObject(entries[0])) {
+      throw new Error(`Primary web part manifest has no preconfigured entry: ${path.relative(appDir, sourcePaths.webPartManifest)}`);
+    }
+    const entry = entries[0];
+    entry.title = localizedValue(entry.title, exportConfig.appName);
+    entry.description = localizedValue(entry.description, exportConfig.description);
+    applyAppIcon(entry, exportConfig.appIcon);
   }
-  const entry = entries[0];
-  entry.title = localizedValue(entry.title, exportConfig.appName);
-  entry.description = localizedValue(entry.description, exportConfig.description);
-  applyAppIcon(entry, exportConfig.appIcon);
 
-  await Promise.all([
+  const writes = [
     writeJson(sourcePaths.packageJson, packageJson),
     writeJson(sourcePaths.packageSolution, packageSolution),
-    writeJson(sourcePaths.writeManifests, writeManifests),
-    writeJson(sourcePaths.webPartManifest, webPartManifest)
-  ]);
+    writeJson(sourcePaths.writeManifests, writeManifests)
+  ];
+  if (webPartManifest) {
+    writes.push(writeJson(sourcePaths.webPartManifest, webPartManifest));
+  }
+  await Promise.all(writes);
 }
 
 async function findPrimaryWebPartManifest(appDir) {
   const webPartsDir = path.join(appDir, 'src', 'webparts');
   if (!(await exists(webPartsDir))) {
-    throw new Error(`No src/webparts directory found for export configuration in ${appDir}`);
+    return undefined;
   }
   const manifests = await listManifestFiles(webPartsDir);
   for (const manifestPath of manifests.sort((left, right) => left.localeCompare(right))) {
@@ -104,7 +112,7 @@ async function findPrimaryWebPartManifest(appDir) {
       return manifestPath;
     }
   }
-  throw new Error(`No primary web part manifest found for export configuration in ${appDir}`);
+  return undefined;
 }
 
 async function listManifestFiles(directory) {
