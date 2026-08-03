@@ -12,7 +12,7 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(page.getByRole('combobox', { name: 'Select web part' })).toHaveText('Hello Card');
 
   await expect(page.getByRole('button', { name: 'Manage apps' })).toHaveCount(0);
-  const appMenuButton = page.getByRole('button', { name: 'Open app menu' });
+  const appMenuButton = page.locator('button[aria-controls="app-management-sidebar"]');
   await appMenuButton.click();
   const sidebar = page.locator('#app-management-sidebar');
   await expect(sidebar).toBeVisible();
