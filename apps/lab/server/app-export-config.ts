@@ -3,15 +3,60 @@ import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile 
 import path from 'node:path';
 
 const exportConfigFileName = 'export-config.json';
-const exportConfigFields = ['appName', 'fileName', 'description', 'appIcon', 'version', 'cdnUrl'] as const;
+const exportConfigStringFields = [
+  'appName',
+  'fileName',
+  'description',
+  'longDescription',
+  'videoUrl',
+  'appIcon',
+  'catalogIconPath',
+  'version',
+  'cdnUrl',
+  'developerName',
+  'developerWebsiteUrl',
+  'privacyUrl',
+  'termsOfUseUrl',
+  'partnerId'
+] as const;
+const exportConfigArrayFields = ['screenshotPaths', 'categories'] as const;
+const catalogCategories = new Set([
+  'Accounting + Finance',
+  'Collaboration',
+  'Content management',
+  'CRM',
+  'Data + analytics',
+  'File managers',
+  'IT/admin',
+  'Legal + HR',
+  'News + weather',
+  'Productivity',
+  'Project management',
+  'Reference',
+  'Sales + marketing',
+  'Site Design',
+  'Social',
+  'Workflow & Process Management'
+]);
+const screenshotExtensions = new Set(['.gif', '.jpeg', '.jpg', '.png']);
 
 export interface ManagedAppExportConfig {
   appName: string;
   fileName: string;
   description: string;
+  longDescription: string;
+  videoUrl: string;
   appIcon: string;
+  catalogIconPath: string;
+  screenshotPaths: string[];
+  categories: string[];
   version: string;
   cdnUrl: string;
+  developerName: string;
+  developerWebsiteUrl: string;
+  privacyUrl: string;
+  termsOfUseUrl: string;
+  partnerId: string;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -42,6 +87,8 @@ export async function describeManagedAppExportConfig(appDir: string): Promise<Ma
   ]);
 
   const solution = asObject(packageSolution?.solution);
+  const metadata = asObject(solution?.metadata);
+  const developer = asObject(solution?.developer);
   const paths = asObject(packageSolution?.paths);
   const entry = firstObject(manifest?.preconfiguredEntries);
   const manifestTitle = localizedDefault(entry?.title);
@@ -51,17 +98,27 @@ export async function describeManagedAppExportConfig(appDir: string): Promise<Ma
   const defaults: ManagedAppExportConfig = {
     appName: stringValue(solution?.name) || manifestTitle || unscopedPackageName(stringValue(packageJson?.name)),
     fileName: configuredPackagePath ? path.basename(configuredPackagePath) : '',
-    description: stringValue(packageJson?.description) || manifestDescription,
+    description: localizedDefault(metadata?.shortDescription) || stringValue(packageJson?.description) || manifestDescription,
+    longDescription: localizedDefault(metadata?.longDescription),
+    videoUrl: stringValue(metadata?.videoUrl),
     appIcon: stringValue(entry?.iconImageUrl) || stringValue(entry?.officeFabricIconFontName),
+    catalogIconPath: stringValue(solution?.iconPath),
+    screenshotPaths: stringArray(metadata?.screenshotPaths),
+    categories: stringArray(metadata?.categories),
     version: stringValue(packageJson?.version) || packageVersionFromSolution(stringValue(solution?.version)),
-    cdnUrl: stringValue(writeManifests?.cdnBasePath)
+    cdnUrl: stringValue(writeManifests?.cdnBasePath),
+    developerName: stringValue(developer?.name),
+    developerWebsiteUrl: stringValue(developer?.websiteUrl),
+    privacyUrl: stringValue(developer?.privacyUrl),
+    termsOfUseUrl: stringValue(developer?.termsOfUseUrl),
+    partnerId: stringValue(developer?.mpnId)
   };
 
   return overlaySavedConfig(defaults, savedConfig);
 }
 
 export async function updateManagedAppExportConfig(appDir: string, value: unknown): Promise<ManagedAppExportConfig> {
-  const exportConfig = validateExportConfig(value);
+  const exportConfig = await validateExportConfig(appDir, value);
   const configPath = await resolveExportConfigPath(appDir, true);
   const current = (await readJsonIfPresent<JsonObject>(configPath)) || {};
   const next = { ...current, ...exportConfig };
@@ -77,11 +134,12 @@ export async function updateManagedAppExportConfig(appDir: string, value: unknow
   return exportConfig;
 }
 
-export function validateExportConfig(value: unknown): ManagedAppExportConfig {
+export async function validateExportConfig(appDir: string, value: unknown): Promise<ManagedAppExportConfig> {
   const input = asObject(value);
   if (!input) {
     throw new Error('Export configuration is required.');
   }
+  const defaults = await describeManagedAppExportConfig(appDir);
 
   const appName = requiredText(input.appName, 'App name is required.', 256);
   const fileName = requiredText(input.fileName, 'File name is required.', 255);
@@ -98,26 +156,74 @@ export function validateExportConfig(value: unknown): ManagedAppExportConfig {
   }
 
   const cdnUrl = optionalText(input.cdnUrl, 'CDN URL', 2048);
-  if (cdnUrl) {
-    let parsed: URL;
-    try {
-      parsed = new URL(cdnUrl);
-    } catch {
-      throw new Error('CDN URL must be an absolute HTTP or HTTPS URL.');
+  validateHttpsUrl(cdnUrl, 'CDN URL');
+  const videoUrl = optionalText(input.videoUrl ?? defaults.videoUrl, 'Video URL', 2048);
+  validateVideoUrl(videoUrl);
+  const developerWebsiteUrl = optionalText(
+    input.developerWebsiteUrl ?? defaults.developerWebsiteUrl,
+    'Developer website URL',
+    2048
+  );
+  const privacyUrl = optionalText(input.privacyUrl ?? defaults.privacyUrl, 'Privacy URL', 2048);
+  const termsOfUseUrl = optionalText(input.termsOfUseUrl ?? defaults.termsOfUseUrl, 'Terms of use URL', 2048);
+  validateHttpsUrl(developerWebsiteUrl, 'Developer website URL');
+  validateHttpsUrl(privacyUrl, 'Privacy URL');
+  validateHttpsUrl(termsOfUseUrl, 'Terms of use URL');
+
+  const screenshotPaths = textArray(input.screenshotPaths ?? defaults.screenshotPaths, 'Screenshot paths', 5, 2048);
+  const categories = textArray(input.categories ?? defaults.categories, 'Categories', 3, 128);
+  if (new Set(categories).size !== categories.length) {
+    throw new Error('Categories must not contain duplicates.');
+  }
+  for (const category of categories) {
+    if (!catalogCategories.has(category)) {
+      throw new Error(`Unsupported app catalog category: ${category}`);
     }
-    const host = parsed.hostname.toLowerCase();
-    if (parsed.protocol !== 'https:' || host === 'localhost' || host === '127.0.0.1' || host === '::1') {
-      throw new Error('CDN URL must be an absolute non-localhost HTTPS URL.');
+  }
+
+  const catalogIconPath = optionalText(input.catalogIconPath ?? defaults.catalogIconPath, 'Catalog icon path', 2048);
+  const packageRoot =
+    catalogIconPath || screenshotPaths.some((value) => !isExternalUrl(value)) ? await resolvePackageRoot(appDir) : undefined;
+  if (catalogIconPath) {
+    await validateLocalImage(packageRoot!, catalogIconPath, 'Catalog icon', new Set(['.png']));
+  }
+  const screenshotBasenames = new Set<string>();
+  for (const screenshotPath of screenshotPaths) {
+    let basename: string;
+    if (isExternalUrl(screenshotPath)) {
+      const parsed = validateHttpsUrl(screenshotPath, 'Screenshot URL');
+      basename = path.posix.basename(parsed!.pathname);
+      if (!basename) {
+        throw new Error('Screenshot URL must identify an image file.');
+      }
+    } else {
+      await validateLocalImage(packageRoot!, screenshotPath, 'Screenshot', screenshotExtensions);
+      basename = path.posix.basename(screenshotPath);
     }
+    const normalizedBasename = basename.toLowerCase();
+    if (screenshotBasenames.has(normalizedBasename)) {
+      throw new Error(`Screenshot file names must be unique: ${basename}`);
+    }
+    screenshotBasenames.add(normalizedBasename);
   }
 
   return {
     appName,
     fileName,
     description: optionalText(input.description, 'Description', 2048),
+    longDescription: optionalMultilineText(input.longDescription ?? defaults.longDescription, 'Long description', 10_000),
+    videoUrl,
     appIcon: optionalText(input.appIcon, 'App icon', 2048),
+    catalogIconPath,
+    screenshotPaths,
+    categories,
     version,
-    cdnUrl
+    cdnUrl,
+    developerName: optionalText(input.developerName ?? defaults.developerName, 'Developer name', 256),
+    developerWebsiteUrl,
+    privacyUrl,
+    termsOfUseUrl,
+    partnerId: optionalText(input.partnerId ?? defaults.partnerId, 'Partner ID', 256)
   };
 }
 
@@ -184,10 +290,16 @@ function overlaySavedConfig(defaults: ManagedAppExportConfig, savedConfig: JsonO
     return defaults;
   }
   const result = { ...defaults };
-  for (const field of exportConfigFields) {
+  for (const field of exportConfigStringFields) {
     const value = savedConfig[field];
     if (typeof value === 'string') {
       result[field] = value;
+    }
+  }
+  for (const field of exportConfigArrayFields) {
+    const value = savedConfig[field];
+    if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+      result[field] = [...value];
     }
   }
   return result;
@@ -207,6 +319,10 @@ function asObject(value: unknown): JsonObject | undefined {
 
 function stringValue(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()) : [];
 }
 
 function unscopedPackageName(packageName: string): string {
@@ -242,6 +358,181 @@ function optionalText(value: unknown, label: string, maximumLength: number): str
     throw new Error(`${label} contains unsupported control characters.`);
   }
   return normalized;
+}
+
+function optionalMultilineText(value: unknown, label: string, maximumLength: number): string {
+  if (typeof value !== 'string') {
+    throw new Error(`${label} must be text.`);
+  }
+  const normalized = value.replace(/\r\n?/g, '\n').trim();
+  if (normalized.length > maximumLength) {
+    throw new Error(`${label} is too long.`);
+  }
+  if (
+    [...normalized].some((character) => {
+      const code = character.charCodeAt(0);
+      return (code <= 31 && character !== '\n' && character !== '\t') || code === 127;
+    })
+  ) {
+    throw new Error(`${label} contains unsupported control characters.`);
+  }
+  return normalized;
+}
+
+function textArray(value: unknown, label: string, maximumItems: number, maximumItemLength: number): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} must be a list.`);
+  }
+  if (value.length > maximumItems) {
+    throw new Error(`${label} may contain at most ${maximumItems} items.`);
+  }
+  return value.map((item, index) => optionalText(item, `${label} item ${index + 1}`, maximumItemLength));
+}
+
+function isExternalUrl(value: string): boolean {
+  return value.startsWith('//') || /^[a-z][a-z\d+.-]*:/i.test(value);
+}
+
+function validateHttpsUrl(value: string, label: string): URL | undefined {
+  if (!value) {
+    return undefined;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${label} must be an absolute non-localhost HTTPS URL.`);
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (
+    parsed.protocol !== 'https:' ||
+    parsed.username ||
+    parsed.password ||
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host === '127.0.0.1' ||
+    host.startsWith('127.') ||
+    host === '0.0.0.0' ||
+    host === '::1' ||
+    host === '[::1]'
+  ) {
+    throw new Error(`${label} must be an absolute non-localhost HTTPS URL.`);
+  }
+  return parsed;
+}
+
+function validateVideoUrl(value: string): void {
+  const parsed = validateHttpsUrl(value, 'Video URL');
+  if (!parsed) {
+    return;
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (
+    host !== 'youtu.be' &&
+    host !== 'youtube.com' &&
+    !host.endsWith('.youtube.com') &&
+    host !== 'youtube-nocookie.com' &&
+    !host.endsWith('.youtube-nocookie.com') &&
+    host !== 'vimeo.com' &&
+    !host.endsWith('.vimeo.com')
+  ) {
+    throw new Error('Video URL must use YouTube or Vimeo.');
+  }
+}
+
+async function resolvePackageRoot(appDir: string): Promise<string> {
+  const appRoot = await realpath(appDir);
+  const packageSolution = await readJsonIfPresent<PackageSolutionJson>(path.join(appRoot, 'config', 'package-solution.json'));
+  const paths = asObject(packageSolution?.paths);
+  const configuredPackageDir = paths?.packageDir === undefined ? 'sharepoint' : stringValue(paths.packageDir);
+  if (
+    !configuredPackageDir ||
+    configuredPackageDir.includes('\\') ||
+    path.isAbsolute(configuredPackageDir) ||
+    path.win32.isAbsolute(configuredPackageDir)
+  ) {
+    throw new Error('Package directory must be an app-local relative path.');
+  }
+  const packageRoot = path.resolve(appRoot, configuredPackageDir);
+  const relative = path.relative(appRoot, packageRoot);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Package directory must stay inside the managed app.');
+  }
+  const info = await lstat(packageRoot).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') {
+      throw new Error(`Package directory does not exist: ${configuredPackageDir}`);
+    }
+    throw error;
+  });
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error('Package directory must be a regular app-local directory.');
+  }
+  const resolved = await realpath(packageRoot);
+  const resolvedRelative = path.relative(appRoot, resolved);
+  if (resolvedRelative.startsWith('..') || path.isAbsolute(resolvedRelative)) {
+    throw new Error('Package directory must stay inside the managed app.');
+  }
+  return resolved;
+}
+
+async function validateLocalImage(
+  packageRoot: string,
+  value: string,
+  label: string,
+  allowedExtensions: Set<string>
+): Promise<void> {
+  if (
+    !value ||
+    value.includes('\\') ||
+    path.posix.isAbsolute(value) ||
+    value.split('/').some((segment) => !segment || segment === '.' || segment === '..')
+  ) {
+    throw new Error(`${label} path must be a safe package-relative path using forward slashes.`);
+  }
+  const extension = path.posix.extname(value).toLowerCase();
+  if (!allowedExtensions.has(extension)) {
+    throw new Error(`${label} must use a supported image type.`);
+  }
+  const segments = value.split('/');
+  let current = packageRoot;
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    const info = await lstat(current).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') {
+        throw new Error(`${label} file does not exist: ${value}`);
+      }
+      throw error;
+    });
+    if (info.isSymbolicLink()) {
+      throw new Error(`${label} path may not contain symbolic links: ${value}`);
+    }
+  }
+  const info = await stat(current);
+  if (!info.isFile()) {
+    throw new Error(`${label} path must name a regular file: ${value}`);
+  }
+  const bytes = await readFile(current);
+  const detected = detectImageType(bytes);
+  const expected = extension === '.jpg' ? 'jpeg' : extension.slice(1);
+  if (detected !== expected) {
+    throw new Error(`${label} file contents do not match its image type: ${value}`);
+  }
+}
+
+function detectImageType(bytes: Buffer): 'png' | 'jpeg' | 'gif' | undefined {
+  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return 'png';
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'jpeg';
+  }
+  if (
+    bytes.length >= 6 &&
+    (bytes.subarray(0, 6).toString('ascii') === 'GIF87a' || bytes.subarray(0, 6).toString('ascii') === 'GIF89a')
+  ) {
+    return 'gif';
+  }
+  return undefined;
 }
 
 async function readJsonIfPresent<T extends JsonObject>(filePath: string): Promise<T | undefined> {

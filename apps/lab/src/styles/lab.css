@@ -373,6 +373,110 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.app-management-sidebar__catalog-intro {
+  display: grid;
+  gap: 4px;
+}
+
+.app-management-sidebar__catalog-intro h3,
+.app-management-sidebar__catalog-intro p {
+  margin: 0;
+}
+
+.app-management-sidebar__catalog-intro h3 {
+  color: var(--colorNeutralForeground1, #242424);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.app-management-sidebar__catalog-intro p {
+  color: var(--colorNeutralForeground2, #616161);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.app-management-sidebar__catalog-groups {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.app-management-sidebar__catalog-group {
+  min-width: 0;
+  border: 1px solid var(--colorNeutralStroke2, #d1d1d1);
+  border-radius: 6px;
+  background: var(--colorNeutralBackground1, #fff);
+}
+
+.app-management-sidebar__catalog-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  cursor: pointer;
+  color: var(--colorNeutralForeground1, #242424);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  list-style: none;
+}
+
+.app-management-sidebar__catalog-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.app-management-sidebar__catalog-group > summary:focus-visible {
+  border-radius: 5px;
+  outline: 2px solid var(--colorStrokeFocus2, #000);
+  outline-offset: 2px;
+}
+
+.app-management-sidebar__catalog-group > summary small {
+  color: var(--colorNeutralForeground3, #707070);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.app-management-sidebar__catalog-summary-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.app-management-sidebar__catalog-chevron {
+  flex: 0 0 auto;
+  transition: transform 120ms ease;
+}
+
+.app-management-sidebar__catalog-group[open] .app-management-sidebar__catalog-chevron {
+  transform: rotate(90deg);
+}
+
+.app-management-sidebar__catalog-group[open] > summary {
+  border-bottom: 1px solid var(--colorNeutralStroke2, #d1d1d1);
+}
+
+.app-management-sidebar__catalog-fields {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  padding: 12px;
+}
+
+.app-management-sidebar__catalog-fields > .fui-Field,
+.app-management-sidebar__catalog-fields .fui-Dropdown {
+  min-width: 0;
+  width: 100%;
+}
+
+.app-management-sidebar__path-list textarea {
+  min-height: 76px;
+}
+
 .app-management-sidebar__file-name-control {
   position: relative;
   width: 100%;

@@ -22,9 +22,19 @@ describe('managed app export configuration', () => {
       appName: 'Fixture App',
       fileName: 'fixture-app.sppkg',
       description: 'Fixture web part description',
+      longDescription: '',
+      videoUrl: '',
       appIcon: 'FixtureIcon',
+      catalogIconPath: '',
+      screenshotPaths: [],
+      categories: [],
       version: '1.2.3',
-      cdnUrl: 'https://cdn.example.test/spfx/fixture/'
+      cdnUrl: 'https://cdn.example.test/spfx/fixture/',
+      developerName: '',
+      developerWebsiteUrl: '',
+      privacyUrl: '',
+      termsOfUseUrl: '',
+      partnerId: ''
     });
   });
 
@@ -43,18 +53,38 @@ describe('managed app export configuration', () => {
       appName: 'Deployment App',
       fileName: 'deployment-app.sppkg',
       description: 'Deployment description',
+      longDescription: 'Deployment details.\n\nMore information.',
+      videoUrl: 'https://youtu.be/example',
       appIcon: 'https://cdn.example.test/icons/deployment.png',
+      catalogIconPath: 'assets/catalog-icon.png',
+      screenshotPaths: ['assets/screenshot.gif', 'https://images.example.test/tour.jpg'],
+      categories: ['Collaboration', 'Productivity'],
       version: '2.4.6',
-      cdnUrl: 'https://cdn.example.test/spfx/deployment/'
+      cdnUrl: 'https://cdn.example.test/spfx/deployment/',
+      developerName: 'Fixture Org',
+      developerWebsiteUrl: 'https://www.example.test/',
+      privacyUrl: 'https://www.example.test/privacy',
+      termsOfUseUrl: 'https://www.example.test/terms',
+      partnerId: '1234567'
     });
 
     expect(saved).toEqual({
       appName: 'Deployment App',
       fileName: 'deployment-app.sppkg',
       description: 'Deployment description',
+      longDescription: 'Deployment details.\n\nMore information.',
+      videoUrl: 'https://youtu.be/example',
       appIcon: 'https://cdn.example.test/icons/deployment.png',
+      catalogIconPath: 'assets/catalog-icon.png',
+      screenshotPaths: ['assets/screenshot.gif', 'https://images.example.test/tour.jpg'],
+      categories: ['Collaboration', 'Productivity'],
       version: '2.4.6',
-      cdnUrl: 'https://cdn.example.test/spfx/deployment/'
+      cdnUrl: 'https://cdn.example.test/spfx/deployment/',
+      developerName: 'Fixture Org',
+      developerWebsiteUrl: 'https://www.example.test/',
+      privacyUrl: 'https://www.example.test/privacy',
+      termsOfUseUrl: 'https://www.example.test/terms',
+      partnerId: '1234567'
     });
     await expect(describeManagedAppExportConfig(appDir)).resolves.toEqual(saved);
     expect(JSON.parse(await readFile(path.join(sidecarDir, 'export-config.json'), 'utf8'))).toEqual({
@@ -62,28 +92,112 @@ describe('managed app export configuration', () => {
       futureSetting: { preserve: true },
       fileName: 'deployment-app.sppkg',
       description: 'Deployment description',
+      longDescription: 'Deployment details.\n\nMore information.',
+      videoUrl: 'https://youtu.be/example',
       appIcon: 'https://cdn.example.test/icons/deployment.png',
+      catalogIconPath: 'assets/catalog-icon.png',
+      screenshotPaths: ['assets/screenshot.gif', 'https://images.example.test/tour.jpg'],
+      categories: ['Collaboration', 'Productivity'],
       version: '2.4.6',
-      cdnUrl: 'https://cdn.example.test/spfx/deployment/'
+      cdnUrl: 'https://cdn.example.test/spfx/deployment/',
+      developerName: 'Fixture Org',
+      developerWebsiteUrl: 'https://www.example.test/',
+      privacyUrl: 'https://www.example.test/privacy',
+      termsOfUseUrl: 'https://www.example.test/terms',
+      partnerId: '1234567'
     });
     expect(await readFile(solutionPath, 'utf8')).toBe(sourceBefore);
   });
 
-  it('rejects unsafe filenames, invalid versions, and non-production CDN URLs', () => {
+  it('rejects unsafe filenames, invalid versions, and non-production CDN URLs', async () => {
+    const appDir = await createFixture();
     const valid = {
       appName: 'Fixture App',
       fileName: 'fixture.sppkg',
       description: '',
+      longDescription: '',
+      videoUrl: '',
       appIcon: 'Page',
+      catalogIconPath: '',
+      screenshotPaths: [],
+      categories: [],
       version: '1.2.3',
-      cdnUrl: 'https://cdn.example.test/spfx/fixture/'
+      cdnUrl: 'https://cdn.example.test/spfx/fixture/',
+      developerName: '',
+      developerWebsiteUrl: '',
+      privacyUrl: '',
+      termsOfUseUrl: '',
+      partnerId: ''
     };
 
-    expect(() => validateExportConfig({ ...valid, fileName: '../fixture.sppkg' })).toThrow('directory path');
-    expect(() => validateExportConfig({ ...valid, version: '1.2.3.4' })).toThrow('x.y.z');
-    expect(() => validateExportConfig({ ...valid, cdnUrl: 'javascript:alert(1)' })).toThrow('HTTPS');
-    expect(() => validateExportConfig({ ...valid, cdnUrl: 'http://cdn.example.test/spfx/' })).toThrow('HTTPS');
-    expect(() => validateExportConfig({ ...valid, cdnUrl: 'https://localhost/spfx/' })).toThrow('non-localhost');
+    await expect(validateExportConfig(appDir, { ...valid, fileName: '../fixture.sppkg' })).rejects.toThrow('directory path');
+    await expect(validateExportConfig(appDir, { ...valid, version: '1.2.3.4' })).rejects.toThrow('x.y.z');
+    await expect(validateExportConfig(appDir, { ...valid, cdnUrl: 'javascript:alert(1)' })).rejects.toThrow('HTTPS');
+    await expect(validateExportConfig(appDir, { ...valid, cdnUrl: 'http://cdn.example.test/spfx/' })).rejects.toThrow('HTTPS');
+    await expect(validateExportConfig(appDir, { ...valid, cdnUrl: 'https://localhost/spfx/' })).rejects.toThrow('non-localhost');
+    await expect(validateExportConfig(appDir, { ...valid, videoUrl: 'https://videos.example.test/demo' })).rejects.toThrow(
+      'YouTube or Vimeo'
+    );
+    await expect(validateExportConfig(appDir, { ...valid, categories: ['Unknown'] })).rejects.toThrow('Unsupported');
+    await expect(
+      validateExportConfig(appDir, { ...valid, screenshotPaths: ['assets/screenshot.gif', 'https://img.test/screenshot.gif'] })
+    ).rejects.toThrow('must be unique');
+    await expect(validateExportConfig(appDir, { ...valid, catalogIconPath: '../catalog-icon.png' })).rejects.toThrow(
+      'package-relative'
+    );
+    await expect(validateExportConfig(appDir, { ...valid, catalogIconPath: 'assets/missing.png' })).rejects.toThrow(
+      'does not exist'
+    );
+    await expect(validateExportConfig(appDir, { ...valid, catalogIconPath: 'assets/not-an-image.png' })).rejects.toThrow(
+      'contents do not match'
+    );
+    const outsideDir = await makeTemporaryDirectory('spfx-export-image-outside-');
+    const outsideIcon = path.join(outsideDir, 'outside.png');
+    await writeFile(outsideIcon, pngBytes());
+    await symlink(outsideIcon, path.join(appDir, 'sharepoint', 'assets', 'linked.png'));
+    await expect(validateExportConfig(appDir, { ...valid, catalogIconPath: 'assets/linked.png' })).rejects.toThrow(
+      'symbolic links'
+    );
+  });
+
+  it('migrates a legacy saved description while retaining package catalog defaults', async () => {
+    const appDir = await createFixture();
+    const solutionPath = path.join(appDir, 'config', 'package-solution.json');
+    const solution = JSON.parse(await readFile(solutionPath, 'utf8'));
+    solution.solution.iconPath = 'assets/catalog-icon.png';
+    solution.solution.metadata = {
+      shortDescription: { default: 'Source short description' },
+      longDescription: { default: 'Source long description' },
+      screenshotPaths: ['assets/screenshot.gif'],
+      videoUrl: 'https://vimeo.com/123',
+      categories: ['Productivity']
+    };
+    solution.solution.developer = {
+      name: 'Source Org',
+      websiteUrl: 'https://source.example.test/',
+      privacyUrl: 'https://source.example.test/privacy',
+      termsOfUseUrl: 'https://source.example.test/terms',
+      mpnId: 'source-partner'
+    };
+    await writeJson(solutionPath, solution);
+    await mkdir(path.join(appDir, '.spfx-kit'), { recursive: true });
+    await writeJson(path.join(appDir, '.spfx-kit', 'export-config.json'), {
+      appName: 'Legacy App',
+      fileName: 'legacy.sppkg',
+      description: 'Saved legacy description',
+      appIcon: 'Page',
+      version: '1.2.3',
+      cdnUrl: ''
+    });
+
+    await expect(describeManagedAppExportConfig(appDir)).resolves.toMatchObject({
+      description: 'Saved legacy description',
+      longDescription: 'Source long description',
+      catalogIconPath: 'assets/catalog-icon.png',
+      screenshotPaths: ['assets/screenshot.gif'],
+      categories: ['Productivity'],
+      developerName: 'Source Org'
+    });
   });
 
   it('refuses to follow an app-local configuration directory outside the managed app', async () => {
@@ -108,7 +222,8 @@ async function createFixture(): Promise<string> {
   const appDir = await makeTemporaryDirectory('spfx-export-config-');
   await Promise.all([
     mkdir(path.join(appDir, 'config'), { recursive: true }),
-    mkdir(path.join(appDir, 'src', 'webparts', 'fixture'), { recursive: true })
+    mkdir(path.join(appDir, 'src', 'webparts', 'fixture'), { recursive: true }),
+    mkdir(path.join(appDir, 'sharepoint', 'assets'), { recursive: true })
   ]);
   await Promise.all([
     writeJson(path.join(appDir, 'package.json'), {
@@ -123,7 +238,7 @@ async function createFixture(): Promise<string> {
         version: '1.2.3.0',
         includeClientSideAssets: true
       },
-      paths: { zippedPackage: 'solution/fixture-app.sppkg' }
+      paths: { packageDir: 'sharepoint', zippedPackage: 'solution/fixture-app.sppkg' }
     }),
     writeJson(path.join(appDir, 'config', 'write-manifests.json'), {
       cdnBasePath: 'https://cdn.example.test/spfx/fixture/'
@@ -137,9 +252,16 @@ async function createFixture(): Promise<string> {
           officeFabricIconFontName: 'FixtureIcon'
         }
       ]
-    })
+    }),
+    writeFile(path.join(appDir, 'sharepoint', 'assets', 'catalog-icon.png'), pngBytes()),
+    writeFile(path.join(appDir, 'sharepoint', 'assets', 'screenshot.gif'), Buffer.from('GIF89a', 'ascii')),
+    writeFile(path.join(appDir, 'sharepoint', 'assets', 'not-an-image.png'), 'not an image')
   ]);
   return appDir;
+}
+
+function pngBytes(): Buffer {
+  return Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 }
 
 async function makeTemporaryDirectory(prefix: string): Promise<string> {
