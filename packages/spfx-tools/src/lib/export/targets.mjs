@@ -300,20 +300,24 @@ async function createStandalonePackageLock(targetDir) {
 
 function runNpmCommand(cwd, args, failureMessage) {
   const nodeVersion = readPinnedNodeVersion(cwd);
+  const currentNodeVersion = process.version.replace(/^v/, '');
   const nvmScript = process.env.NVM_DIR
     ? path.join(process.env.NVM_DIR, 'nvm.sh')
     : path.join(process.env.HOME || '', '.nvm', 'nvm.sh');
-  const useNvm = Boolean(nodeVersion && existsSync(nvmScript));
+  const useNvm = Boolean(
+    nodeVersion && nodeVersion.replace(/^v/, '') !== currentNodeVersion && existsSync(nvmScript)
+  );
   const result = useNvm
     ? spawnSync(
-        '/bin/zsh',
+        '/bin/bash',
         ['-lc', `source ${shellQuote(nvmScript)} && nvm exec ${shellQuote(nodeVersion)} npm ${args.map(shellQuote).join(' ')}`],
         { cwd, stdio: childStdio(), env: process.env }
       )
     : spawnSync('npm', args, { cwd, stdio: childStdio(), env: process.env });
 
   if (result.status !== 0) {
-    throw new Error(failureMessage);
+    const spawnFailure = result.error?.message ? `: ${result.error.message}` : '';
+    throw new Error(`${failureMessage}${spawnFailure}`);
   }
 }
 
