@@ -1,5 +1,4 @@
 const CDN_DESCRIPTOR_ENDPOINT = '/api/lab-packages/cdn';
-const CDN_ASSET_API_PREFIX = '/api/lab-packages/cdn-assets/';
 const RELEASE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 
@@ -9,10 +8,21 @@ export interface CdnPackageDescriptor {
   releaseId: string;
   generatedAt: string;
   cdnBasePath: string;
-  assetBaseUrl: string;
+  delivery: CdnPackageDelivery;
   packagePath: string;
   assets: CdnPackageScriptAsset[];
   deferredResources: CdnPackageDeferredResource[];
+}
+
+export interface CdnPackageDelivery {
+  kind: 'local-mock-cdn';
+  origin: string;
+  bucketBaseUrl: string;
+  namespaceKind: 'app-release';
+  namespacePath: string;
+  releaseBaseUrl: string;
+  releaseManifestUrl: string;
+  status: 'published-and-verified';
 }
 
 export interface CdnPackageScriptAsset {
@@ -84,19 +94,15 @@ export function validateCdnPackageDescriptor(value: unknown, expectedAppId: stri
     throw new Error('Staged CDN descriptor generatedAt is invalid.');
   }
 
-  const cdnBasePath = validateCdnBasePath(requireString(value.cdnBasePath, 'cdnBasePath'));
   const packagePath = validatePortablePath(requireString(value.packagePath, 'packagePath'), 'packagePath');
 
-  const labOrigin = getLabOrigin();
-  const assetBaseUrl = validateSimulationUrl(requireString(value.assetBaseUrl, 'assetBaseUrl'), labOrigin, 'assetBaseUrl');
-  if (!assetBaseUrl.pathname.endsWith('/')) {
-    throw new Error('Staged CDN descriptor assetBaseUrl must end with a slash.');
-  }
+  const delivery = validateDelivery(value.delivery, appId, releaseId, getLabOrigin());
+  const cdnBasePath = validateCdnBasePath(requireString(value.cdnBasePath, 'cdnBasePath'), delivery.releaseBaseUrl);
 
   if (!Array.isArray(value.assets) || value.assets.length === 0 || value.assets.length > 100) {
     throw new Error('Staged CDN descriptor assets must contain between 1 and 100 items.');
   }
-  const assets = value.assets.map((asset, index) => validateScriptAsset(asset, index, assetBaseUrl));
+  const assets = value.assets.map((asset, index) => validateScriptAsset(asset, index, delivery));
   const assetModuleIds = new Set<string>();
   const assetPaths = new Set<string>();
   for (const [index, asset] of assets.entries()) {
@@ -131,14 +137,14 @@ export function validateCdnPackageDescriptor(value: unknown, expectedAppId: stri
     releaseId,
     generatedAt,
     cdnBasePath,
-    assetBaseUrl: assetBaseUrl.href,
+    delivery,
     packagePath,
     assets,
     deferredResources
   };
 }
 
-function validateScriptAsset(value: unknown, index: number, assetBaseUrl: URL): CdnPackageScriptAsset {
+function validateScriptAsset(value: unknown, index: number, delivery: CdnPackageDelivery): CdnPackageScriptAsset {
   if (!isRecord(value)) {
     throw new Error(`Staged CDN asset ${index} must be an object.`);
   }
@@ -156,12 +162,12 @@ function validateScriptAsset(value: unknown, index: number, assetBaseUrl: URL): 
   if (!/\.(?:m?js)$/i.test(assetPath)) {
     throw new Error(`Staged CDN asset ${index} must name a JavaScript asset.`);
   }
-  const assetUrl = validateSimulationUrl(
+  const assetUrl = validateMockCdnUrl(
     requireString(value.assetUrl, `assets[${index}].assetUrl`),
-    assetBaseUrl.origin,
+    delivery.origin,
     `assets[${index}].assetUrl`
   );
-  const expectedAssetUrl = new URL(encodePortablePath(assetPath), assetBaseUrl);
+  const expectedAssetUrl = new URL(encodePortablePath(assetPath), delivery.releaseBaseUrl);
   if (assetUrl.href !== expectedAssetUrl.href) {
     throw new Error(`Staged CDN asset ${index} URL does not match its assetPath.`);
   }
@@ -176,6 +182,62 @@ function validateScriptAsset(value: unknown, index: number, assetBaseUrl: URL): 
     bytes: validateByteLength(value.bytes, `assets[${index}].bytes`),
     sha256: validateSha256(value.sha256, `assets[${index}].sha256`),
     stageStatus: value.stageStatus
+  };
+}
+
+function validateDelivery(value: unknown, appId: string, releaseId: string, labOrigin: string): CdnPackageDelivery {
+  if (!isRecord(value)) {
+    throw new Error('Staged CDN descriptor delivery must be an object.');
+  }
+  if (value.kind !== 'local-mock-cdn' || value.namespaceKind !== 'app-release' || value.status !== 'published-and-verified') {
+    throw new Error('Staged CDN descriptor delivery has invalid status metadata.');
+  }
+  const originUrl = validateMockCdnOrigin(requireString(value.origin, 'delivery.origin'), labOrigin);
+  const bucketBaseUrl = validateMockCdnUrl(
+    requireString(value.bucketBaseUrl, 'delivery.bucketBaseUrl'),
+    originUrl.origin,
+    'delivery.bucketBaseUrl'
+  );
+  if (bucketBaseUrl.href !== `${originUrl.origin}/`) {
+    throw new Error('Staged CDN descriptor delivery.bucketBaseUrl must be the mock CDN origin root.');
+  }
+  if (encodeURIComponent(appId) !== appId) {
+    throw new Error('Staged CDN descriptor appId cannot identify a safe mock CDN namespace.');
+  }
+  const expectedNamespacePath = `apps/${appId}/versions/${releaseId}/`;
+  const namespacePath = validatePortableDirectoryPath(
+    requireString(value.namespacePath, 'delivery.namespacePath'),
+    'delivery.namespacePath'
+  );
+  if (namespacePath !== expectedNamespacePath) {
+    throw new Error('Staged CDN descriptor delivery namespace does not match the selected app and release.');
+  }
+  const releaseBaseUrl = validateMockCdnUrl(
+    requireString(value.releaseBaseUrl, 'delivery.releaseBaseUrl'),
+    originUrl.origin,
+    'delivery.releaseBaseUrl'
+  );
+  const expectedReleaseBaseUrl = new URL(encodePortablePath(namespacePath), bucketBaseUrl);
+  if (releaseBaseUrl.href !== expectedReleaseBaseUrl.href || !releaseBaseUrl.pathname.endsWith('/')) {
+    throw new Error('Staged CDN descriptor delivery.releaseBaseUrl does not match its immutable namespace.');
+  }
+  const releaseManifestUrl = validateMockCdnUrl(
+    requireString(value.releaseManifestUrl, 'delivery.releaseManifestUrl'),
+    originUrl.origin,
+    'delivery.releaseManifestUrl'
+  );
+  if (releaseManifestUrl.href !== new URL('deployment-manifest.json', releaseBaseUrl).href) {
+    throw new Error('Staged CDN descriptor delivery.releaseManifestUrl does not match its immutable release.');
+  }
+  return {
+    kind: value.kind,
+    origin: originUrl.origin,
+    bucketBaseUrl: bucketBaseUrl.href,
+    namespaceKind: value.namespaceKind,
+    namespacePath,
+    releaseBaseUrl: releaseBaseUrl.href,
+    releaseManifestUrl: releaseManifestUrl.href,
+    status: value.status
   };
 }
 
@@ -229,13 +291,13 @@ async function readJsonResponse(response: Response, label: string): Promise<unkn
   return value;
 }
 
-function validateCdnBasePath(value: string): string {
+function validateCdnBasePath(value: string, expectedReleaseBaseUrl: string): string {
   const url = tryParseUrl(value);
   if (!url) {
-    throw new Error('Staged CDN descriptor cdnBasePath must be an absolute HTTPS URL.');
+    throw new Error('Staged CDN descriptor cdnBasePath must be an absolute URL.');
   }
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
-    throw new Error('Staged CDN descriptor cdnBasePath must be a credential-free HTTPS URL.');
+  if (url.href !== expectedReleaseBaseUrl) {
+    throw new Error('Staged CDN descriptor cdnBasePath must match the selected local mock CDN release URL.');
   }
   if (!url.pathname.endsWith('/')) {
     throw new Error('Staged CDN descriptor cdnBasePath must end with a slash.');
@@ -243,23 +305,53 @@ function validateCdnBasePath(value: string): string {
   return url.href;
 }
 
-function validateSimulationUrl(value: string, labOrigin: string, label: string): URL {
-  const url = tryParseUrl(value, labOrigin);
+function validateMockCdnOrigin(value: string, labOrigin: string): URL {
+  const url = tryParseUrl(value);
   if (!url) {
-    throw new Error(`Staged CDN descriptor ${label} is not a valid URL.`);
+    throw new Error('Staged CDN descriptor delivery.origin is not a valid URL.');
+  }
+  if (url.href !== url.origin && url.href !== `${url.origin}/`) {
+    throw new Error('Staged CDN descriptor delivery.origin must contain only an origin.');
   }
   if (
-    url.origin !== labOrigin ||
-    !url.pathname.startsWith(CDN_ASSET_API_PREFIX) ||
+    url.protocol !== 'http:' ||
+    url.hostname !== '127.0.0.1' ||
+    !url.port ||
+    url.origin === labOrigin ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error(
+      'Staged CDN descriptor delivery.origin must be a separate credential-free http://127.0.0.1 origin with an explicit port.'
+    );
+  }
+  return url;
+}
+
+function validateMockCdnUrl(value: string, expectedOrigin: string, label: string): URL {
+  const url = tryParseUrl(value);
+  if (
+    !url ||
+    url.origin !== expectedOrigin ||
     url.username ||
     url.password ||
     url.search ||
     url.hash ||
     hasUnsafeEncodedPath(url.pathname)
   ) {
-    throw new Error(`Staged CDN descriptor ${label} must stay within the Lab CDN asset API.`);
+    throw new Error(`Staged CDN descriptor ${label} must stay within the selected local mock CDN origin.`);
   }
   return url;
+}
+
+function validatePortableDirectoryPath(value: string, label: string): string {
+  if (!value.endsWith('/')) {
+    throw new Error(`Staged CDN descriptor ${label} must end with a slash.`);
+  }
+  validatePortablePath(value.slice(0, -1), label);
+  return value;
 }
 
 function validatePortablePath(value: string, label: string): string {

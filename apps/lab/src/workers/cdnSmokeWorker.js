@@ -2,7 +2,6 @@
   'use strict';
 
   const MESSAGE_SOURCE = 'spfx-kit-cdn-smoke-check';
-  const ASSET_API_PREFIX = '/api/lab-packages/cdn-assets/';
 
   self.addEventListener('message', (event) => {
     const loadScript = self.importScripts.bind(self);
@@ -102,6 +101,8 @@
     if (!Array.isArray(value.assets) || value.assets.length === 0 || value.assets.length > 100) {
       throw new Error('The staged CDN smoke-check asset list is invalid.');
     }
+    const deliveryOrigin = validateDeliveryOrigin(value.deliveryOrigin);
+    const releaseBaseUrl = validateReleaseBaseUrl(value.releaseBaseUrl, deliveryOrigin);
     const seenPaths = new Set();
     const assets = value.assets.map((asset, index) => {
       if (!isRecord(asset) || typeof asset.path !== 'string' || !isPortablePath(asset.path)) {
@@ -115,10 +116,10 @@
         throw new Error(`Staged CDN smoke-check asset ${index} has an invalid URL.`);
       }
       const url = tryParseUrl(asset.url);
+      const expectedUrl = new URL(encodePortablePath(asset.path), releaseBaseUrl);
       if (
         !url ||
-        url.origin !== self.location.origin ||
-        !url.pathname.startsWith(ASSET_API_PREFIX) ||
+        url.href !== expectedUrl.href ||
         url.username ||
         url.password ||
         url.search ||
@@ -126,11 +127,71 @@
         hasUnsafeRawUrlPath(asset.url) ||
         hasUnsafeEncodedPath(url.pathname)
       ) {
-        throw new Error(`Staged CDN smoke-check asset ${index} must stay within the Lab CDN asset API.`);
+        throw new Error(`Staged CDN smoke-check asset ${index} must stay within the selected mock-CDN release.`);
       }
       return { path: asset.path, url: url.href };
     });
     return { requestId: value.requestId, assets };
+  }
+
+  function validateDeliveryOrigin(value) {
+    if (typeof value !== 'string') {
+      throw new Error('The staged CDN smoke-check delivery origin is invalid.');
+    }
+    const url = tryParseUrl(value);
+    if (
+      !url ||
+      url.protocol !== 'http:' ||
+      url.hostname !== '127.0.0.1' ||
+      !url.port ||
+      url.origin === self.location.origin ||
+      url.href !== `${url.origin}/` ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    ) {
+      throw new Error('The staged CDN smoke-check requires a separate explicit loopback mock-CDN origin.');
+    }
+    return url.origin;
+  }
+
+  function validateReleaseBaseUrl(value, deliveryOrigin) {
+    if (typeof value !== 'string') {
+      throw new Error('The staged CDN smoke-check release base URL is invalid.');
+    }
+    const url = tryParseUrl(value);
+    const segments = url ? url.pathname.split('/').filter(Boolean) : [];
+    if (
+      !url ||
+      url.origin !== deliveryOrigin ||
+      !url.pathname.endsWith('/') ||
+      segments.length !== 4 ||
+      segments[0] !== 'apps' ||
+      segments[2] !== 'versions' ||
+      !isSafeNamespaceSegment(segments[1]) ||
+      !isSafeNamespaceSegment(segments[3]) ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      hasUnsafeRawUrlPath(value) ||
+      hasUnsafeEncodedPath(url.pathname)
+    ) {
+      throw new Error('The staged CDN smoke-check release base URL is outside the selected immutable app release.');
+    }
+    return url;
+  }
+
+  function isSafeNamespaceSegment(value) {
+    return /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value) && encodeURIComponent(value) === value;
+  }
+
+  function encodePortablePath(value) {
+    return value
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
   }
 
   function isPortablePath(value) {

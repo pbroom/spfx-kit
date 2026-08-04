@@ -5,7 +5,7 @@ import { readJson } from '../lib/fs.mjs';
 import { verifyCdnStage, verifyRemoteCdnFiles } from '../lib/cdn-stage.mjs';
 
 const usage = `Usage:
-  verify-cdn-stage --stage <export-dir>/staging-cdn [--remote --expected-cdn-base-url <exact-prefix>] [--authorization-env <ENV_NAME>] [--json]
+  verify-cdn-stage --stage <export-dir>/staging-cdn [--local-mock-cdn] [--remote --expected-cdn-base-url <exact-prefix>] [--authorization-env <ENV_NAME>] [--json]
 
 Local verification is always performed. --remote downloads every staged URL and compares its bytes and SHA-256.
 The expected prefix must come from trusted deployment configuration, not from the artifact being checked.
@@ -15,10 +15,14 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const stageDir = path.resolve(required(args, 'stage', usage));
   const manifest = await readJson(path.join(stageDir, 'deployment-manifest.json'));
-  const rebuilt = await verifyCdnStage(stageDir, manifest);
+  const allowLocalMockCdn = args['local-mock-cdn'] === true || args['local-mock-cdn'] === 'true';
+  const rebuilt = await verifyCdnStage(stageDir, manifest, { allowLocalMockCdn });
   let remote = { status: 'not-run', files: 0 };
 
   if (args.remote === true || args.remote === 'true') {
+    if (allowLocalMockCdn) {
+      throw new Error('--remote is for configured HTTPS staging CDNs, not the local mock CDN');
+    }
     const expectedCdnBasePath = String(
       args['expected-cdn-base-url'] || process.env.SPFX_KIT_EXPECTED_STAGING_CDN_BASE_URL || ''
     ).trim();

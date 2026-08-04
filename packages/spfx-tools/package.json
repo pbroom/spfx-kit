@@ -10,6 +10,7 @@
     "create-spfx-app": "./src/cli/create-spfx-app.mjs",
     "export-spfx-app": "./src/cli/export-spfx-app.mjs",
     "import-spfx-app": "./src/cli/import-spfx-app.mjs",
+    "spfx-kit-mock-cdn": "./src/cli/mock-cdn.mjs",
     "sync-cdn-config": "./src/cli/sync-cdn-config.mjs",
     "sync-lab": "./src/cli/sync-lab.mjs",
     "sync-source-editor": "./src/cli/sync-source-editor.mjs",

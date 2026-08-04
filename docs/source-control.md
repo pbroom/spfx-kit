@@ -96,6 +96,25 @@ SharePoint deployment. App Catalog upload, trust/deploy, site installation,
 runtime exercise, and browser network checks remain a separate test-tenant
 gate.
 
+For a local CDN-boundary smoke check, use the same staging target with an
+explicit loopback base and publish it into SPFx Kit's ignored immutable bucket:
+
+```sh
+npm run export:spfx -- \
+  --app .spfx-kit/apps/<slug> \
+  --target staging-cdn \
+  --staging-cdn-base-url http://127.0.0.1:5174 \
+  --local-mock-cdn \
+  --cdn-release local.1
+npm run mock-cdn -- publish --stage <export-dir>/staging-cdn --select
+npm run mock-cdn -- serve --origin http://127.0.0.1:5174 --lab-origin http://127.0.0.1:5173
+```
+
+The local bucket is not source-controlled or deployable. Publishing is
+validated, immutable, and explicit; serving is GET/HEAD-only from the selected
+manifest closure. This does not replace the HTTPS remote proof or any App
+Catalog/deployment validation.
+
 ## Third-party apps (repos shared with you)
 
 Use `clone:spfx` instead of `import:spfx` when you plan to send changes or

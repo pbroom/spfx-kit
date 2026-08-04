@@ -9,8 +9,10 @@ import {
   clearGeneratedCdnOutputs,
   createCdnStageManifest,
   createImmutableCdnReleaseId,
+  localMockCdnBasePath,
   mergeCdnAssetTree,
   normalizeCdnReleaseId,
+  normalizeLocalMockCdnRoot,
   normalizeStagingCdnRoot,
   stagingCdnBasePath,
   verifyCdnStage,
@@ -45,6 +47,24 @@ describe('staging CDN release paths', () => {
     expect(() => normalizeStagingCdnRoot('https://user:secret@staging.contoso.test/spfx')).toThrow('credentials');
     for (const releaseId of ['latest', 'current', '../1.2.3', 'release']) {
       expect(() => normalizeCdnReleaseId(releaseId)).toThrow();
+    }
+  });
+
+  it('builds a local mock release path only on an explicit IPv4 loopback origin', () => {
+    expect(localMockCdnBasePath('http://127.0.0.1:4174', 'team-spfx', '1.2.3-rc.4')).toBe(
+      'http://127.0.0.1:4174/apps/team-spfx/versions/1.2.3-rc.4/'
+    );
+    expect(normalizeLocalMockCdnRoot('http://127.0.0.1:4174')).toBe('http://127.0.0.1:4174/');
+    for (const root of [
+      'http://localhost:4174',
+      'http://0.0.0.0:4174',
+      'http://127.0.0.1',
+      'http://127.0.0.1:4174/mock',
+      'https://127.0.0.1:4174',
+      'http://user:secret@127.0.0.1:4174',
+      'http://127.0.0.1:4174/?fault=missing'
+    ]) {
+      expect(() => normalizeLocalMockCdnRoot(root)).toThrow('Local mock CDN root');
     }
   });
 });
@@ -269,6 +289,15 @@ describe('staging CDN proof manifest', () => {
     await expect(verifyCdnStage(fixture.stageDir, manifest)).rejects.toThrow('deterministic manifest core');
   });
 
+  it('accepts loopback HTTP only through the explicit local mock policy', async () => {
+    const cdnBasePath = localMockCdnBasePath('http://127.0.0.1:4174', 'team-spfx', '1.2.3-rc.4');
+    const fixture = await createStageFixture({ cdnBasePath });
+    await expect(createCdnStageManifest(fixture)).rejects.toThrow('credential-free HTTPS');
+    const manifest = await createCdnStageManifest({ ...fixture, allowLocalMockCdn: true });
+    await expect(verifyCdnStage(fixture.stageDir, manifest)).rejects.toThrow('credential-free HTTPS');
+    await expect(verifyCdnStage(fixture.stageDir, manifest, { allowLocalMockCdn: true })).resolves.toMatchObject({ cdnBasePath });
+  });
+
   it('rejects malformed or extended version 1 manifest shapes', async () => {
     const fixture = await createStageFixture();
     const manifest = await createCdnStageManifest(fixture);
@@ -351,12 +380,11 @@ describe('staging CDN proof manifest', () => {
   });
 });
 
-async function createStageFixture() {
+async function createStageFixture({ cdnBasePath = 'https://staging.contoso.test/spfx/team-spfx/versions/1.2.3-rc.4/' } = {}) {
   const stageDir = await temporaryDirectory();
   const uploadDir = path.join(stageDir, 'upload');
   const releaseManifestDir = path.join(stageDir, 'manifests');
   const packageFile = path.join(stageDir, 'sharepoint', 'solution', 'team-spfx.staging.cdn.sppkg');
-  const cdnBasePath = 'https://staging.contoso.test/spfx/team-spfx/versions/1.2.3-rc.4/';
   const componentManifest = {
     id: 'component-id',
     loaderConfig: {

@@ -374,7 +374,7 @@ export function LabApp(): JSX.Element {
                   aria-describedby="cdn-package-mode-description"
                   className="package-mode-option"
                   label="CDN"
-                  title="Staged CDN bundle smoke check (not a SharePoint preview)"
+                  title="Local mock-CDN staged-bundle smoke check (not a SharePoint preview)"
                   value="cdn"
                 />
                 <span className="visually-hidden" id="cdn-package-mode-description">

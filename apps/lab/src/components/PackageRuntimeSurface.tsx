@@ -95,18 +95,19 @@ export function PackageRuntimeSurface({
           className={`preview-frame ${boundsVisible ? 'preview-frame--bounded' : ''}`}
           aria-busy={mode === 'cdn' && (descriptorLoading || smokeStatus.status === 'loading')}
           data-package-artifact={descriptor?.releaseId}
+          data-package-delivery-origin={descriptor?.delivery.origin}
           data-package-mode={mode}
           style={{ width: `min(${frameWidth}px, calc(100% - 48px))` }}
         >
           {mode === 'cdn' && descriptorLoading ? (
             <div className="package-runtime-state" role="status">
               <Spinner size="small" />
-              <strong>Preparing staged CDN smoke check</strong>
-              <span>Validating and pinning one local staging-CDN release.</span>
+              <strong>Preparing local mock-CDN smoke check</strong>
+              <span>Validating the staged release and pinning its separate-origin delivery URL.</span>
             </div>
           ) : mode === 'cdn' && descriptorState.status === 'error' ? (
             <div className="package-runtime-state package-runtime-state--error" role="status">
-              <strong>Staged CDN bundle unavailable</strong>
+              <strong>CDN resources unavailable</strong>
               <span>{descriptorState.message}</span>
               <Button appearance="primary" size="small" onClick={retry}>
                 Retry
@@ -114,7 +115,7 @@ export function PackageRuntimeSurface({
             </div>
           ) : descriptor && selected ? (
             <CdnSmokeCheck
-              key={`${selected.id}:cdn:${descriptor.releaseId}:${descriptor.assetBaseUrl}`}
+              key={`${selected.id}:cdn:${descriptor.releaseId}:${descriptor.delivery.releaseBaseUrl}`}
               descriptor={descriptor}
               onRetry={retry}
               onStatusChange={updateSmokeStatus}

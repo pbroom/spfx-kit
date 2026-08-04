@@ -27,6 +27,7 @@
     "export:spfx": "node packages/spfx-tools/src/cli/export-spfx-app.mjs",
     "bump:spfx": "node packages/spfx-tools/src/cli/bump-spfx-app.mjs",
     "guard:public": "node packages/spfx-tools/src/cli/guard-public-repo.mjs",
+    "mock-cdn": "node packages/spfx-tools/src/cli/mock-cdn.mjs",
     "sync:cdn": "node packages/spfx-tools/src/cli/sync-cdn-config.mjs",
     "sync:lab": "node packages/spfx-tools/src/cli/sync-lab.mjs",
     "sync:source-editor": "node packages/spfx-tools/src/cli/sync-source-editor.mjs",

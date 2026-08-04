@@ -17,7 +17,8 @@ export type CdnSmokeCheckStatus =
   | { status: 'error'; assetEvidence: CdnSmokeAssetEvidence[]; message: string };
 
 export function CdnSmokeCheck({ descriptor, onRetry, onStatusChange }: CdnSmokeCheckProps): JSX.Element {
-  const requestId = React.useMemo(createRequestId, [descriptor.assetBaseUrl]);
+  const { origin: deliveryOrigin, releaseBaseUrl } = descriptor.delivery;
+  const requestId = React.useMemo(createRequestId, [releaseBaseUrl]);
   const assets = React.useMemo(
     () => descriptor.assets.map((asset) => ({ path: asset.assetPath, url: asset.assetUrl })),
     [descriptor.assets]
@@ -101,7 +102,7 @@ export function CdnSmokeCheck({ descriptor, onRetry, onStatusChange }: CdnSmokeC
     );
     worker.addEventListener('message', handleMessage);
     worker.addEventListener('error', handleWorkerError);
-    worker.postMessage({ requestId, assets });
+    worker.postMessage({ requestId, deliveryOrigin, releaseBaseUrl, assets });
     return () => {
       settled = true;
       window.clearTimeout(timeoutId);
@@ -109,7 +110,7 @@ export function CdnSmokeCheck({ descriptor, onRetry, onStatusChange }: CdnSmokeC
       worker.removeEventListener('error', handleWorkerError);
       worker.terminate();
     };
-  }, [assets, expectedPaths, onStatusChange, requestId]);
+  }, [assets, deliveryOrigin, expectedPaths, onStatusChange, releaseBaseUrl, requestId]);
 
   return (
     <div
@@ -120,15 +121,16 @@ export function CdnSmokeCheck({ descriptor, onRetry, onStatusChange }: CdnSmokeC
       {state.status === 'loading' ? (
         <>
           <Spinner size="small" />
-          <strong>Checking staged CDN bundle</strong>
-          <span>Loading the pinned staged scripts through the Lab's same-origin CDN asset route.</span>
+          <strong>Checking mock-CDN delivery</strong>
+          <span>Loading the pinned staged scripts from {descriptor.delivery.origin}.</span>
         </>
       ) : state.status === 'ready' ? (
         <>
-          <strong>Staged CDN bundle smoke check passed</strong>
+          <strong>Local mock-CDN smoke check passed</strong>
           <span>
-            Loaded {state.assetEvidence.length} immutable staged script{state.assetEvidence.length === 1 ? '' : 's'}; detected{' '}
-            {state.registrations.length} AMD module registration{state.registrations.length === 1 ? '' : 's'}.
+            Loaded {state.assetEvidence.length} immutable staged script{state.assetEvidence.length === 1 ? '' : 's'} from the
+            separate local mock CDN; detected {state.registrations.length} AMD module registration
+            {state.registrations.length === 1 ? '' : 's'}.
           </span>
           <span className="cdn-smoke-limitation">
             The worker executed each staged script's top-level code. The Lab did not invoke registered AMD factories or
@@ -138,7 +140,7 @@ export function CdnSmokeCheck({ descriptor, onRetry, onStatusChange }: CdnSmokeC
         </>
       ) : (
         <>
-          <strong>Staged CDN bundle smoke check failed</strong>
+          <strong>Mock-CDN delivery or staged-script execution failed</strong>
           <span>{state.message}</span>
           <button type="button" onClick={onRetry}>
             Retry

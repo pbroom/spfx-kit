@@ -5,7 +5,7 @@ import {
   safeLocalPath
 } from './cdn-stage-paths.mjs';
 
-export function parseCdnStageManifestV1(value) {
+export function parseCdnStageManifestV1(value, { allowLocalMockCdn = false } = {}) {
   if (!isRecord(value) || value.schemaVersion !== 1) {
     throw new Error('Unsupported or missing CDN stage manifest schemaVersion');
   }
@@ -42,7 +42,7 @@ export function parseCdnStageManifestV1(value) {
     throw new Error('CDN stage deployment manifest releaseId must be normalized and immutable');
   }
   const cdnBasePath = requireString(value.cdnBasePath, 'deployment manifest cdnBasePath');
-  if (normalizeExactCdnBasePath(cdnBasePath) !== cdnBasePath) {
+  if (normalizeExactCdnBasePath(cdnBasePath, { allowLocalMockCdn }) !== cdnBasePath) {
     throw new Error('CDN stage deployment manifest cdnBasePath must be normalized');
   }
   const expectedSuffix = `/${encodeURIComponent(slug)}/versions/${encodeURIComponent(releaseId)}/`;

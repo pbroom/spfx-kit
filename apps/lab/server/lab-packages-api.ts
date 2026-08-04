@@ -1,12 +1,19 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { lstat, readFile, realpath } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import type { Plugin } from 'vite';
 // @ts-expect-error The shared SPFx tooling is an untyped ESM package.
-import { verifyCdnStage } from '../../../packages/spfx-tools/src/lib/cdn-stage.mjs';
+import * as mockCdnBucket from '../../../packages/spfx-tools/src/lib/mock-cdn-bucket.mjs';
+const {
+  DEFAULT_MOCK_CDN_BUCKET_PATH,
+  DEFAULT_MOCK_CDN_ORIGIN,
+  normalizeMockCdnOrigin,
+  resolveMockCdnBucketRoot,
+  resolveSelectedMockCdnAppRelease
+} = mockCdnBucket;
 // @ts-expect-error The shared SPFx tooling is an untyped ESM package.
-import { assertPortableAssetPath, safeLocalPath } from '../../../packages/spfx-tools/src/lib/cdn-stage-paths.mjs';
+import { assetUrl, safeLocalPath } from '../../../packages/spfx-tools/src/lib/cdn-stage-paths.mjs';
 // @ts-expect-error The shared SPFx tooling is an untyped ESM package.
 import { readSppkgComponentManifestsFromBytes } from '../../../packages/spfx-tools/src/lib/sppkg.mjs';
 import { isSameOriginRequest, sendJson } from './http';
@@ -14,8 +21,6 @@ import { rootDir } from './paths';
 import { sanitizeSlug } from './sanitize';
 
 const apiRoot = '/api/lab-packages';
-const cdnAssetRoute = '/cdn-assets/';
-const maximumManifestBytes = 10 * 1024 * 1024;
 
 interface CdnStageFile {
   path: string;
@@ -30,31 +35,29 @@ interface ValidatedCdnStageManifest {
   slug: string;
   releaseId: string;
   cdnBasePath: string;
-  uploadRoot: string;
-  package: {
-    path: string;
-    bytes: number;
-    sha256: string;
-  };
+  package: { path: string; bytes: number; sha256: string };
   files: CdnStageFile[];
 }
 
-interface ValidatedCdnStage {
-  stageDir: string;
+interface SelectedMockCdnRelease {
+  appId: string;
+  releaseId: string;
+  releaseBaseUrl: string;
+  releaseDir: string;
   manifest: ValidatedCdnStageManifest;
+  manifestSha256: string;
+}
+
+interface ValidatedSelectedRelease extends SelectedMockCdnRelease {
   componentManifests: ReadonlyArray<{
     manifest?: { id?: unknown; loaderConfig?: unknown };
     source: string;
   }>;
 }
 
-interface PinnedCdnStageSession extends ValidatedCdnStage {
-  appId: string;
-  sessionId: string;
-}
-
 export interface CdnRuntimeSessionStoreOptions {
-  exportsRoot?: string;
+  bucketRoot?: string;
+  mockCdnOrigin?: string;
 }
 
 export interface CdnRuntimeDescriptor {
@@ -63,7 +66,16 @@ export interface CdnRuntimeDescriptor {
   releaseId: string;
   generatedAt: string;
   cdnBasePath: string;
-  assetBaseUrl: string;
+  delivery: {
+    kind: 'local-mock-cdn';
+    origin: string;
+    bucketBaseUrl: string;
+    namespaceKind: 'app-release';
+    namespacePath: string;
+    releaseBaseUrl: string;
+    releaseManifestUrl: string;
+    status: 'published-and-verified';
+  };
   assets: Array<{
     role: 'dependency' | 'entry';
     moduleId: string;
@@ -84,17 +96,11 @@ export interface CdnRuntimeDescriptor {
   packagePath: string;
 }
 
-export interface CdnRuntimeAsset {
-  bytes: Buffer;
-  contentType: string;
-  etag: string;
-}
-
 export function spfxLabPackagesApi(): Plugin {
-  const options: CdnRuntimeSessionStoreOptions = {};
-  if (process.env.SPFX_KIT_LAB_EXPORTS_DIR) {
-    options.exportsRoot = process.env.SPFX_KIT_LAB_EXPORTS_DIR;
-  }
+  const options: CdnRuntimeSessionStoreOptions = {
+    bucketRoot: process.env.SPFX_KIT_MOCK_CDN_ROOT || DEFAULT_MOCK_CDN_BUCKET_PATH,
+    mockCdnOrigin: process.env.SPFX_KIT_MOCK_CDN_ORIGIN || DEFAULT_MOCK_CDN_ORIGIN
+  };
   return {
     name: 'spfx-kit-lab-packages-api',
     configureServer(server) {
@@ -110,13 +116,10 @@ export function createLabPackagesRequestHandler(workspaceRoot: string, options: 
   const sessionStore = createCdnRuntimeSessionStore(workspaceRoot, options);
   return async (req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> => {
     const rawPath = requestPath(req.url);
-    const descriptorRequest = rawPath === '/cdn';
-    const assetRequest = rawPath.startsWith(cdnAssetRoute);
-    if (!descriptorRequest && !assetRequest) {
+    if (rawPath !== '/cdn') {
       next();
       return;
     }
-
     if (req.method !== 'GET') {
       res.statusCode = 405;
       res.setHeader('Allow', 'GET');
@@ -125,36 +128,24 @@ export function createLabPackagesRequestHandler(workspaceRoot: string, options: 
     }
     if (!isSameOriginRequest(req)) {
       res.statusCode = 403;
-      sendJson(res, { error: 'Lab package assets require a same-origin request.' });
+      sendJson(res, { error: 'Lab package descriptors require a same-origin request.' });
       return;
     }
 
     try {
-      if (descriptorRequest) {
-        const url = new URL(req.url || '/', 'http://127.0.0.1');
-        const appId = requiredSingleQueryValue(url, 'app');
-        const componentId = optionalSingleQueryValue(url, 'component');
-        const descriptor = await sessionStore.resolveDescriptor(appId, componentId);
-        res.setHeader('Cache-Control', 'no-store');
-        sendJson(res, descriptor);
-        return;
-      }
-
-      const route = parseCdnAssetRoute(rawPath);
-      const asset = await sessionStore.readAsset(route.sessionId, route.assetPath);
-      res.statusCode = 200;
-      res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-      res.setHeader('Content-Type', asset.contentType);
-      res.setHeader('Content-Length', String(asset.bytes.length));
-      res.setHeader('ETag', asset.etag);
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.end(asset.bytes);
+      const url = new URL(req.url || '/', 'http://127.0.0.1');
+      const descriptor = await sessionStore.resolveDescriptor(
+        requiredSingleQueryValue(url, 'app'),
+        optionalSingleQueryValue(url, 'component')
+      );
+      res.setHeader('Cache-Control', 'no-store');
+      sendJson(res, descriptor);
     } catch (error) {
       const requestError = error instanceof LabPackageRequestError ? error : undefined;
       res.statusCode = requestError?.statusCode || 409;
       res.setHeader('Cache-Control', 'no-store');
       sendJson(res, {
-        error: requestError?.publicMessage || 'CDN package runtime artifact is unavailable.'
+        error: requestError?.publicMessage || 'Local mock CDN release is unavailable.'
       });
     }
   };
@@ -165,50 +156,50 @@ export function createCdnRuntimeSessionStore(
   options: CdnRuntimeSessionStoreOptions = {}
 ): {
   resolveDescriptor(requestedAppId: string, requestedComponentId?: string): Promise<CdnRuntimeDescriptor>;
-  readAsset(requestedSessionId: string, requestedAssetPath: string): Promise<CdnRuntimeAsset>;
 } {
-  const exportsRoot = resolveExportsRoot(workspaceRoot, options.exportsRoot);
-  const sessions = new Map<string, PinnedCdnStageSession>();
+  const bucketRoot = resolveMockCdnBucketRoot(workspaceRoot, options.bucketRoot || DEFAULT_MOCK_CDN_BUCKET_PATH);
+  const mockCdnOrigin = normalizeMockCdnOrigin(options.mockCdnOrigin || DEFAULT_MOCK_CDN_ORIGIN);
 
   return {
     async resolveDescriptor(requestedAppId, requestedComponentId) {
-      const stage = await selectLatestValidatedCdnStage(workspaceRoot, exportsRoot, requestedAppId);
-      const sessionId = randomUUID();
-      const session = Object.freeze({
-        appId: sanitizeRuntimeAppId(requestedAppId),
-        sessionId,
-        stageDir: stage.stageDir,
-        manifest: stage.manifest,
-        componentManifests: Object.freeze([...stage.componentManifests])
-      });
-      const descriptor = await describePinnedCdnStage(session, requestedComponentId);
-      sessions.set(sessionId, session);
-      trimOldestSessions(sessions);
-      return descriptor;
-    },
-    async readAsset(requestedSessionId, requestedAssetPath) {
-      const sessionId = sanitizeSessionId(requestedSessionId);
-      const session = sessions.get(sessionId);
-      if (!session) {
-        throw unavailable('CDN stage session was not found.');
+      const appId = sanitizeRuntimeAppId(requestedAppId);
+      let release: SelectedMockCdnRelease;
+      try {
+        release = (await resolveSelectedMockCdnAppRelease({
+          bucketRoot,
+          origin: mockCdnOrigin,
+          appId
+        })) as SelectedMockCdnRelease;
+      } catch {
+        throw unavailable();
       }
-      return readPinnedCdnRuntimeAsset(session, requestedAssetPath);
+      return describeSelectedMockCdnRelease(await validateSelectedPackage(release), requestedComponentId, mockCdnOrigin);
     }
   };
 }
 
-async function describePinnedCdnStage(
-  stage: PinnedCdnStageSession,
-  requestedComponentId?: string
+async function validateSelectedPackage(release: SelectedMockCdnRelease): Promise<ValidatedSelectedRelease> {
+  const packageFile = safeLocalPath(release.releaseDir, release.manifest.package.path);
+  await assertRealFileWithin(release.releaseDir, packageFile);
+  const packageBytes = await readFile(packageFile);
+  if (packageBytes.length !== release.manifest.package.bytes || sha256(packageBytes) !== release.manifest.package.sha256) {
+    throw unavailable();
+  }
+  const componentManifests = Object.freeze(
+    readSppkgComponentManifestsFromBytes(packageBytes, 'selected local mock CDN SPFx package')
+  );
+  return { ...release, componentManifests };
+}
+
+async function describeSelectedMockCdnRelease(
+  release: ValidatedSelectedRelease,
+  requestedComponentId: string | undefined,
+  mockCdnOrigin: string
 ): Promise<CdnRuntimeDescriptor> {
-  const appId = stage.appId;
   const componentId = requestedComponentId === undefined ? undefined : sanitizeComponentId(requestedComponentId);
-  const packagedComponents = stage.componentManifests;
   const componentManifests = componentId
-    ? packagedComponents.filter(
-        ({ manifest }: { manifest?: { id?: unknown } }) => String(manifest?.id || '').trim() === componentId
-      )
-    : packagedComponents;
+    ? release.componentManifests.filter(({ manifest }) => String(manifest?.id || '').trim() === componentId)
+    : release.componentManifests;
   if (!componentId && componentManifests.length > 1) {
     throw new LabPackageRequestError(
       409,
@@ -216,79 +207,81 @@ async function describePinnedCdnStage(
     );
   }
   if (componentManifests.length !== 1) {
-    throw unavailable(componentManifests.length ? 'Component manifest is ambiguous.' : 'Component manifest was not found.');
+    throw unavailable();
   }
 
   const componentManifest = componentManifests[0].manifest as {
-    loaderConfig?: {
-      entryModuleId?: unknown;
-      scriptResources?: Record<string, unknown>;
-    };
+    loaderConfig?: { entryModuleId?: unknown; scriptResources?: Record<string, unknown> };
   };
   const entryModuleId = componentManifest.loaderConfig?.entryModuleId;
   const scriptResources = componentManifest.loaderConfig?.scriptResources;
   if (typeof entryModuleId !== 'string' || !scriptResources || Array.isArray(scriptResources)) {
-    throw unavailable('Component entry module is invalid.');
+    throw unavailable();
   }
   const validatedEntryModuleId = validateRuntimeResourceIdentity(entryModuleId, 'Component entry module id');
-  const entryResource = scriptResources[entryModuleId];
-  const entryResourcePath = resolveScriptResourcePath(entryResource);
+  const entryResourcePath = resolveScriptResourcePath(scriptResources[entryModuleId]);
   if (!entryResourcePath) {
-    throw unavailable('Component entry module must resolve to one path asset.');
+    throw unavailable();
   }
 
-  const releaseId = stage.manifest.releaseId;
-  const assetBaseUrl = `${apiRoot}${cdnAssetRoute}${encodeURIComponent(stage.sessionId)}/`;
-  const entryAsset = resolveUniqueManifestAsset(stage.manifest, entryResourcePath, 'Component entry asset');
+  const releaseBaseUrl = release.releaseBaseUrl;
+  const entryAsset = resolveUniqueManifestAsset(release.manifest, entryResourcePath);
   const dependencyAssets = Object.entries(scriptResources)
-    .filter(([moduleId, resource]) => moduleId !== entryModuleId && (!isRecord(resource) || resource.type !== 'component'))
+    .filter(([moduleId, resource]) => moduleId !== entryModuleId && !isComponentScriptResource(resource))
     .map(([moduleId, resource]) => {
-      const validatedModuleId = validateRuntimeResourceIdentity(moduleId, 'Component dependency module id');
-      const resourcePath = resolveScriptResourcePath(resource);
-      if (!resourcePath) {
-        throw unavailable(`Component dependency ${moduleId} does not resolve to one path asset.`);
-      }
-      const asset = resolveUniqueManifestAsset(stage.manifest, resourcePath, `Component dependency ${moduleId}`);
-      const assetPath = asset.path;
-      return {
-        role: 'dependency' as const,
-        moduleId: validatedModuleId,
-        assetPath,
-        assetUrl: `${assetBaseUrl}${encodePortablePath(assetPath)}`,
-        bytes: asset.bytes,
-        sha256: asset.sha256,
-        stageStatus: 'allowed-and-verified' as const
-      };
+      const asset = resolveUniqueManifestAsset(release.manifest, requireScriptResourcePath(resource));
+      return describeAsset(
+        'dependency',
+        validateRuntimeResourceIdentity(moduleId, 'Component dependency module id'),
+        asset,
+        releaseBaseUrl
+      );
     })
     .sort((left, right) => left.moduleId.localeCompare(right.moduleId));
-  const entryAssetPath = entryAsset.path;
-  const assets = [
-    ...dependencyAssets,
-    {
-      role: 'entry' as const,
-      moduleId: validatedEntryModuleId,
-      assetPath: entryAssetPath,
-      assetUrl: `${assetBaseUrl}${encodePortablePath(entryAssetPath)}`,
-      bytes: entryAsset.bytes,
-      sha256: entryAsset.sha256,
-      stageStatus: 'allowed-and-verified' as const
-    }
-  ];
+  const assets = [...dependencyAssets, describeAsset('entry', validatedEntryModuleId, entryAsset, releaseBaseUrl)];
   assertUniqueRuntimeAssets(assets);
   const deferredResources = Object.entries(scriptResources)
     .filter((entry): entry is [string, Record<string, unknown>] => isComponentScriptResource(entry[1]))
     .map(([moduleId, resource]) => describeDeferredComponentResource(moduleId, resource))
     .sort((left, right) => left.moduleId.localeCompare(right.moduleId));
+  const namespacePath = `apps/${release.appId}/versions/${release.releaseId}/`;
+
   return {
     mode: 'cdn',
-    appId,
-    releaseId,
-    generatedAt: stage.manifest.generatedAt,
-    cdnBasePath: stage.manifest.cdnBasePath,
-    assetBaseUrl,
+    appId: release.appId,
+    releaseId: release.releaseId,
+    generatedAt: release.manifest.generatedAt,
+    cdnBasePath: release.manifest.cdnBasePath,
+    delivery: {
+      kind: 'local-mock-cdn',
+      origin: mockCdnOrigin,
+      bucketBaseUrl: `${mockCdnOrigin}/`,
+      namespaceKind: 'app-release',
+      namespacePath,
+      releaseBaseUrl,
+      releaseManifestUrl: new URL('deployment-manifest.json', releaseBaseUrl).href,
+      status: 'published-and-verified'
+    },
     assets,
     deferredResources,
-    packagePath: stage.manifest.package.path
+    packagePath: release.manifest.package.path
+  };
+}
+
+function describeAsset(
+  role: 'dependency' | 'entry',
+  moduleId: string,
+  descriptor: CdnStageFile,
+  releaseBaseUrl: string
+): CdnRuntimeDescriptor['assets'][number] {
+  return {
+    role,
+    moduleId,
+    assetPath: descriptor.path,
+    assetUrl: assetUrl(releaseBaseUrl, descriptor.path),
+    bytes: descriptor.bytes,
+    sha256: descriptor.sha256,
+    stageStatus: 'allowed-and-verified'
   };
 }
 
@@ -310,7 +303,37 @@ function describeDeferredComponentResource(
   };
 }
 
-function validateRuntimeResourceIdentity(value: unknown, label: string): string {
+function resolveUniqueManifestAsset(manifest: ValidatedCdnStageManifest, resourcePath: string): CdnStageFile {
+  const resourceUrl = new URL(resourcePath, manifest.cdnBasePath).href;
+  const matches = manifest.files.filter((file) => file.url === resourceUrl);
+  if (matches.length !== 1) {
+    throw unavailable();
+  }
+  return matches[0];
+}
+
+function requireScriptResourcePath(value: unknown): string {
+  const resourcePath = resolveScriptResourcePath(value);
+  if (!resourcePath) {
+    throw unavailable();
+  }
+  return resourcePath;
+}
+
+function resolveScriptResourcePath(value: unknown): string | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  if (value.type === 'path' && typeof value.path === 'string') {
+    return value.path;
+  }
+  if (value.type === 'localizedPath' && typeof value.defaultPath === 'string') {
+    return value.defaultPath;
+  }
+  return undefined;
+}
+
+function validateRuntimeResourceIdentity(value: unknown, _label: string): string {
   if (
     typeof value !== 'string' ||
     !value.trim() ||
@@ -318,7 +341,7 @@ function validateRuntimeResourceIdentity(value: unknown, label: string): string 
     value.length > 200 ||
     [...value].some(isControlCharacter)
   ) {
-    throw unavailable(`${label} is invalid.`);
+    throw unavailable();
   }
   return value;
 }
@@ -326,183 +349,13 @@ function validateRuntimeResourceIdentity(value: unknown, label: string): string 
 function assertUniqueRuntimeAssets(assets: CdnRuntimeDescriptor['assets']): void {
   const moduleIds = new Set<string>();
   const paths = new Set<string>();
-  for (const asset of assets) {
-    if (moduleIds.has(asset.moduleId) || paths.has(asset.assetPath)) {
-      throw unavailable('Component script assets must have unique module ids and paths.');
+  for (const candidate of assets) {
+    if (moduleIds.has(candidate.moduleId) || paths.has(candidate.assetPath)) {
+      throw unavailable();
     }
-    moduleIds.add(asset.moduleId);
-    paths.add(asset.assetPath);
+    moduleIds.add(candidate.moduleId);
+    paths.add(candidate.assetPath);
   }
-}
-
-async function readPinnedCdnRuntimeAsset(stage: PinnedCdnStageSession, requestedAssetPath: string): Promise<CdnRuntimeAsset> {
-  assertPortableAssetPath(requestedAssetPath, 'CDN runtime asset path');
-  const fileDescriptors = stage.manifest.files.filter((file) => file.path === requestedAssetPath);
-  if (fileDescriptors.length !== 1) {
-    throw unavailable(fileDescriptors.length ? 'CDN asset is ambiguous.' : 'CDN asset is not allowlisted.');
-  }
-  const fileDescriptor = fileDescriptors[0];
-  const uploadDir = safeLocalPath(stage.stageDir, stage.manifest.uploadRoot);
-  const filePath = safeLocalPath(uploadDir, requestedAssetPath);
-  await assertRealFileWithin(uploadDir, filePath);
-  const bytes = await readFile(filePath);
-  const digest = sha256(bytes);
-  if (bytes.length !== fileDescriptor.bytes || digest !== fileDescriptor.sha256) {
-    throw unavailable('CDN asset no longer matches its validated manifest.');
-  }
-
-  return {
-    bytes,
-    contentType: contentTypeFor(requestedAssetPath),
-    etag: `"sha256-${digest}"`
-  };
-}
-
-export function parseCdnAssetRoute(rawPath: string): { sessionId: string; assetPath: string } {
-  if (!rawPath.startsWith(cdnAssetRoute)) {
-    throw badRequest('Invalid CDN asset route.');
-  }
-  const encodedSegments = rawPath.slice(cdnAssetRoute.length).split('/');
-  if (encodedSegments.length < 2 || encodedSegments.some((segment) => !segment)) {
-    throw badRequest('Invalid CDN asset route.');
-  }
-  const segments = encodedSegments.map((segment) => decodeRouteSegment(segment));
-  const sessionId = sanitizeSessionId(segments[0]);
-  const assetPath = segments.slice(1).join('/');
-  assertPortableAssetPath(assetPath, 'CDN runtime asset path');
-  return { sessionId, assetPath };
-}
-
-interface CdnStageCandidate {
-  stageDir: string;
-  generatedAt: string;
-  manifest: Record<string, unknown>;
-}
-
-async function selectLatestValidatedCdnStage(
-  workspaceRoot: string,
-  exportsRoot: string,
-  requestedAppId: string
-): Promise<ValidatedCdnStage> {
-  const appId = sanitizeRuntimeAppId(requestedAppId);
-  const candidates = await discoverCdnStageCandidates(workspaceRoot, exportsRoot, appId);
-  const sorted = candidates.sort((left, right) => right.generatedAt.localeCompare(left.generatedAt));
-  if (!sorted.length) {
-    throw unavailable('No validated staging CDN artifact was found.');
-  }
-  if (sorted[1]?.generatedAt === sorted[0].generatedAt) {
-    throw unavailable('Latest staging CDN artifact is ambiguous.');
-  }
-
-  const selected = sorted[0];
-  let rebuilt: ValidatedCdnStageManifest;
-  try {
-    rebuilt = (await verifyCdnStage(selected.stageDir, selected.manifest)) as ValidatedCdnStageManifest;
-  } catch {
-    throw unavailable('Selected staging CDN deployment manifest did not validate.');
-  }
-  if (rebuilt.slug !== appId || rebuilt.releaseId !== selected.manifest.releaseId) {
-    throw unavailable('Selected staging CDN artifact identity changed during validation.');
-  }
-  const packageFile = safeLocalPath(selected.stageDir, rebuilt.package.path);
-  await assertRealFileWithin(selected.stageDir, packageFile);
-  const packageBytes = await readFile(packageFile);
-  if (packageBytes.length !== rebuilt.package.bytes || sha256(packageBytes) !== rebuilt.package.sha256) {
-    throw unavailable('Selected staged SPFx package changed after validation.');
-  }
-  const componentManifests = Object.freeze(readSppkgComponentManifestsFromBytes(packageBytes, 'validated staged SPFx package'));
-  return {
-    stageDir: selected.stageDir,
-    manifest: Object.freeze({ ...rebuilt, generatedAt: selected.generatedAt }),
-    componentManifests
-  };
-}
-
-async function discoverCdnStageCandidates(
-  workspaceRoot: string,
-  exportsRoot: string,
-  appId: string
-): Promise<CdnStageCandidate[]> {
-  const appExportsDir = safeLocalPath(exportsRoot, appId);
-  let entries;
-  try {
-    const [exportsStats, appExportsStats] = await Promise.all([lstat(exportsRoot), lstat(appExportsDir)]);
-    if (
-      !exportsStats.isDirectory() ||
-      exportsStats.isSymbolicLink() ||
-      !appExportsStats.isDirectory() ||
-      appExportsStats.isSymbolicLink()
-    ) {
-      throw unavailable('Staging CDN exports roots must be real directories.');
-    }
-    await assertRealDirectoryWithin(workspaceRoot, exportsRoot);
-    await assertRealDirectoryWithin(exportsRoot, appExportsDir);
-    entries = await readdir(appExportsDir, { withFileTypes: true });
-  } catch (error) {
-    if (isNodeError(error, 'ENOENT')) {
-      return [];
-    }
-    throw unavailable('Could not inspect staging CDN artifacts.');
-  }
-
-  const candidates: CdnStageCandidate[] = [];
-  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    if (!entry.isDirectory() || entry.isSymbolicLink()) {
-      continue;
-    }
-    const exportDir = path.join(appExportsDir, entry.name);
-    const stageDir = path.join(exportDir, 'staging-cdn');
-    let stageStats;
-    try {
-      stageStats = await lstat(stageDir);
-    } catch {
-      continue;
-    }
-    if (!stageStats.isDirectory() || stageStats.isSymbolicLink()) {
-      continue;
-    }
-    try {
-      await assertRealDirectoryWithin(appExportsDir, stageDir);
-    } catch {
-      continue;
-    }
-
-    const manifestFile = path.join(stageDir, 'deployment-manifest.json');
-    let manifestBytes: Buffer;
-    try {
-      const manifestStats = await stat(manifestFile);
-      if (!manifestStats.isFile() || manifestStats.size <= 0 || manifestStats.size > maximumManifestBytes) {
-        continue;
-      }
-      manifestBytes = await readFile(manifestFile);
-    } catch {
-      continue;
-    }
-
-    let manifest: unknown;
-    try {
-      manifest = JSON.parse(manifestBytes.toString('utf8'));
-    } catch {
-      continue;
-    }
-    if (!isRecord(manifest) || manifest.slug !== appId || !isCanonicalTimestamp(manifest.generatedAt)) {
-      continue;
-    }
-    try {
-      if (typeof manifest.releaseId !== 'string') {
-        continue;
-      }
-      sanitizeReleaseId(manifest.releaseId);
-    } catch {
-      continue;
-    }
-    candidates.push({
-      stageDir,
-      generatedAt: manifest.generatedAt,
-      manifest
-    });
-  }
-  return candidates;
 }
 
 function requestPath(requestUrl: string | undefined): string {
@@ -549,118 +402,15 @@ function isControlCharacter(value: string): boolean {
   return codePoint <= 0x1f || codePoint === 0x7f;
 }
 
-function sanitizeReleaseId(value: string): string {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value) || !/\d/.test(value)) {
-    throw badRequest('Invalid CDN release id.');
-  }
-  return value;
-}
-
-function sanitizeSessionId(value: string): string {
-  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value)) {
-    throw badRequest('Invalid CDN stage session id.');
-  }
-  return value.toLowerCase();
-}
-
-function isCanonicalTimestamp(value: unknown): value is string {
-  if (typeof value !== 'string') {
-    return false;
-  }
-  const parsed = new Date(value);
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString() === value;
-}
-
-function resolveExportsRoot(workspaceRoot: string, configuredRoot: string | undefined): string {
-  const value = configuredRoot?.trim() || '.spfx-kit/exports';
-  const resolvedWorkspaceRoot = path.resolve(workspaceRoot);
-  const resolvedExportsRoot = path.resolve(resolvedWorkspaceRoot, value);
-  const relative = path.relative(resolvedWorkspaceRoot, resolvedExportsRoot);
-  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error('SPFX_KIT_LAB_EXPORTS_DIR must resolve inside the workspace.');
-  }
-  return resolvedExportsRoot;
-}
-
-function trimOldestSessions(sessions: Map<string, PinnedCdnStageSession>): void {
-  const maximumPinnedSessions = 64;
-  while (sessions.size > maximumPinnedSessions) {
-    const oldestSessionId = sessions.keys().next().value;
-    if (typeof oldestSessionId !== 'string') {
-      return;
-    }
-    sessions.delete(oldestSessionId);
-  }
-}
-
-function decodeRouteSegment(value: string): string {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(value);
-  } catch {
-    throw badRequest('Invalid CDN asset route encoding.');
-  }
-  if (!decoded || decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
-    throw badRequest('Invalid CDN asset route segment.');
-  }
-  return decoded;
-}
-
-function encodePortablePath(value: string): string {
-  return value
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/');
-}
-
-async function assertRealDirectoryWithin(root: string, directory: string): Promise<void> {
-  const [realRoot, realDirectory] = await Promise.all([realpath(root), realpath(directory)]);
-  assertContained(realRoot, realDirectory);
-}
-
 async function assertRealFileWithin(root: string, file: string): Promise<void> {
   const fileStats = await lstat(file);
   if (!fileStats.isFile() || fileStats.isSymbolicLink()) {
-    throw unavailable('CDN asset must be a real file.');
+    throw unavailable();
   }
   const [realRoot, realFile] = await Promise.all([realpath(root), realpath(file)]);
-  assertContained(realRoot, realFile);
-}
-
-function assertContained(realRoot: string, realTarget: string): void {
-  const relative = path.relative(realRoot, realTarget);
+  const relative = path.relative(realRoot, realFile);
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw unavailable('CDN artifact path is outside its validated root.');
-  }
-}
-
-function contentTypeFor(filePath: string): string {
-  switch (path.posix.extname(filePath).toLowerCase()) {
-    case '.js':
-    case '.mjs':
-      return 'text/javascript; charset=utf-8';
-    case '.css':
-      return 'text/css; charset=utf-8';
-    case '.json':
-    case '.map':
-      return 'application/json; charset=utf-8';
-    case '.wasm':
-      return 'application/wasm';
-    case '.svg':
-      return 'image/svg+xml';
-    case '.png':
-      return 'image/png';
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg';
-    case '.gif':
-      return 'image/gif';
-    case '.woff':
-      return 'font/woff';
-    case '.woff2':
-      return 'font/woff2';
-    default:
-      return 'application/octet-stream';
+    throw unavailable();
   }
 }
 
@@ -672,40 +422,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function resolveScriptResourcePath(value: unknown): string | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
-  if (value.type === 'path' && typeof value.path === 'string') {
-    return value.path;
-  }
-  if (value.type === 'localizedPath' && typeof value.defaultPath === 'string') {
-    return value.defaultPath;
-  }
-  return undefined;
-}
-
-function resolveUniqueManifestAsset(manifest: ValidatedCdnStageManifest, resourcePath: string, _label: string): CdnStageFile {
-  const resourceUrl = new URL(resourcePath, manifest.cdnBasePath).href;
-  const matches = manifest.files.filter((file) => file.url === resourceUrl);
-  if (matches.length !== 1) {
-    throw unavailable('Component script asset is missing or ambiguous.');
-  }
-  return matches[0];
-}
-
-function isNodeError(error: unknown, code: string): boolean {
-  return error instanceof Error && 'code' in error && error.code === code;
-}
-
 function badRequest(message: string): LabPackageRequestError {
   return new LabPackageRequestError(400, message);
 }
 
-function unavailable(_internalMessage: string): LabPackageRequestError {
+function unavailable(): LabPackageRequestError {
   return new LabPackageRequestError(
     409,
-    'The local staging CDN artifact is missing, invalid, or incomplete. Export a new staging-cdn package and retry.'
+    'The selected local mock CDN release is missing, invalid, or incomplete. Export and publish a local staging-cdn release, then retry.'
   );
 }
 

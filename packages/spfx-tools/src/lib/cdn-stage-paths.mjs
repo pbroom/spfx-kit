@@ -35,6 +35,30 @@ export function normalizeStagingCdnRoot(value) {
   return url.href;
 }
 
+export function normalizeLocalMockCdnRoot(value) {
+  let url;
+  try {
+    url = new URL(String(value));
+  } catch {
+    throw new Error(`Local mock CDN root must be a valid loopback HTTP URL: ${value}`);
+  }
+  if (
+    url.protocol !== 'http:' ||
+    url.hostname !== '127.0.0.1' ||
+    !url.port ||
+    url.username ||
+    url.password ||
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error(
+      'Local mock CDN root must use credential-free http://127.0.0.1:<port> without a query or fragment'
+    );
+  }
+  return url.href;
+}
+
 export function normalizeCdnReleaseId(value) {
   const releaseId = String(value || '').trim();
   if (!RELEASE_ID_PATTERN.test(releaseId) || !/\d/.test(releaseId)) {
@@ -69,9 +93,27 @@ export function stagingCdnBasePath(root, slug, releaseId) {
   ).href;
 }
 
-export function normalizeExactCdnBasePath(value) {
+export function localMockCdnBasePath(root, slug, releaseId) {
+  const normalizedRoot = normalizeLocalMockCdnRoot(root);
+  const normalizedSlug = normalizePathSegment(slug, 'app slug');
+  const normalizedRelease = normalizeCdnReleaseId(releaseId);
+  return new URL(
+    `apps/${encodeURIComponent(normalizedSlug)}/versions/${encodeURIComponent(normalizedRelease)}/`,
+    normalizedRoot
+  ).href;
+}
+
+export function normalizeExactCdnBasePath(value, { allowLocalMockCdn = false } = {}) {
   const url = new URL(String(value));
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
+  const isLocalMock =
+    allowLocalMockCdn && url.protocol === 'http:' && url.hostname === '127.0.0.1' && Boolean(url.port);
+  if (
+    (url.protocol !== 'https:' && !isLocalMock) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
     throw new Error(`CDN base path must be a credential-free HTTPS URL: ${value}`);
   }
   url.pathname = `${url.pathname.replace(/\/+$/, '')}/`;

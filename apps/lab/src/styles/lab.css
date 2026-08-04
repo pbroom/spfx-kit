@@ -2440,6 +2440,18 @@ textarea {
     padding-inline: 16px;
   }
 
+  .package-release-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .package-resource-row__details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .package-resource-row__hash {
+    grid-column: auto;
+  }
+
   .source-workspace--floating {
     min-width: 360px;
   }
