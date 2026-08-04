@@ -179,6 +179,13 @@ test('opens a distinct accessible Local CDN inventory table with a truthful empt
   const dialog = page.getByRole('dialog', { name: 'Local CDN bucket' });
   await expect(dialog).toBeVisible();
   const inventory = dialog.getByRole('region', { name: 'Local CDN bucket inventory' });
+  const desktopViewport = page.viewportSize();
+  expect(desktopViewport).not.toBeNull();
+  await expect.poll(async () => (await dialog.boundingBox())?.width || 0).toBeGreaterThanOrEqual(desktopViewport!.width - 32);
+  await expect.poll(async () => (await dialog.boundingBox())?.height || 0).toBeGreaterThanOrEqual(desktopViewport!.height - 32);
+  expect((await inventory.boundingBox())?.height).toBeGreaterThan(220);
+  await expect(dialog.getByRole('button', { name: 'Refresh Local CDN bucket inventory' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Close Local CDN bucket' })).toBeVisible();
   await expect(
     inventory.getByRole('table', { name: 'Immutable app releases, selected pointers, packages, and assets' })
   ).toBeVisible();
@@ -196,7 +203,22 @@ test('opens a distinct accessible Local CDN inventory table with a truthful empt
   await expect(dialog).toContainText('cannot browse arbitrary files or overwrite a release');
   await expect(inventory.getByRole('button')).toHaveCount(0);
 
+  const desktopAccessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .exclude('[data-tabster-dummy]')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(desktopAccessibility.violations).toEqual([]);
+
   await page.setViewportSize({ width: 480, height: 720 });
+  const narrowDialogBox = await dialog.boundingBox();
+  expect(narrowDialogBox).not.toBeNull();
+  expect(narrowDialogBox!.width).toBeGreaterThanOrEqual(479);
+  expect(narrowDialogBox!.height).toBeGreaterThanOrEqual(719);
+  expect((await inventory.boundingBox())?.height).toBeGreaterThan(100);
+  await expect(dialog.getByRole('combobox', { name: 'Approved staged release' })).toBeVisible();
+  await expect(dialog.getByRole('combobox', { name: 'Release used by Lab CDN mode' })).toBeVisible();
+  await expect(dialog).toContainText('Bucket inventory is the local control plane');
   expect(
     await inventory.evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
   ).toMatchObject({ clientWidth: expect.any(Number), scrollWidth: expect.any(Number) });
@@ -209,6 +231,48 @@ test('opens a distinct accessible Local CDN inventory table with a truthful empt
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();
   expect(accessibility.violations).toEqual([]);
+
+  await page.setViewportSize({ width: 720, height: 320 });
+  await expect.poll(() => dialog.evaluate((element) => getComputedStyle(element).overflowY)).toBe('auto');
+  const shortViewportScroll = await dialog.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight
+  }));
+  expect(shortViewportScroll.scrollHeight).toBeGreaterThan(shortViewportScroll.clientHeight);
+  await dialog.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(dialog.getByText('Bucket inventory is the local control plane')).toBeVisible();
+  await dialog.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await expect(dialog.getByRole('button', { name: 'Close Local CDN bucket' })).toBeVisible();
+});
+
+test('keeps controls fixed while a populated bucket inventory scrolls independently', async ({ page }) => {
+  const releases = Array.from({ length: 12 }, (_value, index) => `1.2.3-workspace-${index + 1}`);
+  await page.route('**/api/local-cdn', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(bucketInventory(releases[0], releases)) });
+  });
+
+  await page.goto('/');
+  await page.getByRole('region', { name: 'Package resources' }).getByRole('button', { name: 'Local CDN bucket' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Local CDN bucket' });
+  const controls = dialog.locator('.local-cdn-admin__controls');
+  const inventory = dialog.getByRole('region', { name: 'Local CDN bucket inventory' });
+  await expect(controls).toBeVisible();
+  await expect(inventory).toBeVisible();
+  await expect.poll(() => inventory.evaluate((element) => getComputedStyle(element).overflowY)).toBe('auto');
+
+  const scroll = await inventory.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    return { clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, scrollTop: element.scrollTop };
+  });
+  expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+  expect(scroll.scrollTop).toBeGreaterThan(0);
+  await expect(controls).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Close Local CDN bucket' })).toBeVisible();
 });
 
 test('identifies the exact release behind an invalid selected pointer', async ({ page }) => {
