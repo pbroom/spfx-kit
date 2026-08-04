@@ -357,11 +357,6 @@ export function LocalCdnBucketDialog({ open, onOpenChange, onSelectionChanged }:
                 </p>
               </section>
             </div>
-
-            <p className="local-cdn-admin__limitation">
-              Bucket inventory is the local control plane. Package resources remains per-app browser delivery evidence. The CDN
-              mode is a staged-bundle top-level smoke check, not a SharePoint runtime or deployment preview.
-            </p>
           </DialogContent>
         </DialogBody>
       </DialogSurface>
