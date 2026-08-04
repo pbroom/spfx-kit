@@ -3,7 +3,7 @@ import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 const workspaceRoot = process.cwd();
-const exportsRoot = path.join(workspaceRoot, '.spfx-kit', 'e2e-cdn-exports');
+const exportsRoot = path.join(workspaceRoot, '.spfx-kit', 'exports');
 const bucketRoot = path.join(workspaceRoot, '.spfx-kit', 'e2e-mock-cdn', 'v1');
 const exportDir = path.join(exportsRoot, 'hello-card-spfx', 'browser-e2e');
 const stageDir = path.join(exportDir, 'staging-cdn');
@@ -33,19 +33,6 @@ try {
     'browser-e2e.1',
     '--json'
   ]);
-  await run(process.execPath, [
-    mockCdnCli,
-    'publish',
-    '--stage',
-    stageDir,
-    '--select',
-    '--origin',
-    mockCdnOrigin,
-    '--root',
-    path.relative(workspaceRoot, bucketRoot),
-    '--json'
-  ]);
-
   mockServer = spawn(
     process.execPath,
     [
@@ -63,8 +50,8 @@ try {
   mockServer.once('error', (error) => {
     throw error;
   });
-  const manifest = JSON.parse(await readFile(path.join(stageDir, 'deployment-manifest.json'), 'utf8'));
-  await waitForMockCdn(`${manifest.cdnBasePath}deployment-manifest.json`);
+  await readFile(path.join(stageDir, 'deployment-manifest.json'), 'utf8');
+  await waitForMockCdn(mockCdnOrigin);
 
   await run('npx', ['playwright', 'test'], {
     ...process.env,
@@ -91,13 +78,11 @@ async function waitForMockCdn(manifestUrl) {
       throw new Error(`Mock CDN server exited before becoming ready (code ${mockServer?.exitCode}).`);
     }
     try {
-      const response = await fetch(manifestUrl, {
+      await fetch(`${manifestUrl}/__spfx_kit_ready__`, {
         headers: { Origin: labOrigin },
         redirect: 'error'
       });
-      if (response.ok) {
-        return;
-      }
+      return;
     } catch {
       // The separate process may still be binding the loopback port.
     }
@@ -108,7 +93,7 @@ async function waitForMockCdn(manifestUrl) {
 
 async function cleanup() {
   await Promise.all([
-    rm(exportsRoot, { recursive: true, force: true }),
+    rm(exportDir, { recursive: true, force: true }),
     rm(path.dirname(bucketRoot), { recursive: true, force: true })
   ]);
 }

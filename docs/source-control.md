@@ -115,6 +115,15 @@ validated, immutable, and explicit; serving is GET/HEAD-only from the selected
 manifest closure. This does not replace the HTTPS remote proof or any App
 Catalog/deployment validation.
 
+The Lab's **Local CDN bucket** administration surface exposes the same local
+workflow without accepting arbitrary paths. It enumerates only candidate
+`staging-cdn` directories beneath `.spfx-kit/exports`, assigns opaque source
+identifiers, and routes publish and select actions through the canonical mock-CDN
+bucket primitives. Publish is create-only and does not select automatically.
+The table is an inventory/control plane; the app-scoped **Package resources**
+table separately reports browser delivery evidence for the currently selected
+release.
+
 ## Third-party apps (repos shared with you)
 
 Use `clone:spfx` instead of `import:spfx` when you plan to send changes or

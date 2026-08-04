@@ -20,6 +20,7 @@ interface PackageDependencyPanelProps {
   descriptorLoading: boolean;
   mode: LabPackageMode;
   smoke: CdnSmokeStatus;
+  onOpenBucket?: () => void;
   onRetry: () => void;
 }
 
@@ -30,6 +31,7 @@ export function PackageDependencyPanel({
   descriptorLoading,
   mode,
   smoke,
+  onOpenBucket = () => undefined,
   onRetry
 }: PackageDependencyPanelProps): JSX.Element {
   const headingIdRef = React.useRef('');
@@ -54,7 +56,12 @@ export function PackageDependencyPanel({
           <h2 id={headingId}>Package resources</h2>
           <p>{appTitle}</p>
         </div>
-        <span className={`package-resource-summary package-resource-summary--${summary.state}`}>{summary.label}</span>
+        <div className="package-dependency-panel__controls">
+          <button className="package-dependency-panel__bucket-button" type="button" onClick={onOpenBucket}>
+            Local CDN bucket
+          </button>
+          <span className={`package-resource-summary package-resource-summary--${summary.state}`}>{summary.label}</span>
+        </div>
       </div>
 
       {mode === 'standalone' ? (
@@ -111,15 +118,23 @@ export function PackageDependencyPanel({
 
           <section aria-labelledby={`${headingId}-staged`} className="package-resource-group">
             <h3 id={`${headingId}-staged`}>App scripts — selected default paths</h3>
-            <ul className="package-resource-list">
-              {descriptor.assets.map((asset) => (
-                <StagedAssetRow
-                  asset={asset}
-                  key={`${asset.role}:${asset.moduleId}:${asset.assetPath}`}
-                  status={assetStatus(asset, smoke)}
-                />
-              ))}
-            </ul>
+            <div aria-labelledby={`${headingId}-staged`} className="package-resource-table-frame" role="region" tabIndex={0}>
+              <table className="package-resource-table">
+                <caption className="visually-hidden">Selected app scripts and browser delivery evidence</caption>
+                <ResourceTableHeader />
+                <tbody>
+                  {descriptor.assets.map((asset) => (
+                    <StagedAssetRow
+                      asset={asset}
+                      key={`${asset.role}:${asset.moduleId}:${asset.assetPath}`}
+                      origin={descriptor.delivery.origin}
+                      releaseId={descriptor.releaseId}
+                      status={assetStatus(asset, smoke)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p className="package-resource-group__note">
               Staged integrity is verified before publication. Browser delivery and top-level execution are tracked separately.
               For localized resources, only the selected default-locale path is loaded.
@@ -129,28 +144,31 @@ export function PackageDependencyPanel({
           <section aria-labelledby={`${headingId}-deferred`} className="package-resource-group">
             <h3 id={`${headingId}-deferred`}>SharePoint loader references — not staged files</h3>
             {descriptor.deferredResources.length ? (
-              <ul className="package-resource-list package-resource-list--deferred">
-                {descriptor.deferredResources.map((resource) => (
-                  <li className="package-resource-row" key={`${resource.moduleId}:${resource.componentId}`}>
-                    <div className="package-resource-row__heading">
-                      <strong>{resource.moduleId}</strong>
-                      <span className="package-resource-status package-resource-status--deferred">
-                        Deferred — SharePoint loader required
-                      </span>
-                    </div>
-                    <dl className="package-resource-row__details">
-                      <div>
-                        <dt>Component</dt>
-                        <dd>{resource.componentId}</dd>
-                      </div>
-                      <div>
-                        <dt>Version</dt>
-                        <dd>{resource.version}</dd>
-                      </div>
-                    </dl>
-                  </li>
-                ))}
-              </ul>
+              <div aria-labelledby={`${headingId}-deferred`} className="package-resource-table-frame" role="region" tabIndex={0}>
+                <table className="package-resource-table">
+                  <caption className="visually-hidden">SharePoint loader references not exercised by the smoke check</caption>
+                  <ResourceTableHeader />
+                  <tbody>
+                    {descriptor.deferredResources.map((resource) => (
+                      <tr className="package-resource-table__row" key={`${resource.moduleId}:${resource.componentId}`}>
+                        <th scope="row">
+                          <strong>{resource.moduleId}</strong>
+                          <small>{resource.componentId}</small>
+                        </th>
+                        <td>SharePoint component</td>
+                        <td>{resource.version}</td>
+                        <td>
+                          <span className="package-resource-status package-resource-status--deferred">
+                            Deferred — SharePoint loader required
+                          </span>
+                        </td>
+                        <td aria-label="Size unavailable">—</td>
+                        <td>SharePoint loader</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <p className="package-resource-group__empty">No separate SharePoint component references were declared.</p>
             )}
@@ -173,42 +191,45 @@ export function PackageDependencyPanel({
 
 interface StagedAssetRowProps {
   asset: CdnPackageScriptAsset;
+  origin: string;
+  releaseId: string;
   status: CdnAssetLoadStatus;
 }
 
-function StagedAssetRow({ asset, status }: StagedAssetRowProps): JSX.Element {
+function StagedAssetRow({ asset, origin, releaseId, status }: StagedAssetRowProps): JSX.Element {
   return (
-    <li className="package-resource-row" data-asset-path={asset.assetPath} data-asset-status={status}>
-      <div className="package-resource-row__heading">
-        <span>
-          <strong>{asset.moduleId}</strong>
-          <small>{asset.role === 'entry' ? 'Entry' : 'Dependency'}</small>
-        </span>
+    <tr className="package-resource-table__row" data-asset-path={asset.assetPath} data-asset-status={status}>
+      <th scope="row">
+        <strong>{asset.moduleId}</strong>
+        <small>{asset.assetPath}</small>
+        <small className="package-resource-table__hash" title={asset.sha256}>
+          SHA-256 {asset.sha256}
+        </small>
+      </th>
+      <td>{asset.role === 'entry' ? 'App script / entry' : 'App script / dependency'}</td>
+      <td>{releaseId}</td>
+      <td>
         <span className={`package-resource-status package-resource-status--${status}`}>{assetStatusLabel(status)}</span>
-      </div>
-      <dl className="package-resource-row__details">
-        <div>
-          <dt>Staged</dt>
-          <dd>Hash and size verified</dd>
-        </div>
-        <div>
-          <dt>Mock bucket</dt>
-          <dd>Published and verified</dd>
-        </div>
-        <div>
-          <dt>Path</dt>
-          <dd>{asset.assetPath}</dd>
-        </div>
-        <div>
-          <dt>Size</dt>
-          <dd>{formatBytes(asset.bytes)}</dd>
-        </div>
-        <div className="package-resource-row__hash">
-          <dt>SHA-256</dt>
-          <dd>{asset.sha256}</dd>
-        </div>
-      </dl>
-    </li>
+        <small>Hash and size verified · Published and verified</small>
+      </td>
+      <td>{formatBytes(asset.bytes)}</td>
+      <td>{origin}</td>
+    </tr>
+  );
+}
+
+function ResourceTableHeader(): JSX.Element {
+  return (
+    <thead>
+      <tr>
+        <th scope="col">Resource / path</th>
+        <th scope="col">Kind / role</th>
+        <th scope="col">Version / release</th>
+        <th scope="col">Integrity / delivery</th>
+        <th scope="col">Size</th>
+        <th scope="col">Origin</th>
+      </tr>
+    </thead>
   );
 }
 

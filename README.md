@@ -62,15 +62,24 @@ origin in an isolated worker that executes their top-level code and records AMD
 module registration. The Lab does not invoke registered AMD factories.
 
 The **Package resources** panel reports the selected app, immutable namespace,
-release manifest, and mock-CDN origin, then lists the exact package-local
-scripts selected for the default-locale smoke path. It distinguishes staged
-hash/size verification, protected-bucket publication, and browser delivery or
-top-level execution evidence. Locale-specific
+release manifest, and mock-CDN origin, then presents the exact package-local
+scripts selected for the default-locale smoke path in a scrollable resource
+table. It distinguishes staged hash/size verification, protected-bucket
+publication, and browser delivery or top-level execution evidence. Locale-specific
 alternatives are not exercised. SPFx component references that SharePoint
 would resolve are shown separately as deferred loader resources; they are not
 claimed to be staged files or evidence that arbitrary npm dependencies are
 available from a CDN. In Standalone mode, the panel explicitly reports that no
 CDN session is selected.
+
+The separate **Local CDN bucket** administration surface is the app-independent
+inventory and control plane. It lists every immutable app release, selected
+pointer, manifest checksum, provenance, asset path, size, and verification
+state in a full-height scrollable table. It can publish a server-enumerated
+`staging-cdn` export through the same canonical intake primitive as the CLI and
+can explicitly select an already published release. Publishing never selects a
+release implicitly. The app-scoped Package resources table remains browser
+delivery evidence rather than a bucket browser.
 
 If the selected release, mock-CDN service, origin, CORS response, staged asset,
 or hash is missing or invalid, the Lab shows the error and does not fall back
@@ -97,8 +106,12 @@ package/manifest/path/hash verification, copies real files into a same-filesyste
 temporary directory, validates the copy, and atomically creates the immutable
 release. Existing releases cannot be overwritten. `--select` atomically updates
 one checksum-pinned pointer for that app. The same JSON-capable CLI is suitable
-for deliberate manual intake or local packaging agents; there is no HTTP upload
-endpoint and the server never exposes arbitrary repository files.
+for deliberate manual intake or local packaging agents. In the Lab, the Local
+CDN bucket surface offers only validated source identifiers that the server
+enumerated beneath `.spfx-kit/exports/*/*/staging-cdn`; it does not accept a raw
+filesystem path, stream an arbitrary upload, expose repository files, or write
+directly into the bucket. Its loopback-only publish action invokes the same
+canonical intake primitive and keeps selection as a separate explicit action.
 
 Create, publish, and serve a local release:
 
@@ -128,6 +141,12 @@ headers. App and shared namespaces are disjoint. Shared bundle publishing is
 intentionally deferred until it has its own canonical manifest verifier; the
 reserved namespace is not evidence that npm packages or shared resources are
 already CDN-hosted.
+
+The Lab administration API is development-only and fail-closed: requests must
+arrive over the local Lab origin from loopback, and writes also require the
+Lab's explicit same-origin intent header. Invalid, missing, ambiguous,
+symbolic-link, traversal, immutable-conflict, or checksum-mismatched sources are
+rejected without disclosing arbitrary local paths.
 
 If a staged script cannot be loaded or registered in the isolated worker, CDN
 mode fails visibly instead of substituting the Standalone adapter.

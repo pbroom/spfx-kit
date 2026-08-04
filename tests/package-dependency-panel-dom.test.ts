@@ -114,6 +114,23 @@ describe('PackageDependencyPanel', () => {
     expect(container.textContent).toContain('@microsoft/sp-webpart-base');
     expect(container.textContent).toContain('Deferred — SharePoint loader required');
     expect(container.textContent).toContain('do not imply that arbitrary npm packages are hosted on a CDN');
+    expect(container.querySelectorAll('table')).toHaveLength(2);
+    expect(Array.from(container.querySelectorAll('th[scope="col"]')).map((cell) => cell.textContent)).toEqual([
+      'Resource / path',
+      'Kind / role',
+      'Version / release',
+      'Integrity / delivery',
+      'Size',
+      'Origin',
+      'Resource / path',
+      'Kind / role',
+      'Version / release',
+      'Integrity / delivery',
+      'Size',
+      'Origin'
+    ]);
+    expect(container.querySelectorAll('.package-resource-table-frame[role="region"][tabindex="0"]')).toHaveLength(2);
+    expect(container.querySelector('.package-dependency-panel__bucket-button')?.textContent).toBe('Local CDN bucket');
     expect(assetRow('strings.js').getAttribute('data-asset-status')).toBe('loaded');
     expect(assetRow('hello-card.js').getAttribute('data-asset-status')).toBe('loading');
     expect(assetRow('strings.js').textContent).toContain('Delivered — top-level code executed');
@@ -147,7 +164,10 @@ describe('PackageDependencyPanel', () => {
     const alert = container.querySelector<HTMLElement>('[role="alert"]');
     expect(alert?.textContent).toContain('No validated staging CDN artifact was found.');
     expect(container.querySelectorAll('[data-asset-path]')).toHaveLength(0);
-    act(() => container.querySelector<HTMLButtonElement>('button')?.click());
+    const retryButton = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent === 'Retry'
+    );
+    act(() => retryButton?.click());
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
