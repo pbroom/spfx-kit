@@ -51,11 +51,32 @@ export async function readSppkgEntries(packagePath) {
     throw new Error(`Expected SPFx package is not a non-empty file: ${packagePath}`);
   }
 
+  const packageBytes = await readFile(packagePath);
+  return {
+    bytes: packageBytes.byteLength,
+    entries: readSppkgEntriesFromBytes(packageBytes, packagePath)
+  };
+}
+
+export async function readSppkgComponentManifests(packagePath) {
+  const { entries } = await readSppkgEntries(packagePath);
+  return extractSppkgComponentManifests(entries);
+}
+
+export function readSppkgComponentManifestsFromBytes(packageBytes, packageLabel = 'provided package bytes') {
+  const entries = readSppkgEntriesFromBytes(packageBytes, packageLabel);
+  return extractSppkgComponentManifests(entries);
+}
+
+function readSppkgEntriesFromBytes(packageBytes, packageLabel) {
+  if (!(packageBytes instanceof Uint8Array) || packageBytes.byteLength === 0) {
+    throw new Error(`Expected SPFx package is not a non-empty byte array: ${packageLabel}`);
+  }
   let entries;
   try {
-    entries = unzipSync(new Uint8Array(await readFile(packagePath)));
+    entries = unzipSync(packageBytes);
   } catch (error) {
-    throw new Error(`Expected SPFx package is not a readable ZIP archive: ${packagePath}`, { cause: error });
+    throw new Error(`Expected SPFx package is not a readable ZIP archive: ${packageLabel}`, { cause: error });
   }
 
   const entryNames = Object.keys(entries);
@@ -63,14 +84,10 @@ export async function readSppkgEntries(packagePath) {
   if (unsafeEntry) {
     throw new Error(`SPFx package contains an unsafe archive path: ${unsafeEntry}`);
   }
-  return {
-    bytes: packageStats.size,
-    entries
-  };
+  return entries;
 }
 
-export async function readSppkgComponentManifests(packagePath) {
-  const { entries } = await readSppkgEntries(packagePath);
+function extractSppkgComponentManifests(entries) {
   assertRequiredPackageParts(entries);
   const manifests = [];
   for (const [entryName, bytes] of Object.entries(entries)) {

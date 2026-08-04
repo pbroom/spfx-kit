@@ -39,17 +39,16 @@ import {
   createMockSpfxContext,
   LabBreakpoint,
   LabDisplayMode,
-  LabPackageMode,
   LabPropertyBag,
   LabThemeMode,
   LabWebPart,
   LabWebPartRegistry,
   SHAREPOINT_BREAKPOINTS
 } from '@spfx-kit/spfx-lab-runtime';
-import { loadCdnPackage, LoadedCdnPackage } from './api/packageRuntime';
+import { loadCdnPackageDescriptor, type CdnPackageDescriptor } from './api/packageRuntime';
 import { registerGeneratedWebParts } from './generated/lab-registry';
 import { PropertyPane } from './components/PropertyPane';
-import { CdnPackagePreview } from './components/CdnPackagePreview';
+import { CdnSmokeCheck } from './components/CdnSmokeCheck';
 import { AddAppDrawer, AddAppMode } from './components/AddAppDrawer';
 import { ExportDrawer } from './components/ExportDrawer';
 import { AppManagementSidebar } from './components/AppManagementSidebar';
@@ -62,14 +61,14 @@ import {
   resolveInitialWebPartId,
   resolvePinnedAppId
 } from './lib/pinnedApp';
-import { cdnPackageSelectionKey } from './lib/packageMode';
+import { cdnPackageSelectionKey, type LabPackageMode } from './lib/packageMode';
 
 type PropsByWebPart = Record<string, LabPropertyBag>;
 
 type PackageRuntimeState =
   | { status: 'standalone' }
   | { status: 'loading' }
-  | { status: 'ready'; package: LoadedCdnPackage; selectionKey: string }
+  | { status: 'ready'; descriptor: CdnPackageDescriptor; selectionKey: string }
   | { status: 'error'; message: string };
 
 const themeOptions: Array<{ label: string; value: LabThemeMode }> = [
@@ -158,17 +157,17 @@ export function LabApp(): JSX.Element {
     const controller = new AbortController();
     const selectionKey = cdnPackageSelectionKey(selected);
     setPackageRuntime({ status: 'loading' });
-    void loadCdnPackage(selected.appId, selected.componentId, controller.signal)
-      .then((loadedPackage) => {
+    void loadCdnPackageDescriptor(selected.appId, selected.componentId, controller.signal)
+      .then((descriptor) => {
         if (!controller.signal.aborted) {
-          setPackageRuntime({ status: 'ready', package: loadedPackage, selectionKey });
+          setPackageRuntime({ status: 'ready', descriptor, selectionKey });
         }
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) {
           return;
         }
-        const message = error instanceof Error ? error.message : 'The CDN package could not be loaded.';
+        const message = error instanceof Error ? error.message : 'The staged CDN bundle could not be checked.';
         setPackageRuntime({ status: 'error', message });
       });
 
@@ -231,7 +230,7 @@ export function LabApp(): JSX.Element {
     setPackageRuntime(mode === 'cdn' ? { status: 'loading' } : { status: 'standalone' });
   };
 
-  const handleCdnRenderError = React.useCallback((message: string): void => {
+  const handleCdnSmokeError = React.useCallback((message: string): void => {
     setPackageRuntime({ status: 'error', message });
   }, []);
 
@@ -277,14 +276,13 @@ export function LabApp(): JSX.Element {
   };
 
   const Preview = selected?.render;
-  const loadedCdnPackage =
+  const cdnDescriptor =
     packageMode === 'cdn' &&
     packageRuntime.status === 'ready' &&
     selected &&
     packageRuntime.selectionKey === cdnPackageSelectionKey(selected)
-      ? packageRuntime.package
+      ? packageRuntime.descriptor
       : undefined;
-  const cdnDescriptor = loadedCdnPackage?.descriptor;
 
   return (
     <FluentProvider theme={fluentTheme}>
@@ -408,7 +406,16 @@ export function LabApp(): JSX.Element {
                 onChange={(_event, data) => selectPackageMode(data.value as LabPackageMode)}
               >
                 <Radio className="package-mode-option" label="Standalone" value="standalone" />
-                <Radio className="package-mode-option" label="CDN" value="cdn" />
+                <Radio
+                  aria-describedby="cdn-package-mode-description"
+                  className="package-mode-option"
+                  label="CDN"
+                  title="Staged CDN bundle smoke check (not a SharePoint preview)"
+                  value="cdn"
+                />
+                <span className="visually-hidden" id="cdn-package-mode-description">
+                  CDN runs a staged bundle smoke check, not a SharePoint or deployment preview.
+                </span>
               </RadioGroup>
 
               <TabList
@@ -439,25 +446,22 @@ export function LabApp(): JSX.Element {
               {packageMode === 'cdn' && packageRuntime.status === 'loading' ? (
                 <div className="package-runtime-state" role="status">
                   <Spinner size="small" />
-                  <strong>Loading CDN package</strong>
-                  <span>Validating the local CDN simulation and its entry asset.</span>
+                  <strong>Preparing staged CDN smoke check</strong>
+                  <span>Validating and pinning one local staging-CDN release.</span>
                 </div>
               ) : packageMode === 'cdn' && packageRuntime.status === 'error' ? (
                 <div className="package-runtime-state package-runtime-state--error" role="alert">
-                  <strong>CDN package unavailable</strong>
+                  <strong>Staged CDN bundle unavailable</strong>
                   <span>{packageRuntime.message}</span>
                   <Button appearance="primary" size="small" onClick={() => setPackageLoadAttempt((attempt) => attempt + 1)}>
                     Retry
                   </Button>
                 </div>
-              ) : loadedCdnPackage ? (
-                <CdnPackagePreview
-                  key={`${selected.id}:cdn:${cdnDescriptor?.releaseId}`}
-                  WebPart={loadedCdnPackage.WebPart}
-                  context={context}
-                  displayMode={displayMode}
-                  properties={activeProps}
-                  onError={handleCdnRenderError}
+              ) : cdnDescriptor ? (
+                <CdnSmokeCheck
+                  key={`${selected.id}:cdn:${cdnDescriptor.releaseId}`}
+                  descriptor={cdnDescriptor}
+                  onError={handleCdnSmokeError}
                 />
               ) : packageMode === 'standalone' && Preview ? (
                 <Preview
@@ -470,8 +474,7 @@ export function LabApp(): JSX.Element {
                     theme,
                     spfxContext: context,
                     fixtures: selected.fixtures || {},
-                    boundsVisible: effectiveBoundsVisible,
-                    package: { mode: 'standalone' }
+                    boundsVisible: effectiveBoundsVisible
                   }}
                 />
               ) : (

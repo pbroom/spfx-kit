@@ -35,6 +35,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:cdn": "node scripts/tests/run-lab-cdn-e2e.mjs",
     "test:e2e:ui": "playwright test --ui",
     "test:security": "npm --workspace @spfx-kit/code-workbench-runtime run build && node scripts/tests/code-workbench-graph-search.mjs && npm --workspace @spfx-kit/spfx-tools run test:safe-copy && node scripts/tests/lab-api-security.mjs",
     "security:audit": "npm audit --omit=dev --audit-level=moderate",

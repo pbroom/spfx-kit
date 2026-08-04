@@ -52,21 +52,24 @@ The lab is for fast local authoring and visual QA. Before deployment, still run 
 
 ### Lab Package Mode
 
-The Lab previews the selected app in **Standalone** mode by default. To preview
-its CDN package behavior, first export a local `staging-cdn` artifact, then
-switch the Lab to CDN mode. CDN mode accepts only that validated artifact and
-loads its recorded AMD entry and package-local dependency assets through the
-immutable CDN simulation path. The staged web part renders in place of the
-Lab's embedded Standalone adapter.
+The Lab previews the selected app in **Standalone** mode by default. To check a
+staged CDN bundle, first export a local `staging-cdn` artifact, then switch the
+Lab to CDN mode. The Lab pins one validated release and loads its recorded AMD
+entry and package-local dependency scripts through an immutable, hash-checked,
+session-scoped CDN asset path. The scripts load in an isolated worker that
+executes their top-level code and records AMD module registration. The Lab does
+not invoke registered AMD factories.
 
 If the staging artifact is missing, invalid, or does not contain a valid entry
 asset, the Lab shows the error and does not fall back to Standalone mode. This
-is a local simulation only: it does not upload CDN assets, deploy a package, or
-change a SharePoint App Catalog.
+is a bounded **staged CDN bundle smoke check**, not a SharePoint or
+deployment-equivalent preview. It does not instantiate the web part or exercise
+dynamic chunks, external component modules, SPFx lifecycle, service scope,
+property-pane, loader, CSP, or deployment behavior. It also does not upload CDN
+assets, deploy a package, or change a SharePoint App Catalog.
 
-The simulator supplies the SPFx framework modules used by the Lab runtime. If
-an app requires another external module that the Lab cannot supply, CDN mode
-fails visibly instead of substituting the Standalone adapter.
+If a staged script cannot be loaded or registered in the isolated worker, CDN
+mode fails visibly instead of substituting the Standalone adapter.
 
 Packages with more than one SPFx component must set `componentId` on each Lab
 adapter so CDN mode can select the matching packaged component unambiguously.
@@ -119,6 +122,7 @@ npm run lint           # ESLint across the monorepo
 npm run format:check   # Prettier baseline
 npm test               # vitest unit + CLI integration tests
 npm run test:e2e       # Playwright smoke + Axe WCAG A/AA checks
+npm run test:e2e:cdn   # fresh committed-example staging export + real CDN smoke/failure checks
 npm run guard:public   # public-safety guard
 npm run test:security  # lab API, Graph search, and safe-copy regression tests
 npm run security:audit # production dependency audit

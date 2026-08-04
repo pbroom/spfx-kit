@@ -1124,6 +1124,46 @@ textarea {
   background: var(--colorPaletteRedBackground1, #fff4f4);
 }
 
+.cdn-smoke-check {
+  width: min(100%, 640px);
+}
+
+.cdn-smoke-evidence {
+  display: grid;
+  width: 100%;
+  gap: 8px;
+  margin: 4px 0;
+  text-align: left;
+}
+
+.cdn-smoke-evidence div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.cdn-smoke-evidence dt {
+  color: var(--colorNeutralForeground2, #424242);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cdn-smoke-evidence dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.package-runtime-state .cdn-smoke-limitation {
+  width: 100%;
+  border-top: 1px solid var(--lab-border);
+  padding-top: 12px;
+  color: var(--colorNeutralForeground1, #242424);
+  text-align: left;
+}
+
 .lab-shell--viewer .preview-canvas {
   padding-top: 48px;
 }

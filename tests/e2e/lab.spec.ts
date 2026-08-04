@@ -51,7 +51,7 @@ test('places package mode before display mode and keeps the controls independent
   await expect(page.locator('.package-mode-option .fui-Radio__label', { hasText: 'CDN' })).toBeVisible();
 });
 
-test('loads CDN mode only after executing the selected staging artifact entry asset', async ({ page }) => {
+test('checks the selected staged scripts without invoking the package or rendering the standalone adapter', async ({ page }) => {
   const entryRequests: string[] = [];
   let releaseEntryAsset!: () => void;
   const entryAssetGate = new Promise<void>((resolve) => {
@@ -68,9 +68,11 @@ test('loads CDN mode only after executing the selected staging artifact entry as
           releaseId: '1.2.3-test.abc123',
           generatedAt: '2026-08-04T12:00:00.000Z',
           cdnBasePath: 'https://staging-cdn.example.com/spfx/hello-card-spfx/versions/1.2.3-test.abc123/',
-          assetBaseUrl: '/api/lab-packages/cdn-assets/hello-card-spfx/1.2.3-test.abc123/',
+          assetBaseUrl: '/api/lab-packages/cdn-assets/11111111-1111-4111-8111-111111111111/',
           entryAssetPath: 'hello-card-web-part.js',
-          entryAssetUrl: '/api/lab-packages/cdn-assets/hello-card-spfx/1.2.3-test.abc123/hello-card-web-part.js',
+          entryAssetUrl: '/api/lab-packages/cdn-assets/11111111-1111-4111-8111-111111111111/hello-card-web-part.js',
+          entryAssetBytes: 205,
+          entryAssetSha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           packagePath: 'sharepoint/solution/hello-card-spfx.staging.cdn.sppkg',
           dependencyAssets: []
         })
@@ -82,10 +84,8 @@ test('loads CDN mode only after executing the selected staging artifact entry as
       await entryAssetGate;
       await route.fulfill({
         contentType: 'text/javascript',
-        body: `define('cdn-fixture', ['@microsoft/sp-webpart-base'], function (base) {
-          return { default: class extends base.BaseClientSideWebPart {
-            render() { this.domElement.innerHTML = '<h2>Rendered from staged CDN bundle</h2>'; }
-          } };
+        body: `define('cdn-fixture', ['@microsoft/sp-webpart-base'], function () {
+          throw new Error('The smoke check must not invoke this package factory.');
         });`
       });
       return;
@@ -98,19 +98,22 @@ test('loads CDN mode only after executing the selected staging artifact entry as
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
   await page.getByRole('radio', { name: 'CDN' }).click();
 
-  await expect(frame.getByRole('status')).toContainText('Loading CDN package');
+  await expect(frame.getByRole('status')).toContainText('Checking staged CDN bundle');
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
   releaseEntryAsset();
+  const smokeCheck = frame.locator('[data-cdn-smoke-check="ready"]');
+  await expect(smokeCheck.getByText('Staged CDN bundle smoke check passed', { exact: true })).toBeVisible();
+  await expect(smokeCheck).toContainText('The Lab did not invoke registered AMD factories');
+  await expect(smokeCheck).toContainText('not a SharePoint or deployment preview');
   await expect(frame).toHaveAttribute('data-package-mode', 'cdn');
   await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-test.abc123');
-  await expect(frame.getByRole('heading', { name: 'Rendered from staged CDN bundle' })).toBeVisible();
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
   expect(entryRequests).toHaveLength(1);
 
   await page.getByRole('tab', { name: 'Viewer' }).click();
   await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
   await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-test.abc123');
-  await expect(frame.getByRole('heading', { name: 'Rendered from staged CDN bundle' })).toBeVisible();
+  await expect(frame.locator('[data-cdn-smoke-check="ready"]')).toBeVisible();
 });
 
 test('shows a clear CDN error without falling back to the standalone package', async ({ page }) => {
@@ -126,7 +129,7 @@ test('shows a clear CDN error without falling back to the standalone package', a
   await page.getByRole('radio', { name: 'CDN' }).click();
 
   const alert = page.getByRole('alert');
-  await expect(alert).toContainText('CDN package unavailable');
+  await expect(alert).toContainText('Staged CDN bundle unavailable');
   await expect(alert).toContainText('No validated staging CDN export exists for hello-card-spfx.');
   await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
   await expect(page.locator('.preview-frame')).toHaveAttribute('data-package-mode', 'cdn');

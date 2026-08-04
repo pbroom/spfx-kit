@@ -22,7 +22,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run build && npm --workspace @spfx-kit/lab run preview',
     url: 'http://127.0.0.1:4173',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !process.env.CI && process.env.SPFX_KIT_E2E_FRESH_SERVER !== '1',
     timeout: 120_000
   }
 });
