@@ -13,8 +13,6 @@ import {
   MenuPopover,
   MenuTrigger,
   Option,
-  Radio,
-  RadioGroup,
   Tab,
   TabList,
   webDarkTheme,
@@ -31,7 +29,8 @@ import {
   Columns2,
   Eye,
   Menu as MenuIcon,
-  Pencil
+  Pencil,
+  Upload
 } from 'lucide-react';
 import {
   createLabTheme,
@@ -274,20 +273,55 @@ export function LabApp(): JSX.Element {
 
         <section className="preview-area" aria-label="Web part preview area">
           <div className={`lab-toolbar lab-toolbar--preview lab-toolbar--${displayMode}`}>
-            {displayMode === 'edit' ? (
-              <div className="app-menu-control" aria-label="App menu">
-                <IconButton
-                  controls="app-management-sidebar"
-                  expanded={appSidebarOpen}
-                  label="Open app menu"
-                  onClick={appSidebarOpen ? () => setAppSidebarOpen(false) : openAppSidebar}
+            <div className="preview-toolbar__primary">
+              {displayMode === 'edit' ? (
+                <div className="app-menu-control" aria-label="App menu">
+                  <IconButton
+                    controls="app-management-sidebar"
+                    expanded={appSidebarOpen}
+                    label="Open app menu"
+                    onClick={appSidebarOpen ? () => setAppSidebarOpen(false) : openAppSidebar}
+                  >
+                    <MenuIcon size={16} />
+                  </IconButton>
+                  <IconButton label="Export package" onClick={openExportDrawer}>
+                    <Upload size={16} />
+                  </IconButton>
+                </div>
+              ) : null}
+
+              <div className="package-mode-control">
+                <TabList
+                  aria-label="App package mode"
+                  className="lab-mode-tabs package-mode-tabs"
+                  selectedValue={packageMode}
+                  size="small"
+                  onTabSelect={(_event, data) => selectPackageMode(data.value as LabPackageMode)}
                 >
-                  <MenuIcon size={16} />
-                </IconButton>
+                  <Tab value="standalone">Standalone</Tab>
+                  <Tab
+                    aria-describedby="cdn-package-mode-description"
+                    title="Local mock-CDN staged-bundle smoke check (not a SharePoint preview)"
+                    value="cdn"
+                  >
+                    CDN
+                  </Tab>
+                </TabList>
+                <span className="visually-hidden" id="cdn-package-mode-description">
+                  CDN runs a staged bundle smoke check, not a SharePoint or deployment preview.
+                </span>
               </div>
-            ) : (
-              <span aria-hidden="true" />
-            )}
+
+              <Button
+                appearance="subtle"
+                aria-label="Local CDN bucket"
+                className="preview-toolbar__bucket-button"
+                size="small"
+                onClick={() => setLocalCdnBucketOpen(true)}
+              >
+                Local CDN
+              </Button>
+            </div>
 
             {displayMode === 'edit' ? (
               <div className="preview-toolbar__center">
@@ -365,26 +399,6 @@ export function LabApp(): JSX.Element {
             )}
 
             <div className="preview-toolbar__modes">
-              <RadioGroup
-                aria-label="App package mode"
-                className="package-mode-group"
-                layout="horizontal"
-                value={packageMode}
-                onChange={(_event, data) => selectPackageMode(data.value as LabPackageMode)}
-              >
-                <Radio className="package-mode-option" label="Standalone" value="standalone" />
-                <Radio
-                  aria-describedby="cdn-package-mode-description"
-                  className="package-mode-option"
-                  label="CDN"
-                  title="Local mock-CDN staged-bundle smoke check (not a SharePoint preview)"
-                  value="cdn"
-                />
-                <span className="visually-hidden" id="cdn-package-mode-description">
-                  CDN runs a staged bundle smoke check, not a SharePoint or deployment preview.
-                </span>
-              </RadioGroup>
-
               <TabList
                 aria-label="Lab display mode"
                 className="lab-mode-tabs"
@@ -409,7 +423,6 @@ export function LabApp(): JSX.Element {
             selectionRevision={cdnSelectionRevision}
             selected={selected}
             standaloneContent={standalonePreview}
-            onOpenBucket={() => setLocalCdnBucketOpen(true)}
           />
         </section>
 

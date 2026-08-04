@@ -20,7 +20,6 @@ interface PackageDependencyPanelProps {
   descriptorLoading: boolean;
   mode: LabPackageMode;
   smoke: CdnSmokeStatus;
-  onOpenBucket?: () => void;
   onRetry: () => void;
 }
 
@@ -31,7 +30,6 @@ export function PackageDependencyPanel({
   descriptorLoading,
   mode,
   smoke,
-  onOpenBucket = () => undefined,
   onRetry
 }: PackageDependencyPanelProps): JSX.Element {
   const headingIdRef = React.useRef('');
@@ -60,9 +58,6 @@ export function PackageDependencyPanel({
           <p>{appTitle}</p>
         </div>
         <div className="package-dependency-panel__controls">
-          <button className="package-dependency-panel__bucket-button" type="button" onClick={onOpenBucket}>
-            Local CDN bucket
-          </button>
           <span className={`package-resource-summary package-resource-summary--${summary.state}`}>{summary.label}</span>
         </div>
       </div>
@@ -209,10 +204,7 @@ function StagedAssetRow({ asset, origin, releaseId, status }: StagedAssetRowProp
     <tr className="package-resource-table__row" data-asset-path={asset.assetPath} data-asset-status={status}>
       <th scope="row">
         <strong>{asset.moduleId}</strong>
-        <small>{asset.assetPath}</small>
-        <small className="package-resource-table__hash" title={asset.sha256}>
-          SHA-256 {asset.sha256}
-        </small>
+        <small className="package-resource-table__path">{asset.assetPath}</small>
       </th>
       <td>{asset.role === 'entry' ? 'App script / entry' : 'App script / dependency'}</td>
       <td>{releaseId}</td>

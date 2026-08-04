@@ -84,7 +84,7 @@ test.describe('real local mock-CDN artifact', () => {
       const url = new URL(response.url());
       return url.pathname === '/api/lab-packages/cdn' && response.status() === 409;
     });
-    await page.getByRole('radio', { name: 'CDN' }).click();
+    await page.getByRole('tab', { name: 'CDN', exact: true }).click();
     await unavailableDescriptor;
     await expect(preview.getByRole('alert')).toContainText('selected local mock CDN release is missing');
     expect(mockResponses.size).toBe(0);
@@ -128,7 +128,7 @@ test.describe('real local mock-CDN artifact', () => {
       expect(new URL(asset.assetUrl).origin).toBe(mockCdnOrigin);
       const row = packageResources.locator(`[data-asset-path="${asset.assetPath}"]`);
       await expect(row).toContainText(asset.moduleId);
-      await expect(row).toContainText(asset.sha256);
+      await expect(row).not.toContainText(asset.sha256);
       await expect(row).toHaveAttribute('data-asset-status', 'loaded');
       const served = mockResponses.get(new URL(asset.assetUrl).pathname);
       expect(served?.status).toBe(200);
@@ -158,13 +158,13 @@ test.describe('real local mock-CDN artifact', () => {
       const frame = page.locator('.preview-frame');
       await expect(preview.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
       const descriptorResponse = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/lab-packages/cdn');
-      await page.getByRole('radio', { name: 'CDN' }).click();
+      await page.getByRole('tab', { name: 'CDN', exact: true }).click();
 
       expect((await descriptorResponse).status()).toBe(409);
       const alert = preview.getByRole('alert');
       await expect(alert.getByText('CDN resources unavailable', { exact: true })).toBeVisible();
       await expect(alert).toContainText('selected local mock CDN release is missing, invalid, or incomplete');
-      await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+      await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'true');
       await expect(frame).toHaveAttribute('data-package-mode', 'cdn');
       await expect(frame.locator('.hello-card')).toHaveCount(0);
       expect(mockAssetRequests).toBe(0);
