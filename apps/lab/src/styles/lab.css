@@ -1713,8 +1713,7 @@ textarea {
   margin-top: 8px;
 }
 
-.package-resource-summary,
-.package-resource-status {
+.package-resource-summary {
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
@@ -1728,6 +1727,22 @@ textarea {
   line-height: 16px;
 }
 
+.package-resource-status {
+  display: inline;
+  flex: 0 1 auto;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  color: var(--colorNeutralForeground2, #424242);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+  white-space: normal;
+  text-align: left;
+}
+
 .package-resource-summary--ready {
   border-color: var(--colorPaletteGreenBorder1, #a7d8a9);
   color: var(--colorPaletteGreenForeground1, #0e700e);
@@ -1735,26 +1750,27 @@ textarea {
 }
 
 .package-resource-status--loaded {
-  display: inline;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
   color: var(--colorNeutralForeground1, #242424);
-  background: transparent;
 }
 
-.package-resource-summary--loading,
-.package-resource-status--loading {
+.package-resource-summary--loading {
   border-color: var(--colorBrandStroke1, #0f6cbd);
   color: var(--colorBrandForeground1, #0f6cbd);
   background: var(--colorBrandBackground2, #ebf3fc);
 }
 
-.package-resource-summary--error,
-.package-resource-status--failed {
+.package-resource-status--loading {
+  color: var(--colorBrandForeground1, #0f6cbd);
+}
+
+.package-resource-summary--error {
   border-color: var(--colorPaletteRedBorder1, #f1bbbc);
   color: var(--colorPaletteRedForeground1, #a4262c);
   background: var(--colorPaletteRedBackground1, #fff4f4);
+}
+
+.package-resource-status--failed {
+  color: var(--colorPaletteRedForeground1, #a4262c);
 }
 
 .package-dependency-panel__body {
@@ -1905,16 +1921,8 @@ textarea {
   grid-column: 1 / -1;
 }
 
-.package-resource-status {
-  max-width: 210px;
-  white-space: normal;
-  text-align: right;
-}
-
 .package-resource-status--deferred {
-  border-color: var(--colorPaletteMarigoldBorder1, #eaa300);
   color: var(--colorPaletteMarigoldForeground2, #835b00);
-  background: var(--colorPaletteMarigoldBackground1, #fff8e1);
 }
 
 .package-resource-group__note,
