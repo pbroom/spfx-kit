@@ -96,10 +96,38 @@ textarea {
   gap: 4px;
 }
 
-.lab-mode-tabs {
+.preview-toolbar__modes {
   grid-column: 3;
+  display: inline-flex;
+  align-items: center;
   justify-self: end;
   min-width: 0;
+  gap: 10px;
+}
+
+.package-mode-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.package-mode-option {
+  margin: 0;
+  font-size: 12px;
+}
+
+.package-mode-option .fui-Radio__indicator {
+  width: 14px;
+  height: 14px;
+}
+
+.package-mode-option .fui-Radio__label {
+  padding-inline-start: 4px;
+  font-size: 12px;
+}
+
+.lab-mode-tabs {
   padding: 2px;
   border-radius: 8px;
   background: #f5f5f5;
@@ -1068,6 +1096,32 @@ textarea {
 .preview-frame--bounded {
   outline: 1px dashed #0f6cbd;
   outline-offset: 8px;
+}
+
+.package-runtime-state {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 520px;
+  margin: 32px auto;
+  border: 1px solid var(--lab-border);
+  border-radius: 10px;
+  padding: 24px;
+  color: var(--colorNeutralForeground1, #242424);
+  background: var(--lab-panel);
+  text-align: center;
+}
+
+.package-runtime-state span {
+  color: var(--colorNeutralForeground2, #424242);
+  font-size: 13px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.package-runtime-state--error {
+  border-color: var(--colorPaletteRedBorder1, #f1bbbc);
+  background: var(--colorPaletteRedBackground1, #fff4f4);
 }
 
 .lab-shell--viewer .preview-canvas {

@@ -50,6 +50,27 @@ managed apps under `.spfx-kit/apps` for real work (see `examples/README.md`).
 
 The lab is for fast local authoring and visual QA. Before deployment, still run the SPFx app build, ship, and validation commands for the target app.
 
+### Lab Package Mode
+
+The Lab previews the selected app in **Standalone** mode by default. To preview
+its CDN package behavior, first export a local `staging-cdn` artifact, then
+switch the Lab to CDN mode. CDN mode accepts only that validated artifact and
+loads its recorded AMD entry and package-local dependency assets through the
+immutable CDN simulation path. The staged web part renders in place of the
+Lab's embedded Standalone adapter.
+
+If the staging artifact is missing, invalid, or does not contain a valid entry
+asset, the Lab shows the error and does not fall back to Standalone mode. This
+is a local simulation only: it does not upload CDN assets, deploy a package, or
+change a SharePoint App Catalog.
+
+The simulator supplies the SPFx framework modules used by the Lab runtime. If
+an app requires another external module that the Lab cannot supply, CDN mode
+fails visibly instead of substituting the Standalone adapter.
+
+Packages with more than one SPFx component must set `componentId` on each Lab
+adapter so CDN mode can select the matching packaged component unambiguously.
+
 ## Workspace Layout
 
 - `apps/lab` - Vite React lab, started by `npm run dev`. Lab-only dev-server

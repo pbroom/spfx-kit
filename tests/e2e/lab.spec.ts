@@ -10,6 +10,8 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(preview).toBeVisible();
   await expect(preview.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Select web part' })).toHaveText('Hello Card');
+  await expect(page.getByRole('radio', { name: 'Standalone' })).toBeChecked();
+  await expect(page.getByRole('radio', { name: 'CDN' })).not.toBeChecked();
 
   await expect(page.getByRole('button', { name: 'Manage apps' })).toHaveCount(0);
   const appMenuButton = page.locator('button[aria-controls="app-management-sidebar"]');
@@ -23,6 +25,119 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await page.getByRole('button', { name: 'Theme: Light' }).click();
   await page.getByRole('menuitemradio', { name: 'Dark' }).click();
   await expect(page.locator('main.lab-shell')).toHaveClass(/lab-shell--dark/);
+});
+
+test('places package mode before display mode and keeps the controls independent', async ({ page }) => {
+  await page.goto('/');
+
+  const packageModes = page.getByRole('radiogroup', { name: 'App package mode' });
+  const displayModes = page.getByRole('tablist', { name: 'Lab display mode' });
+  const packageModesBox = await packageModes.boundingBox();
+  const displayModesBox = await displayModes.boundingBox();
+  expect(packageModesBox).not.toBeNull();
+  expect(displayModesBox).not.toBeNull();
+  expect(packageModesBox!.x + packageModesBox!.width).toBeLessThanOrEqual(displayModesBox!.x);
+
+  await page.getByRole('tab', { name: 'Viewer' }).click();
+  await expect(page.getByRole('radio', { name: 'Standalone' })).toBeChecked();
+  await expect(
+    page.getByRole('region', { name: 'Web part preview area' }).getByRole('heading', { name: 'Hello Card' })
+  ).toBeVisible();
+  await page.getByRole('tab', { name: 'Edit' }).click();
+  await expect(page.getByRole('radio', { name: 'Standalone' })).toBeChecked();
+
+  await page.setViewportSize({ width: 800, height: 700 });
+  await expect(page.locator('.package-mode-option .fui-Radio__label', { hasText: 'Standalone' })).toBeVisible();
+  await expect(page.locator('.package-mode-option .fui-Radio__label', { hasText: 'CDN' })).toBeVisible();
+});
+
+test('loads CDN mode only after executing the selected staging artifact entry asset', async ({ page }) => {
+  const entryRequests: string[] = [];
+  let releaseEntryAsset!: () => void;
+  const entryAssetGate = new Promise<void>((resolve) => {
+    releaseEntryAsset = resolve;
+  });
+  await page.route('**/api/lab-packages/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/api/lab-packages/cdn') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          mode: 'cdn',
+          appId: 'hello-card-spfx',
+          releaseId: '1.2.3-test.abc123',
+          generatedAt: '2026-08-04T12:00:00.000Z',
+          cdnBasePath: 'https://staging-cdn.example.com/spfx/hello-card-spfx/versions/1.2.3-test.abc123/',
+          assetBaseUrl: '/api/lab-packages/cdn-assets/hello-card-spfx/1.2.3-test.abc123/',
+          entryAssetPath: 'hello-card-web-part.js',
+          entryAssetUrl: '/api/lab-packages/cdn-assets/hello-card-spfx/1.2.3-test.abc123/hello-card-web-part.js',
+          packagePath: 'sharepoint/solution/hello-card-spfx.staging.cdn.sppkg',
+          dependencyAssets: []
+        })
+      });
+      return;
+    }
+    if (url.pathname.endsWith('/hello-card-web-part.js')) {
+      entryRequests.push(url.pathname);
+      await entryAssetGate;
+      await route.fulfill({
+        contentType: 'text/javascript',
+        body: `define('cdn-fixture', ['@microsoft/sp-webpart-base'], function (base) {
+          return { default: class extends base.BaseClientSideWebPart {
+            render() { this.domElement.innerHTML = '<h2>Rendered from staged CDN bundle</h2>'; }
+          } };
+        });`
+      });
+      return;
+    }
+    await route.abort();
+  });
+
+  await page.goto('/');
+  const frame = page.locator('.preview-frame');
+  await expect(frame.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
+  await page.getByRole('radio', { name: 'CDN' }).click();
+
+  await expect(frame.getByRole('status')).toContainText('Loading CDN package');
+  await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
+  releaseEntryAsset();
+  await expect(frame).toHaveAttribute('data-package-mode', 'cdn');
+  await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-test.abc123');
+  await expect(frame.getByRole('heading', { name: 'Rendered from staged CDN bundle' })).toBeVisible();
+  await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
+  expect(entryRequests).toHaveLength(1);
+
+  await page.getByRole('tab', { name: 'Viewer' }).click();
+  await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+  await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-test.abc123');
+  await expect(frame.getByRole('heading', { name: 'Rendered from staged CDN bundle' })).toBeVisible();
+});
+
+test('shows a clear CDN error without falling back to the standalone package', async ({ page }) => {
+  await page.route('**/api/lab-packages/cdn?*', async (route) => {
+    await route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'No validated staging CDN export exists for hello-card-spfx.' })
+    });
+  });
+
+  await page.goto('/');
+  await page.getByRole('radio', { name: 'CDN' }).click();
+
+  const alert = page.getByRole('alert');
+  await expect(alert).toContainText('CDN package unavailable');
+  await expect(alert).toContainText('No validated staging CDN export exists for hello-card-spfx.');
+  await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+  await expect(page.locator('.preview-frame')).toHaveAttribute('data-package-mode', 'cdn');
+  await expect(page.locator('.preview-frame').getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
+
+  const accessibility = await new AxeBuilder({ page })
+    .include('main')
+    .exclude('[data-tabster-dummy]')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
 });
 
 test('keeps viewer controls anchored while collapsing the options content', async ({ page }) => {

@@ -2,6 +2,22 @@ import type * as React from 'react';
 
 export type LabThemeMode = 'light' | 'dark' | 'custom';
 export type LabDisplayMode = 'edit' | 'viewer';
+export type LabPackageMode = 'standalone' | 'cdn';
+
+export type LabPackageContext =
+  | {
+      mode: 'standalone';
+    }
+  | {
+      mode: 'cdn';
+      releaseId: string;
+      generatedAt: string;
+      cdnBasePath: string;
+      assetBaseUrl: string;
+      entryAssetPath: string;
+      entryAssetUrl: string;
+      packagePath: string;
+    };
 
 export interface LabBreakpoint {
   id: 'one-column' | 'two-third' | 'one-half' | 'one-third' | 'mobile';
@@ -36,6 +52,7 @@ export interface LabRenderContext {
   spfxContext: MockSpfxContext;
   fixtures: Record<string, unknown>;
   boundsVisible: boolean;
+  package: LabPackageContext;
 }
 
 export type LabPropertyPrimitive = string | number | boolean | undefined;
@@ -177,6 +194,8 @@ export interface LabRenderProps<Props extends LabPropertyBag = LabPropertyBag> {
 export interface LabWebPart<Props extends LabPropertyBag = LabPropertyBag> {
   id: string;
   appId: string;
+  /** SPFx component manifest id. Required to disambiguate multi-component CDN packages. */
+  componentId?: string;
   title: string;
   description: string;
   group?: string;
