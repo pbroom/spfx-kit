@@ -164,7 +164,7 @@ describe('local mock CDN bucket contract', () => {
     });
   });
 
-  it('keeps valid sibling releases visible and marks missing or mismatched selections invalid', async () => {
+  it('keeps historical inventory metadata bounded while selection deeply rejects a tampered release', async () => {
     const workspaceRoot = await temporaryDirectory();
     const bucketRoot = resolveMockCdnBucketRoot(workspaceRoot);
     const firstStage = await createStage(workspaceRoot, {
@@ -189,16 +189,19 @@ describe('local mock CDN bucket contract', () => {
     const withInvalidSibling = await getMockCdnBucketInventory({ bucketRoot, origin });
     expect(withInvalidSibling.namespaces.apps.releases).toEqual([
       expect.objectContaining({ releaseId, selected: true, status: 'verified' }),
-      expect.objectContaining({ releaseId: secondReleaseId, selected: false, status: 'invalid' })
+      expect.objectContaining({ releaseId: secondReleaseId, selected: false, status: 'anchored' })
     ]);
     expect(withInvalidSibling.selectedPointers).toEqual([
       expect.objectContaining({ appId, releaseId, status: 'selected-and-verified' })
     ]);
+    await expect(selectMockCdnAppRelease({ bucketRoot, origin, appId, releaseId: secondReleaseId })).rejects.toThrow(
+      'deterministic manifest core'
+    );
 
     await rm(path.join(bucketRoot, 'apps', appId, 'versions', releaseId), { recursive: true });
     const withMissingSelection = await getMockCdnBucketInventory({ bucketRoot, origin });
     expect(withMissingSelection.namespaces.apps.releases).toEqual([
-      expect.objectContaining({ releaseId: secondReleaseId, selected: false, status: 'invalid' })
+      expect.objectContaining({ releaseId: secondReleaseId, selected: false, status: 'anchored' })
     ]);
     expect(withMissingSelection.selectedPointers).toEqual([{ appId, releaseId, status: 'invalid' }]);
   });

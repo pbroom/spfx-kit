@@ -31,6 +31,18 @@ function inventoryFixture() {
             proof: { localArtifact: 'passed', remoteCdn: 'not-run', sharePointAppCatalog: 'not-run' },
             package: { path: 'sharepoint/solution/hello-card.sppkg', bytes: 4096, sha256: hash, status: 'verified' },
             components: { package: ['component-a'], generated: ['component-a'] },
+            sourceProvenance: {
+              kind: 'github-directory',
+              visibility: 'private',
+              repository: 'acme-private/staging-assets',
+              commit: '0123456789abcdef0123456789abcdef01234567',
+              path: 'releases/hello-card',
+              descriptorSha256: 'c'.repeat(64),
+              sourceManifestSha256: 'b'.repeat(64),
+              releaseManifestSha256: hash,
+              files: 4,
+              status: 'staging-closure-verified'
+            },
             assets: [
               {
                 path: 'hello-card.js',
@@ -73,11 +85,73 @@ describe('Local CDN bucket browser contract', () => {
 
     expect(result.origin).toBe(origin);
     expect(result.namespaces.apps.releases[0]).toMatchObject({ appId, releaseId, selected: true, status: 'verified' });
+    expect(result.namespaces.apps.releases[0]).toMatchObject({
+      sourceProvenance: {
+        repository: 'acme-private/staging-assets',
+        commit: '0123456789abcdef0123456789abcdef01234567',
+        path: 'releases/hello-card'
+      }
+    });
     expect(result.namespaces.shared).toEqual({
       status: 'reserved-unsupported',
       releases: [],
       message: 'Shared resource publication awaits a canonical verifier.'
     });
+  });
+
+  it('distinguishes anchored historical metadata from a deeply verified selected release', () => {
+    const anchored = inventoryFixture();
+    anchored.namespaces.apps.releases[0].selected = false;
+    anchored.namespaces.apps.releases[0].status = 'anchored';
+    anchored.namespaces.apps.releases[0].package.status = 'anchored';
+    anchored.namespaces.apps.releases[0].assets[0].status = 'anchored';
+    anchored.selectedPointers = [{ appId, status: 'none' }];
+
+    expect(validateLocalCdnBucketInventory(anchored).namespaces.apps.releases[0]).toMatchObject({
+      selected: false,
+      status: 'anchored',
+      package: { status: 'anchored' },
+      assets: [{ status: 'anchored' }]
+    });
+  });
+
+  it('labels legacy releases without immutable record anchors as recorded only', () => {
+    const recorded = inventoryFixture();
+    recorded.namespaces.apps.releases[0].selected = false;
+    recorded.namespaces.apps.releases[0].status = 'recorded';
+    recorded.namespaces.apps.releases[0].package.status = 'recorded';
+    recorded.namespaces.apps.releases[0].assets[0].status = 'recorded';
+    delete recorded.namespaces.apps.releases[0].sourceProvenance;
+    recorded.selectedPointers = [{ appId, status: 'none' }];
+
+    expect(validateLocalCdnBucketInventory(recorded).namespaces.apps.releases[0]).toMatchObject({
+      selected: false,
+      status: 'recorded',
+      package: { status: 'recorded' },
+      assets: [{ status: 'recorded' }]
+    });
+  });
+
+  it('rejects malformed, unpinned, unsafe, or desynchronized GitHub source provenance', () => {
+    const invalidRepository = inventoryFixture();
+    invalidRepository.namespaces.apps.releases[0].sourceProvenance.repository = 'https://user:token@github.com/acme/repo';
+    expect(() => validateLocalCdnBucketInventory(invalidRepository)).toThrow('source repository is invalid');
+
+    const unpinned = inventoryFixture();
+    unpinned.namespaces.apps.releases[0].sourceProvenance.commit = 'main';
+    expect(() => validateLocalCdnBucketInventory(unpinned)).toThrow('source commit is not pinned');
+
+    const unsafePath = inventoryFixture();
+    unsafePath.namespaces.apps.releases[0].sourceProvenance.path = '../release';
+    expect(() => validateLocalCdnBucketInventory(unsafePath)).toThrow('safe portable path');
+
+    const desynchronized = inventoryFixture();
+    desynchronized.namespaces.apps.releases[0].sourceProvenance.releaseManifestSha256 = 'd'.repeat(64);
+    expect(() => validateLocalCdnBucketInventory(desynchronized)).toThrow('desynchronized');
+
+    const unsupported = inventoryFixture();
+    (unsupported.namespaces.apps.releases[0].sourceProvenance as Record<string, unknown>).token = 'secret';
+    expect(() => validateLocalCdnBucketInventory(unsupported)).toThrow('unsupported or missing fields');
   });
 
   it('rejects asset URL/path escapes and unsupported shared inventory claims', () => {

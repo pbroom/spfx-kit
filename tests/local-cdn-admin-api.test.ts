@@ -58,7 +58,14 @@ describe('local CDN bucket administration API', () => {
     expect(published.body).toMatchObject({ appId, releaseId, published: true, selected: false });
     const publishedInventory = await getInventory(api);
     expect(publishedInventory.namespaces.apps.releases).toEqual([
-      expect.objectContaining({ appId, releaseId, status: 'verified', selected: false })
+      expect.objectContaining({
+        appId,
+        releaseId,
+        status: 'anchored',
+        selected: false,
+        package: expect.objectContaining({ status: 'anchored' }),
+        assets: expect.arrayContaining([expect.objectContaining({ status: 'anchored' })])
+      })
     ]);
     expect(publishedInventory.selectedPointers).toEqual([{ appId, status: 'none' }]);
 

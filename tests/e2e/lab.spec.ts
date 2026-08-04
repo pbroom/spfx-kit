@@ -14,6 +14,7 @@ function bucketInventory(selectedReleaseId: string, releaseIds: string[]) {
         releases: releaseIds.map((releaseId, index) => {
           const namespacePath = `apps/hello-card-spfx/versions/${releaseId}/`;
           const releaseBaseUrl = `${syntheticMockCdnOrigin}/${namespacePath}`;
+          const integrityStatus = releaseId === selectedReleaseId ? 'verified' : 'anchored';
           return {
             namespace: 'app',
             appId: 'hello-card-spfx',
@@ -21,7 +22,7 @@ function bucketInventory(selectedReleaseId: string, releaseIds: string[]) {
             namespacePath,
             releaseBaseUrl,
             selected: releaseId === selectedReleaseId,
-            status: 'verified',
+            status: integrityStatus,
             generatedAt: '2026-08-04T15:00:00.000Z',
             releaseLabel: index === 0 ? 'Release A' : 'Release B',
             manifestSha256: 'a'.repeat(64),
@@ -31,9 +32,25 @@ function bucketInventory(selectedReleaseId: string, releaseIds: string[]) {
               path: 'sharepoint/solution/hello-card-spfx.staging.cdn.sppkg',
               bytes: 4096,
               sha256: 'b'.repeat(64),
-              status: 'verified'
+              status: integrityStatus
             },
             components: { package: ['component-a'], generated: ['component-a'] },
+            ...(index === 0
+              ? {
+                  sourceProvenance: {
+                    kind: 'github-directory',
+                    visibility: 'private',
+                    repository: 'acme-private/staging-assets',
+                    commit: '0123456789abcdef0123456789abcdef01234567',
+                    path: 'releases/hello-card',
+                    descriptorSha256: 'd'.repeat(64),
+                    sourceManifestSha256: 'b'.repeat(64),
+                    releaseManifestSha256: 'a'.repeat(64),
+                    files: 4,
+                    status: 'staging-closure-verified'
+                  }
+                }
+              : {}),
             assets: [
               {
                 path: 'hello-card.js',
@@ -41,7 +58,7 @@ function bucketInventory(selectedReleaseId: string, releaseIds: string[]) {
                 bytes: 128,
                 sha256: 'c'.repeat(64),
                 referencedBy: ['SPFx package:component-a:entry'],
-                status: 'verified'
+                status: integrityStatus
               }
             ]
           };
@@ -262,6 +279,12 @@ test('keeps controls fixed while a populated bucket inventory scrolls independen
   const inventory = dialog.getByRole('region', { name: 'Local CDN bucket inventory' });
   await expect(controls).toBeVisible();
   await expect(inventory).toBeVisible();
+  const sourceRelease = inventory.locator(`[data-release-id="${releases[0]}"]`);
+  await expect(sourceRelease).toContainText(
+    'Source: GitHub staging (declared private) · acme-private/staging-assets@0123456789ab…'
+  );
+  await expect(sourceRelease).toContainText('releases/hello-card · source closure verified at publish');
+  await expect(sourceRelease.getByRole('link')).toHaveCount(0);
   await expect.poll(() => inventory.evaluate((element) => getComputedStyle(element).overflowY)).toBe('auto');
 
   const scroll = await inventory.evaluate((element) => {
@@ -272,6 +295,27 @@ test('keeps controls fixed while a populated bucket inventory scrolls independen
   expect(scroll.scrollTop).toBeGreaterThan(0);
   await expect(controls).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Close Local CDN bucket' })).toBeVisible();
+});
+
+test('distinguishes a legacy recorded release from anchored and deeply verified releases', async ({ page }) => {
+  const selectedReleaseId = '1.2.3-selected.1';
+  const legacyReleaseId = '1.2.3-legacy.1';
+  const inventory = bucketInventory(selectedReleaseId, [selectedReleaseId, legacyReleaseId]);
+  const legacy = inventory.namespaces.apps.releases[1];
+  legacy.status = 'recorded';
+  legacy.package.status = 'recorded';
+  legacy.assets[0].status = 'recorded';
+  await page.route('**/api/local-cdn', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(inventory) });
+  });
+
+  await page.goto('/');
+  await page.getByRole('region', { name: 'Package resources' }).getByRole('button', { name: 'Local CDN bucket' }).click();
+
+  const legacyRelease = page.getByRole('dialog', { name: 'Local CDN bucket' }).locator(`[data-release-id="${legacyReleaseId}"]`);
+  await expect(legacyRelease).toContainText('Legacy manifest recorded · verify on selection');
+  await expect(legacyRelease.locator('xpath=following-sibling::tr[1]')).toContainText('Package metadata recorded');
+  await expect(legacyRelease.locator('xpath=following-sibling::tr[2]')).toContainText('Legacy hash and size recorded');
 });
 
 test('identifies the exact release behind an invalid selected pointer', async ({ page }) => {
