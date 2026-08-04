@@ -41,12 +41,15 @@ export function PackageDependencyPanel({
   const headingId = headingIdRef.current;
   const loadedCount = descriptor ? descriptor.assets.filter((asset) => assetStatus(asset, smoke) === 'loaded').length : 0;
   const summary = packageSummary(mode, descriptor, descriptorError, descriptorLoading, smoke, loadedCount);
+  const workspaceActive = mode === 'cdn' && Boolean(descriptor) && !descriptorLoading && !descriptorError;
 
   return (
     <section
       aria-busy={mode === 'cdn' && (descriptorLoading || smoke.status === 'loading')}
       aria-labelledby={headingId}
-      className={`package-dependency-panel package-dependency-panel--${mode}`}
+      className={`package-dependency-panel package-dependency-panel--${mode} ${
+        workspaceActive ? 'package-dependency-panel--workspace' : ''
+      }`}
       data-package-delivery-kind={descriptor?.delivery.kind}
       data-package-delivery-origin={descriptor?.delivery.origin}
       data-package-resource-state={summary.state}
@@ -116,9 +119,9 @@ export function PackageDependencyPanel({
             {summary.announcement}
           </div>
 
-          <section aria-labelledby={`${headingId}-staged`} className="package-resource-group">
+          <section aria-labelledby={`${headingId}-staged`} className="package-resource-group package-resource-group--primary">
             <h3 id={`${headingId}-staged`}>App scripts — selected default paths</h3>
-            <div aria-labelledby={`${headingId}-staged`} className="package-resource-table-frame" role="region" tabIndex={0}>
+            <div aria-label="App scripts table" className="package-resource-table-frame" role="region" tabIndex={0}>
               <table className="package-resource-table">
                 <caption className="visually-hidden">Selected app scripts and browser delivery evidence</caption>
                 <ResourceTableHeader />
@@ -144,7 +147,12 @@ export function PackageDependencyPanel({
           <section aria-labelledby={`${headingId}-deferred`} className="package-resource-group">
             <h3 id={`${headingId}-deferred`}>SharePoint loader references — not staged files</h3>
             {descriptor.deferredResources.length ? (
-              <div aria-labelledby={`${headingId}-deferred`} className="package-resource-table-frame" role="region" tabIndex={0}>
+              <div
+                aria-label="SharePoint loader references table"
+                className="package-resource-table-frame"
+                role="region"
+                tabIndex={0}
+              >
                 <table className="package-resource-table">
                   <caption className="visually-hidden">SharePoint loader references not exercised by the smoke check</caption>
                   <ResourceTableHeader />
@@ -285,7 +293,7 @@ function packageSummary(
     return {
       state: 'ready',
       label: `${loadedCount}/${descriptor.assets.length} delivered`,
-      announcement: `Local mock-CDN smoke check passed. ${loadedCount} of ${descriptor.assets.length} scripts loaded.`
+      announcement: `${loadedCount} of ${descriptor.assets.length} staged scripts delivered by the local mock CDN.`
     };
   }
   return {

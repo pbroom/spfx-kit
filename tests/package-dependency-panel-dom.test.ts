@@ -152,6 +152,24 @@ describe('PackageDependencyPanel', () => {
     expect(assetRow('hello-card.js').getAttribute('data-asset-status')).toBe('failed');
     expect(container.textContent).toContain('Delivery check failed');
     expect(assetRow('hello-card.js').textContent).toContain('Delivery or execution failed');
+
+    renderPanel(
+      {
+        status: 'ready',
+        assetEvidence: [
+          { path: 'strings.js', status: 'loaded', registrationCount: 1 },
+          { path: 'hello-card.js', status: 'loaded', registrationCount: 1 }
+        ]
+      },
+      { mode: 'cdn', descriptor }
+    );
+
+    const panel = container.querySelector<HTMLElement>('[data-package-resource-state="ready"]');
+    expect(panel?.classList.contains('package-dependency-panel--workspace')).toBe(true);
+    expect(panel?.textContent).toContain('2/2 delivered');
+    expect(panel?.textContent).toContain('2 of 2 staged scripts delivered by the local mock CDN.');
+    expect(panel?.textContent).not.toContain('Local mock-CDN smoke check passed');
+    expect(panel?.querySelector('.package-resource-group--primary .package-resource-table-frame')).not.toBeNull();
   });
 
   it('shows a single actionable descriptor error without inventing resource rows', () => {

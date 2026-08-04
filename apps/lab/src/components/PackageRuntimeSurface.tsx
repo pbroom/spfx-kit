@@ -95,7 +95,7 @@ export function PackageRuntimeSurface({
         onOpenBucket={onOpenBucket}
         onRetry={retry}
       />
-      <div className="preview-canvas">
+      <div className={`preview-canvas ${mode === 'cdn' && smokeStatus.status === 'ready' ? 'preview-canvas--cdn-ready' : ''}`}>
         <div
           className={`preview-frame ${boundsVisible ? 'preview-frame--bounded' : ''}`}
           aria-busy={mode === 'cdn' && (descriptorLoading || smokeStatus.status === 'loading')}

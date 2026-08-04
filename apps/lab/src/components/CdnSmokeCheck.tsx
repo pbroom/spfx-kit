@@ -16,7 +16,7 @@ export type CdnSmokeCheckStatus =
   | { status: 'ready'; assetEvidence: CdnSmokeAssetEvidence[]; registrations: CdnSmokeRegistration[] }
   | { status: 'error'; assetEvidence: CdnSmokeAssetEvidence[]; message: string };
 
-export function CdnSmokeCheck({ descriptor, onRetry, onStatusChange }: CdnSmokeCheckProps): JSX.Element {
+export function CdnSmokeCheck({ descriptor, onRetry, onStatusChange }: CdnSmokeCheckProps): JSX.Element | null {
   const { origin: deliveryOrigin, releaseBaseUrl } = descriptor.delivery;
   const requestId = React.useMemo(createRequestId, [releaseBaseUrl]);
   const assets = React.useMemo(
@@ -112,6 +112,10 @@ export function CdnSmokeCheck({ descriptor, onRetry, onStatusChange }: CdnSmokeC
     };
   }, [assets, deliveryOrigin, expectedPaths, onStatusChange, releaseBaseUrl, requestId]);
 
+  if (state.status === 'ready') {
+    return null;
+  }
+
   return (
     <div
       className={`package-runtime-state cdn-smoke-check ${state.status === 'error' ? 'package-runtime-state--error' : ''}`}
@@ -123,20 +127,6 @@ export function CdnSmokeCheck({ descriptor, onRetry, onStatusChange }: CdnSmokeC
           <Spinner size="small" />
           <strong>Checking mock-CDN delivery</strong>
           <span>Loading the pinned staged scripts from {descriptor.delivery.origin}.</span>
-        </>
-      ) : state.status === 'ready' ? (
-        <>
-          <strong>Local mock-CDN smoke check passed</strong>
-          <span>
-            Loaded {state.assetEvidence.length} immutable staged script{state.assetEvidence.length === 1 ? '' : 's'} from the
-            separate local mock CDN; detected {state.registrations.length} AMD module registration
-            {state.registrations.length === 1 ? '' : 's'}.
-          </span>
-          <span className="cdn-smoke-limitation">
-            The worker executed each staged script's top-level code. The Lab did not invoke registered AMD factories or
-            instantiate a web part. This is not a SharePoint or deployment preview; dynamic chunks, external component modules,
-            SPFx lifecycle, services, property pane, loader, and CSP behavior are not exercised.
-          </span>
         </>
       ) : (
         <>
