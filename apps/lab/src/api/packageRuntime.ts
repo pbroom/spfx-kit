@@ -10,20 +10,28 @@ export interface CdnPackageDescriptor {
   generatedAt: string;
   cdnBasePath: string;
   assetBaseUrl: string;
-  entryAssetPath: string;
-  entryAssetUrl: string;
-  entryAssetBytes: number;
-  entryAssetSha256: string;
   packagePath: string;
-  dependencyAssets: CdnPackageScriptAsset[];
+  assets: CdnPackageScriptAsset[];
+  deferredResources: CdnPackageDeferredResource[];
 }
 
 export interface CdnPackageScriptAsset {
+  role: 'dependency' | 'entry';
   moduleId: string;
   assetPath: string;
   assetUrl: string;
   bytes: number;
   sha256: string;
+  stageStatus: 'allowed-and-verified';
+}
+
+export interface CdnPackageDeferredResource {
+  moduleId: string;
+  kind: 'spfx-component';
+  componentId: string;
+  version: string;
+  status: 'deferred';
+  reason: 'sharepoint-loader-not-exercised';
 }
 
 export async function loadCdnPackageDescriptor(
@@ -77,40 +85,44 @@ export function validateCdnPackageDescriptor(value: unknown, expectedAppId: stri
   }
 
   const cdnBasePath = validateCdnBasePath(requireString(value.cdnBasePath, 'cdnBasePath'));
-  const entryAssetPath = validatePortablePath(requireString(value.entryAssetPath, 'entryAssetPath'), 'entryAssetPath');
   const packagePath = validatePortablePath(requireString(value.packagePath, 'packagePath'), 'packagePath');
-  if (!/\.(?:m?js)$/i.test(entryAssetPath)) {
-    throw new Error('Staged CDN descriptor entryAssetPath must name a JavaScript asset.');
-  }
 
   const labOrigin = getLabOrigin();
   const assetBaseUrl = validateSimulationUrl(requireString(value.assetBaseUrl, 'assetBaseUrl'), labOrigin, 'assetBaseUrl');
   if (!assetBaseUrl.pathname.endsWith('/')) {
     throw new Error('Staged CDN descriptor assetBaseUrl must end with a slash.');
   }
-  const entryAssetUrl = validateSimulationUrl(requireString(value.entryAssetUrl, 'entryAssetUrl'), labOrigin, 'entryAssetUrl');
-  const expectedEntryUrl = new URL(encodePortablePath(entryAssetPath), assetBaseUrl);
-  if (entryAssetUrl.href !== expectedEntryUrl.href) {
-    throw new Error('Staged CDN descriptor entryAssetUrl does not match entryAssetPath.');
-  }
-  const entryAssetBytes = validateByteLength(value.entryAssetBytes, 'entryAssetBytes');
-  const entryAssetSha256 = validateSha256(value.entryAssetSha256, 'entryAssetSha256');
 
-  if (!Array.isArray(value.dependencyAssets)) {
-    throw new Error('Staged CDN descriptor dependencyAssets must be an array.');
+  if (!Array.isArray(value.assets) || value.assets.length === 0 || value.assets.length > 100) {
+    throw new Error('Staged CDN descriptor assets must contain between 1 and 100 items.');
   }
-  const dependencyAssets = value.dependencyAssets.map((asset, index) => validateDependencyAsset(asset, index, assetBaseUrl));
-  const dependencyModuleIds = new Set<string>();
-  const dependencyPaths = new Set<string>();
-  for (const dependency of dependencyAssets) {
-    if (dependencyModuleIds.has(dependency.moduleId) || dependencyPaths.has(dependency.assetPath)) {
-      throw new Error('Staged CDN descriptor contains duplicate dependency assets.');
+  const assets = value.assets.map((asset, index) => validateScriptAsset(asset, index, assetBaseUrl));
+  const assetModuleIds = new Set<string>();
+  const assetPaths = new Set<string>();
+  for (const [index, asset] of assets.entries()) {
+    if (assetModuleIds.has(asset.moduleId) || assetPaths.has(asset.assetPath)) {
+      throw new Error('Staged CDN descriptor contains duplicate script assets.');
     }
-    if (dependency.assetPath === entryAssetPath) {
-      throw new Error('Staged CDN descriptor lists its entry asset as a dependency.');
+    if (asset.role === 'entry' && index !== assets.length - 1) {
+      throw new Error('Staged CDN descriptor entry asset must be last.');
     }
-    dependencyModuleIds.add(dependency.moduleId);
-    dependencyPaths.add(dependency.assetPath);
+    assetModuleIds.add(asset.moduleId);
+    assetPaths.add(asset.assetPath);
+  }
+  if (assets[assets.length - 1].role !== 'entry' || assets.slice(0, -1).some((asset) => asset.role !== 'dependency')) {
+    throw new Error('Staged CDN descriptor must contain dependencies followed by exactly one entry asset.');
+  }
+
+  if (!Array.isArray(value.deferredResources) || value.deferredResources.length > 100) {
+    throw new Error('Staged CDN descriptor deferredResources must be an array with at most 100 items.');
+  }
+  const deferredResources = value.deferredResources.map((resource, index) => validateDeferredResource(resource, index));
+  const deferredModuleIds = new Set<string>();
+  for (const resource of deferredResources) {
+    if (deferredModuleIds.has(resource.moduleId) || assetModuleIds.has(resource.moduleId)) {
+      throw new Error('Staged CDN descriptor contains duplicate resource module ids.');
+    }
+    deferredModuleIds.add(resource.moduleId);
   }
 
   return {
@@ -120,46 +132,79 @@ export function validateCdnPackageDescriptor(value: unknown, expectedAppId: stri
     generatedAt,
     cdnBasePath,
     assetBaseUrl: assetBaseUrl.href,
-    entryAssetPath,
-    entryAssetUrl: entryAssetUrl.href,
-    entryAssetBytes,
-    entryAssetSha256,
     packagePath,
-    dependencyAssets
+    assets,
+    deferredResources
   };
 }
 
-function validateDependencyAsset(value: unknown, index: number, assetBaseUrl: URL): CdnPackageScriptAsset {
+function validateScriptAsset(value: unknown, index: number, assetBaseUrl: URL): CdnPackageScriptAsset {
   if (!isRecord(value)) {
-    throw new Error(`Staged CDN dependency ${index} must be an object.`);
+    throw new Error(`Staged CDN asset ${index} must be an object.`);
   }
-  const moduleId = requireString(value.moduleId, `dependencyAssets[${index}].moduleId`);
+  if (value.role !== 'dependency' && value.role !== 'entry') {
+    throw new Error(`Staged CDN asset ${index} has an invalid role.`);
+  }
+  const moduleId = requireString(value.moduleId, `assets[${index}].moduleId`);
   if (moduleId.length > 200 || hasControlCharacter(moduleId)) {
-    throw new Error(`Staged CDN dependency ${index} has an invalid moduleId.`);
+    throw new Error(`Staged CDN asset ${index} has an invalid moduleId.`);
   }
   const assetPath = validatePortablePath(
-    requireString(value.assetPath, `dependencyAssets[${index}].assetPath`),
-    `dependencyAssets[${index}].assetPath`
+    requireString(value.assetPath, `assets[${index}].assetPath`),
+    `assets[${index}].assetPath`
   );
   if (!/\.(?:m?js)$/i.test(assetPath)) {
-    throw new Error(`Staged CDN dependency ${index} must name a JavaScript asset.`);
+    throw new Error(`Staged CDN asset ${index} must name a JavaScript asset.`);
   }
   const assetUrl = validateSimulationUrl(
-    requireString(value.assetUrl, `dependencyAssets[${index}].assetUrl`),
+    requireString(value.assetUrl, `assets[${index}].assetUrl`),
     assetBaseUrl.origin,
-    `dependencyAssets[${index}].assetUrl`
+    `assets[${index}].assetUrl`
   );
   const expectedAssetUrl = new URL(encodePortablePath(assetPath), assetBaseUrl);
   if (assetUrl.href !== expectedAssetUrl.href) {
-    throw new Error(`Staged CDN dependency ${index} URL does not match its assetPath.`);
+    throw new Error(`Staged CDN asset ${index} URL does not match its assetPath.`);
+  }
+  if (value.stageStatus !== 'allowed-and-verified') {
+    throw new Error(`Staged CDN asset ${index} has an invalid stageStatus.`);
   }
   return {
+    role: value.role,
     moduleId,
     assetPath,
     assetUrl: assetUrl.href,
-    bytes: validateByteLength(value.bytes, `dependencyAssets[${index}].bytes`),
-    sha256: validateSha256(value.sha256, `dependencyAssets[${index}].sha256`)
+    bytes: validateByteLength(value.bytes, `assets[${index}].bytes`),
+    sha256: validateSha256(value.sha256, `assets[${index}].sha256`),
+    stageStatus: value.stageStatus
   };
+}
+
+function validateDeferredResource(value: unknown, index: number): CdnPackageDeferredResource {
+  if (!isRecord(value)) {
+    throw new Error(`Staged CDN deferred resource ${index} must be an object.`);
+  }
+  const moduleId = validateResourceIdentity(value.moduleId, `deferredResources[${index}].moduleId`);
+  const componentId = validateResourceIdentity(value.componentId, `deferredResources[${index}].componentId`);
+  const version = validateResourceIdentity(value.version, `deferredResources[${index}].version`);
+  if (value.kind !== 'spfx-component' || value.status !== 'deferred' || value.reason !== 'sharepoint-loader-not-exercised') {
+    throw new Error(`Staged CDN deferred resource ${index} has invalid status metadata.`);
+  }
+  return {
+    moduleId,
+    kind: value.kind,
+    componentId,
+    version,
+    status: value.status,
+    reason: value.reason
+  };
+}
+
+function validateResourceIdentity(value: unknown, field: string): string {
+  const identity = requireString(value, field);
+  if (identity.length > 200 || hasControlCharacter(identity)) {
+    throw new Error(`Staged CDN descriptor ${field} is invalid.`);
+  }
+  return identity;
 }
 
 async function readJsonResponse(response: Response, label: string): Promise<unknown> {

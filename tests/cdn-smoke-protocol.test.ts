@@ -26,15 +26,39 @@ describe('actual staged CDN smoke-check worker', () => {
     });
 
     expect(harness.loadedUrls).toEqual([`${sessionBase}strings.js`, `${sessionBase}assets/hello-card.js`]);
-    expect(harness.messages).toEqual([
+    expect(harness.messages.at(-1)).toEqual(
       expect.objectContaining({
         source: CDN_SMOKE_MESSAGE_SOURCE,
         requestId: 'request-1',
         status: 'ready',
         loadedAssetPaths: ['strings.js', 'assets/hello-card.js'],
         assetEvidence: [
-          { path: 'strings.js', registrationCount: 1 },
-          { path: 'assets/hello-card.js', registrationCount: 1 }
+          { path: 'strings.js', status: 'loaded', registrationCount: 1 },
+          { path: 'assets/hello-card.js', status: 'loaded', registrationCount: 1 }
+        ]
+      })
+    );
+    expect(harness.messages.slice(0, -1)).toEqual([
+      expect.objectContaining({
+        status: 'progress',
+        assetEvidence: [{ path: 'strings.js', status: 'loading', registrationCount: 0 }]
+      }),
+      expect.objectContaining({
+        status: 'progress',
+        assetEvidence: [{ path: 'strings.js', status: 'loaded', registrationCount: 1 }]
+      }),
+      expect.objectContaining({
+        status: 'progress',
+        assetEvidence: [
+          { path: 'strings.js', status: 'loaded', registrationCount: 1 },
+          { path: 'assets/hello-card.js', status: 'loading', registrationCount: 0 }
+        ]
+      }),
+      expect.objectContaining({
+        status: 'progress',
+        assetEvidence: [
+          { path: 'strings.js', status: 'loaded', registrationCount: 1 },
+          { path: 'assets/hello-card.js', status: 'loaded', registrationCount: 1 }
         ]
       })
     ]);
@@ -51,13 +75,13 @@ describe('actual staged CDN smoke-check worker', () => {
     harness.dispatch({ requestId: 'request-1', assets: [{ path: 'assets/hello-card.js', url }] });
 
     expect(harness.loadedUrls).toEqual([]);
-    expect(harness.messages).toEqual([
+    expect(harness.messages.at(-1)).toEqual(
       expect.objectContaining({
         requestId: 'request-1',
         status: 'error',
         message: expect.stringContaining('Lab CDN asset API')
       })
-    ]);
+    );
   });
 
   it('fails when a dependency registers but the entry script does not', () => {
@@ -76,13 +100,47 @@ describe('actual staged CDN smoke-check worker', () => {
     });
 
     expect(harness.loadedUrls).toHaveLength(2);
-    expect(harness.messages).toEqual([
+    expect(harness.messages.at(-1)).toEqual(
       expect.objectContaining({
         requestId: 'request-1',
         status: 'error',
-        message: 'The staged entry script loaded but did not register an AMD module.'
+        message: 'The staged entry script loaded but did not register an AMD module.',
+        assetEvidence: [
+          { path: 'strings.js', status: 'loaded', registrationCount: 1 },
+          { path: 'assets/hello-card.js', status: 'failed', registrationCount: 0 }
+        ]
       })
-    ]);
+    );
+  });
+
+  it('reports the exact failed asset after preserving prior loaded evidence', () => {
+    const harness = createWorkerHarness((url, worker) => {
+      if (url.endsWith('/strings.js')) {
+        worker.define?.('WebPartStrings', [], () => undefined);
+        return;
+      }
+      throw new Error('The selected staged asset was blocked.');
+    });
+
+    harness.dispatch({
+      requestId: 'request-1',
+      assets: [
+        { path: 'strings.js', url: `${sessionBase}strings.js` },
+        { path: 'assets/hello-card.js', url: `${sessionBase}assets/hello-card.js` }
+      ]
+    });
+
+    expect(harness.messages.at(-1)).toEqual(
+      expect.objectContaining({
+        requestId: 'request-1',
+        status: 'error',
+        message: 'The selected staged asset was blocked.',
+        assetEvidence: [
+          { path: 'strings.js', status: 'loaded', registrationCount: 1 },
+          { path: 'assets/hello-card.js', status: 'failed', registrationCount: 0 }
+        ]
+      })
+    );
   });
 
   it('uses captured native loading and messaging functions after a dependency tries to replace them', () => {
@@ -107,7 +165,7 @@ describe('actual staged CDN smoke-check worker', () => {
     });
 
     expect(harness.loadedUrls).toEqual([`${sessionBase}strings.js`, `${sessionBase}assets/hello-card.js`]);
-    expect(harness.messages).toEqual([expect.objectContaining({ requestId: 'request-1', status: 'ready' })]);
+    expect(harness.messages.at(-1)).toEqual(expect.objectContaining({ requestId: 'request-1', status: 'ready' }));
   });
 });
 
@@ -121,8 +179,8 @@ describe('staged CDN smoke-check parent protocol', () => {
           status: 'ready',
           loadedAssetPaths: ['strings.js', 'assets/hello-card.js'],
           assetEvidence: [
-            { path: 'strings.js', registrationCount: 1 },
-            { path: 'assets/hello-card.js', registrationCount: 1 }
+            { path: 'strings.js', status: 'loaded', registrationCount: 1 },
+            { path: 'assets/hello-card.js', status: 'loaded', registrationCount: 1 }
           ],
           registrations: [
             { moduleId: 'WebPartStrings', dependencyCount: 0 },
@@ -141,13 +199,56 @@ describe('staged CDN smoke-check parent protocol', () => {
       status: 'ready',
       loadedAssetPaths: ['strings.js', 'assets/hello-card.js'],
       assetEvidence: [
-        { path: 'strings.js', registrationCount: 1 },
-        { path: 'assets/hello-card.js', registrationCount: 0 }
+        { path: 'strings.js', status: 'loaded', registrationCount: 1 },
+        { path: 'assets/hello-card.js', status: 'loaded', registrationCount: 0 }
       ],
       registrations: [{ moduleId: 'WebPartStrings', dependencyCount: 0 }]
     };
     expect(parseCdnSmokeMessage({ ...baseMessage, requestId: 'another-request' }, 'request-1')).toBeUndefined();
     expect(parseCdnSmokeMessage(baseMessage, 'request-1')).toBeUndefined();
+  });
+
+  it('accepts ordered progress and terminal failure evidence but rejects duplicate paths', () => {
+    expect(
+      parseCdnSmokeMessage(
+        {
+          source: CDN_SMOKE_MESSAGE_SOURCE,
+          requestId: 'request-1',
+          status: 'progress',
+          assetEvidence: [
+            { path: 'strings.js', status: 'loaded', registrationCount: 1 },
+            { path: 'entry.js', status: 'loading', registrationCount: 0 }
+          ]
+        },
+        'request-1'
+      )
+    ).toMatchObject({ status: 'progress' });
+    expect(
+      parseCdnSmokeMessage(
+        {
+          source: CDN_SMOKE_MESSAGE_SOURCE,
+          requestId: 'request-1',
+          status: 'error',
+          message: 'blocked',
+          assetEvidence: [{ path: 'entry.js', status: 'failed', registrationCount: 0 }]
+        },
+        'request-1'
+      )
+    ).toMatchObject({ status: 'error' });
+    expect(
+      parseCdnSmokeMessage(
+        {
+          source: CDN_SMOKE_MESSAGE_SOURCE,
+          requestId: 'request-1',
+          status: 'progress',
+          assetEvidence: [
+            { path: 'entry.js', status: 'loaded', registrationCount: 1 },
+            { path: 'entry.js', status: 'loading', registrationCount: 0 }
+          ]
+        },
+        'request-1'
+      )
+    ).toBeUndefined();
   });
 });
 

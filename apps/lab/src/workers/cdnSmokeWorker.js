@@ -8,15 +8,15 @@
     const loadScript = self.importScripts.bind(self);
     const postEvidence = self.postMessage.bind(self);
     let requestId = '';
+    const loadedAssetPaths = [];
+    const registrations = [];
+    const assetEvidence = [];
     try {
       if (isRecord(event.data) && typeof event.data.requestId === 'string') {
         requestId = event.data.requestId;
       }
       const request = validateRequest(event.data);
       requestId = request.requestId;
-      const loadedAssetPaths = [];
-      const registrations = [];
-      const assetEvidence = [];
       const define = (...args) => {
         const named = typeof args[0] === 'string';
         const dependencies = args[named ? 1 : 0];
@@ -33,15 +33,36 @@
 
       for (const asset of request.assets) {
         const registrationsBeforeLoad = registrations.length;
-        loadScript(asset.url);
+        const evidence = { path: asset.path, status: 'loading', registrationCount: 0 };
+        assetEvidence.push(evidence);
+        postEvidence({
+          source: MESSAGE_SOURCE,
+          requestId,
+          status: 'progress',
+          assetEvidence: assetEvidence.map(copyAssetEvidence)
+        });
+        try {
+          loadScript(asset.url);
+        } catch (error) {
+          evidence.status = 'failed';
+          evidence.registrationCount = registrations.length - registrationsBeforeLoad;
+          throw error;
+        }
         loadedAssetPaths.push(asset.path);
-        assetEvidence.push({
-          path: asset.path,
-          registrationCount: registrations.length - registrationsBeforeLoad
+        evidence.status = 'loaded';
+        evidence.registrationCount = registrations.length - registrationsBeforeLoad;
+        postEvidence({
+          source: MESSAGE_SOURCE,
+          requestId,
+          status: 'progress',
+          assetEvidence: assetEvidence.map(copyAssetEvidence)
         });
       }
       const entryEvidence = assetEvidence[assetEvidence.length - 1];
       if (!entryEvidence || entryEvidence.registrationCount === 0) {
+        if (entryEvidence) {
+          entryEvidence.status = 'failed';
+        }
         throw new Error('The staged entry script loaded but did not register an AMD module.');
       }
       postEvidence({
@@ -49,7 +70,7 @@
         requestId,
         status: 'ready',
         loadedAssetPaths,
-        assetEvidence,
+        assetEvidence: assetEvidence.map(copyAssetEvidence),
         registrations
       });
     } catch (error) {
@@ -57,10 +78,22 @@
         source: MESSAGE_SOURCE,
         requestId,
         status: 'error',
-        message: error instanceof Error ? error.message : 'The staged CDN smoke check failed.'
+        message:
+          error && typeof error === 'object' && typeof error.message === 'string'
+            ? error.message
+            : 'The staged CDN smoke check failed.',
+        assetEvidence: assetEvidence.map(copyAssetEvidence)
       });
     }
   });
+
+  function copyAssetEvidence(evidence) {
+    return {
+      path: evidence.path,
+      status: evidence.status,
+      registrationCount: evidence.registrationCount
+    };
+  }
 
   function validateRequest(value) {
     if (!isRecord(value) || typeof value.requestId !== 'string' || !value.requestId || value.requestId.length > 200) {
