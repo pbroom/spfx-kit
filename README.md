@@ -60,6 +60,16 @@ session-scoped CDN asset path. The scripts load in an isolated worker that
 executes their top-level code and records AMD module registration. The Lab does
 not invoke registered AMD factories.
 
+The **Package resources** panel reports the selected app and pinned release,
+then lists the exact package-local scripts selected for the default-locale
+smoke path. Each row shows its module role, immutable path, verified size and
+SHA-256 digest, plus browser loading or execution status. Locale-specific
+alternatives are not exercised. SPFx component references that SharePoint
+would resolve are shown separately as deferred loader resources; they are not
+claimed to be staged files or evidence that arbitrary npm dependencies are
+available from a CDN. In Standalone mode, the panel explicitly reports that no
+CDN session is selected.
+
 If the staging artifact is missing, invalid, or does not contain a valid entry
 asset, the Lab shows the error and does not fall back to Standalone mode. This
 is a bounded **staged CDN bundle smoke check**, not a SharePoint or

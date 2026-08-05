@@ -64,16 +64,22 @@ export interface CdnRuntimeDescriptor {
   generatedAt: string;
   cdnBasePath: string;
   assetBaseUrl: string;
-  entryAssetPath: string;
-  entryAssetUrl: string;
-  entryAssetBytes: number;
-  entryAssetSha256: string;
-  dependencyAssets: Array<{
+  assets: Array<{
+    role: 'dependency' | 'entry';
     moduleId: string;
     assetPath: string;
     assetUrl: string;
     bytes: number;
     sha256: string;
+    stageStatus: 'allowed-and-verified';
+  }>;
+  deferredResources: Array<{
+    moduleId: string;
+    kind: 'spfx-component';
+    componentId: string;
+    version: string;
+    status: 'deferred';
+    reason: 'sharepoint-loader-not-exercised';
   }>;
   packagePath: string;
 }
@@ -224,6 +230,7 @@ async function describePinnedCdnStage(
   if (typeof entryModuleId !== 'string' || !scriptResources || Array.isArray(scriptResources)) {
     throw unavailable('Component entry module is invalid.');
   }
+  const validatedEntryModuleId = validateRuntimeResourceIdentity(entryModuleId, 'Component entry module id');
   const entryResource = scriptResources[entryModuleId];
   const entryResourcePath = resolveScriptResourcePath(entryResource);
   if (!entryResourcePath) {
@@ -233,10 +240,10 @@ async function describePinnedCdnStage(
   const releaseId = stage.manifest.releaseId;
   const assetBaseUrl = `${apiRoot}${cdnAssetRoute}${encodeURIComponent(stage.sessionId)}/`;
   const entryAsset = resolveUniqueManifestAsset(stage.manifest, entryResourcePath, 'Component entry asset');
-  const entryAssetPath = entryAsset.path;
   const dependencyAssets = Object.entries(scriptResources)
     .filter(([moduleId, resource]) => moduleId !== entryModuleId && (!isRecord(resource) || resource.type !== 'component'))
     .map(([moduleId, resource]) => {
+      const validatedModuleId = validateRuntimeResourceIdentity(moduleId, 'Component dependency module id');
       const resourcePath = resolveScriptResourcePath(resource);
       if (!resourcePath) {
         throw unavailable(`Component dependency ${moduleId} does not resolve to one path asset.`);
@@ -244,13 +251,33 @@ async function describePinnedCdnStage(
       const asset = resolveUniqueManifestAsset(stage.manifest, resourcePath, `Component dependency ${moduleId}`);
       const assetPath = asset.path;
       return {
-        moduleId,
+        role: 'dependency' as const,
+        moduleId: validatedModuleId,
         assetPath,
         assetUrl: `${assetBaseUrl}${encodePortablePath(assetPath)}`,
         bytes: asset.bytes,
-        sha256: asset.sha256
+        sha256: asset.sha256,
+        stageStatus: 'allowed-and-verified' as const
       };
     })
+    .sort((left, right) => left.moduleId.localeCompare(right.moduleId));
+  const entryAssetPath = entryAsset.path;
+  const assets = [
+    ...dependencyAssets,
+    {
+      role: 'entry' as const,
+      moduleId: validatedEntryModuleId,
+      assetPath: entryAssetPath,
+      assetUrl: `${assetBaseUrl}${encodePortablePath(entryAssetPath)}`,
+      bytes: entryAsset.bytes,
+      sha256: entryAsset.sha256,
+      stageStatus: 'allowed-and-verified' as const
+    }
+  ];
+  assertUniqueRuntimeAssets(assets);
+  const deferredResources = Object.entries(scriptResources)
+    .filter((entry): entry is [string, Record<string, unknown>] => isComponentScriptResource(entry[1]))
+    .map(([moduleId, resource]) => describeDeferredComponentResource(moduleId, resource))
     .sort((left, right) => left.moduleId.localeCompare(right.moduleId));
   return {
     mode: 'cdn',
@@ -259,13 +286,53 @@ async function describePinnedCdnStage(
     generatedAt: stage.manifest.generatedAt,
     cdnBasePath: stage.manifest.cdnBasePath,
     assetBaseUrl,
-    entryAssetPath,
-    entryAssetUrl: `${assetBaseUrl}${encodePortablePath(entryAssetPath)}`,
-    entryAssetBytes: entryAsset.bytes,
-    entryAssetSha256: entryAsset.sha256,
-    dependencyAssets,
+    assets,
+    deferredResources,
     packagePath: stage.manifest.package.path
   };
+}
+
+function isComponentScriptResource(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && value.type === 'component';
+}
+
+function describeDeferredComponentResource(
+  moduleId: string,
+  resource: Record<string, unknown>
+): CdnRuntimeDescriptor['deferredResources'][number] {
+  return {
+    moduleId: validateRuntimeResourceIdentity(moduleId, 'Deferred component module id'),
+    kind: 'spfx-component',
+    componentId: validateRuntimeResourceIdentity(resource.id, `Component dependency ${moduleId} id`),
+    version: validateRuntimeResourceIdentity(resource.version, `Component dependency ${moduleId} version`),
+    status: 'deferred',
+    reason: 'sharepoint-loader-not-exercised'
+  };
+}
+
+function validateRuntimeResourceIdentity(value: unknown, label: string): string {
+  if (
+    typeof value !== 'string' ||
+    !value.trim() ||
+    value !== value.trim() ||
+    value.length > 200 ||
+    [...value].some(isControlCharacter)
+  ) {
+    throw unavailable(`${label} is invalid.`);
+  }
+  return value;
+}
+
+function assertUniqueRuntimeAssets(assets: CdnRuntimeDescriptor['assets']): void {
+  const moduleIds = new Set<string>();
+  const paths = new Set<string>();
+  for (const asset of assets) {
+    if (moduleIds.has(asset.moduleId) || paths.has(asset.assetPath)) {
+      throw unavailable('Component script assets must have unique module ids and paths.');
+    }
+    moduleIds.add(asset.moduleId);
+    paths.add(asset.assetPath);
+  }
 }
 
 async function readPinnedCdnRuntimeAsset(stage: PinnedCdnStageSession, requestedAssetPath: string): Promise<CdnRuntimeAsset> {

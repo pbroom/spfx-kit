@@ -1,43 +1,59 @@
 import * as React from 'react';
 import { Spinner } from '@fluentui/react-components';
 import type { CdnPackageDescriptor } from '../api/packageRuntime';
-import { parseCdnSmokeMessage, type CdnSmokeRegistration } from '../lib/cdnSmokeProtocol';
+import { parseCdnSmokeMessage, type CdnSmokeAssetEvidence, type CdnSmokeRegistration } from '../lib/cdnSmokeProtocol';
 
 const SMOKE_TIMEOUT_MS = 15_000;
 
 interface CdnSmokeCheckProps {
   descriptor: CdnPackageDescriptor;
-  onError: (message: string) => void;
+  onRetry: () => void;
+  onStatusChange: (status: CdnSmokeCheckStatus) => void;
 }
 
-type SmokeState = { status: 'loading' } | { status: 'ready'; loadedAssetPaths: string[]; registrations: CdnSmokeRegistration[] };
+export type CdnSmokeCheckStatus =
+  | { status: 'loading'; assetEvidence: CdnSmokeAssetEvidence[] }
+  | { status: 'ready'; assetEvidence: CdnSmokeAssetEvidence[]; registrations: CdnSmokeRegistration[] }
+  | { status: 'error'; assetEvidence: CdnSmokeAssetEvidence[]; message: string };
 
-export function CdnSmokeCheck({ descriptor, onError }: CdnSmokeCheckProps): JSX.Element {
+export function CdnSmokeCheck({ descriptor, onRetry, onStatusChange }: CdnSmokeCheckProps): JSX.Element {
   const requestId = React.useMemo(createRequestId, [descriptor.assetBaseUrl]);
   const assets = React.useMemo(
-    () => [
-      ...descriptor.dependencyAssets.map((asset) => ({ path: asset.assetPath, url: asset.assetUrl })),
-      { path: descriptor.entryAssetPath, url: descriptor.entryAssetUrl }
-    ],
-    [descriptor]
+    () => descriptor.assets.map((asset) => ({ path: asset.assetPath, url: asset.assetUrl })),
+    [descriptor.assets]
   );
   const expectedPaths = React.useMemo(() => assets.map((asset) => asset.path), [assets]);
-  const [state, setState] = React.useState<SmokeState>({ status: 'loading' });
+  const [state, setState] = React.useState<CdnSmokeCheckStatus>({ status: 'loading', assetEvidence: [] });
 
   React.useEffect(() => {
-    setState({ status: 'loading' });
+    const loadingState: CdnSmokeCheckStatus = { status: 'loading', assetEvidence: [] };
+    setState(loadingState);
+    onStatusChange(loadingState);
     let settled = false;
+    let latestEvidence: CdnSmokeAssetEvidence[] = [];
     if (typeof Worker === 'undefined') {
-      onError('This browser cannot run the isolated staged CDN smoke check because Web Workers are unavailable.');
+      const errorState: CdnSmokeCheckStatus = {
+        status: 'error',
+        assetEvidence: [],
+        message: 'This browser cannot run the isolated staged CDN smoke check because Web Workers are unavailable.'
+      };
+      setState(errorState);
+      onStatusChange(errorState);
       return;
     }
     const worker = new Worker(new URL('../workers/cdnSmokeWorker.js', import.meta.url), {
       name: 'spfx-kit-cdn-smoke-check'
     });
-    const fail = (message: string): void => {
+    const fail = (message: string, assetEvidence: CdnSmokeAssetEvidence[] = latestEvidence): void => {
       if (!settled) {
         settled = true;
-        onError(message);
+        const errorState: CdnSmokeCheckStatus = {
+          status: 'error',
+          assetEvidence: terminalFailureEvidence(assetEvidence),
+          message
+        };
+        setState(errorState);
+        onStatusChange(errorState);
       }
     };
     const handleMessage = (event: MessageEvent): void => {
@@ -45,8 +61,20 @@ export function CdnSmokeCheck({ descriptor, onError }: CdnSmokeCheckProps): JSX.
       if (!message || settled) {
         return;
       }
+      if (!evidenceMatchesExpectedPrefix(message.assetEvidence, expectedPaths)) {
+        fail('The staged CDN smoke check returned unexpected asset evidence.');
+        return;
+      }
+      if (message.status === 'progress') {
+        latestEvidence = message.assetEvidence;
+        const progressState: CdnSmokeCheckStatus = { status: 'loading', assetEvidence: latestEvidence };
+        setState(progressState);
+        onStatusChange(progressState);
+        return;
+      }
       if (message.status === 'error') {
-        fail(message.message);
+        latestEvidence = message.assetEvidence;
+        fail(message.message, message.assetEvidence);
         return;
       }
       if (!sameStrings(message.loadedAssetPaths, expectedPaths)) {
@@ -54,11 +82,14 @@ export function CdnSmokeCheck({ descriptor, onError }: CdnSmokeCheckProps): JSX.
         return;
       }
       settled = true;
-      setState({
+      latestEvidence = message.assetEvidence;
+      const readyState: CdnSmokeCheckStatus = {
         status: 'ready',
-        loadedAssetPaths: message.loadedAssetPaths,
+        assetEvidence: message.assetEvidence,
         registrations: message.registrations
-      });
+      };
+      setState(readyState);
+      onStatusChange(readyState);
     };
     const handleWorkerError = (event: ErrorEvent): void => {
       event.preventDefault();
@@ -78,46 +109,40 @@ export function CdnSmokeCheck({ descriptor, onError }: CdnSmokeCheckProps): JSX.
       worker.removeEventListener('error', handleWorkerError);
       worker.terminate();
     };
-  }, [assets, expectedPaths, onError, requestId]);
+  }, [assets, expectedPaths, onStatusChange, requestId]);
 
   return (
-    <div className="package-runtime-state cdn-smoke-check" data-cdn-smoke-check={state.status} role="status">
+    <div
+      className={`package-runtime-state cdn-smoke-check ${state.status === 'error' ? 'package-runtime-state--error' : ''}`}
+      data-cdn-smoke-check={state.status}
+      role={state.status === 'error' ? 'alert' : 'status'}
+    >
       {state.status === 'loading' ? (
         <>
           <Spinner size="small" />
           <strong>Checking staged CDN bundle</strong>
           <span>Loading the pinned staged scripts through the Lab's same-origin CDN asset route.</span>
         </>
-      ) : (
+      ) : state.status === 'ready' ? (
         <>
           <strong>Staged CDN bundle smoke check passed</strong>
           <span>
-            Loaded {state.loadedAssetPaths.length} immutable staged script{state.loadedAssetPaths.length === 1 ? '' : 's'};
-            detected {state.registrations.length} AMD module registration{state.registrations.length === 1 ? '' : 's'}.
+            Loaded {state.assetEvidence.length} immutable staged script{state.assetEvidence.length === 1 ? '' : 's'}; detected{' '}
+            {state.registrations.length} AMD module registration{state.registrations.length === 1 ? '' : 's'}.
           </span>
-          <dl className="cdn-smoke-evidence">
-            <div>
-              <dt>Release</dt>
-              <dd>{descriptor.releaseId}</dd>
-            </div>
-            <div>
-              <dt>Entry</dt>
-              <dd>{descriptor.entryAssetPath}</dd>
-            </div>
-            <div>
-              <dt>SHA-256</dt>
-              <dd>{descriptor.entryAssetSha256}</dd>
-            </div>
-            <div>
-              <dt>Verified size</dt>
-              <dd>{formatBytes(descriptor.entryAssetBytes)}</dd>
-            </div>
-          </dl>
           <span className="cdn-smoke-limitation">
             The worker executed each staged script's top-level code. The Lab did not invoke registered AMD factories or
             instantiate a web part. This is not a SharePoint or deployment preview; dynamic chunks, external component modules,
             SPFx lifecycle, services, property pane, loader, and CSP behavior are not exercised.
           </span>
+        </>
+      ) : (
+        <>
+          <strong>Staged CDN bundle smoke check failed</strong>
+          <span>{state.message}</span>
+          <button type="button" onClick={onRetry}>
+            Retry
+          </button>
         </>
       )}
     </div>
@@ -139,9 +164,14 @@ function sameStrings(actual: string[], expected: string[]): boolean {
   return actual.length === expected.length && actual.every((value, index) => value === expected[index]);
 }
 
-function formatBytes(value: number): string {
-  if (value < 1024) {
-    return `${value} B`;
-  }
-  return `${(value / 1024).toFixed(1)} KiB`;
+function evidenceMatchesExpectedPrefix(evidence: CdnSmokeAssetEvidence[], expectedPaths: string[]): boolean {
+  return (
+    evidence.length <= expectedPaths.length &&
+    evidence.every((item, index) => item.path === expectedPaths[index]) &&
+    evidence.slice(0, -1).every((item) => item.status === 'loaded')
+  );
+}
+
+function terminalFailureEvidence(evidence: CdnSmokeAssetEvidence[]): CdnSmokeAssetEvidence[] {
+  return evidence.map((item) => ({ ...item, status: item.status === 'loading' ? 'failed' : item.status }));
 }

@@ -8,14 +8,20 @@ const stageDir = path.join(exportsRoot, 'hello-card-spfx', 'browser-e2e', 'stagi
 
 interface DeploymentManifest {
   releaseId: string;
-  files: Array<{ path: string; sha256: string }>;
+  files: Array<{ path: string; bytes: number; sha256: string }>;
 }
 
 interface CdnDescriptor {
   releaseId: string;
-  entryAssetPath: string;
-  entryAssetUrl: string;
-  dependencyAssets: Array<{ assetPath: string; assetUrl: string }>;
+  assets: Array<{
+    role: 'dependency' | 'entry';
+    moduleId: string;
+    assetPath: string;
+    assetUrl: string;
+    bytes: number;
+    sha256: string;
+  }>;
+  deferredResources: Array<{ moduleId: string; componentId: string; version: string }>;
 }
 
 test.describe('real staging CDN artifact', () => {
@@ -50,26 +56,34 @@ test.describe('real staging CDN artifact', () => {
     const descriptor = (await response.json()) as CdnDescriptor;
 
     const ready = preview.locator('[data-cdn-smoke-check="ready"]');
+    const packageResources = page.getByRole('region', { name: 'Package resources' });
     await expect(ready.getByText('Staged CDN bundle smoke check passed', { exact: true })).toBeVisible();
     await expect(ready).toContainText('The Lab did not invoke registered AMD factories');
     await expect(ready).toContainText('not a SharePoint or deployment preview');
-    await expect(ready).toContainText(descriptor.entryAssetPath);
+    await expect(packageResources).toContainText(descriptor.releaseId);
     await expect(frame).toHaveAttribute('data-package-mode', 'cdn');
     await expect(frame).toHaveAttribute('data-package-artifact', manifest.releaseId);
     await expect(frame.locator('.hello-card')).toHaveCount(0);
 
     expect(descriptor.releaseId).toBe(manifest.releaseId);
-    const expectedAssets = [...descriptor.dependencyAssets.map(({ assetPath }) => assetPath), descriptor.entryAssetPath];
-    expect(expectedAssets.length).toBeGreaterThan(0);
-    for (const assetPath of expectedAssets) {
-      const file = manifest.files.find((candidate) => candidate.path === assetPath);
-      expect(file, `${assetPath} is recorded in the emitted deployment manifest`).toBeDefined();
-      const assetUrl =
-        assetPath === descriptor.entryAssetPath
-          ? descriptor.entryAssetUrl
-          : descriptor.dependencyAssets.find((candidate) => candidate.assetPath === assetPath)!.assetUrl;
-      const served = assetResponses.get(new URL(assetUrl, 'http://127.0.0.1:4173').pathname);
+    expect(descriptor.assets.length).toBeGreaterThan(0);
+    for (const asset of descriptor.assets) {
+      const file = manifest.files.find((candidate) => candidate.path === asset.assetPath);
+      expect(file, `${asset.assetPath} is recorded in the emitted deployment manifest`).toBeDefined();
+      expect(asset.sha256).toBe(file!.sha256);
+      expect(asset.bytes).toBe(file!.bytes);
+      const row = packageResources.locator(`[data-asset-path="${asset.assetPath}"]`);
+      await expect(row).toContainText(asset.moduleId);
+      await expect(row).toContainText(asset.sha256);
+      await expect(row).toHaveAttribute('data-asset-status', 'loaded');
+      const served = assetResponses.get(new URL(asset.assetUrl, 'http://127.0.0.1:4173').pathname);
       expect(served).toEqual({ status: 200, etag: `"sha256-${file!.sha256}"` });
+    }
+    await expect(packageResources).toContainText(`${descriptor.assets.length}/${descriptor.assets.length} loaded`);
+    for (const resource of descriptor.deferredResources) {
+      await expect(packageResources).toContainText(resource.moduleId);
+      await expect(packageResources).toContainText(resource.componentId);
+      await expect(packageResources).toContainText(resource.version);
     }
   });
 
@@ -96,7 +110,7 @@ test.describe('real staging CDN artifact', () => {
 
       expect((await descriptorResponse).status()).toBe(409);
       const alert = preview.getByRole('alert');
-      await expect(alert.getByText('Staged CDN bundle unavailable', { exact: true })).toBeVisible();
+      await expect(alert.getByText('Staged CDN resources unavailable', { exact: true })).toBeVisible();
       await expect(alert).toContainText('missing, invalid, or incomplete');
       await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
       await expect(frame).toHaveAttribute('data-package-mode', 'cdn');

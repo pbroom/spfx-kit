@@ -12,6 +12,9 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(page.getByRole('combobox', { name: 'Select web part' })).toHaveText('Hello Card');
   await expect(page.getByRole('radio', { name: 'Standalone' })).toBeChecked();
   await expect(page.getByRole('radio', { name: 'CDN' })).not.toBeChecked();
+  const packageResources = page.getByRole('region', { name: 'Package resources' });
+  await expect(packageResources).toContainText('No staged CDN session is selected');
+  await expect(packageResources).toHaveAttribute('data-package-resource-state', 'standalone');
 
   await expect(page.getByRole('button', { name: 'Manage apps' })).toHaveCount(0);
   const appMenuButton = page.locator('button[aria-controls="app-management-sidebar"]');
@@ -52,7 +55,7 @@ test('places package mode before display mode and keeps the controls independent
 });
 
 test('checks the selected staged scripts without invoking the package or rendering the standalone adapter', async ({ page }) => {
-  const entryRequests: string[] = [];
+  const assetRequests: string[] = [];
   let releaseEntryAsset!: () => void;
   const entryAssetGate = new Promise<void>((resolve) => {
     releaseEntryAsset = resolve;
@@ -69,18 +72,51 @@ test('checks the selected staged scripts without invoking the package or renderi
           generatedAt: '2026-08-04T12:00:00.000Z',
           cdnBasePath: 'https://staging-cdn.example.com/spfx/hello-card-spfx/versions/1.2.3-test.abc123/',
           assetBaseUrl: '/api/lab-packages/cdn-assets/11111111-1111-4111-8111-111111111111/',
-          entryAssetPath: 'hello-card-web-part.js',
-          entryAssetUrl: '/api/lab-packages/cdn-assets/11111111-1111-4111-8111-111111111111/hello-card-web-part.js',
-          entryAssetBytes: 205,
-          entryAssetSha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           packagePath: 'sharepoint/solution/hello-card-spfx.staging.cdn.sppkg',
-          dependencyAssets: []
+          assets: [
+            {
+              role: 'dependency',
+              moduleId: 'WebPartStrings',
+              assetPath: 'strings-panel-proof.js',
+              assetUrl: '/api/lab-packages/cdn-assets/11111111-1111-4111-8111-111111111111/strings-panel-proof.js',
+              bytes: 97,
+              sha256: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+              stageStatus: 'allowed-and-verified'
+            },
+            {
+              role: 'entry',
+              moduleId: 'hello-card',
+              assetPath: 'hello-card-web-part.js',
+              assetUrl: '/api/lab-packages/cdn-assets/11111111-1111-4111-8111-111111111111/hello-card-web-part.js',
+              bytes: 205,
+              sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              stageStatus: 'allowed-and-verified'
+            }
+          ],
+          deferredResources: [
+            {
+              moduleId: '@microsoft/sp-webpart-base',
+              kind: 'spfx-component',
+              componentId: '974a7777-0990-4136-8fa6-95d80114c2e0',
+              version: '1.23.2',
+              status: 'deferred',
+              reason: 'sharepoint-loader-not-exercised'
+            }
+          ]
         })
       });
       return;
     }
+    if (url.pathname.endsWith('/strings-panel-proof.js')) {
+      assetRequests.push(url.pathname);
+      await route.fulfill({
+        contentType: 'text/javascript',
+        body: `define('WebPartStrings', [], function () { return {}; });`
+      });
+      return;
+    }
     if (url.pathname.endsWith('/hello-card-web-part.js')) {
-      entryRequests.push(url.pathname);
+      assetRequests.push(url.pathname);
       await entryAssetGate;
       await route.fulfill({
         contentType: 'text/javascript',
@@ -95,11 +131,24 @@ test('checks the selected staged scripts without invoking the package or renderi
 
   await page.goto('/');
   const frame = page.locator('.preview-frame');
+  const packageResources = page.getByRole('region', { name: 'Package resources' });
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
   await page.getByRole('radio', { name: 'CDN' }).click();
 
   await expect(frame.getByRole('status')).toContainText('Checking staged CDN bundle');
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
+  await expect(packageResources).toContainText('1.2.3-test.abc123');
+  await expect(packageResources.locator('[data-asset-path="strings-panel-proof.js"]')).toHaveAttribute(
+    'data-asset-status',
+    'loaded'
+  );
+  await expect(packageResources.locator('[data-asset-path="hello-card-web-part.js"]')).toHaveAttribute(
+    'data-asset-status',
+    'loading'
+  );
+  await expect(packageResources).toContainText('@microsoft/sp-webpart-base');
+  await expect(packageResources).toContainText('Deferred — SharePoint loader required');
+  await expect(packageResources).toContainText('do not imply that arbitrary npm packages are hosted on a CDN');
   releaseEntryAsset();
   const smokeCheck = frame.locator('[data-cdn-smoke-check="ready"]');
   await expect(smokeCheck.getByText('Staged CDN bundle smoke check passed', { exact: true })).toBeVisible();
@@ -108,12 +157,92 @@ test('checks the selected staged scripts without invoking the package or renderi
   await expect(frame).toHaveAttribute('data-package-mode', 'cdn');
   await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-test.abc123');
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
-  expect(entryRequests).toHaveLength(1);
+  await expect(packageResources.locator('[data-asset-path="hello-card-web-part.js"]')).toHaveAttribute(
+    'data-asset-status',
+    'loaded'
+  );
+  await expect(packageResources).toContainText('2/2 loaded');
+  expect(assetRequests).toHaveLength(2);
 
   await page.getByRole('tab', { name: 'Viewer' }).click();
   await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
   await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-test.abc123');
   await expect(frame.locator('[data-cdn-smoke-check="ready"]')).toBeVisible();
+  await expect(packageResources).toContainText('2/2 loaded');
+});
+
+test('keeps completed evidence and marks a blocked staged asset failed without falling back', async ({ page }) => {
+  await page.route('**/api/lab-packages/**', async (route) => {
+    const url = new URL(route.request().url());
+    const assetBaseUrl = '/api/lab-packages/cdn-assets/22222222-2222-4222-8222-222222222222/';
+    if (url.pathname === '/api/lab-packages/cdn') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          mode: 'cdn',
+          appId: 'hello-card-spfx',
+          releaseId: '1.2.3-blocked.1',
+          generatedAt: '2026-08-04T12:00:00.000Z',
+          cdnBasePath: 'https://staging-cdn.example.com/spfx/hello-card-spfx/versions/1.2.3-blocked.1/',
+          assetBaseUrl,
+          packagePath: 'sharepoint/solution/hello-card-spfx.staging.cdn.sppkg',
+          assets: [
+            {
+              role: 'dependency',
+              moduleId: 'WebPartStrings',
+              assetPath: 'loaded-before-failure.js',
+              assetUrl: `${assetBaseUrl}loaded-before-failure.js`,
+              bytes: 73,
+              sha256: 'c'.repeat(64),
+              stageStatus: 'allowed-and-verified'
+            },
+            {
+              role: 'entry',
+              moduleId: 'hello-card',
+              assetPath: 'blocked-entry.js',
+              assetUrl: `${assetBaseUrl}blocked-entry.js`,
+              bytes: 205,
+              sha256: 'd'.repeat(64),
+              stageStatus: 'allowed-and-verified'
+            }
+          ],
+          deferredResources: []
+        })
+      });
+      return;
+    }
+    if (url.pathname.endsWith('/loaded-before-failure.js')) {
+      await route.fulfill({
+        contentType: 'text/javascript',
+        body: `define('WebPartStrings', [], function () { return {}; });`
+      });
+      return;
+    }
+    if (url.pathname.endsWith('/blocked-entry.js')) {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'The pinned staged asset no longer matches its manifest.' })
+      });
+      return;
+    }
+    await route.abort();
+  });
+
+  await page.goto('/');
+  const frame = page.locator('.preview-frame');
+  const packageResources = page.getByRole('region', { name: 'Package resources' });
+  await page.getByRole('radio', { name: 'CDN' }).click();
+
+  await expect(frame.getByRole('alert')).toContainText('Staged CDN bundle smoke check failed');
+  await expect(packageResources.locator('[data-asset-path="loaded-before-failure.js"]')).toHaveAttribute(
+    'data-asset-status',
+    'loaded'
+  );
+  await expect(packageResources.locator('[data-asset-path="blocked-entry.js"]')).toHaveAttribute('data-asset-status', 'failed');
+  await expect(packageResources).toHaveAttribute('data-package-resource-state', 'error');
+  await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+  await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
 });
 
 test('shows a clear CDN error without falling back to the standalone package', async ({ page }) => {
@@ -129,11 +258,12 @@ test('shows a clear CDN error without falling back to the standalone package', a
   await page.getByRole('radio', { name: 'CDN' }).click();
 
   const alert = page.getByRole('alert');
-  await expect(alert).toContainText('Staged CDN bundle unavailable');
+  await expect(alert).toContainText('Staged CDN resources unavailable');
   await expect(alert).toContainText('No validated staging CDN export exists for hello-card-spfx.');
   await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
   await expect(page.locator('.preview-frame')).toHaveAttribute('data-package-mode', 'cdn');
   await expect(page.locator('.preview-frame').getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Package resources' })).toHaveAttribute('data-package-resource-state', 'error');
 
   const accessibility = await new AxeBuilder({ page })
     .include('main')

@@ -10,12 +10,19 @@ const descriptor: CdnPackageDescriptor = {
   generatedAt: '2026-08-04T12:00:00.000Z',
   cdnBasePath: 'https://cdn.contoso.example/spfx/hello-card/versions/1.0.0-20260804/',
   assetBaseUrl: sessionBase,
-  entryAssetPath: 'assets/hello-card.js',
-  entryAssetUrl: `${sessionBase}assets/hello-card.js`,
-  entryAssetBytes: 2048,
-  entryAssetSha256: digest,
   packagePath: 'sharepoint/solution/hello-card.sppkg',
-  dependencyAssets: []
+  assets: [
+    {
+      role: 'entry',
+      moduleId: 'hello-card',
+      assetPath: 'assets/hello-card.js',
+      assetUrl: `${sessionBase}assets/hello-card.js`,
+      bytes: 2048,
+      sha256: digest,
+      stageStatus: 'allowed-and-verified'
+    }
+  ],
+  deferredResources: []
 };
 
 afterEach(() => {
@@ -65,11 +72,16 @@ describe('loadCdnPackageDescriptor', () => {
     ['an invalid release id', { ...descriptor, releaseId: 'latest' }, 'releaseId is invalid'],
     ['an invalid generated time', { ...descriptor, generatedAt: 'yesterday' }, 'generatedAt is invalid'],
     ['an insecure CDN base', { ...descriptor, cdnBasePath: 'http://cdn.contoso.example/assets/' }, 'credential-free HTTPS'],
-    ['an unsafe entry path', { ...descriptor, entryAssetPath: '../entry.js' }, 'safe relative path'],
+    [
+      'an unsafe entry path',
+      { ...descriptor, assets: [{ ...descriptor.assets[0], assetPath: '../entry.js' }] },
+      'safe relative path'
+    ],
     ['an unsafe package path', { ...descriptor, packagePath: 'C:\\package.sppkg' }, 'safe relative path'],
-    ['missing entry bytes', { ...descriptor, entryAssetBytes: undefined }, 'positive integer'],
-    ['an invalid entry digest', { ...descriptor, entryAssetSha256: 'nope' }, 'lowercase SHA-256'],
-    ['missing dependencies', { ...descriptor, dependencyAssets: undefined }, 'dependencyAssets must be an array'],
+    ['missing entry bytes', { ...descriptor, assets: [{ ...descriptor.assets[0], bytes: undefined }] }, 'positive integer'],
+    ['an invalid entry digest', { ...descriptor, assets: [{ ...descriptor.assets[0], sha256: 'nope' }] }, 'lowercase SHA-256'],
+    ['missing assets', { ...descriptor, assets: undefined }, 'assets must contain'],
+    ['missing deferred resources', { ...descriptor, deferredResources: undefined }, 'deferredResources must be an array'],
     [
       'an off-origin asset base',
       { ...descriptor, assetBaseUrl: 'https://evil.example/api/lab-packages/cdn-assets/session/' },
@@ -78,8 +90,16 @@ describe('loadCdnPackageDescriptor', () => {
     ['a non-API asset base', { ...descriptor, assetBaseUrl: 'http://lab.local/assets/' }, 'Lab CDN asset API'],
     [
       'an entry outside its session',
-      { ...descriptor, entryAssetUrl: 'http://lab.local/api/lab-packages/cdn-assets/another-session/assets/hello-card.js' },
-      'does not match entryAssetPath'
+      {
+        ...descriptor,
+        assets: [
+          {
+            ...descriptor.assets[0],
+            assetUrl: 'http://lab.local/api/lab-packages/cdn-assets/another-session/assets/hello-card.js'
+          }
+        ]
+      },
+      'does not match its assetPath'
     ]
   ])('rejects %s before any staged script is loaded', async (_label, value, message) => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(value));
@@ -89,16 +109,29 @@ describe('loadCdnPackageDescriptor', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it('validates dependency paths, session URLs, sizes, and hashes', async () => {
+  it('validates ordered assets and explicitly deferred SharePoint component resources', async () => {
     const value: CdnPackageDescriptor = {
       ...descriptor,
-      dependencyAssets: [
+      assets: [
         {
+          role: 'dependency',
           moduleId: 'WebPartStrings',
           assetPath: 'strings.js',
           assetUrl: `${sessionBase}strings.js`,
           bytes: 512,
-          sha256: 'b'.repeat(64)
+          sha256: 'b'.repeat(64),
+          stageStatus: 'allowed-and-verified'
+        },
+        descriptor.assets[0]
+      ],
+      deferredResources: [
+        {
+          moduleId: '@microsoft/sp-webpart-base',
+          kind: 'spfx-component',
+          componentId: '974a7777-0990-4136-8fa6-95d80114c2e0',
+          version: '1.23.2',
+          status: 'deferred',
+          reason: 'sharepoint-loader-not-exercised'
         }
       ]
     };
@@ -106,6 +139,62 @@ describe('loadCdnPackageDescriptor', () => {
     stubBrowser(fetchMock);
 
     await expect(loadCdnPackageDescriptor('hello-card-spfx', undefined, new AbortController().signal)).resolves.toEqual(value);
+  });
+
+  it.each([
+    [
+      'an entry before a dependency',
+      {
+        ...descriptor,
+        assets: [
+          descriptor.assets[0],
+          {
+            ...descriptor.assets[0],
+            role: 'dependency',
+            moduleId: 'helper',
+            assetPath: 'helper.js',
+            assetUrl: `${sessionBase}helper.js`
+          }
+        ]
+      },
+      'entry asset must be last'
+    ],
+    ['no entry asset', { ...descriptor, assets: [{ ...descriptor.assets[0], role: 'dependency' }] }, 'exactly one entry asset'],
+    [
+      'duplicate asset paths',
+      {
+        ...descriptor,
+        assets: [{ ...descriptor.assets[0], role: 'dependency', moduleId: 'helper' }, descriptor.assets[0]]
+      },
+      'duplicate script assets'
+    ],
+    [
+      'unverified stage metadata',
+      { ...descriptor, assets: [{ ...descriptor.assets[0], stageStatus: 'pending' }] },
+      'invalid stageStatus'
+    ],
+    [
+      'forged deferred-resource semantics',
+      {
+        ...descriptor,
+        deferredResources: [
+          {
+            moduleId: 'react',
+            kind: 'npm-package',
+            componentId: 'react',
+            version: '17.0.1',
+            status: 'available',
+            reason: 'on-cdn'
+          }
+        ]
+      },
+      'invalid status metadata'
+    ]
+  ])('rejects %s', async (_label, value, message) => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(value));
+    stubBrowser(fetchMock);
+
+    await expect(loadCdnPackageDescriptor('hello-card-spfx', undefined, new AbortController().signal)).rejects.toThrow(message);
   });
 
   it('preserves abort failures from the descriptor request', async () => {

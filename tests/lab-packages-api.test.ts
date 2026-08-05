@@ -36,7 +36,9 @@ describe('Lab staging CDN runtime', () => {
 
     await expect(
       createCdnRuntimeSessionStore(workspaceRoot, { exportsRoot: '.spfx-kit/e2e-cdn-exports' }).resolveDescriptor(appId)
-    ).resolves.toMatchObject({ entryAssetPath: 'main.js' });
+    ).resolves.toMatchObject({
+      assets: expect.arrayContaining([expect.objectContaining({ role: 'entry', assetPath: 'main.js' })])
+    });
     expect(() => createCdnRuntimeSessionStore(workspaceRoot, { exportsRoot: '../outside' })).toThrow(
       'must resolve inside the workspace'
     );
@@ -66,24 +68,43 @@ describe('Lab staging CDN runtime', () => {
       generatedAt: latest.generatedAt,
       cdnBasePath: latest.cdnBasePath,
       assetBaseUrl: expect.stringMatching(/^\/api\/lab-packages\/cdn-assets\/[a-f0-9-]{36}\/$/),
-      entryAssetPath: 'main.js',
-      entryAssetUrl: expect.stringMatching(/^\/api\/lab-packages\/cdn-assets\/[a-f0-9-]{36}\/main\.js$/),
-      entryAssetBytes: 9,
-      entryAssetSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
-      dependencyAssets: [
+      assets: [
         {
+          role: 'dependency',
           moduleId: 'helper',
           assetPath: 'helper.js',
           assetUrl: expect.stringMatching(/\/helper\.js$/),
           bytes: 9,
-          sha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+          sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+          stageStatus: 'allowed-and-verified'
         },
         {
+          role: 'dependency',
           moduleId: 'labels',
           assetPath: 'labels_en-us.js',
           assetUrl: expect.stringMatching(/\/labels_en-us\.js$/),
           bytes: 16,
-          sha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+          sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+          stageStatus: 'allowed-and-verified'
+        },
+        {
+          role: 'entry',
+          moduleId: 'main',
+          assetPath: 'main.js',
+          assetUrl: expect.stringMatching(/^\/api\/lab-packages\/cdn-assets\/[a-f0-9-]{36}\/main\.js$/),
+          bytes: 9,
+          sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+          stageStatus: 'allowed-and-verified'
+        }
+      ],
+      deferredResources: [
+        {
+          moduleId: 'react',
+          kind: 'spfx-component',
+          componentId: 'react-component-id',
+          version: '17.0.1',
+          status: 'deferred',
+          reason: 'sharepoint-loader-not-exercised'
         }
       ],
       packagePath: `sharepoint/solution/${appId}.staging.cdn.sppkg`
@@ -101,7 +122,9 @@ describe('Lab staging CDN runtime', () => {
     });
     const store = createCdnRuntimeSessionStore(workspaceRoot);
     const descriptor = await store.resolveDescriptor(appId);
-    const route = parseCdnAssetRoute(descriptor.entryAssetUrl.replace('/api/lab-packages', ''));
+    const entryAsset = descriptor.assets.find((asset) => asset.role === 'entry');
+    expect(entryAsset).toBeDefined();
+    const route = parseCdnAssetRoute(entryAsset!.assetUrl.replace('/api/lab-packages', ''));
     const asset = await store.readAsset(route.sessionId, route.assetPath);
 
     expect(asset.bytes.toString('utf8')).toBe('entry();');
@@ -126,7 +149,7 @@ describe('Lab staging CDN runtime', () => {
     await expect(multiStore.resolveDescriptor(appId)).rejects.toThrow('the Lab adapter must supply a component id');
     await expect(multiStore.resolveDescriptor(appId, componentId)).resolves.toMatchObject({
       releaseId: multi.releaseId,
-      entryAssetPath: 'main.js'
+      assets: expect.arrayContaining([expect.objectContaining({ role: 'entry', assetPath: 'main.js' })])
     });
 
     const localizedWorkspace = await temporaryDirectory();
@@ -138,11 +161,10 @@ describe('Lab staging CDN runtime', () => {
       localizedEntry: true
     });
     await expect(createCdnRuntimeSessionStore(localizedWorkspace).resolveDescriptor(appId)).resolves.toMatchObject({
-      entryAssetPath: 'main_en-us.js',
-      entryAssetUrl: expect.stringMatching(/\/main_en-us\.js$/),
-      dependencyAssets: [
+      assets: [
         expect.objectContaining({ moduleId: 'helper', assetPath: 'helper.js' }),
-        expect.objectContaining({ moduleId: 'labels', assetPath: 'labels_en-us.js' })
+        expect.objectContaining({ moduleId: 'labels', assetPath: 'labels_en-us.js' }),
+        expect.objectContaining({ role: 'entry', moduleId: 'main', assetPath: 'main_en-us.js' })
       ]
     });
   });
@@ -219,7 +241,9 @@ describe('Lab staging CDN runtime', () => {
     });
     const store = createCdnRuntimeSessionStore(workspaceRoot);
     const descriptor = await store.resolveDescriptor(appId);
-    const route = parseCdnAssetRoute(descriptor.entryAssetUrl.replace('/api/lab-packages', ''));
+    const entryAsset = descriptor.assets.find((asset) => asset.role === 'entry');
+    expect(entryAsset).toBeDefined();
+    const route = parseCdnAssetRoute(entryAsset!.assetUrl.replace('/api/lab-packages', ''));
 
     const laterInvalid = await createStage(workspaceRoot, {
       exportId: 'later-invalid',

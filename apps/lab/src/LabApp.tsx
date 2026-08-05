@@ -15,7 +15,6 @@ import {
   Option,
   Radio,
   RadioGroup,
-  Spinner,
   Tab,
   TabList,
   webDarkTheme,
@@ -45,10 +44,9 @@ import {
   LabWebPartRegistry,
   SHAREPOINT_BREAKPOINTS
 } from '@spfx-kit/spfx-lab-runtime';
-import { loadCdnPackageDescriptor, type CdnPackageDescriptor } from './api/packageRuntime';
 import { registerGeneratedWebParts } from './generated/lab-registry';
 import { PropertyPane } from './components/PropertyPane';
-import { CdnSmokeCheck } from './components/CdnSmokeCheck';
+import { PackageRuntimeSurface } from './components/PackageRuntimeSurface';
 import { AddAppDrawer, AddAppMode } from './components/AddAppDrawer';
 import { ExportDrawer } from './components/ExportDrawer';
 import { AppManagementSidebar } from './components/AppManagementSidebar';
@@ -61,15 +59,9 @@ import {
   resolveInitialWebPartId,
   resolvePinnedAppId
 } from './lib/pinnedApp';
-import { cdnPackageSelectionKey, type LabPackageMode } from './lib/packageMode';
+import type { LabPackageMode } from './lib/packageMode';
 
 type PropsByWebPart = Record<string, LabPropertyBag>;
-
-type PackageRuntimeState =
-  | { status: 'standalone' }
-  | { status: 'loading' }
-  | { status: 'ready'; descriptor: CdnPackageDescriptor; selectionKey: string }
-  | { status: 'error'; message: string };
 
 const themeOptions: Array<{ label: string; value: LabThemeMode }> = [
   { label: 'Light', value: 'light' },
@@ -90,8 +82,6 @@ export function LabApp(): JSX.Element {
   const [breakpointId, setBreakpointId] = React.useState<LabBreakpoint['id']>('one-column');
   const [displayMode, setDisplayMode] = React.useState<LabDisplayMode>('edit');
   const [packageMode, setPackageMode] = React.useState<LabPackageMode>('standalone');
-  const [packageRuntime, setPackageRuntime] = React.useState<PackageRuntimeState>({ status: 'standalone' });
-  const [packageLoadAttempt, setPackageLoadAttempt] = React.useState(0);
   const [boundsVisible, setBoundsVisible] = React.useState(false);
   const [appSidebarOpen, setAppSidebarOpen] = React.useState(false);
   const [themeMode, setThemeMode] = React.useState<LabThemeMode>('light');
@@ -143,36 +133,6 @@ export function LabApp(): JSX.Element {
     window.addEventListener('keydown', handleAppCommandShortcut);
     return () => window.removeEventListener('keydown', handleAppCommandShortcut);
   }, [displayMode]);
-
-  React.useEffect(() => {
-    if (packageMode === 'standalone') {
-      setPackageRuntime({ status: 'standalone' });
-      return;
-    }
-    if (!selected) {
-      setPackageRuntime({ status: 'error', message: 'No app is selected.' });
-      return;
-    }
-
-    const controller = new AbortController();
-    const selectionKey = cdnPackageSelectionKey(selected);
-    setPackageRuntime({ status: 'loading' });
-    void loadCdnPackageDescriptor(selected.appId, selected.componentId, controller.signal)
-      .then((descriptor) => {
-        if (!controller.signal.aborted) {
-          setPackageRuntime({ status: 'ready', descriptor, selectionKey });
-        }
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) {
-          return;
-        }
-        const message = error instanceof Error ? error.message : 'The staged CDN bundle could not be checked.';
-        setPackageRuntime({ status: 'error', message });
-      });
-
-    return () => controller.abort();
-  }, [packageLoadAttempt, packageMode, selected]);
 
   const activeBreakpoint = SHAREPOINT_BREAKPOINTS.find((item) => item.id === breakpointId) || SHAREPOINT_BREAKPOINTS[0];
   const theme = createLabTheme(themeMode, customBackground);
@@ -227,12 +187,7 @@ export function LabApp(): JSX.Element {
 
   const selectPackageMode = (mode: LabPackageMode): void => {
     setPackageMode(mode);
-    setPackageRuntime(mode === 'cdn' ? { status: 'loading' } : { status: 'standalone' });
   };
-
-  const handleCdnSmokeError = React.useCallback((message: string): void => {
-    setPackageRuntime({ status: 'error', message });
-  }, []);
 
   const openAddAppDrawer = (mode: AddAppMode): void => {
     selectDisplayMode('edit');
@@ -276,13 +231,22 @@ export function LabApp(): JSX.Element {
   };
 
   const Preview = selected?.render;
-  const cdnDescriptor =
-    packageMode === 'cdn' &&
-    packageRuntime.status === 'ready' &&
-    selected &&
-    packageRuntime.selectionKey === cdnPackageSelectionKey(selected)
-      ? packageRuntime.descriptor
-      : undefined;
+  const standalonePreview =
+    selected && Preview ? (
+      <Preview
+        key={`${selected.id}:standalone`}
+        props={activeProps}
+        updateProps={displayMode === 'edit' ? updateProps : ignorePropertyUpdate}
+        lab={{
+          breakpoint: activeBreakpoint,
+          displayMode,
+          theme,
+          spfxContext: context,
+          fixtures: selected.fixtures || {},
+          boundsVisible: effectiveBoundsVisible
+        }}
+      />
+    ) : undefined;
 
   return (
     <FluentProvider theme={fluentTheme}>
@@ -435,56 +399,13 @@ export function LabApp(): JSX.Element {
             </div>
           </div>
 
-          <div className="preview-canvas">
-            <div
-              className={`preview-frame ${effectiveBoundsVisible ? 'preview-frame--bounded' : ''}`}
-              aria-busy={packageMode === 'cdn' && packageRuntime.status === 'loading'}
-              data-package-artifact={cdnDescriptor?.releaseId}
-              data-package-mode={packageMode}
-              style={{ width: `min(${activeBreakpoint.width}px, calc(100% - 48px))` }}
-            >
-              {packageMode === 'cdn' && packageRuntime.status === 'loading' ? (
-                <div className="package-runtime-state" role="status">
-                  <Spinner size="small" />
-                  <strong>Preparing staged CDN smoke check</strong>
-                  <span>Validating and pinning one local staging-CDN release.</span>
-                </div>
-              ) : packageMode === 'cdn' && packageRuntime.status === 'error' ? (
-                <div className="package-runtime-state package-runtime-state--error" role="alert">
-                  <strong>Staged CDN bundle unavailable</strong>
-                  <span>{packageRuntime.message}</span>
-                  <Button appearance="primary" size="small" onClick={() => setPackageLoadAttempt((attempt) => attempt + 1)}>
-                    Retry
-                  </Button>
-                </div>
-              ) : cdnDescriptor ? (
-                <CdnSmokeCheck
-                  key={`${selected.id}:cdn:${cdnDescriptor.releaseId}`}
-                  descriptor={cdnDescriptor}
-                  onError={handleCdnSmokeError}
-                />
-              ) : packageMode === 'standalone' && Preview ? (
-                <Preview
-                  key={`${selected.id}:standalone`}
-                  props={activeProps}
-                  updateProps={displayMode === 'edit' ? updateProps : ignorePropertyUpdate}
-                  lab={{
-                    breakpoint: activeBreakpoint,
-                    displayMode,
-                    theme,
-                    spfxContext: context,
-                    fixtures: selected.fixtures || {},
-                    boundsVisible: effectiveBoundsVisible
-                  }}
-                />
-              ) : (
-                <div className="empty-preview">
-                  <strong>No web parts registered</strong>
-                  <span>Import an SPFx app or add a lab adapter.</span>
-                </div>
-              )}
-            </div>
-          </div>
+          <PackageRuntimeSurface
+            boundsVisible={effectiveBoundsVisible}
+            frameWidth={activeBreakpoint.width}
+            mode={packageMode}
+            selected={selected}
+            standaloneContent={standalonePreview}
+          />
         </section>
 
         <aside
