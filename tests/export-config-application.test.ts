@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { copyPortableSpfxSource } from '../packages/spfx-tools/src/lib/fs.mjs';
 import { withAppliedExportConfig } from '../packages/spfx-tools/src/lib/export/config.mjs';
 import { exportCdnPackage } from '../packages/spfx-tools/src/lib/export/targets.mjs';
-import { validGifBytes, validPngBytes } from './image-fixtures';
+import { validPngBytes } from './image-fixtures';
 
 const temporaryDirectories: string[] = [];
 
@@ -69,7 +69,7 @@ describe('export configuration application', () => {
             metadata: {
               shortDescription: { default: 'Configured export description', fr: 'Description courte originale' },
               longDescription: { default: 'Configured long description', fr: 'Description longue originale' },
-              screenshotPaths: ['assets/screenshot.gif', 'https://images.configured.test/tour.jpg'],
+              screenshotPaths: ['assets/screenshot.png', 'https://images.configured.test/tour.jpg'],
               videoUrl: 'https://youtu.be/configured',
               categories: ['Collaboration', 'Productivity'],
               futureMetadata: { keep: true }
@@ -132,8 +132,8 @@ describe('export configuration application', () => {
         await expect(readFile(path.join(portableDir, 'sharepoint', 'assets', 'catalog-icon.png'))).resolves.toEqual(
           validPngBytes()
         );
-        await expect(readFile(path.join(portableDir, 'sharepoint', 'assets', 'screenshot.gif'))).resolves.toEqual(
-          validGifBytes()
+        await expect(readFile(path.join(portableDir, 'sharepoint', 'assets', 'screenshot.png'))).resolves.toEqual(
+          validPngBytes()
         );
         await expect(readJson(path.join(portableDir, 'config', 'write-manifests.json'))).resolves.toMatchObject({
           cdnBasePath: 'https://cdn.configured.test/apps/export/'
@@ -287,7 +287,7 @@ const configuredOverrides = {
   videoUrl: 'https://youtu.be/configured',
   appIcon: 'https://cdn.configured.test/icons/app.png',
   catalogIconPath: 'assets/catalog-icon.png',
-  screenshotPaths: ['assets/screenshot.gif', 'https://images.configured.test/tour.jpg'],
+  screenshotPaths: ['assets/screenshot.png', 'https://images.configured.test/tour.jpg'],
   categories: ['Collaboration', 'Productivity'],
   version: '2.4.6',
   cdnUrl: 'https://cdn.configured.test/apps/export/',
@@ -360,7 +360,7 @@ async function createFixture() {
     }),
     writeJson(path.join(appDir, '.spfx-kit', 'export-config.json'), configuredOverrides),
     writeFile(path.join(appDir, 'sharepoint', 'assets', 'catalog-icon.png'), validPngBytes()),
-    writeFile(path.join(appDir, 'sharepoint', 'assets', 'screenshot.gif'), validGifBytes())
+    writeFile(path.join(appDir, 'sharepoint', 'assets', 'screenshot.png'), validPngBytes())
   ]);
   return {
     root,

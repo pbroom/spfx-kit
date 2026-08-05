@@ -7,7 +7,7 @@ import {
   updateManagedAppExportConfig,
   validateExportConfig
 } from '../apps/lab/server/app-export-config';
-import { validGifBytes, validJpegBytes, validPngBytes } from './image-fixtures';
+import { framedCorruptGifBytes, framedCorruptJpegBytes, pngWithDimensions, validPngBytes } from './image-fixtures';
 
 const temporaryDirectories: string[] = [];
 
@@ -58,7 +58,7 @@ describe('managed app export configuration', () => {
       videoUrl: 'https://youtu.be/example',
       appIcon: 'https://cdn.example.test/icons/deployment.png',
       catalogIconPath: 'assets/catalog-icon.png',
-      screenshotPaths: ['assets/screenshot.gif', 'https://images.example.test/tour.jpg'],
+      screenshotPaths: ['assets/screenshot.png', 'https://images.example.test/tour.jpg'],
       categories: ['Collaboration', 'Productivity'],
       version: '2.4.6',
       cdnUrl: 'https://cdn.example.test/spfx/deployment/',
@@ -77,7 +77,7 @@ describe('managed app export configuration', () => {
       videoUrl: 'https://youtu.be/example',
       appIcon: 'https://cdn.example.test/icons/deployment.png',
       catalogIconPath: 'assets/catalog-icon.png',
-      screenshotPaths: ['assets/screenshot.gif', 'https://images.example.test/tour.jpg'],
+      screenshotPaths: ['assets/screenshot.png', 'https://images.example.test/tour.jpg'],
       categories: ['Collaboration', 'Productivity'],
       version: '2.4.6',
       cdnUrl: 'https://cdn.example.test/spfx/deployment/',
@@ -97,7 +97,7 @@ describe('managed app export configuration', () => {
       videoUrl: 'https://youtu.be/example',
       appIcon: 'https://cdn.example.test/icons/deployment.png',
       catalogIconPath: 'assets/catalog-icon.png',
-      screenshotPaths: ['assets/screenshot.gif', 'https://images.example.test/tour.jpg'],
+      screenshotPaths: ['assets/screenshot.png', 'https://images.example.test/tour.jpg'],
       categories: ['Collaboration', 'Productivity'],
       version: '2.4.6',
       cdnUrl: 'https://cdn.example.test/spfx/deployment/',
@@ -141,7 +141,7 @@ describe('managed app export configuration', () => {
     );
     await expect(validateExportConfig(appDir, { ...valid, categories: ['Unknown'] })).rejects.toThrow('Unsupported');
     await expect(
-      validateExportConfig(appDir, { ...valid, screenshotPaths: ['assets/screenshot.gif', 'https://img.test/screenshot.gif'] })
+      validateExportConfig(appDir, { ...valid, screenshotPaths: ['assets/screenshot.png', 'https://img.test/screenshot.png'] })
     ).rejects.toThrow('must be unique');
     await expect(validateExportConfig(appDir, { ...valid, catalogIconPath: '../catalog-icon.png' })).rejects.toThrow(
       'package-relative'
@@ -161,7 +161,7 @@ describe('managed app export configuration', () => {
     );
   });
 
-  it('accepts complete images and rejects truncated or excessive catalog image structures', async () => {
+  it('accepts decoded PNGs and rejects corrupt PNGs and unsupported local GIF/JPEG data', async () => {
     const appDir = await createFixture();
     const assetsDir = path.join(appDir, 'sharepoint', 'assets');
     const valid = {
@@ -172,7 +172,7 @@ describe('managed app export configuration', () => {
       videoUrl: '',
       appIcon: 'Page',
       catalogIconPath: 'assets/catalog-icon.png',
-      screenshotPaths: ['assets/screenshot.gif', 'assets/screenshot.jpg'],
+      screenshotPaths: ['assets/screenshot.png'],
       categories: [],
       version: '1.2.3',
       cdnUrl: '',
@@ -182,20 +182,14 @@ describe('managed app export configuration', () => {
       termsOfUseUrl: '',
       partnerId: ''
     };
-    await writeFile(path.join(assetsDir, 'screenshot.jpg'), validJpegBytes());
-
     await expect(validateExportConfig(appDir, valid)).resolves.toMatchObject({
       catalogIconPath: 'assets/catalog-icon.png',
-      screenshotPaths: ['assets/screenshot.gif', 'assets/screenshot.jpg']
+      screenshotPaths: ['assets/screenshot.png']
     });
 
     const corruptImages = [
       ['truncated-signature.png', validPngBytes().subarray(0, 8)],
-      ['truncated-body.png', validPngBytes().subarray(0, -4)],
-      ['truncated-signature.gif', validGifBytes().subarray(0, 6)],
-      ['truncated-body.gif', validGifBytes().subarray(0, -1)],
-      ['truncated-signature.jpg', validJpegBytes().subarray(0, 3)],
-      ['truncated-body.jpg', validJpegBytes().subarray(0, -2)]
+      ['truncated-body.png', validPngBytes().subarray(0, -4)]
     ] as const;
     for (const [fileName, bytes] of corruptImages) {
       await writeFile(path.join(assetsDir, fileName), bytes);
@@ -204,11 +198,20 @@ describe('managed app export configuration', () => {
       ).rejects.toThrow(/truncated|missing|invalid|corrupt/i);
     }
 
-    const excessiveGif = Buffer.from(validGifBytes());
-    excessiveGif.writeUInt16LE(8193, 6);
-    await writeFile(path.join(assetsDir, 'excessive.gif'), excessiveGif);
+    const corruptGif = framedCorruptGifBytes();
+    const corruptJpeg = framedCorruptJpegBytes();
+    expect(corruptJpeg).toHaveLength(28);
+    await writeFile(path.join(assetsDir, 'framed-corrupt.gif'), corruptGif);
+    await writeFile(path.join(assetsDir, 'framed-corrupt.jpg'), corruptJpeg);
+    for (const fileName of ['framed-corrupt.gif', 'framed-corrupt.jpg']) {
+      await expect(
+        validateExportConfig(appDir, { ...valid, catalogIconPath: '', screenshotPaths: [`assets/${fileName}`] })
+      ).rejects.toThrow('package-local image must use PNG');
+    }
+
+    await writeFile(path.join(assetsDir, 'excessive.png'), pngWithDimensions(8193, 1));
     await expect(
-      validateExportConfig(appDir, { ...valid, catalogIconPath: '', screenshotPaths: ['assets/excessive.gif'] })
+      validateExportConfig(appDir, { ...valid, catalogIconPath: '', screenshotPaths: ['assets/excessive.png'] })
     ).rejects.toThrow('dimensions');
   });
 
@@ -220,7 +223,7 @@ describe('managed app export configuration', () => {
     solution.solution.metadata = {
       shortDescription: { default: 'Source short description' },
       longDescription: { default: 'Source long description' },
-      screenshotPaths: ['assets/screenshot.gif'],
+      screenshotPaths: ['assets/screenshot.png'],
       videoUrl: 'https://vimeo.com/123',
       categories: ['Productivity']
     };
@@ -246,7 +249,7 @@ describe('managed app export configuration', () => {
       description: 'Saved legacy description',
       longDescription: 'Source long description',
       catalogIconPath: 'assets/catalog-icon.png',
-      screenshotPaths: ['assets/screenshot.gif'],
+      screenshotPaths: ['assets/screenshot.png'],
       categories: ['Productivity'],
       developerName: 'Source Org'
     });
@@ -306,7 +309,7 @@ async function createFixture(): Promise<string> {
       ]
     }),
     writeFile(path.join(appDir, 'sharepoint', 'assets', 'catalog-icon.png'), validPngBytes()),
-    writeFile(path.join(appDir, 'sharepoint', 'assets', 'screenshot.gif'), validGifBytes()),
+    writeFile(path.join(appDir, 'sharepoint', 'assets', 'screenshot.png'), validPngBytes()),
     writeFile(path.join(appDir, 'sharepoint', 'assets', 'not-an-image.png'), 'not an image')
   ]);
   return appDir;

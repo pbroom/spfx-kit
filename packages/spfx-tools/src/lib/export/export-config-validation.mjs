@@ -38,7 +38,7 @@ const catalogCategories = new Set([
   'Social',
   'Workflow & Process Management'
 ]);
-const screenshotExtensions = new Set(['.gif', '.jpeg', '.jpg', '.png']);
+const localImageExtensions = new Set(['.png']);
 const maximumImageFileBytes = 25 * 1024 * 1024;
 const maximumImageDimension = 8192;
 const maximumImagePixels = 40_000_000;
@@ -130,7 +130,7 @@ export async function validateExportConfig(appDir, value) {
       ? await resolvePackageRoot(appDir)
       : undefined;
   if (normalized.catalogIconPath) {
-    await validateLocalImage(packageRoot, normalized.catalogIconPath, 'Catalog icon', new Set(['.png']));
+    await validateLocalImage(packageRoot, normalized.catalogIconPath, 'Catalog icon', localImageExtensions);
   }
   const screenshotBasenames = new Set();
   for (const screenshotPath of normalized.screenshotPaths) {
@@ -143,7 +143,7 @@ export async function validateExportConfig(appDir, value) {
         throw new Error('Screenshot URL must identify an image file.');
       }
     } else {
-      await validateLocalImage(packageRoot, screenshotPath, 'Screenshot', screenshotExtensions);
+      await validateLocalImage(packageRoot, screenshotPath, 'Screenshot', localImageExtensions);
       basename = path.posix.basename(screenshotPath);
     }
     const normalizedBasename = basename.toLowerCase();
@@ -298,7 +298,7 @@ async function validateLocalImage(packageRoot, value, label, allowedExtensions) 
   }
   const extension = path.posix.extname(value).toLowerCase();
   if (!allowedExtensions.has(extension)) {
-    throw new Error(`${label} must use a supported image type.`);
+    throw new Error(`${label} package-local image must use PNG.`);
   }
   let current = packageRoot;
   for (const segment of value.split('/')) {
@@ -321,37 +321,21 @@ async function validateLocalImage(packageRoot, value, label, allowedExtensions) 
     throw new Error(`${label} file is too large: ${value}`);
   }
   const bytes = await readFile(current);
-  let detected;
   try {
-    detected = inspectImage(bytes);
+    inspectPng(bytes);
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Image structure validation failed.';
     throw new Error(`${label} file is corrupt or undecodable: ${value}. ${detail}`);
   }
-  const expected = extension === '.jpg' ? 'jpeg' : extension.slice(1);
-  if (detected.type !== expected) {
-    throw new Error(`${label} file contents do not match its image type: ${value}`);
-  }
-  validateImageDimensions(detected.width, detected.height, label, value);
-}
-
-function inspectImage(bytes) {
-  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
-    return inspectPng(bytes);
-  }
-  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8) {
-    return inspectJpeg(bytes);
-  }
-  if (
-    bytes.length >= 6 &&
-    (bytes.subarray(0, 6).toString('ascii') === 'GIF87a' || bytes.subarray(0, 6).toString('ascii') === 'GIF89a')
-  ) {
-    return inspectGif(bytes);
-  }
-  throw new Error('Image file has an unsupported or corrupt image structure.');
 }
 
 function inspectPng(bytes) {
+  if (
+    bytes.length < 8 ||
+    !bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  ) {
+    throw new Error('PNG signature is invalid or truncated.');
+  }
   let offset = 8;
   let header;
   let sawImageData = false;
@@ -409,7 +393,7 @@ function inspectPng(bytes) {
         throw new Error('Indexed PNG is missing its palette.');
       }
       validatePngImageData(header, Buffer.concat(imageData));
-      return { type: 'png', width: header.width, height: header.height };
+      return;
     } else if (type[0] === type[0].toUpperCase()) {
       throw new Error(`PNG contains unsupported critical chunk ${type}.`);
     } else if (sawImageData) {
@@ -487,183 +471,6 @@ function validatePngImageData(header, compressed) {
       offset += rowLength + 1;
     }
   }
-}
-
-function inspectGif(bytes) {
-  if (bytes.length < 14) {
-    throw new Error('GIF header is truncated.');
-  }
-  const width = bytes.readUInt16LE(6);
-  const height = bytes.readUInt16LE(8);
-  validateImageDimensions(width, height, 'GIF', 'image');
-  const packed = bytes[10];
-  let offset = 13;
-  if (packed & 0x80) {
-    offset += 3 * 2 ** ((packed & 0x07) + 1);
-  }
-  if (offset > bytes.length) {
-    throw new Error('GIF global color table is truncated.');
-  }
-  let sawImage = false;
-  while (offset < bytes.length) {
-    const marker = bytes[offset++];
-    if (marker === 0x3b) {
-      if (!sawImage || offset !== bytes.length) {
-        throw new Error('GIF trailer is invalid or not final.');
-      }
-      return { type: 'gif', width, height };
-    }
-    if (marker === 0x21) {
-      if (offset >= bytes.length) {
-        throw new Error('GIF extension is truncated.');
-      }
-      offset += 1;
-      offset = skipGifSubBlocks(bytes, offset, false);
-      continue;
-    }
-    if (marker !== 0x2c || offset + 9 > bytes.length) {
-      throw new Error('GIF contains an invalid or truncated block.');
-    }
-    const left = bytes.readUInt16LE(offset);
-    const top = bytes.readUInt16LE(offset + 2);
-    const imageWidth = bytes.readUInt16LE(offset + 4);
-    const imageHeight = bytes.readUInt16LE(offset + 6);
-    const imagePacked = bytes[offset + 8];
-    if (!imageWidth || !imageHeight || left + imageWidth > width || top + imageHeight > height) {
-      throw new Error('GIF image descriptor has invalid dimensions.');
-    }
-    offset += 9;
-    if (imagePacked & 0x80) {
-      offset += 3 * 2 ** ((imagePacked & 0x07) + 1);
-    }
-    if (offset >= bytes.length) {
-      throw new Error('GIF image data is truncated.');
-    }
-    const minimumCodeSize = bytes[offset++];
-    if (minimumCodeSize < 2 || minimumCodeSize > 8) {
-      throw new Error('GIF LZW code size is invalid.');
-    }
-    offset = skipGifSubBlocks(bytes, offset, true);
-    sawImage = true;
-  }
-  throw new Error('GIF is missing its final trailer.');
-}
-
-function skipGifSubBlocks(bytes, initialOffset, requireData) {
-  let offset = initialOffset;
-  let dataLength = 0;
-  while (offset < bytes.length) {
-    const length = bytes[offset++];
-    if (length === 0) {
-      if (requireData && dataLength === 0) {
-        throw new Error('GIF image data is empty.');
-      }
-      return offset;
-    }
-    if (offset + length > bytes.length) {
-      throw new Error('GIF data sub-block is truncated.');
-    }
-    dataLength += length;
-    offset += length;
-  }
-  throw new Error('GIF data sub-block terminator is missing.');
-}
-
-function inspectJpeg(bytes) {
-  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
-    throw new Error('JPEG start marker is invalid.');
-  }
-  let offset = 2;
-  let dimensions;
-  let sawScan = false;
-  while (offset < bytes.length) {
-    if (bytes[offset] !== 0xff) {
-      throw new Error('JPEG marker boundary is invalid.');
-    }
-    while (offset < bytes.length && bytes[offset] === 0xff) {
-      offset += 1;
-    }
-    if (offset >= bytes.length) {
-      throw new Error('JPEG marker is truncated.');
-    }
-    const marker = bytes[offset++];
-    if (marker === 0xd9) {
-      if (!dimensions || !sawScan || offset !== bytes.length) {
-        throw new Error('JPEG end marker is invalid or not final.');
-      }
-      return { type: 'jpeg', ...dimensions };
-    }
-    if (marker === 0x00 || marker === 0xd8 || (marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) {
-      throw new Error('JPEG contains an invalid marker sequence.');
-    }
-    if (offset + 2 > bytes.length) {
-      throw new Error('JPEG segment length is truncated.');
-    }
-    const segmentLength = bytes.readUInt16BE(offset);
-    if (segmentLength < 2 || offset + segmentLength > bytes.length) {
-      throw new Error('JPEG segment is truncated.');
-    }
-    const dataStart = offset + 2;
-    const dataEnd = offset + segmentLength;
-    if (isJpegStartOfFrame(marker)) {
-      if (segmentLength < 11) {
-        throw new Error('JPEG frame header is truncated.');
-      }
-      const precision = bytes[dataStart];
-      const height = bytes.readUInt16BE(dataStart + 1);
-      const width = bytes.readUInt16BE(dataStart + 3);
-      const components = bytes[dataStart + 5];
-      if ((precision !== 8 && precision !== 12) || components < 1 || components > 4 || segmentLength !== 8 + 3 * components) {
-        throw new Error('JPEG frame header is invalid.');
-      }
-      validateImageDimensions(width, height, 'JPEG', 'image');
-      dimensions = { width, height };
-    }
-    if (marker === 0xda) {
-      const components = bytes[dataStart];
-      if (components < 1 || components > 4 || segmentLength !== 6 + 2 * components) {
-        throw new Error('JPEG scan header is invalid.');
-      }
-    }
-    offset = dataEnd;
-    if (marker !== 0xda) {
-      continue;
-    }
-    sawScan = true;
-    let foundMarker = false;
-    while (offset < bytes.length) {
-      if (bytes[offset++] !== 0xff) {
-        continue;
-      }
-      while (offset < bytes.length && bytes[offset] === 0xff) {
-        offset += 1;
-      }
-      if (offset >= bytes.length) {
-        throw new Error('JPEG scan data is truncated.');
-      }
-      const scanMarker = bytes[offset];
-      if (scanMarker === 0x00 || (scanMarker >= 0xd0 && scanMarker <= 0xd7)) {
-        offset += 1;
-        continue;
-      }
-      offset -= 1;
-      foundMarker = true;
-      break;
-    }
-    if (!foundMarker) {
-      throw new Error('JPEG is missing its final end marker.');
-    }
-  }
-  throw new Error('JPEG is missing its final end marker.');
-}
-
-function isJpegStartOfFrame(marker) {
-  return (
-    (marker >= 0xc0 && marker <= 0xc3) ||
-    (marker >= 0xc5 && marker <= 0xc7) ||
-    (marker >= 0xc9 && marker <= 0xcb) ||
-    (marker >= 0xcd && marker <= 0xcf)
-  );
 }
 
 function validateImageDimensions(width, height, label, value) {

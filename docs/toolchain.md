@@ -53,20 +53,20 @@ an internal package. During export, SPFx Kit applies the saved values to the
 app's `config/package-solution.json`; the generated `.sppkg`, rather than the
 Lab sidecar alone, contains the resulting metadata.
 
-| App export setting           | Exported SPFx value                                                                                  |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
-| App name                     | `solution.name`; it also remains the primary web part title through the existing export overlay      |
-| Short description            | `solution.metadata.shortDescription.default`                                                         |
-| Long description             | `solution.metadata.longDescription.default`; SPFx supports HTML on the app About page                |
-| Video URL                    | `solution.metadata.videoUrl`; only YouTube and Vimeo URLs are accepted                               |
-| Screenshots                  | `solution.metadata.screenshotPaths`; at most five package-local images or non-local HTTPS image URLs |
-| App Catalog icon             | `solution.iconPath`; a package-local image path                                                      |
-| Categories                   | `solution.metadata.categories`; at most three values from Microsoft's supported category list        |
-| Developer / organization     | `solution.developer.name`                                                                            |
-| Website                      | `solution.developer.websiteUrl`                                                                      |
-| Privacy statement            | `solution.developer.privacyUrl`                                                                      |
-| Terms of use                 | `solution.developer.termsOfUseUrl`                                                                   |
-| Microsoft partner identifier | `solution.developer.mpnId`                                                                           |
+| App export setting           | Exported SPFx value                                                                                |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| App name                     | `solution.name`; it also remains the primary web part title through the existing export overlay    |
+| Short description            | `solution.metadata.shortDescription.default`                                                       |
+| Long description             | `solution.metadata.longDescription.default`; SPFx supports HTML on the app About page              |
+| Video URL                    | `solution.metadata.videoUrl`; only YouTube and Vimeo URLs are accepted                             |
+| Screenshots                  | `solution.metadata.screenshotPaths`; at most five package-local PNGs or non-local HTTPS image URLs |
+| App Catalog icon             | `solution.iconPath`; a package-local PNG path                                                      |
+| Categories                   | `solution.metadata.categories`; at most three values from Microsoft's supported category list      |
+| Developer / organization     | `solution.developer.name`                                                                          |
+| Website                      | `solution.developer.websiteUrl`                                                                    |
+| Privacy statement            | `solution.developer.privacyUrl`                                                                    |
+| Terms of use                 | `solution.developer.termsOfUseUrl`                                                                 |
+| Microsoft partner identifier | `solution.developer.mpnId`                                                                         |
 
 The previous **Description** value is not discarded or moved to a new storage
 key. Existing saved values are shown as **Short description** and also become
@@ -94,13 +94,18 @@ schema](https://developer.microsoft.com/json-schemas/spfx-build/package-solution
 
 ### Images And Paths
 
-A local App Catalog PNG icon or screenshot is relative to `paths.packageDir`,
+A local App Catalog icon or screenshot must be a PNG relative to `paths.packageDir`,
 which is `sharepoint/` by default. For example, an app can keep
 `sharepoint/images/catalog-icon.png` and save `images/catalog-icon.png` as its
 catalog icon path. Absolute filesystem paths, path traversal, missing files,
 unsupported image files, and duplicate packaged screenshot names are rejected.
+SPFx Kit fully checks each package-local PNG's chunks and checksums and decodes
+its bounded image data before accepting it. Package-local GIF and JPEG files
+are rejected because container framing alone cannot prove that their LZW or
+entropy-coded image data is renderable without adding another decoder runtime.
 
-Screenshot URLs may instead be absolute, non-local HTTPS URLs. The SPFx
+Screenshot URLs may instead be absolute, non-local HTTPS URLs. These references
+are not downloaded or presented as locally decoded images. The SPFx
 packager leaves those URLs external. It copies package-local screenshots into
 the `.sppkg` and rewrites their metadata references to packaged filenames, so
 these listing images remain package assets in both standalone and CDN export

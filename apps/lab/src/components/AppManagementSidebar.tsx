@@ -674,7 +674,7 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                   />
                 </Field>
                 <Field
-                  hint="Up to five package-directory-relative image paths or credential-free HTTPS image URLs, one per line."
+                  hint="Up to five package-directory-relative PNG paths or credential-free HTTPS image URLs, one per line."
                   label="Screenshots"
                   size="small"
                 >
