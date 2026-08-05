@@ -415,10 +415,13 @@ test('checks the selected staged scripts without invoking the package or renderi
   await expect(packageResources).toContainText('Deferred — SharePoint loader required');
   await expect(packageResources).toContainText('do not imply that arbitrary npm packages are hosted on a CDN');
   releaseEntryAsset();
-  const smokeCheck = frame.locator('[data-cdn-smoke-check="ready"]');
-  await expect(smokeCheck.getByText('Local mock-CDN smoke check passed', { exact: true })).toBeVisible();
-  await expect(smokeCheck).toContainText('The Lab did not invoke registered AMD factories');
-  await expect(smokeCheck).toContainText('not a SharePoint or deployment preview');
+  await expect(packageResources).toHaveAttribute('data-package-resource-state', 'ready');
+  await expect(page.getByText('Local mock-CDN smoke check passed', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.preview-canvas')).toBeHidden();
+  await expect(packageResources).toHaveClass(/package-dependency-panel--workspace/);
+  await expect(packageResources.locator('[role="status"].visually-hidden')).toContainText(
+    '2 of 2 staged scripts delivered by the local mock CDN.'
+  );
   await expect(frame).toHaveAttribute('data-package-mode', 'cdn');
   await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-test.abc123');
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
@@ -427,14 +430,41 @@ test('checks the selected staged scripts without invoking the package or renderi
     'loaded'
   );
   await expect(packageResources).toContainText('2/2 delivered');
+  const stagedResources = packageResources.locator('.package-resource-group--primary .package-resource-table-frame');
+  await expect(stagedResources).toBeVisible();
+  const editLayout = await Promise.all([packageResources.boundingBox(), stagedResources.boundingBox()]);
+  expect(editLayout[0]?.height).toBeGreaterThan(500);
+  expect(editLayout[1]?.height).toBeGreaterThan(180);
+  await expect.poll(() => stagedResources.evaluate((element) => getComputedStyle(element).overflowY)).toBe('auto');
+  await expect
+    .poll(() =>
+      packageResources.locator('.package-dependency-panel__body').evaluate((element) => getComputedStyle(element).overflowY)
+    )
+    .toBe('auto');
   expect(assetRequests).toHaveLength(2);
   expect(assetRequests.every((requestUrl) => new URL(requestUrl).origin === syntheticMockCdnOrigin)).toBe(true);
 
   await page.getByRole('tab', { name: 'Viewer' }).click();
   await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
   await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-test.abc123');
-  await expect(frame.locator('[data-cdn-smoke-check="ready"]')).toBeVisible();
   await expect(packageResources).toContainText('2/2 delivered');
+  await expect(page.locator('.preview-canvas')).toBeHidden();
+
+  await page.setViewportSize({ width: 520, height: 720 });
+  await expect(packageResources).toBeVisible();
+  await expect.poll(() => stagedResources.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  const stagedScroll = await stagedResources.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    return { clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, scrollTop: element.scrollTop };
+  });
+  expect(stagedScroll.scrollHeight).toBeGreaterThan(stagedScroll.clientHeight);
+  expect(stagedScroll.scrollTop).toBeGreaterThan(0);
+  const accessibility = await new AxeBuilder({ page }).include('.package-dependency-panel').analyze();
+  expect(accessibility.violations).toEqual([]);
+  await expect(page.getByRole('button', { name: 'Local CDN bucket' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Edit' }).click();
+  await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+  await expect(packageResources).toHaveClass(/package-dependency-panel--workspace/);
 });
 
 test('keeps completed evidence and marks a blocked staged asset failed without falling back', async ({ page }) => {

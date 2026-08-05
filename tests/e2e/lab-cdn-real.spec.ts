@@ -102,11 +102,11 @@ test.describe('real local mock-CDN artifact', () => {
     const descriptor = (await response.json()) as CdnDescriptor;
     await bucketDialog.getByRole('button', { name: 'Close Local CDN bucket' }).click();
 
-    const ready = preview.locator('[data-cdn-smoke-check="ready"]');
     const packageResources = page.getByRole('region', { name: 'Package resources' });
-    await expect(ready.getByText('Local mock-CDN smoke check passed', { exact: true })).toBeVisible();
-    await expect(ready).toContainText('separate local mock CDN');
-    await expect(ready).toContainText('not a SharePoint or deployment preview');
+    await expect(packageResources).toHaveAttribute('data-package-resource-state', 'ready');
+    await expect(packageResources).toHaveClass(/package-dependency-panel--workspace/);
+    await expect(page.getByText('Local mock-CDN smoke check passed', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.preview-canvas')).toBeHidden();
     await expect(packageResources).toContainText('Published and verified');
     await expect(packageResources).toContainText(mockCdnOrigin);
     await expect(packageResources).toContainText(descriptor.releaseId);
