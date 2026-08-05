@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { lstat, readFile, readdir, readlink } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
+import { promisify, TextDecoder } from 'node:util';
 import Ajv from 'ajv';
 
 const execFileAsync = promisify(execFile);
@@ -22,7 +22,13 @@ const TRUST_RUNTIME_PACKAGE_LOCK_PATH = path.join(TRUST_RUNTIME_DIRECTORY, 'pack
 const TRUST_RUNTIME_STATUS_PUBLISHER_PATH = path.join(TRUST_RUNTIME_DIRECTORY, 'publish-status.mjs');
 const TRUST_STATUS_CONTEXT = 'spfx-kit/evidence-history-v1';
 const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
+const MAX_GIT_TREE_BYTES = MAX_EVIDENCE_BYTES;
+const MAX_GIT_TREE_ENTRY_COUNT = 1_000;
 const MAX_RELEASE_SET_COUNT = 1_000;
+const MAX_FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1_000;
+const SOURCE_ONLY_EXPORT_TARGETS = Object.freeze(['source']);
+const APPLICATION_MATRIX_EXPORT_TARGETS = Object.freeze(['source', 'single', 'cdn', 'staging-cdn', 'standalone']);
+const DEPLOYABLE_EXPORT_TARGETS = Object.freeze(['single', 'cdn', 'staging-cdn', 'standalone']);
 const PROTECTED_TREE_PATHS = Object.freeze([WORKFLOW_DIRECTORY, TRUST_RUNTIME_DIRECTORY]);
 const TRUST_RUNTIME_FILE_PATHS = Object.freeze([
   TRUST_RUNTIME_NPM_CONFIG_PATH,
@@ -39,8 +45,13 @@ const AJV_RUNTIME_PACKAGE_PATHS = Object.freeze([
   'node_modules/json-schema-traverse',
   'node_modules/require-from-string'
 ]);
+const STRICT_UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
 
 const SUBJECT_KIND_BY_EVENT = new Map([
+  ['baseline-inventory', 'source'],
+  ['classification-acceptance', 'source'],
+  ['accountability-acceptance', 'source'],
+  ['decision-acceptance', 'source'],
   ['local-validation', 'source'],
   ['exact-head-ci', 'source'],
   ['local-mock-smoke', 'deployment'],
@@ -53,6 +64,12 @@ const SUBJECT_KIND_BY_EVENT = new Map([
   ['fallback-negative-case', 'deployment'],
   ['rollback-artifacts-retained', 'rollback'],
   ['rollback-drill', 'rollback']
+]);
+const PHASE_ZERO_GOVERNANCE_EVENTS = new Set([
+  'baseline-inventory',
+  'classification-acceptance',
+  'accountability-acceptance',
+  'decision-acceptance'
 ]);
 const OPERATIONAL_EVENTS = new Set([
   'remote-bytes',
@@ -76,7 +93,8 @@ function assert(condition, message) {
 }
 
 function assertBlobSize(contents, label) {
-  assert(Buffer.byteLength(contents, 'utf8') <= MAX_EVIDENCE_BYTES, `${label} exceeds the evidence size limit.`);
+  const byteLength = Buffer.isBuffer(contents) ? contents.length : Buffer.byteLength(contents, 'utf8');
+  assert(byteLength <= MAX_EVIDENCE_BYTES, `${label} exceeds the evidence size limit.`);
 }
 
 function sha256(contents) {
@@ -96,9 +114,27 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
-function parseJsonDocument(contents, label) {
+function decodeUtf8(contents, label) {
+  if (typeof contents === 'string') {
+    return contents;
+  }
   try {
-    return JSON.parse(contents);
+    return STRICT_UTF8_DECODER.decode(contents);
+  } catch (error) {
+    throw new Error(`${label} is not valid UTF-8.`, { cause: error });
+  }
+}
+
+function contentsEqual(left, right) {
+  const leftBytes = Buffer.isBuffer(left) ? left : Buffer.from(left, 'utf8');
+  const rightBytes = Buffer.isBuffer(right) ? right : Buffer.from(right, 'utf8');
+  return leftBytes.equals(rightBytes);
+}
+
+function parseJsonDocument(contents, label) {
+  const decodedContents = decodeUtf8(contents, label);
+  try {
+    return JSON.parse(decodedContents);
   } catch (error) {
     throw new Error(`${label} is not valid JSON: ${error.message}`, { cause: error });
   }
@@ -118,6 +154,39 @@ function normalizeRepositoryPath(value) {
   return value.split(path.sep).join('/');
 }
 
+async function assertLocalPathAncestors(rootDirectory, relativePath, includeLeaf = false) {
+  const normalizedPath = path.normalize(relativePath);
+  assert(
+    !path.isAbsolute(normalizedPath) && normalizedPath !== '..' && !normalizedPath.startsWith(`..${path.sep}`),
+    `Local repository path must stay inside the repository: ${relativePath}.`
+  );
+  const components = normalizedPath.split(path.sep).filter((component) => component.length > 0 && component !== '.');
+  const ancestorCount = includeLeaf ? components.length : Math.max(components.length - 1, 0);
+  let absoluteAncestor = rootDirectory;
+  for (let index = 0; index < ancestorCount; index += 1) {
+    absoluteAncestor = path.join(absoluteAncestor, components[index]);
+    const relativeAncestor = components.slice(0, index + 1).join(path.sep);
+    let stats;
+    try {
+      stats = await lstat(absoluteAncestor);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return false;
+      }
+      throw error;
+    }
+    assert(
+      !stats.isSymbolicLink(),
+      `Local repository path ancestor ${normalizeRepositoryPath(relativeAncestor)} must not be a symbolic link.`
+    );
+    assert(
+      stats.isDirectory(),
+      `Local repository path ancestor ${normalizeRepositoryPath(relativeAncestor)} must be a directory.`
+    );
+  }
+  return true;
+}
+
 function sourceRevisionKey(revision) {
   if (revision.kind === 'public-git') {
     return `public-git:${revision.repository}@${revision.commitSha}`;
@@ -135,6 +204,15 @@ function deploymentIdentityKey(deployment) {
     deployment.applicationId,
     deployment.exportTarget,
     deployment.packageArtifactId,
+    deployment.packageSha256,
+    resourceBindingKey(deployment.resourceBinding)
+  ].join(':');
+}
+
+function deploymentGenerationKey(deployment) {
+  return [
+    deployment.applicationId,
+    deployment.exportTarget,
     deployment.packageSha256,
     resourceBindingKey(deployment.resourceBinding)
   ].join(':');
@@ -271,6 +349,18 @@ function assertSubjectBinding(event, releaseSet, releaseSets, row) {
   const subject = event.proofSubject;
   const expectedKind = SUBJECT_KIND_BY_EVENT.get(event.proofEvent);
   assert(subject.kind === expectedKind, `Evidence ledger row ${row} requires a ${expectedKind} proof subject.`);
+  if (PHASE_ZERO_GOVERNANCE_EVENTS.has(event.proofEvent)) {
+    assert(event.exportTarget === 'source', `Evidence ledger row ${row} Phase 0 governance proof requires exportTarget source.`);
+    assert(
+      releaseSet.releaseSetProfile === 'source-only',
+      `Evidence ledger row ${row} Phase 0 governance proof requires a source-only release set.`
+    );
+  } else if (subject.kind !== 'source') {
+    assert(
+      releaseSet.releaseSetProfile === 'application-matrix',
+      `Evidence ledger row ${row} ${subject.kind} proof requires an application-matrix release set.`
+    );
+  }
 
   if (subject.kind === 'source') {
     assert(
@@ -341,12 +431,20 @@ function assertSubjectBinding(event, releaseSet, releaseSets, row) {
       subject.prior.exportTarget === subject.candidate.exportTarget,
       `Evidence ledger row ${row} rollback candidate and prior targets must match.`
     );
+    assert(
+      deploymentGenerationKey(subject.candidate) !== deploymentGenerationKey(subject.prior),
+      `Evidence ledger row ${row} rollback candidate and prior deployment generations must differ.`
+    );
     for (const [role, identity] of [
       ['candidate', subject.candidate],
       ['prior', subject.prior]
     ]) {
       const record = releaseSets.get(identity.releaseSetId);
       assert(record, `Evidence ledger row ${row} rollback ${role} release set is absent.`);
+      assert(
+        record.manifest.releaseSetProfile === 'application-matrix',
+        `Evidence ledger row ${row} rollback ${role} requires an application-matrix release set.`
+      );
       assertDeploymentIdentity(record.manifest, identity, `Evidence ledger row ${row} rollback ${role}`);
     }
   }
@@ -394,10 +492,14 @@ function assertPassInvariants(event, row) {
   }
 }
 
-export function validateLedgerSemantics(events, releaseSets, trustedSchemaSha256) {
+export function validateLedgerSemantics(
+  events,
+  releaseSets,
+  trustedSchemaSha256,
+  { baseLedgerRowCount = 0, validationStartedMs = Date.now() } = {}
+) {
   const byEvidenceId = new Map();
   const currentByEventKey = new Map();
-  const supersededIds = new Set();
 
   events.forEach((event, index) => {
     const row = index + 1;
@@ -471,42 +573,45 @@ export function validateLedgerSemantics(events, releaseSets, trustedSchemaSha256
       !Number.isNaN(recordedDate.valueOf()) && recordedDate.toISOString() === event.recordedUtc.replace('Z', '.000Z'),
       `Evidence ledger row ${row} has an invalid recordedUtc value.`
     );
-
-    const currentEvidenceId = currentByEventKey.get(event.eventKey);
-    if (currentEvidenceId === undefined) {
+    if (index >= baseLedgerRowCount) {
       assert(
-        event.supersedesEvidenceId === undefined,
-        `Evidence ledger row ${row} supersedes an event that is not the current row for ${event.eventKey}.`
-      );
-    } else {
-      assert(
-        event.supersedesEvidenceId === currentEvidenceId,
-        `Evidence ledger row ${row} must supersede current evidence ${currentEvidenceId}.`
+        recordedDate.valueOf() <= validationStartedMs + MAX_FUTURE_CLOCK_SKEW_MS,
+        `Evidence ledger row ${row} recordedUtc exceeds the trusted validation time by more than five minutes.`
       );
     }
 
-    if (event.supersedesEvidenceId !== undefined) {
-      const prior = byEvidenceId.get(event.supersedesEvidenceId);
-      assert(prior !== undefined, `Evidence ledger row ${row} supersedes a missing or later evidence row.`);
-      assert(prior.eventKey === event.eventKey, `Evidence ledger row ${row} cannot supersede a different event key.`);
-      assert(
-        event.recordedUtc > prior.recordedUtc,
-        `Evidence ledger row ${row} must be recorded after the evidence it supersedes.`
-      );
-      assert(
-        !supersededIds.has(event.supersedesEvidenceId),
-        `Evidence ledger row ${row} supersedes evidence that already has a correction.`
-      );
-      supersededIds.add(event.supersedesEvidenceId);
+    const currentEvidenceIds = currentByEventKey.get(event.eventKey) ?? new Set();
+    if (event.supersedesEvidenceIds !== undefined) {
+      for (const supersededEvidenceId of event.supersedesEvidenceIds) {
+        const prior = byEvidenceId.get(supersededEvidenceId);
+        assert(prior !== undefined, `Evidence ledger row ${row} supersedes a missing or later evidence row.`);
+        assert(prior.eventKey === event.eventKey, `Evidence ledger row ${row} cannot supersede a different event key.`);
+        assert(
+          event.recordedUtc > prior.recordedUtc,
+          `Evidence ledger row ${row} must be recorded after the evidence it supersedes.`
+        );
+        currentEvidenceIds.delete(supersededEvidenceId);
+      }
     }
 
     byEvidenceId.set(event.evidenceId, event);
-    currentByEventKey.set(event.eventKey, event.evidenceId);
+    currentEvidenceIds.add(event.evidenceId);
+    currentByEventKey.set(event.eventKey, currentEvidenceIds);
   });
+
+  for (const [eventKey, currentEvidenceIds] of currentByEventKey) {
+    assert(
+      currentEvidenceIds.size === 1,
+      `Evidence ledger event key ${eventKey} must have exactly one current evidence leaf; found ${currentEvidenceIds.size}.`
+    );
+  }
 }
 
 async function listLocalReleaseSetEntries(rootDirectory) {
   const absoluteDirectory = path.join(rootDirectory, RELEASE_SET_DIRECTORY);
+  if (!(await assertLocalPathAncestors(rootDirectory, RELEASE_SET_DIRECTORY, true))) {
+    return [];
+  }
   let entries;
   try {
     entries = await readdir(absoluteDirectory, { withFileTypes: true });
@@ -523,15 +628,18 @@ async function listLocalReleaseSetEntries(rootDirectory) {
     `Release-set directory contains unsupported entries: ${unsupported.map((entry) => entry.name).join(', ')}.`
   );
   assert(entries.length <= MAX_RELEASE_SET_COUNT, 'Release-set directory exceeds the manifest count limit.');
-  return Promise.all(
-    entries
-      .map((entry) => path.join(RELEASE_SET_DIRECTORY, entry.name))
-      .sort()
-      .map(async (relativePath) => ({
-        relativePath,
-        contents: await readFile(path.join(rootDirectory, relativePath), 'utf8')
-      }))
-  );
+  const localEntries = [];
+  let totalBytes = 0;
+  for (const relativePath of entries.map((entry) => path.join(RELEASE_SET_DIRECTORY, entry.name)).sort()) {
+    const entry = await readLocalFileEntry(rootDirectory, relativePath);
+    assert(entry !== undefined, `${relativePath} could not be read.`);
+    totalBytes += entry.contents.length;
+    assert(totalBytes <= MAX_GIT_TREE_BYTES, `${RELEASE_SET_DIRECTORY} exceeds the evidence byte limit.`);
+    localEntries.push(entry);
+  }
+  const nonRegular = localEntries.filter((entry) => entry.mode !== '100644').map((entry) => entry.relativePath);
+  assert(nonRegular.length === 0, `Release-set manifests must use mode 100644: ${nonRegular.join(', ')}.`);
+  return localEntries.map(({ relativePath, contents }) => ({ relativePath, contents }));
 }
 
 async function resolveGitCommit(rootDirectory, ref) {
@@ -550,7 +658,7 @@ async function readGitPath(rootDirectory, commitSha, relativePath) {
   try {
     const { stdout } = await execFileAsync('git', ['show', `${commitSha}:${normalizeRepositoryPath(relativePath)}`], {
       cwd: rootDirectory,
-      encoding: 'utf8',
+      encoding: 'buffer',
       maxBuffer: MAX_EVIDENCE_BYTES + 1
     });
     assertBlobSize(stdout, normalizeRepositoryPath(relativePath));
@@ -563,41 +671,111 @@ async function readGitPath(rootDirectory, commitSha, relativePath) {
   }
 }
 
-async function listGitTreeEntries(rootDirectory, commitSha, relativeTreePath) {
-  const { stdout } = await execFileAsync(
-    'git',
-    ['ls-tree', '-r', '-z', commitSha, '--', normalizeRepositoryPath(relativeTreePath)],
-    { cwd: rootDirectory, encoding: 'utf8', maxBuffer: MAX_EVIDENCE_BYTES + 1 }
+async function readGitBlob(rootDirectory, objectId, expectedSize, label) {
+  const { stdout } = await execFileAsync('git', ['cat-file', 'blob', objectId], {
+    cwd: rootDirectory,
+    encoding: 'buffer',
+    maxBuffer: MAX_EVIDENCE_BYTES + 1
+  });
+  assertBlobSize(stdout, label);
+  assert(stdout.length === expectedSize, `${label} Git blob size differs from its tree metadata.`);
+  return stdout;
+}
+
+function splitNullTerminatedBuffer(contents) {
+  const records = [];
+  let start = 0;
+  for (let index = 0; index < contents.length; index += 1) {
+    if (contents[index] !== 0) {
+      continue;
+    }
+    if (index > start) {
+      records.push(contents.subarray(start, index));
+    }
+    start = index + 1;
+  }
+  assert(start === contents.length, 'Protected Git tree output is not NUL-terminated.');
+  return records;
+}
+
+async function listGitTreeEntries(
+  rootDirectory,
+  commitSha,
+  relativeTreePath,
+  {
+    maxEntryCount = MAX_GIT_TREE_ENTRY_COUNT,
+    expectedEntryCount,
+    maxTotalBytes = MAX_GIT_TREE_BYTES,
+    validateMetadata = () => {}
+  } = {}
+) {
+  const normalizedTreePath = normalizeRepositoryPath(relativeTreePath);
+  const { stdout } = await execFileAsync('git', ['ls-tree', '-r', '-l', '-z', commitSha, '--', normalizedTreePath], {
+    cwd: rootDirectory,
+    encoding: 'buffer',
+    maxBuffer: MAX_EVIDENCE_BYTES + 1
+  });
+  const records = splitNullTerminatedBuffer(stdout);
+  assert(records.length <= maxEntryCount, `${normalizedTreePath} exceeds the Git tree entry count limit.`);
+  if (expectedEntryCount !== undefined) {
+    assert(
+      records.length === expectedEntryCount,
+      `${normalizedTreePath} protected tree entry count differs from trusted metadata.`
+    );
+  }
+  const metadataEntries = records.map((record) => {
+    const tabIndex = record.indexOf(0x09);
+    assert(tabIndex > 0, 'Protected Git tree has an unsupported entry.');
+    const metadata = record.subarray(0, tabIndex).toString('ascii');
+    const match = /^([0-7]{6}) ([a-z]+) ([0-9a-f]+) +([0-9]+|-)$/.exec(metadata);
+    assert(match !== null, `Protected Git tree has unsupported metadata: ${metadata}.`);
+    const [, mode, type, objectId, sizeText] = match;
+    const relativePath = decodeUtf8(record.subarray(tabIndex + 1), 'Protected Git tree path');
+    assert(type === 'blob', `Protected Git tree entry ${relativePath} must be a blob, not ${type}.`);
+    const size = Number(sizeText);
+    assert(Number.isSafeInteger(size) && size >= 0, `Protected Git tree entry ${relativePath} has an invalid blob size.`);
+    assert(size <= MAX_EVIDENCE_BYTES, `${relativePath} exceeds the evidence size limit.`);
+    return { mode, type, objectId, relativePath, size };
+  });
+  validateMetadata(metadataEntries);
+  const totalBytes = metadataEntries.reduce((total, entry) => total + entry.size, 0);
+  assert(
+    Number.isSafeInteger(totalBytes) && totalBytes <= maxTotalBytes,
+    `${normalizedTreePath} exceeds the Git tree byte limit.`
   );
-  const records = stdout.split('\0').filter(Boolean);
-  return Promise.all(
-    records.map(async (record) => {
-      const match = /^([0-7]{6}) ([a-z]+) ([0-9a-f]+)\t([^\n]+)$/.exec(record);
-      assert(match !== null, `Protected Git tree has an unsupported entry: ${record}.`);
-      const [, mode, type, , relativePath] = match;
-      assert(type === 'blob', `Protected Git tree entry ${relativePath} must be a blob, not ${type}.`);
-      const contents = await readGitPath(rootDirectory, commitSha, relativePath);
-      assert(contents !== undefined, `Protected Git tree entry ${relativePath} could not be read.`);
-      return { mode, type, relativePath, contents };
-    })
+
+  const entries = [];
+  for (const entry of metadataEntries) {
+    const contents = await readGitBlob(rootDirectory, entry.objectId, entry.size, entry.relativePath);
+    entries.push({ ...entry, contents });
+  }
+  return entries;
+}
+
+function assertExactGitFileMetadata(entries, normalizedPath) {
+  assert(entries.length === 1, `${normalizedPath} must resolve to exactly one Git file.`);
+  assert(
+    normalizeRepositoryPath(entries[0].relativePath) === normalizedPath,
+    `${normalizedPath} must resolve to exactly one Git file.`
   );
+  assert(entries[0].mode === '100644', `${normalizedPath} must use mode 100644.`);
 }
 
 async function readRegularGitFile(rootDirectory, commitSha, relativePath) {
   const normalizedPath = normalizeRepositoryPath(relativePath);
-  const entries = await listGitTreeEntries(rootDirectory, commitSha, normalizedPath);
-  assert(entries.length === 1, `${normalizedPath} must resolve to exactly one Git file.`);
+  const entries = await listGitTreeEntries(rootDirectory, commitSha, normalizedPath, {
+    maxEntryCount: 1,
+    validateMetadata: (metadataEntries) => assertExactGitFileMetadata(metadataEntries, normalizedPath)
+  });
   const [entry] = entries;
-  assert(
-    normalizeRepositoryPath(entry.relativePath) === normalizedPath,
-    `${normalizedPath} must resolve to exactly one Git file.`
-  );
-  assert(entry.mode === '100644', `${normalizedPath} must use mode 100644.`);
   return entry.contents;
 }
 
 async function listLocalTreeEntries(rootDirectory, relativeTreePath) {
   const entries = [];
+  if (!(await assertLocalPathAncestors(rootDirectory, relativeTreePath, true))) {
+    return entries;
+  }
   async function visit(relativeDirectory) {
     const absoluteDirectory = path.join(rootDirectory, relativeDirectory);
     let children;
@@ -624,11 +802,11 @@ async function listLocalTreeEntries(rootDirectory, relativeTreePath) {
       let contents;
       if (stats.isSymbolicLink()) {
         mode = '120000';
-        contents = await readlink(absolutePath);
+        contents = await readlink(absolutePath, { encoding: 'buffer' });
       } else {
         assert(stats.isFile(), `Protected local tree entry ${relativePath} must be a file.`);
         mode = stats.mode & 0o111 ? '100755' : '100644';
-        contents = await readFile(absolutePath, 'utf8');
+        contents = await readFile(absolutePath);
       }
       assertBlobSize(contents, relativePath);
       entries.push({ mode, type: 'blob', relativePath, contents });
@@ -639,18 +817,26 @@ async function listLocalTreeEntries(rootDirectory, relativeTreePath) {
 }
 
 async function readLocalFileEntry(rootDirectory, relativePath) {
+  if (!(await assertLocalPathAncestors(rootDirectory, relativePath))) {
+    return undefined;
+  }
   const absolutePath = path.join(rootDirectory, relativePath);
   try {
     const stats = await lstat(absolutePath);
     if (stats.isSymbolicLink()) {
-      return { mode: '120000', type: 'blob', relativePath, contents: await readlink(absolutePath) };
+      return {
+        mode: '120000',
+        type: 'blob',
+        relativePath,
+        contents: await readlink(absolutePath, { encoding: 'buffer' })
+      };
     }
     assert(stats.isFile(), `${relativePath} must be a file.`);
     return {
       mode: stats.mode & 0o111 ? '100755' : '100644',
       type: 'blob',
       relativePath,
-      contents: await readFile(absolutePath, 'utf8')
+      contents: await readFile(absolutePath)
     };
   } catch (error) {
     if (error.code === 'ENOENT') {
@@ -658,6 +844,13 @@ async function readLocalFileEntry(rootDirectory, relativePath) {
     }
     throw error;
   }
+}
+
+async function readRegularLocalFile(rootDirectory, relativePath) {
+  const entry = await readLocalFileEntry(rootDirectory, relativePath);
+  assert(entry !== undefined, `${relativePath} must resolve to exactly one local file.`);
+  assert(entry.mode === '100644', `${relativePath} must use mode 100644.`);
+  return entry.contents;
 }
 
 function protectedTreeFingerprint(entries) {
@@ -673,23 +866,70 @@ function protectedTreeFingerprint(entries) {
   );
 }
 
-async function readTrustState(rootDirectory, commitSha) {
+function trustEntryIdentity(entry) {
+  return {
+    mode: entry.mode,
+    type: entry.type,
+    path: normalizeRepositoryPath(entry.relativePath),
+    sha256: sha256(entry.contents)
+  };
+}
+
+function trustTreeIdentity(entries) {
+  return canonicalJson(entries.map(trustEntryIdentity));
+}
+
+function trustTreeMetadataIdentity(entries) {
+  return canonicalJson(
+    entries.map(({ mode, type, relativePath }) => ({
+      mode,
+      type,
+      path: normalizeRepositoryPath(relativePath)
+    }))
+  );
+}
+
+async function readTrustState(rootDirectory, commitSha, trustedTrees = {}) {
   const manifestEntries = commitSha
-    ? await listGitTreeEntries(rootDirectory, commitSha, TRUST_BASE_PATH)
+    ? await listGitTreeEntries(rootDirectory, commitSha, TRUST_BASE_PATH, {
+        maxEntryCount: 1,
+        validateMetadata: (metadataEntries) => {
+          if (metadataEntries.length > 0) {
+            assertExactGitFileMetadata(metadataEntries, normalizeRepositoryPath(TRUST_BASE_PATH));
+          }
+        }
+      })
     : [await readLocalFileEntry(rootDirectory, TRUST_BASE_PATH)].filter(Boolean);
   if (manifestEntries.length === 0) {
     return undefined;
   }
   assert(manifestEntries.length === 1, `${TRUST_BASE_PATH} must resolve to exactly one file.`);
+  const manifest = parseTrustManifest(manifestEntries[0].contents);
 
   const trees = {};
   for (const relativeTreePath of PROTECTED_TREE_PATHS) {
+    const trustedEntries = trustedTrees[relativeTreePath];
+    const expectedEntryCount = trustedEntries?.length ?? manifest.protectedTrees[relativeTreePath].entryCount;
     trees[relativeTreePath] = commitSha
-      ? await listGitTreeEntries(rootDirectory, commitSha, relativeTreePath)
+      ? await listGitTreeEntries(rootDirectory, commitSha, relativeTreePath, {
+          expectedEntryCount,
+          validateMetadata: (metadataEntries) => {
+            if (trustedEntries !== undefined) {
+              assert(
+                trustTreeMetadataIdentity(metadataEntries) === trustTreeMetadataIdentity(trustedEntries),
+                `${relativeTreePath} protected tree metadata differs from trusted base.`
+              );
+            }
+          }
+        })
       : await listLocalTreeEntries(rootDirectory, relativeTreePath);
   }
   const schemaEntries = commitSha
-    ? await listGitTreeEntries(rootDirectory, commitSha, SCHEMA_PATH)
+    ? await listGitTreeEntries(rootDirectory, commitSha, SCHEMA_PATH, {
+        maxEntryCount: 1,
+        expectedEntryCount: 1,
+        validateMetadata: (metadataEntries) => assertExactGitFileMetadata(metadataEntries, normalizeRepositoryPath(SCHEMA_PATH))
+      })
     : [await readLocalFileEntry(rootDirectory, SCHEMA_PATH)].filter(Boolean);
   assert(schemaEntries.length === 1, `${TRUST_BASE_PATH} requires exactly one ${SCHEMA_PATH} file.`);
   return { manifestEntry: manifestEntries[0], trees, schemaEntry: schemaEntries[0] };
@@ -743,12 +983,14 @@ function verifyTrustRuntimeTree(entries, manifest, label) {
   const files = runtimeTreeFileMap(entries);
   const contents = (relativePath) => files.get(normalizeRepositoryPath(relativePath)).contents;
   assert(
-    contents(TRUST_RUNTIME_NODE_VERSION_PATH) === `${manifest.runtime.nodeVersion}\n`,
+    contentsEqual(contents(TRUST_RUNTIME_NODE_VERSION_PATH), `${manifest.runtime.nodeVersion}\n`),
     `${label} trusted Node version file does not match ${TRUST_BASE_PATH}.`
   );
   assert(
-    contents(TRUST_RUNTIME_NPM_CONFIG_PATH) ===
-      'registry=https://registry.npmjs.org/\nengine-strict=true\nignore-scripts=true\naudit=false\nfund=false\n',
+    contentsEqual(
+      contents(TRUST_RUNTIME_NPM_CONFIG_PATH),
+      'registry=https://registry.npmjs.org/\nengine-strict=true\nignore-scripts=true\naudit=false\nfund=false\n'
+    ),
     `${label} trusted npm configuration is not the reviewed v1 configuration.`
   );
 
@@ -821,6 +1063,64 @@ function verifyTrustState(state, label) {
   return manifest;
 }
 
+function assertTrustIdentityMatches(state, trustedState, label, trustedBaseCommit) {
+  assert(
+    canonicalJson(trustEntryIdentity(state.manifestEntry)) === canonicalJson(trustEntryIdentity(trustedState.manifestEntry)),
+    `${label} ${TRUST_BASE_PATH} differs from trusted base ${trustedBaseCommit}.`
+  );
+  assert(
+    canonicalJson(trustEntryIdentity(state.schemaEntry)) === canonicalJson(trustEntryIdentity(trustedState.schemaEntry)),
+    `${label} ${SCHEMA_PATH} differs from trusted base ${trustedBaseCommit}.`
+  );
+  for (const relativeTreePath of PROTECTED_TREE_PATHS) {
+    assert(
+      trustTreeIdentity(state.trees[relativeTreePath]) === trustTreeIdentity(trustedState.trees[relativeTreePath]),
+      `${label} protected tree ${relativeTreePath} differs from trusted base ${trustedBaseCommit}.`
+    );
+  }
+  verifyTrustState(state, label);
+}
+
+async function assertGitAncestor(rootDirectory, ancestorCommit, descendantCommit, label) {
+  try {
+    await execFileAsync('git', ['merge-base', '--is-ancestor', ancestorCommit, descendantCommit], {
+      cwd: rootDirectory,
+      encoding: 'utf8'
+    });
+  } catch (error) {
+    if (error.code === 1) {
+      throw new Error(`${label} must be an ancestor of trusted base ${descendantCommit}.`, { cause: error });
+    }
+    throw new Error(`${label} ancestry could not be verified against trusted base ${descendantCommit}.`, { cause: error });
+  }
+}
+
+async function verifyAppendedValidatorIdentities(
+  rootDirectory,
+  events,
+  trustedValidatorStartRow,
+  trustedBaseCommit,
+  trustedTrustState
+) {
+  if (trustedTrustState === undefined) {
+    return;
+  }
+  const verifiedCommits = new Set();
+  for (let index = trustedValidatorStartRow; index < events.length; index += 1) {
+    const row = index + 1;
+    const claimedCommit = await resolveGitCommit(rootDirectory, events[index].validator.commitSha);
+    if (verifiedCommits.has(claimedCommit)) {
+      continue;
+    }
+    const label = `Evidence ledger row ${row} validator commit ${claimedCommit}`;
+    await assertGitAncestor(rootDirectory, claimedCommit, trustedBaseCommit, label);
+    const claimedTrustState = await readTrustState(rootDirectory, claimedCommit);
+    assert(claimedTrustState !== undefined, `${label} does not contain ${TRUST_BASE_PATH}.`);
+    assertTrustIdentityMatches(claimedTrustState, trustedTrustState, label, trustedBaseCommit);
+    verifiedCommits.add(claimedCommit);
+  }
+}
+
 async function verifyInstalledTrustRuntime(rootDirectory, manifest) {
   if (process.env.EVIDENCE_REQUIRE_ISOLATED_RUNTIME !== '1') {
     return;
@@ -853,21 +1153,24 @@ async function verifyInstalledTrustRuntime(rootDirectory, manifest) {
 }
 
 async function listGitReleaseSetEntries(rootDirectory, commitSha) {
-  const entries = (await listGitTreeEntries(rootDirectory, commitSha, RELEASE_SET_DIRECTORY)).sort((left, right) =>
-    left.relativePath.localeCompare(right.relativePath)
-  );
-  assert(entries.length <= MAX_RELEASE_SET_COUNT, 'Release-set directory exceeds the manifest count limit.');
-  const unsupported = entries.filter(
-    (entry) =>
-      path.posix.dirname(normalizeRepositoryPath(entry.relativePath)) !== normalizeRepositoryPath(RELEASE_SET_DIRECTORY) ||
-      !entry.relativePath.endsWith('.json')
-  );
-  assert(
-    unsupported.length === 0,
-    `Release-set directory contains unsupported entries: ${unsupported.map((entry) => entry.relativePath).join(', ')}.`
-  );
-  const nonRegular = entries.filter((entry) => entry.mode !== '100644').map((entry) => entry.relativePath);
-  assert(nonRegular.length === 0, `Release-set manifests must use mode 100644: ${nonRegular.join(', ')}.`);
+  const entries = (
+    await listGitTreeEntries(rootDirectory, commitSha, RELEASE_SET_DIRECTORY, {
+      maxEntryCount: MAX_RELEASE_SET_COUNT,
+      validateMetadata: (metadataEntries) => {
+        const unsupported = metadataEntries.filter(
+          (entry) =>
+            path.posix.dirname(normalizeRepositoryPath(entry.relativePath)) !== normalizeRepositoryPath(RELEASE_SET_DIRECTORY) ||
+            !entry.relativePath.endsWith('.json')
+        );
+        assert(
+          unsupported.length === 0,
+          `Release-set directory contains unsupported entries: ${unsupported.map((entry) => entry.relativePath).join(', ')}.`
+        );
+        const nonRegular = metadataEntries.filter((entry) => entry.mode !== '100644').map((entry) => entry.relativePath);
+        assert(nonRegular.length === 0, `Release-set manifests must use mode 100644: ${nonRegular.join(', ')}.`);
+      }
+    })
+  ).sort((left, right) => left.relativePath.localeCompare(right.relativePath));
   return entries.map(({ relativePath, contents }) => ({ relativePath, contents }));
 }
 
@@ -876,17 +1179,41 @@ function loadReleaseSets(entries, validateReleaseSetManifest) {
   for (const { relativePath, contents } of entries) {
     assert(contents !== undefined, `${relativePath} could not be read.`);
     assertBlobSize(contents, relativePath);
-    let manifest;
-    try {
-      manifest = JSON.parse(contents);
-    } catch (error) {
-      throw new Error(`${relativePath} is not valid JSON: ${error.message}`, { cause: error });
-    }
+    const manifest = parseJsonDocument(contents, relativePath);
     if (!validateReleaseSetManifest(manifest)) {
       throw new Error(`${relativePath} does not match schema v1: ${formatAjvErrors(validateReleaseSetManifest.errors)}`);
     }
     const expectedName = `${manifest.releaseSetId}.json`;
     assert(path.basename(relativePath) === expectedName, `${relativePath} must be named ${expectedName}.`);
+
+    const expectedExportTargets =
+      manifest.releaseSetProfile === 'source-only' ? SOURCE_ONLY_EXPORT_TARGETS : APPLICATION_MATRIX_EXPORT_TARGETS;
+    assert(
+      manifest.exportTargets.length === expectedExportTargets.length &&
+        manifest.exportTargets.every((target, index) => target === expectedExportTargets[index]),
+      `${relativePath} ${manifest.releaseSetProfile} exportTargets must be exactly ${expectedExportTargets.join(', ')}.`
+    );
+    if (manifest.releaseSetProfile === 'source-only') {
+      assert(
+        manifest.resourceManifests.length === 0 && manifest.deployments.length === 0,
+        `${relativePath} source-only release set must not contain resource manifests or deployments.`
+      );
+    } else {
+      const applicationIds = [...new Set(manifest.artifacts.map((artifact) => artifact.applicationId))];
+      for (const applicationId of applicationIds) {
+        for (const exportTarget of DEPLOYABLE_EXPORT_TARGETS) {
+          assert(
+            manifest.artifacts.some(
+              (artifact) =>
+                artifact.applicationId === applicationId &&
+                artifact.exportTarget === exportTarget &&
+                artifact.artifactKind !== 'report'
+            ),
+            `${relativePath} application-matrix application ${applicationId} requires at least one non-report artifact for ${exportTarget}.`
+          );
+        }
+      }
+    }
 
     for (const [field, key] of [
       ['uiProfiles', 'profileId'],
@@ -923,8 +1250,9 @@ export async function verifyAppendOnlyHistory(rootDirectory, baseCommit, candida
   if (!baseCommit) {
     return;
   }
-  const baseLedger = await readGitPath(rootDirectory, baseCommit, LEDGER_PATH);
-  if (baseLedger !== undefined) {
+  const baseLedgerBytes = await readGitPath(rootDirectory, baseCommit, LEDGER_PATH);
+  if (baseLedgerBytes !== undefined) {
+    const baseLedger = decodeUtf8(baseLedgerBytes, LEDGER_PATH);
     assert(
       candidate.ledgerContents.startsWith(baseLedger),
       `Evidence ledger edits or deletes rows from ${baseCommit}; corrections must append a new row.`
@@ -933,19 +1261,24 @@ export async function verifyAppendOnlyHistory(rootDirectory, baseCommit, candida
 
   const baseSchema = await readGitPath(rootDirectory, baseCommit, SCHEMA_PATH);
   if (baseSchema !== undefined) {
-    assert(candidate.schemaContents === baseSchema, `Evidence schema v1 differs from ${baseCommit}; v1 bytes are immutable.`);
+    assert(
+      contentsEqual(candidate.schemaContents, baseSchema),
+      `Evidence schema v1 differs from ${baseCommit}; v1 bytes are immutable.`
+    );
   }
 
   const baseTrustState = await readTrustState(rootDirectory, baseCommit);
   if (baseTrustState !== undefined) {
     assert(candidate.trustState !== undefined, `Candidate deletes immutable ${TRUST_BASE_PATH}.`);
     assert(
-      canonicalJson(candidate.trustState.manifestEntry) === canonicalJson(baseTrustState.manifestEntry),
+      canonicalJson(trustEntryIdentity(candidate.trustState.manifestEntry)) ===
+        canonicalJson(trustEntryIdentity(baseTrustState.manifestEntry)),
       `${TRUST_BASE_PATH} differs from ${baseCommit}; v1 trust-base bytes are immutable.`
     );
     for (const relativeTreePath of PROTECTED_TREE_PATHS) {
       assert(
-        canonicalJson(candidate.trustState.trees[relativeTreePath]) === canonicalJson(baseTrustState.trees[relativeTreePath]),
+        trustTreeIdentity(candidate.trustState.trees[relativeTreePath]) ===
+          trustTreeIdentity(baseTrustState.trees[relativeTreePath]),
         `${relativeTreePath} differs from ${baseCommit}; v1 protected tree is immutable.`
       );
     }
@@ -957,44 +1290,50 @@ export async function verifyAppendOnlyHistory(rootDirectory, baseCommit, candida
     const current = candidate.releaseSets.get(releaseSetId);
     assert(current !== undefined, `Release-set manifest ${baseManifest.relativePath} was deleted; manifests are write-once.`);
     assert(
-      current.contents === baseManifest.contents,
+      contentsEqual(current.contents, baseManifest.contents),
       `Release-set manifest ${baseManifest.relativePath} was edited; manifests are write-once.`
     );
   }
 }
 
 export async function validateShadcnEvidence({ rootDirectory, baseRef, candidateRef } = {}) {
+  const validationStartedMs = Date.now();
   const resolvedRoot = path.resolve(rootDirectory ?? process.cwd());
-  const localSchemaContents = await readFile(path.join(resolvedRoot, SCHEMA_PATH), 'utf8');
-  const localTrustState = await readTrustState(resolvedRoot);
+  let localSchemaContents;
+  let localTrustState;
   let baseCommit;
   let baseTrustState;
   let candidate;
 
   if (candidateRef) {
     assert(baseRef, '--candidate-ref requires --base-ref.');
+    localSchemaContents = await readRegularLocalFile(resolvedRoot, SCHEMA_PATH);
+    localTrustState = await readTrustState(resolvedRoot);
     baseCommit = await resolveGitCommit(resolvedRoot, baseRef);
     baseTrustState = await readTrustState(resolvedRoot, baseCommit);
     const candidateCommit = await resolveGitCommit(resolvedRoot, candidateRef);
     const baseSchemaContents = await readGitPath(resolvedRoot, baseCommit, SCHEMA_PATH);
     assert(baseSchemaContents !== undefined, `Trusted base ${baseCommit} does not contain schema v1.`);
-    assert(localSchemaContents === baseSchemaContents, 'Working tree schema is not the trusted base schema.');
-    const candidateSchemaContents = await readGitPath(resolvedRoot, candidateCommit, SCHEMA_PATH);
-    assert(candidateSchemaContents !== undefined, `Candidate ${candidateCommit} deletes schema v1.`);
-    const candidateLedger = await readRegularGitFile(resolvedRoot, candidateCommit, LEDGER_PATH);
+    assert(contentsEqual(localSchemaContents, baseSchemaContents), 'Working tree schema is not the trusted base schema.');
+    const candidateSchemaContents = await readRegularGitFile(resolvedRoot, candidateCommit, SCHEMA_PATH);
+    const candidateLedger = decodeUtf8(await readRegularGitFile(resolvedRoot, candidateCommit, LEDGER_PATH), LEDGER_PATH);
     candidate = {
       schemaContents: candidateSchemaContents,
       ledgerContents: candidateLedger,
       releaseSetEntries: await listGitReleaseSetEntries(resolvedRoot, candidateCommit),
-      trustState: await readTrustState(resolvedRoot, candidateCommit)
+      trustState: await readTrustState(resolvedRoot, candidateCommit, baseTrustState?.trees)
     };
   } else {
     baseCommit = baseRef ? await resolveGitCommit(resolvedRoot, baseRef) : undefined;
     baseTrustState = baseCommit ? await readTrustState(resolvedRoot, baseCommit) : undefined;
+    const ledgerContents = decodeUtf8(await readRegularLocalFile(resolvedRoot, LEDGER_PATH), LEDGER_PATH);
+    const releaseSetEntries = await listLocalReleaseSetEntries(resolvedRoot);
+    localSchemaContents = await readRegularLocalFile(resolvedRoot, SCHEMA_PATH);
+    localTrustState = await readTrustState(resolvedRoot);
     candidate = {
       schemaContents: localSchemaContents,
-      ledgerContents: await readFile(path.join(resolvedRoot, LEDGER_PATH), 'utf8'),
-      releaseSetEntries: await listLocalReleaseSetEntries(resolvedRoot),
+      ledgerContents,
+      releaseSetEntries,
       trustState: localTrustState
     };
   }
@@ -1008,12 +1347,14 @@ export async function validateShadcnEvidence({ rootDirectory, baseRef, candidate
     if (baseTrustState !== undefined && candidateRef) {
       assert(localTrustState !== undefined, `Checked-out trusted base is missing ${TRUST_BASE_PATH}.`);
       assert(
-        canonicalJson(localTrustState.manifestEntry) === canonicalJson(baseTrustState.manifestEntry),
+        canonicalJson(trustEntryIdentity(localTrustState.manifestEntry)) ===
+          canonicalJson(trustEntryIdentity(baseTrustState.manifestEntry)),
         `Checked-out ${TRUST_BASE_PATH} does not match trusted base ${baseCommit}.`
       );
       for (const relativeTreePath of PROTECTED_TREE_PATHS) {
         assert(
-          canonicalJson(localTrustState.trees[relativeTreePath]) === canonicalJson(baseTrustState.trees[relativeTreePath]),
+          trustTreeIdentity(localTrustState.trees[relativeTreePath]) ===
+            trustTreeIdentity(baseTrustState.trees[relativeTreePath]),
           `Checked-out ${relativeTreePath} does not match trusted base ${baseCommit}.`
         );
       }
@@ -1026,14 +1367,14 @@ export async function validateShadcnEvidence({ rootDirectory, baseRef, candidate
     const immutableBaseSchema = await readGitPath(resolvedRoot, baseCommit, SCHEMA_PATH);
     if (immutableBaseSchema !== undefined) {
       assert(
-        candidate.schemaContents === immutableBaseSchema,
+        contentsEqual(candidate.schemaContents, immutableBaseSchema),
         `Evidence schema v1 differs from ${baseCommit}; v1 bytes are immutable.`
       );
     }
   }
 
   const trustedSchemaContents = candidateRef ? await readGitPath(resolvedRoot, baseCommit, SCHEMA_PATH) : localSchemaContents;
-  const schema = JSON.parse(trustedSchemaContents);
+  const schema = parseJsonDocument(trustedSchemaContents, SCHEMA_PATH);
   const ajv = new Ajv({ allErrors: true, strict: true });
   ajv.compile(schema);
   const validateProofEvent = ajv.getSchema(`${schema.$id}#/$defs/proofEvent`);
@@ -1043,7 +1384,16 @@ export async function validateShadcnEvidence({ rootDirectory, baseRef, candidate
 
   const releaseSets = loadReleaseSets(candidate.releaseSetEntries, validateReleaseSetManifest);
   const events = parseLedger(candidate.ledgerContents, validateProofEvent);
-  validateLedgerSemantics(events, releaseSets, sha256(trustedSchemaContents));
+  const baseLedgerBytes = baseCommit ? await readGitPath(resolvedRoot, baseCommit, LEDGER_PATH) : undefined;
+  const baseLedgerRowCount =
+    baseLedgerBytes === undefined ? 0 : parseLedger(decodeUtf8(baseLedgerBytes, LEDGER_PATH), validateProofEvent).length;
+  validateLedgerSemantics(events, releaseSets, sha256(trustedSchemaContents), {
+    baseLedgerRowCount,
+    validationStartedMs
+  });
+  if (baseCommit) {
+    await verifyAppendedValidatorIdentities(resolvedRoot, events, baseLedgerRowCount, baseCommit, trustedTrustState);
+  }
   await verifyAppendOnlyHistory(resolvedRoot, baseCommit, { ...candidate, releaseSets });
   return { eventCount: events.length, releaseSetCount: releaseSets.size };
 }

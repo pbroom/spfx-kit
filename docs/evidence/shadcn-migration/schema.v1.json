@@ -294,7 +294,12 @@
           "pattern": "^[a-z0-9./:-]+$",
           "maxLength": 640
         },
-        "supersedesEvidenceId": { "$ref": "#/$defs/opaqueId" },
+        "supersedesEvidenceIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/opaqueId" }
+        },
         "releaseSetId": { "$ref": "#/$defs/opaqueId" },
         "deploymentTopologyId": { "$ref": "#/$defs/opaqueId" },
         "phaseSurface": {
@@ -321,6 +326,10 @@
         "proofSubject": { "$ref": "#/$defs/proofSubject" },
         "proofEvent": {
           "enum": [
+            "baseline-inventory",
+            "classification-acceptance",
+            "accountability-acceptance",
+            "decision-acceptance",
             "local-validation",
             "exact-head-ci",
             "local-mock-smoke",
@@ -356,6 +365,7 @@
         "schemaVersion",
         "kind",
         "releaseSetId",
+        "releaseSetProfile",
         "sourceRevisions",
         "uiProfiles",
         "exportTargets",
@@ -367,6 +377,7 @@
         "schemaVersion": { "const": 1 },
         "kind": { "const": "release-set-manifest" },
         "releaseSetId": { "$ref": "#/$defs/opaqueId" },
+        "releaseSetProfile": { "enum": ["source-only", "application-matrix"] },
         "sourceRevisions": {
           "type": "array",
           "minItems": 1,
@@ -415,7 +426,86 @@
           "type": "array",
           "items": { "$ref": "#/$defs/deploymentIdentity" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "releaseSetProfile": { "const": "source-only" } },
+            "required": ["releaseSetProfile"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "exportTargets": { "const": ["source"] } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "releaseSetProfile": { "const": "application-matrix" } },
+            "required": ["releaseSetProfile"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "exportTargets": { "const": ["source", "single", "cdn", "staging-cdn", "standalone"] },
+              "artifacts": {
+                "type": "array",
+                "allOf": [
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": ["exportTarget"],
+                      "properties": { "exportTarget": { "const": "single" } },
+                      "not": {
+                        "type": "object",
+                        "required": ["artifactKind"],
+                        "properties": { "artifactKind": { "const": "report" } }
+                      }
+                    }
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": ["exportTarget"],
+                      "properties": { "exportTarget": { "const": "cdn" } },
+                      "not": {
+                        "type": "object",
+                        "required": ["artifactKind"],
+                        "properties": { "artifactKind": { "const": "report" } }
+                      }
+                    }
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": ["exportTarget"],
+                      "properties": { "exportTarget": { "const": "staging-cdn" } },
+                      "not": {
+                        "type": "object",
+                        "required": ["artifactKind"],
+                        "properties": { "artifactKind": { "const": "report" } }
+                      }
+                    }
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": ["exportTarget"],
+                      "properties": { "exportTarget": { "const": "standalone" } },
+                      "not": {
+                        "type": "object",
+                        "required": ["artifactKind"],
+                        "properties": { "artifactKind": { "const": "report" } }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

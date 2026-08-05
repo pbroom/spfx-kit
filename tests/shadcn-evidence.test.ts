@@ -52,6 +52,8 @@ const ids = {
   priorRelease: 'rs-2222222222222222',
   evidence: 'ev-1111111111111111',
   evidenceTwo: 'ev-2222222222222222',
+  evidenceThree: 'ev-3333333333333333',
+  evidenceFour: 'ev-4444444444444444',
   topology: 'top-1111111111111111',
   environment: 'env-1111111111111111',
   subject: 'sub-1111111111111111',
@@ -59,10 +61,18 @@ const ids = {
   profile: 'prof-1111111111111111',
   package: 'art-1111111111111111',
   report: 'art-2222222222222222',
+  singlePackage: 'art-4444444444444444',
+  cdnPackage: 'art-5555555555555555',
+  standaloneArchive: 'art-6666666666666666',
+  stagingAssets: 'art-aaaaaaaaaaaaaaaa',
   resource: 'res-1111111111111111',
   resourceRelease: 'rel-1111111111111111',
   deployment: 'dep-1111111111111111',
   priorPackage: 'art-3333333333333333',
+  priorSinglePackage: 'art-7777777777777777',
+  priorCdnPackage: 'art-8888888888888888',
+  priorStandaloneArchive: 'art-9999999999999999',
+  priorStagingAssets: 'art-bbbbbbbbbbbbbbbb',
   priorResource: 'res-2222222222222222',
   priorResourceRelease: 'rel-2222222222222222',
   priorDeployment: 'dep-2222222222222222',
@@ -106,9 +116,10 @@ function releaseSet(overrides = {}) {
     schemaVersion: 1,
     kind: 'release-set-manifest',
     releaseSetId: ids.release,
+    releaseSetProfile: 'application-matrix',
     sourceRevisions: [{ kind: 'public-git', repository: 'pbroom/spfx-kit', commitSha: commitA }],
     uiProfiles: [{ profileId: ids.profile, sha256: shaA }],
-    exportTargets: ['source', 'staging-cdn'],
+    exportTargets: ['source', 'single', 'cdn', 'staging-cdn', 'standalone'],
     artifacts: [
       {
         artifactId: ids.package,
@@ -123,6 +134,27 @@ function releaseSet(overrides = {}) {
         artifactKind: 'report',
         exportTarget: 'staging-cdn',
         sha256: shaB
+      },
+      {
+        artifactId: ids.singlePackage,
+        applicationId: ids.application,
+        artifactKind: 'package',
+        exportTarget: 'single',
+        sha256: shaA
+      },
+      {
+        artifactId: ids.cdnPackage,
+        applicationId: ids.application,
+        artifactKind: 'package',
+        exportTarget: 'cdn',
+        sha256: shaB
+      },
+      {
+        artifactId: ids.standaloneArchive,
+        applicationId: ids.application,
+        artifactKind: 'archive',
+        exportTarget: 'standalone',
+        sha256: shaC
       }
     ],
     resourceManifests: [resourceBinding],
@@ -142,10 +174,42 @@ function priorReleaseSet(overrides = {}) {
         artifactKind: 'package',
         exportTarget: 'staging-cdn',
         sha256: shaC
+      },
+      {
+        artifactId: ids.priorSinglePackage,
+        applicationId: ids.application,
+        artifactKind: 'package',
+        exportTarget: 'single',
+        sha256: shaC
+      },
+      {
+        artifactId: ids.priorCdnPackage,
+        applicationId: ids.application,
+        artifactKind: 'package',
+        exportTarget: 'cdn',
+        sha256: shaC
+      },
+      {
+        artifactId: ids.priorStandaloneArchive,
+        applicationId: ids.application,
+        artifactKind: 'archive',
+        exportTarget: 'standalone',
+        sha256: shaC
       }
     ],
     resourceManifests: [priorResourceBinding],
     deployments: [priorDeploymentIdentity],
+    ...overrides
+  });
+}
+
+function sourceOnlyReleaseSet(overrides = {}) {
+  return releaseSet({
+    releaseSetProfile: 'source-only',
+    exportTargets: ['source'],
+    artifacts: [],
+    resourceManifests: [],
+    deployments: [],
     ...overrides
   });
 }
@@ -296,12 +360,63 @@ async function createFixture({ manifests = [releaseSet(), priorReleaseSet()], ev
 
 async function createTrustedFixture(options = {}) {
   const directory = await createFixture(options);
+  await installTrustedFixturePaths(directory);
+  return directory;
+}
+
+async function installTrustedFixturePaths(directory: string) {
   for (const relativePath of trustedFixturePaths) {
     const destination = path.join(directory, relativePath);
     await mkdir(path.dirname(destination), { recursive: true });
     await cp(path.join(process.cwd(), relativePath), destination);
   }
-  return directory;
+}
+
+function canonicalFixtureJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalFixtureJson).join(',')}]`;
+  }
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalFixtureJson(record[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+async function refreshFixtureTrustBindings(
+  directory: string,
+  { schema = false, protectedTrees = [] }: { schema?: boolean; protectedTrees?: string[] }
+) {
+  const trustManifestPath = path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'trust-base.v1.json');
+  const trustManifest = JSON.parse(await readFile(trustManifestPath, 'utf8'));
+  if (schema) {
+    trustManifest.schema.sha256 = createHash('sha256')
+      .update(await readFile(path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'schema.v1.json')))
+      .digest('hex');
+  }
+  for (const relativeTreePath of protectedTrees) {
+    const entries = await Promise.all(
+      trustedFixturePaths
+        .filter((relativePath) => relativePath.startsWith(`${relativeTreePath}${path.sep}`))
+        .sort()
+        .map(async (relativePath) => ({
+          mode: '100644',
+          type: 'blob',
+          path: relativePath.split(path.sep).join('/'),
+          sha256: createHash('sha256')
+            .update(await readFile(path.join(directory, relativePath)))
+            .digest('hex')
+        }))
+    );
+    trustManifest.protectedTrees[relativeTreePath] = {
+      entryCount: entries.length,
+      sha256: createHash('sha256').update(canonicalFixtureJson(entries)).digest('hex')
+    };
+  }
+  await writeFile(trustManifestPath, `${JSON.stringify(trustManifest, null, 2)}\n`);
 }
 
 async function createInstalledTrustRuntime(directory: string, versionOverrides: Record<string, string> = {}) {
@@ -393,7 +508,15 @@ async function initializeGit(directory) {
   await execFileAsync('git', ['config', 'user.email', 'evidence@example.test'], { cwd: directory });
 }
 
+const phaseZeroGovernanceEvents = [
+  'baseline-inventory',
+  'classification-acceptance',
+  'accountability-acceptance',
+  'decision-acceptance'
+];
+
 const proofEvents = [
+  ...phaseZeroGovernanceEvents,
   'local-validation',
   'exact-head-ci',
   'local-mock-smoke',
@@ -410,11 +533,134 @@ const proofEvents = [
 
 describe('shadcn migration evidence validator', () => {
   it.each(proofEvents)('accepts a correctly bound %s proof event', async (proofEventName) => {
-    const directory = await createFixture({ events: [validEvent(proofEventName)] });
+    const manifests = phaseZeroGovernanceEvents.includes(proofEventName)
+      ? [sourceOnlyReleaseSet(), priorReleaseSet()]
+      : undefined;
+    const directory = await createFixture({ events: [validEvent(proofEventName)], manifests });
     await expect(validateShadcnEvidence({ rootDirectory: directory })).resolves.toEqual({
       eventCount: 1,
       releaseSetCount: 2
     });
+  });
+
+  it.each(phaseZeroGovernanceEvents)('requires a source subject for the Phase 0 %s event', async (proofEventName) => {
+    const event = proofEvent({
+      proofEvent: proofEventName,
+      exportTarget: 'staging-cdn',
+      proofSubject: artifactSubject()
+    });
+    const directory = await createFixture({ events: [event] });
+    await expect(validateShadcnEvidence({ rootDirectory: directory })).rejects.toThrow('requires a source proof subject');
+
+    const wrongTarget = proofEvent({ proofEvent: proofEventName, exportTarget: 'staging-cdn' });
+    const wrongTargetDirectory = await createFixture({ events: [wrongTarget] });
+    await expect(validateShadcnEvidence({ rootDirectory: wrongTargetDirectory })).rejects.toThrow('requires exportTarget source');
+
+    const applicationProfileDirectory = await createFixture({ events: [validEvent(proofEventName)] });
+    await expect(validateShadcnEvidence({ rootDirectory: applicationProfileDirectory })).rejects.toThrow(
+      'requires a source-only release set'
+    );
+  });
+
+  it('keeps every required export-target artifact in one immutable release set', async () => {
+    const completeReleaseSet = releaseSet();
+    const requiredTargetArtifacts = completeReleaseSet.artifacts;
+    const directory = await createFixture({ manifests: [completeReleaseSet, priorReleaseSet()] });
+    await expect(validateShadcnEvidence({ rootDirectory: directory })).resolves.toMatchObject({ releaseSetCount: 2 });
+
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'complete release set');
+    const changedArtifacts = requiredTargetArtifacts.map((artifact) =>
+      artifact.exportTarget === 'single' ? { ...artifact, sha256: shaC } : artifact
+    );
+    const manifestPath = path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'release-sets', `${ids.release}.json`);
+    await writeFile(manifestPath, `${JSON.stringify({ ...completeReleaseSet, artifacts: changedArtifacts })}\n`);
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base })).rejects.toThrow(
+      'was edited; manifests are write-once'
+    );
+  });
+
+  it('rejects incomplete or split application matrices and non-canonical source-only sets', async () => {
+    const incompleteTargets = releaseSet({
+      exportTargets: ['source', 'single', 'cdn', 'staging-cdn'],
+      artifacts: releaseSet().artifacts.filter((artifact) => artifact.exportTarget !== 'standalone')
+    });
+    const incompleteDirectory = await createFixture({ manifests: [incompleteTargets, priorReleaseSet()] });
+    await expect(validateShadcnEvidence({ rootDirectory: incompleteDirectory })).rejects.toThrow('does not match schema v1');
+
+    const incompleteArtifacts = releaseSet({
+      artifacts: releaseSet().artifacts.filter((artifact) => artifact.exportTarget !== 'standalone')
+    });
+    const artifactDirectory = await createFixture({ manifests: [incompleteArtifacts, priorReleaseSet()] });
+    await expect(validateShadcnEvidence({ rootDirectory: artifactDirectory })).rejects.toThrow('does not match schema v1');
+
+    const reportOnlyStandalone = releaseSet({
+      artifacts: releaseSet().artifacts.map((artifact) =>
+        artifact.exportTarget === 'standalone' ? { ...artifact, artifactKind: 'report' } : artifact
+      )
+    });
+    const reportOnlyDirectory = await createFixture({ manifests: [reportOnlyStandalone, priorReleaseSet()] });
+    await expect(validateShadcnEvidence({ rootDirectory: reportOnlyDirectory })).rejects.toThrow('does not match schema v1');
+
+    const secondApplicationId = 'app-2222222222222222';
+    const crossApplicationArtifacts = releaseSet().artifacts.map((artifact) =>
+      ['single', 'cdn', 'standalone'].includes(artifact.exportTarget)
+        ? { ...artifact, applicationId: secondApplicationId }
+        : artifact
+    );
+    const crossApplicationDirectory = await createFixture({
+      manifests: [releaseSet({ artifacts: crossApplicationArtifacts }), priorReleaseSet()]
+    });
+    await expect(validateShadcnEvidence({ rootDirectory: crossApplicationDirectory })).rejects.toThrow(
+      `application ${ids.application} requires at least one non-report artifact for single`
+    );
+
+    const splitDirectory = await createFixture({
+      manifests: [
+        releaseSet({
+          exportTargets: ['source', 'single', 'cdn'],
+          artifacts: releaseSet().artifacts.filter((artifact) => ['single', 'cdn'].includes(artifact.exportTarget))
+        }),
+        priorReleaseSet({
+          exportTargets: ['source', 'staging-cdn', 'standalone'],
+          artifacts: priorReleaseSet().artifacts.filter((artifact) =>
+            ['staging-cdn', 'standalone'].includes(artifact.exportTarget)
+          )
+        })
+      ]
+    });
+    await expect(validateShadcnEvidence({ rootDirectory: splitDirectory })).rejects.toThrow('does not match schema v1');
+
+    const expandedSourceOnly = sourceOnlyReleaseSet({ exportTargets: ['source', 'single'] });
+    const sourceOnlyDirectory = await createFixture({ manifests: [expandedSourceOnly, priorReleaseSet()] });
+    await expect(validateShadcnEvidence({ rootDirectory: sourceOnlyDirectory })).rejects.toThrow('does not match schema v1');
+  });
+
+  it('prevents non-source and rollback proof from bypassing application-matrix release sets', async () => {
+    const artifactEvent = proofEvent({
+      proofEvent: 'artifact-closure',
+      exportTarget: 'source',
+      proofSubject: artifactSubject({ exportTarget: 'source' })
+    });
+    const artifactDirectory = await createFixture({
+      manifests: [sourceOnlyReleaseSet(), priorReleaseSet()],
+      events: [artifactEvent]
+    });
+    await expect(validateShadcnEvidence({ rootDirectory: artifactDirectory })).rejects.toThrow(
+      'requires an application-matrix release set'
+    );
+
+    const sourceOnlyPrior = sourceOnlyReleaseSet({
+      releaseSetId: ids.priorRelease,
+      sourceRevisions: [{ kind: 'public-git', repository: 'pbroom/spfx-kit', commitSha: commitB }]
+    });
+    const rollbackDirectory = await createFixture({
+      manifests: [releaseSet(), sourceOnlyPrior],
+      events: [validEvent('rollback-drill')]
+    });
+    await expect(validateShadcnEvidence({ rootDirectory: rollbackDirectory })).rejects.toThrow(
+      'rollback prior requires an application-matrix release set'
+    );
   });
 
   it('includes the typed subject ID in the deterministic event key', async () => {
@@ -477,6 +723,24 @@ describe('shadcn migration evidence validator', () => {
     await expect(validateShadcnEvidence({ rootDirectory: rollbackDirectory })).rejects.toThrow('exact deployment identity');
   });
 
+  it('rejects a rollback whose different release-set IDs name the same deployed generation', async () => {
+    const noOpPrior = priorReleaseSet({
+      artifacts: releaseSet().artifacts,
+      resourceManifests: releaseSet().resourceManifests,
+      deployments: releaseSet().deployments
+    });
+    const noOpRollback = rollbackSubject({
+      prior: { releaseSetId: ids.priorRelease, ...deploymentIdentity }
+    });
+    const event = proofEvent({ ...validEvent('rollback-drill'), proofSubject: noOpRollback });
+    event.eventKey = createEventKey(event);
+    const directory = await createFixture({ manifests: [releaseSet(), noOpPrior], events: [event] });
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory })).rejects.toThrow(
+      'rollback candidate and prior deployment generations must differ'
+    );
+  });
+
   it('does not allow a report digest to satisfy package proof', async () => {
     const event = proofEvent({
       ...validEvent('remote-bytes'),
@@ -506,7 +770,7 @@ describe('shadcn migration evidence validator', () => {
       proofSubject: resourceSubject({ exportTarget: 'single' })
     });
     const remoteDirectory = await createFixture({
-      manifests: [releaseSet({ exportTargets: ['source', 'single', 'staging-cdn'] }), priorReleaseSet()],
+      manifests: [releaseSet(), priorReleaseSet()],
       events: [remoteSingle]
     });
     await expect(validateShadcnEvidence({ rootDirectory: remoteDirectory })).rejects.toThrow(
@@ -521,11 +785,19 @@ describe('shadcn migration evidence validator', () => {
       sha256: shaA
     };
     const invalidSingleDeployment = { ...deploymentIdentity, exportTarget: 'single' };
+    const replacementStagingArtifact = {
+      artifactId: ids.stagingAssets,
+      applicationId: ids.application,
+      artifactKind: 'app-assets',
+      exportTarget: 'staging-cdn',
+      sha256: shaB
+    };
+    const singleArtifacts = [...releaseSet().artifacts.filter((artifact) => artifact.artifactId !== ids.package), singleArtifact];
+    singleArtifacts.push(replacementStagingArtifact);
     const singleDirectory = await createFixture({
       manifests: [
         releaseSet({
-          exportTargets: ['source', 'single'],
-          artifacts: [singleArtifact],
+          artifacts: singleArtifacts,
           deployments: [invalidSingleDeployment]
         }),
         priorReleaseSet()
@@ -536,11 +808,15 @@ describe('shadcn migration evidence validator', () => {
     );
 
     const cdnArtifact = { ...singleArtifact, exportTarget: 'cdn' };
+    const cdnArtifacts = [
+      ...releaseSet().artifacts.filter((artifact) => artifact.artifactId !== ids.package),
+      replacementStagingArtifact,
+      cdnArtifact
+    ];
     const cdnDirectory = await createFixture({
       manifests: [
         releaseSet({
-          exportTargets: ['source', 'cdn'],
-          artifacts: [cdnArtifact],
+          artifacts: cdnArtifacts,
           deployments: [{ ...deploymentIdentity, exportTarget: 'cdn', resourceBinding: null }]
         }),
         priorReleaseSet()
@@ -582,16 +858,36 @@ describe('shadcn migration evidence validator', () => {
       packageSha256: shaC,
       resourceBinding: null
     };
+    const candidateArtifacts = [
+      ...releaseSet().artifacts.filter((artifact) => artifact.artifactId !== ids.package),
+      {
+        artifactId: ids.stagingAssets,
+        applicationId: ids.application,
+        artifactKind: 'app-assets',
+        exportTarget: 'staging-cdn',
+        sha256: shaB
+      },
+      candidatePackage
+    ];
+    const priorArtifacts = [
+      ...priorReleaseSet().artifacts.filter((artifact) => artifact.artifactId !== ids.priorPackage),
+      {
+        artifactId: ids.priorStagingAssets,
+        applicationId: ids.application,
+        artifactKind: 'app-assets',
+        exportTarget: 'staging-cdn',
+        sha256: shaB
+      },
+      priorPackage
+    ];
     const manifests = [
       releaseSet({
-        exportTargets: ['source', 'single'],
-        artifacts: [candidatePackage],
+        artifacts: candidateArtifacts,
         resourceManifests: [],
         deployments: [candidateDeployment]
       }),
       priorReleaseSet({
-        exportTargets: ['source', 'single'],
-        artifacts: [priorPackage],
+        artifacts: priorArtifacts,
         resourceManifests: [],
         deployments: [priorDeployment]
       })
@@ -760,19 +1056,149 @@ describe('shadcn migration evidence validator', () => {
     }
   });
 
-  it('requires corrections to append a linear supersession chain', async () => {
+  it('requires a normal linear correction to name its one current leaf', async () => {
     const first = proofEvent();
     const correction = proofEvent({
       evidenceId: ids.evidenceTwo,
-      supersedesEvidenceId: ids.evidence,
+      supersedesEvidenceIds: [ids.evidence],
       recordedUtc: '2026-08-05T00:00:01Z'
     });
     const directory = await createFixture({ events: [first, correction] });
     await expect(validateShadcnEvidence({ rootDirectory: directory })).resolves.toMatchObject({ eventCount: 2 });
 
-    delete correction.supersedesEvidenceId;
+    delete correction.supersedesEvidenceIds;
     const invalidDirectory = await createFixture({ events: [first, correction] });
-    await expect(validateShadcnEvidence({ rootDirectory: invalidDirectory })).rejects.toThrow('must supersede current evidence');
+    await expect(validateShadcnEvidence({ rootDirectory: invalidDirectory })).rejects.toThrow(
+      'must have exactly one current evidence leaf'
+    );
+  });
+
+  it('bounds new evidence timestamps to trusted validation time plus five minutes', async () => {
+    const acceptedTimestamp = new Date(Math.floor((Date.now() + 4 * 60 * 1_000) / 1_000) * 1_000)
+      .toISOString()
+      .replace('.000Z', 'Z');
+    const acceptedDirectory = await createFixture({ events: [proofEvent({ recordedUtc: acceptedTimestamp })] });
+    await expect(validateShadcnEvidence({ rootDirectory: acceptedDirectory })).resolves.toMatchObject({ eventCount: 1 });
+
+    const rejectedTimestamp = new Date(Math.floor((Date.now() + 6 * 60 * 1_000) / 1_000) * 1_000)
+      .toISOString()
+      .replace('.000Z', 'Z');
+    const rejectedDirectory = await createFixture({ events: [proofEvent({ recordedUtc: rejectedTimestamp })] });
+    await expect(validateShadcnEvidence({ rootDirectory: rejectedDirectory })).rejects.toThrow(
+      'recordedUtc exceeds the trusted validation time by more than five minutes'
+    );
+
+    const terminalDirectory = await createFixture({
+      events: [proofEvent({ recordedUtc: '9999-12-31T23:59:59Z' })]
+    });
+    await expect(validateShadcnEvidence({ rootDirectory: terminalDirectory })).rejects.toThrow(
+      'recordedUtc exceeds the trusted validation time by more than five minutes'
+    );
+  });
+
+  it('does not retroactively apply the future-time bound to trusted base rows', async () => {
+    const directory = await createFixture({ events: [proofEvent({ recordedUtc: '9999-12-31T23:59:59Z' })] });
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'trusted historical evidence');
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base })).resolves.toMatchObject({
+      eventCount: 1
+    });
+  });
+
+  it('accepts a correction DAG whose branches share an already-superseded parent and then reconcile', async () => {
+    const a = proofEvent();
+    const b = proofEvent({
+      evidenceId: ids.evidenceTwo,
+      supersedesEvidenceIds: [ids.evidence],
+      recordedUtc: '2026-08-05T00:00:01Z'
+    });
+    const c = proofEvent({
+      evidenceId: ids.evidenceThree,
+      supersedesEvidenceIds: [ids.evidence],
+      recordedUtc: '2026-08-05T00:00:02Z'
+    });
+    const d = proofEvent({
+      evidenceId: ids.evidenceFour,
+      supersedesEvidenceIds: [ids.evidenceTwo, ids.evidenceThree],
+      recordedUtc: '2026-08-05T00:00:03Z'
+    });
+    const directory = await createFixture({ events: [a, b, c, d] });
+    await expect(validateShadcnEvidence({ rootDirectory: directory })).resolves.toMatchObject({ eventCount: 4 });
+
+    const unresolvedDirectory = await createFixture({ events: [a, b, c] });
+    await expect(validateShadcnEvidence({ rootDirectory: unresolvedDirectory })).rejects.toThrow(
+      'must have exactly one current evidence leaf; found 2'
+    );
+
+    const partialResolution = { ...d, supersedesEvidenceIds: [ids.evidenceTwo] };
+    const partialDirectory = await createFixture({ events: [a, b, c, partialResolution] });
+    await expect(validateShadcnEvidence({ rootDirectory: partialDirectory })).rejects.toThrow(
+      'must have exactly one current evidence leaf; found 2'
+    );
+  });
+
+  it('rejects missing, later, foreign, non-earlier, duplicate, empty, and singular correction IDs', async () => {
+    const first = proofEvent();
+    const missingCorrection = proofEvent({
+      evidenceId: ids.evidenceTwo,
+      supersedesEvidenceIds: [ids.evidenceThree],
+      recordedUtc: '2026-08-05T00:00:01Z'
+    });
+    const missingDirectory = await createFixture({ events: [first, missingCorrection] });
+    await expect(validateShadcnEvidence({ rootDirectory: missingDirectory })).rejects.toThrow('missing or later evidence row');
+
+    const laterEvidence = proofEvent({
+      evidenceId: ids.evidenceThree,
+      recordedUtc: '2026-08-05T00:00:02Z'
+    });
+    const laterDirectory = await createFixture({ events: [first, missingCorrection, laterEvidence] });
+    await expect(validateShadcnEvidence({ rootDirectory: laterDirectory })).rejects.toThrow('missing or later evidence row');
+
+    const foreign = proofEvent({ phaseSurface: 'phase-1' });
+    const foreignCorrection = proofEvent({
+      evidenceId: ids.evidenceTwo,
+      supersedesEvidenceIds: [ids.evidence],
+      recordedUtc: '2026-08-05T00:00:01Z'
+    });
+    const foreignDirectory = await createFixture({ events: [foreign, foreignCorrection] });
+    await expect(validateShadcnEvidence({ rootDirectory: foreignDirectory })).rejects.toThrow('different event key');
+
+    const nonEarlierCorrection = proofEvent({
+      evidenceId: ids.evidenceTwo,
+      supersedesEvidenceIds: [ids.evidence],
+      recordedUtc: '2026-08-05T00:00:00Z'
+    });
+    const nonEarlierDirectory = await createFixture({ events: [first, nonEarlierCorrection] });
+    await expect(validateShadcnEvidence({ rootDirectory: nonEarlierDirectory })).rejects.toThrow(
+      'must be recorded after the evidence it supersedes'
+    );
+
+    const duplicateCorrection = proofEvent({
+      evidenceId: ids.evidenceTwo,
+      supersedesEvidenceIds: [ids.evidence, ids.evidence],
+      recordedUtc: '2026-08-05T00:00:01Z'
+    });
+    const duplicateDirectory = await createFixture({ events: [first, duplicateCorrection] });
+    await expect(validateShadcnEvidence({ rootDirectory: duplicateDirectory })).rejects.toThrow('duplicate items');
+
+    const emptyCorrection = proofEvent({
+      evidenceId: ids.evidenceTwo,
+      supersedesEvidenceIds: [],
+      recordedUtc: '2026-08-05T00:00:01Z'
+    });
+    const emptyDirectory = await createFixture({ events: [first, emptyCorrection] });
+    await expect(validateShadcnEvidence({ rootDirectory: emptyDirectory })).rejects.toThrow('fewer than 1 items');
+
+    const singularCorrection = proofEvent({
+      evidenceId: ids.evidenceFour,
+      supersedesEvidenceId: ids.evidence,
+      recordedUtc: '2026-08-05T00:00:01Z'
+    });
+    const singularDirectory = await createFixture({ events: [first, singularCorrection] });
+    await expect(validateShadcnEvidence({ rootDirectory: singularDirectory })).rejects.toThrow(
+      'must NOT have additional properties'
+    );
   });
 
   it('rejects base ledger, release-set manifest, and schema edits', async () => {
@@ -796,12 +1222,84 @@ describe('shadcn migration evidence validator', () => {
     );
   });
 
-  it('validates a candidate ref as inert data with the base validator and schema', async () => {
+  it('rejects symlinked and executable working-tree ledgers', async () => {
+    const symlinkDirectory = await createFixture();
+    const symlinkLedgerPath = path.join(symlinkDirectory, 'docs', 'evidence', 'shadcn-migration', 'ledger.v1.jsonl');
+    await rm(symlinkLedgerPath);
+    await symlink(path.join('release-sets', `${ids.release}.json`), symlinkLedgerPath);
+    await expect(validateShadcnEvidence({ rootDirectory: symlinkDirectory })).rejects.toThrow(
+      'ledger.v1.jsonl must use mode 100644'
+    );
+
+    const modeDirectory = await createFixture();
+    const modeLedgerPath = path.join(modeDirectory, 'docs', 'evidence', 'shadcn-migration', 'ledger.v1.jsonl');
+    await chmod(modeLedgerPath, 0o755);
+    await expect(validateShadcnEvidence({ rootDirectory: modeDirectory })).rejects.toThrow(
+      'ledger.v1.jsonl must use mode 100644'
+    );
+  });
+
+  it('rejects a symlinked working-tree ledger ancestor directory', async () => {
     const directory = await createFixture();
+    const evidenceDirectory = path.join(directory, 'docs', 'evidence', 'shadcn-migration');
+    const outsideEvidenceDirectory = path.join(directory, 'outside-evidence');
+    await cp(evidenceDirectory, outsideEvidenceDirectory, { recursive: true });
+    await rm(evidenceDirectory, { recursive: true });
+    await symlink(outsideEvidenceDirectory, evidenceDirectory);
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory })).rejects.toThrow(
+      'Local repository path ancestor docs/evidence/shadcn-migration must not be a symbolic link'
+    );
+  });
+
+  it('rejects executable working-tree release-set manifests before parsing JSON', async () => {
+    const directory = await createFixture();
+    const manifestPath = path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'release-sets', `${ids.release}.json`);
+    await writeFile(manifestPath, 'not valid JSON\n');
+    await chmod(manifestPath, 0o755);
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory })).rejects.toThrow(
+      `Release-set manifests must use mode 100644: ${path.join(
+        'docs',
+        'evidence',
+        'shadcn-migration',
+        'release-sets',
+        `${ids.release}.json`
+      )}`
+    );
+  });
+
+  it('rejects a symlinked working-tree release-set ancestor directory', async () => {
+    const directory = await createFixture();
+    const releaseSetDirectory = path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'release-sets');
+    const outsideReleaseSetDirectory = path.join(directory, 'outside-release-sets');
+    await cp(releaseSetDirectory, outsideReleaseSetDirectory, { recursive: true });
+    await rm(releaseSetDirectory, { recursive: true });
+    await symlink(outsideReleaseSetDirectory, releaseSetDirectory);
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory })).rejects.toThrow(
+      'Local repository path ancestor docs/evidence/shadcn-migration/release-sets must not be a symbolic link'
+    );
+  });
+
+  it('validates a candidate ref as inert data with the base validator and schema', async () => {
+    const directory = await createTrustedFixture({ manifests: [] });
     await initializeGit(directory);
     const base = await commitAll(directory, 'base');
+    const baseRevision = { kind: 'public-git', repository: 'pbroom/spfx-kit', commitSha: base };
+    const subject = { kind: 'source', sourceRevision: baseRevision };
+    const event = proofEvent({
+      sourceRevision: baseRevision,
+      validator: { ...proofEvent().validator, commitSha: base },
+      proofSubject: { ...subject, subjectId: createProofSubjectId(subject) }
+    });
+    const evidenceDirectory = path.join(directory, 'docs', 'evidence', 'shadcn-migration');
+    await writeFile(
+      path.join(evidenceDirectory, 'release-sets', `${ids.release}.json`),
+      `${JSON.stringify(releaseSet({ sourceRevisions: [baseRevision] }))}\n`
+    );
     const ledgerPath = path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'ledger.v1.jsonl');
-    await writeFile(ledgerPath, `${JSON.stringify(proofEvent())}\n`);
+    await writeFile(ledgerPath, `${JSON.stringify(event)}\n`);
     const candidate = await commitAll(directory, 'candidate evidence');
 
     await expect(
@@ -814,7 +1312,228 @@ describe('shadcn migration evidence validator', () => {
     await writeFile(schemaPath, schemaBytes);
     await expect(
       validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: schemaCandidate })
-    ).rejects.toThrow('v1 bytes are immutable');
+    ).rejects.toThrow('schema.v1.json differs from docs/evidence/shadcn-migration/trust-base.v1.json');
+  });
+
+  it('compares trusted schema Git blobs as raw bytes', async () => {
+    const directory = await createTrustedFixture({ manifests: [] });
+    const schemaPath = path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'schema.v1.json');
+    const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
+    schema.title = `${schema.title} \uFFFD`;
+    const trustedSchemaBytes = Buffer.from(`${JSON.stringify(schema, null, 2)}\n`);
+    await writeFile(schemaPath, trustedSchemaBytes);
+    await refreshFixtureTrustBindings(directory, { schema: true });
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'trusted schema with replacement character');
+
+    const replacementOffset = trustedSchemaBytes.indexOf(Buffer.from('\uFFFD'));
+    expect(replacementOffset).toBeGreaterThanOrEqual(0);
+    await writeFile(
+      schemaPath,
+      Buffer.concat([
+        trustedSchemaBytes.subarray(0, replacementOffset),
+        Buffer.from([0x80]),
+        trustedSchemaBytes.subarray(replacementOffset + Buffer.byteLength('\uFFFD'))
+      ])
+    );
+    const candidate = await commitAll(directory, 'replace trusted schema character with invalid byte');
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', base], { cwd: directory });
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: candidate })).rejects.toThrow(
+      'schema.v1.json differs from docs/evidence/shadcn-migration/trust-base.v1.json'
+    );
+  });
+
+  it('rejects an oversized candidate schema from Git metadata before loading its blob', async () => {
+    const directory = await createFixture({ manifests: [] });
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'trusted schema base');
+    const schemaPath = path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'schema.v1.json');
+    await writeFile(schemaPath, Buffer.alloc(10 * 1024 * 1024 + 1, 0x61));
+    const candidate = await commitAll(directory, 'oversized candidate schema');
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', base], { cwd: directory });
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: candidate })).rejects.toThrow(
+      'docs/evidence/shadcn-migration/schema.v1.json exceeds the evidence size limit'
+    );
+  });
+
+  it('hashes protected Git tree contents as raw bytes', async () => {
+    const directory = await createTrustedFixture({ manifests: [] });
+    const workflowPath = path.join(directory, '.github', 'workflows', 'ci.yml');
+    const trustedWorkflowBytes = Buffer.concat([await readFile(workflowPath), Buffer.from('\n# raw-byte marker: \uFFFD\n')]);
+    await writeFile(workflowPath, trustedWorkflowBytes);
+    await refreshFixtureTrustBindings(directory, { protectedTrees: [path.join('.github', 'workflows')] });
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'trusted workflow with replacement character');
+
+    const replacementOffset = trustedWorkflowBytes.indexOf(Buffer.from('\uFFFD'));
+    expect(replacementOffset).toBeGreaterThanOrEqual(0);
+    await writeFile(
+      workflowPath,
+      Buffer.concat([
+        trustedWorkflowBytes.subarray(0, replacementOffset),
+        Buffer.from([0x80]),
+        trustedWorkflowBytes.subarray(replacementOffset + Buffer.byteLength('\uFFFD'))
+      ])
+    );
+    const candidate = await commitAll(directory, 'replace trusted workflow character with invalid byte');
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', base], { cwd: directory });
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: candidate })).rejects.toThrow(
+      'protected tree .github/workflows does not match docs/evidence/shadcn-migration/trust-base.v1.json'
+    );
+  });
+
+  it('rejects a non-UTF-8 trust manifest before JSON semantics', async () => {
+    const directory = await createTrustedFixture({ manifests: [] });
+    const trustManifestPath = path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'trust-base.v1.json');
+    const trustManifestBytes = await readFile(trustManifestPath);
+    const statusContextOffset = trustManifestBytes.indexOf(Buffer.from('spfx-kit/evidence-history-v1'));
+    expect(statusContextOffset).toBeGreaterThanOrEqual(0);
+    trustManifestBytes[statusContextOffset] = 0x80;
+    await writeFile(trustManifestPath, trustManifestBytes);
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory })).rejects.toThrow('trust-base.v1.json is not valid UTF-8');
+  });
+
+  it('rejects a validator identity that is not an ancestor of the trusted base', async () => {
+    const directory = await createTrustedFixture({ manifests: [] });
+    await initializeGit(directory);
+    const bootstrap = await commitAll(directory, 'trusted bootstrap');
+    await writeFile(path.join(directory, 'sibling.txt'), 'sibling validator line\n');
+    const siblingValidator = await commitAll(directory, 'sibling validator');
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', bootstrap], { cwd: directory });
+    await writeFile(path.join(directory, 'main.txt'), 'trusted base line\n');
+    const base = await commitAll(directory, 'trusted base');
+    const baseRevision = { kind: 'public-git', repository: 'pbroom/spfx-kit', commitSha: base };
+    const wrongValidatorRevision = {
+      kind: 'public-git',
+      repository: 'pbroom/spfx-kit',
+      commitSha: siblingValidator
+    };
+    const subject = { kind: 'source', sourceRevision: baseRevision };
+    const event = proofEvent({
+      sourceRevision: baseRevision,
+      validator: { ...proofEvent().validator, commitSha: siblingValidator },
+      proofSubject: { ...subject, subjectId: createProofSubjectId(subject) }
+    });
+    const evidenceDirectory = path.join(directory, 'docs', 'evidence', 'shadcn-migration');
+    await writeFile(
+      path.join(evidenceDirectory, 'release-sets', `${ids.release}.json`),
+      `${JSON.stringify(releaseSet({ sourceRevisions: [baseRevision, wrongValidatorRevision] }))}\n`
+    );
+    await writeFile(path.join(evidenceDirectory, 'ledger.v1.jsonl'), `${JSON.stringify(event)}\n`);
+    const candidate = await commitAll(directory, 'candidate evidence with wrong validator commit');
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: candidate })).rejects.toThrow(
+      `must be an ancestor of trusted base ${base}`
+    );
+  });
+
+  it('rejects an ancestor validator identity that predates the trust base', async () => {
+    const directory = await createFixture({ manifests: [] });
+    await initializeGit(directory);
+    const preTrustValidator = await commitAll(directory, 'validator before trust-base bootstrap');
+    await installTrustedFixturePaths(directory);
+    const base = await commitAll(directory, 'trusted bootstrap');
+
+    const baseRevision = { kind: 'public-git', repository: 'pbroom/spfx-kit', commitSha: base };
+    const preTrustValidatorRevision = {
+      kind: 'public-git',
+      repository: 'pbroom/spfx-kit',
+      commitSha: preTrustValidator
+    };
+    const subject = { kind: 'source', sourceRevision: baseRevision };
+    const event = proofEvent({
+      sourceRevision: baseRevision,
+      validator: { ...proofEvent().validator, commitSha: preTrustValidator },
+      proofSubject: { ...subject, subjectId: createProofSubjectId(subject) }
+    });
+    const evidenceDirectory = path.join(directory, 'docs', 'evidence', 'shadcn-migration');
+    await writeFile(
+      path.join(evidenceDirectory, 'release-sets', `${ids.release}.json`),
+      `${JSON.stringify(sourceOnlyReleaseSet({ sourceRevisions: [baseRevision, preTrustValidatorRevision] }))}\n`
+    );
+    await writeFile(path.join(evidenceDirectory, 'ledger.v1.jsonl'), `${JSON.stringify(event)}\n`);
+    const candidate = await commitAll(directory, 'candidate evidence with pre-trust validator identity');
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', base], { cwd: directory });
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: candidate })).rejects.toThrow(
+      `validator commit ${preTrustValidator} does not contain docs/evidence/shadcn-migration/trust-base.v1.json`
+    );
+  });
+
+  it('keeps a stable validator identity across an unrelated base advance and correction', async () => {
+    const directory = await createTrustedFixture({ manifests: [] });
+    await initializeGit(directory);
+    const validatorCommit = await commitAll(directory, 'trusted validator bootstrap');
+    const validatorRevision = { kind: 'public-git', repository: 'pbroom/spfx-kit', commitSha: validatorCommit };
+    const subject = { kind: 'source', sourceRevision: validatorRevision };
+    const firstEvent = proofEvent({
+      sourceRevision: validatorRevision,
+      validator: { ...proofEvent().validator, commitSha: validatorCommit },
+      proofSubject: { ...subject, subjectId: createProofSubjectId(subject) }
+    });
+    const evidenceDirectory = path.join(directory, 'docs', 'evidence', 'shadcn-migration');
+    await writeFile(
+      path.join(evidenceDirectory, 'release-sets', `${ids.release}.json`),
+      `${JSON.stringify(sourceOnlyReleaseSet({ sourceRevisions: [validatorRevision] }))}\n`
+    );
+    await writeFile(path.join(evidenceDirectory, 'ledger.v1.jsonl'), `${JSON.stringify(firstEvent)}\n`);
+    await commitAll(directory, 'first release set and evidence row');
+
+    await writeFile(path.join(directory, 'docs', 'unrelated.md'), 'unrelated main advance\n');
+    const advancedBase = await commitAll(directory, 'unrelated main advance');
+    const correction = proofEvent({
+      evidenceId: ids.evidenceTwo,
+      sourceRevision: validatorRevision,
+      validator: { ...proofEvent().validator, commitSha: validatorCommit },
+      proofSubject: { ...subject, subjectId: createProofSubjectId(subject) },
+      recordedUtc: '2026-08-05T00:00:01Z',
+      supersedesEvidenceIds: [firstEvent.evidenceId]
+    });
+    await writeFile(
+      path.join(evidenceDirectory, 'ledger.v1.jsonl'),
+      `${JSON.stringify(firstEvent)}\n${JSON.stringify(correction)}\n`
+    );
+    const candidate = await commitAll(directory, 'correct evidence with stable validator');
+
+    await expect(
+      validateShadcnEvidence({ rootDirectory: directory, baseRef: advancedBase, candidateRef: candidate })
+    ).resolves.toEqual({ eventCount: 2, releaseSetCount: 1 });
+  });
+
+  it('rejects an ancestor validator identity with different protected trust state', async () => {
+    const directory = await createTrustedFixture({ manifests: [] });
+    await initializeGit(directory);
+    await commitAll(directory, 'trusted validator bootstrap');
+    const validatorPath = path.join(directory, '.github', 'evidence-trust', 'v1', 'validate-shadcn-evidence.mjs');
+    const trustedValidatorBytes = await readFile(validatorPath, 'utf8');
+    await writeFile(validatorPath, `${trustedValidatorBytes}\n// untrusted validator drift\n`);
+    const driftedValidator = await commitAll(directory, 'drift validator trust state');
+    await writeFile(validatorPath, trustedValidatorBytes);
+    const base = await commitAll(directory, 'restore trusted validator state');
+
+    const baseRevision = { kind: 'public-git', repository: 'pbroom/spfx-kit', commitSha: base };
+    const validatorRevision = { kind: 'public-git', repository: 'pbroom/spfx-kit', commitSha: driftedValidator };
+    const subject = { kind: 'source', sourceRevision: baseRevision };
+    const event = proofEvent({
+      sourceRevision: baseRevision,
+      validator: { ...proofEvent().validator, commitSha: driftedValidator },
+      proofSubject: { ...subject, subjectId: createProofSubjectId(subject) }
+    });
+    const evidenceDirectory = path.join(directory, 'docs', 'evidence', 'shadcn-migration');
+    await writeFile(
+      path.join(evidenceDirectory, 'release-sets', `${ids.release}.json`),
+      `${JSON.stringify(releaseSet({ sourceRevisions: [baseRevision, validatorRevision] }))}\n`
+    );
+    await writeFile(path.join(evidenceDirectory, 'ledger.v1.jsonl'), `${JSON.stringify(event)}\n`);
+    const candidate = await commitAll(directory, 'candidate evidence with drifted validator identity');
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: candidate })).rejects.toThrow(
+      'protected tree .github/evidence-trust/v1 differs from trusted base'
+    );
   });
 
   it('rejects symlinked release-set manifests and candidate ledgers', async () => {
@@ -899,6 +1618,52 @@ describe('shadcn migration evidence validator', () => {
 
     await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: candidate })).rejects.toThrow(
       /protected tree|trust-base/
+    );
+  });
+
+  it('rejects a protected-tree count mismatch before loading an oversized candidate blob', async () => {
+    const directory = await createTrustedFixture();
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'trusted base');
+    const oversizedWorkflow = path.join(directory, '.github', 'workflows', 'oversized.yml');
+    await writeFile(oversizedWorkflow, Buffer.alloc(10 * 1024 * 1024 + 1, 0x61));
+    const candidate = await commitAll(directory, 'add oversized protected workflow');
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', base], { cwd: directory });
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: candidate })).rejects.toThrow(
+      '.github/workflows protected tree entry count differs from trusted metadata'
+    );
+  });
+
+  it('rejects the release-set entry count before loading an oversized candidate blob', async () => {
+    const directory = await createFixture({ manifests: [] });
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'base without release sets');
+    const releaseSetDirectory = path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'release-sets');
+    for (let index = 0; index <= 1_000; index += 1) {
+      await writeFile(path.join(releaseSetDirectory, `candidate-${index.toString().padStart(4, '0')}.json`), '{}\n');
+    }
+    await writeFile(path.join(releaseSetDirectory, 'candidate-0000.json'), Buffer.alloc(10 * 1024 * 1024 + 1, 0x61));
+    const candidate = await commitAll(directory, 'add too many candidate release sets');
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', base], { cwd: directory });
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: candidate })).rejects.toThrow(
+      'docs/evidence/shadcn-migration/release-sets exceeds the Git tree entry count limit'
+    );
+  });
+
+  it('rejects aggregate candidate release-set bytes before loading manifest contents', async () => {
+    const directory = await createFixture({ manifests: [] });
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'base without release sets');
+    const releaseSetDirectory = path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'release-sets');
+    await writeFile(path.join(releaseSetDirectory, 'candidate-a.json'), Buffer.alloc(6 * 1024 * 1024, 0x61));
+    await writeFile(path.join(releaseSetDirectory, 'candidate-b.json'), Buffer.alloc(6 * 1024 * 1024, 0x62));
+    const candidate = await commitAll(directory, 'add oversized aggregate release-set tree');
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', base], { cwd: directory });
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: candidate })).rejects.toThrow(
+      'docs/evidence/shadcn-migration/release-sets exceeds the Git tree byte limit'
     );
   });
 
@@ -1148,7 +1913,7 @@ describe('shadcn migration evidence validator', () => {
     expect(checkout.uses).toBe('actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1');
     expect(checkout.with).toEqual({
       ref: '${{ github.event.pull_request.base.sha }}',
-      'fetch-depth': 1,
+      'fetch-depth': 0,
       'persist-credentials': false
     });
 

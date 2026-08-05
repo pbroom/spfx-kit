@@ -5,16 +5,16 @@
   "protectedTrees": {
     ".github/workflows": {
       "entryCount": 3,
-      "sha256": "388e1acd287153250006c0fab8b118757484af059ee8b1086593df1b0f35cf13"
+      "sha256": "973755b1fa749a4c937573e02e3d3f8fc1dac33ce20e43fc65a5fbb451e0082b"
     },
     ".github/evidence-trust/v1": {
       "entryCount": 6,
-      "sha256": "523a771146c9e95ba565feeaebd4871e87dc852814c129f142bd776a06316f00"
+      "sha256": "c494049f6a8efe41277f90ff0ace50d7080ad31b5c6722f7658bb265bea481a2"
     }
   },
   "schema": {
     "mode": "100644",
-    "sha256": "a2517014a573894abc0e77c2482bd3be87a62857a32936e262065075d93b3c4c"
+    "sha256": "3a2f226503741b15a3157f3399ee704c7457426d8ab8812a1f3e0c2522addede"
   },
   "runtime": {
     "nodeVersion": "22.22.3",

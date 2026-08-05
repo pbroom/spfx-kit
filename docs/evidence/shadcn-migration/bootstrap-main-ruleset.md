@@ -90,14 +90,56 @@ GitHub App or organization-level required workflow and a separate approver.
 
 ## Versioned transition
 
-Never edit the active v1 workflow/runtime tree or reuse its status context. Add
-a v2 runtime and `spfx-kit/evidence-history-v2` alongside v1, validate all
-retained v1 history, and use a narrowly authorized ruleset transition to probe
-and require v2 while v1 remains required. Remove the v1 requirement only after
-v2 is effective and its negative probe blocks. Preserve v1 schema, manifest,
-runtime, and historical evidence bytes. If an independent status App becomes
-available, use it for the new context and remove the shared-App assumption from
-the newly reviewed trust boundary.
+The transition invariant is: every ordinary merge is gated by a
+version-specific candidate-head status from the exact default-branch trust
+root. A trust-root replacement is the sole exception: a named bypass actor may
+be configured temporarily under an authorization limited to one exact SHA while
+the old requirement remains configured. The ruleset must never have zero
+trusted evidence requirements.
 
-If any probe contradicts this runbook, keep Phase 0 open, leave the ledger
-empty, and revise the mechanism before requiring or recording evidence.
+The complete v1 workflow-tree freeze makes a simultaneously green v1/v2
+transition impossible. Use this fail-closed sequence instead:
+
+1. Prepare one reviewed v2 cutover PR. Use a new
+   `spfx-kit/evidence-history-v2` context, validate all retained v1 history, and
+   preserve the v1 schema, trust manifest, runtime, and historical evidence
+   bytes. Record the exact candidate SHA and complete workflow-tree diff. Its v1
+   status must fail because the workflow tree changes; do not relabel that
+   expected failure as a v1 pass.
+2. Immediately before merging, re-read the effective ruleset, required-context
+   integration, Actions permissions, and bypass configuration. Leave v1
+   required. Temporarily configure a named bypass actor under an authorization
+   limited to the recorded cutover SHA, merge only that SHA, and remove the
+   bypass actor immediately. The platform bypass is actor-scoped; the recorded
+   authorization, operator procedure, and immediate removal enforce the
+   narrower exact-SHA boundary.
+3. Keep v1 required after the cutover merge. Its missing or failing status now
+   deliberately blocks every ordinary merge while the new default-branch v2
+   trust root is probed.
+4. On exact candidate heads, prove the v2 workflow commit, inert candidate
+   fetch, status target URL and integration, successful positive case, stale-head
+   handling, invalid-history rejection, protected-runtime rejection, and rogue
+   workflow-tree rejection. Do not merge the probes.
+5. If any v2 probe fails, keep v1 required and use another explicitly
+   authorized temporary named-actor bypass under a new exact-SHA authorization
+   to restore the reviewed v1 workflow tree. Remove the bypass actor immediately
+   and prove `spfx-kit/evidence-history-v1` effective again before allowing
+   ordinary merges.
+6. After every v2 probe passes, add the observed v2 context and integration to
+   the ruleset while v1 remains required. Re-read the effective rules and prove
+   the v2 requirement is present before removing v1. Both requirements may be
+   configured during this step, but v1 is not expected to be green.
+7. Remove the v1 requirement only after v2 is effective, then open a final
+   ordinary probe and prove v2 alone gates the exact candidate head and its
+   negative case blocks.
+8. Record the cutover and any rollback SHA, bypass authorization and removal,
+   ruleset versions, effective-rule responses, probe PRs/heads/runs, status
+   integrations, and positive and negative results in the accountable issue.
+
+If an independent status App becomes available, use it for the new context and
+remove the shared-App assumption from the newly reviewed trust boundary.
+
+If an initial v1 bootstrap probe contradicts this runbook, keep Phase 0 open,
+leave the ledger empty, and revise the mechanism before requiring or recording
+evidence. During a later versioned transition, keep the old requirement blocking
+and follow the rollback sequence above.

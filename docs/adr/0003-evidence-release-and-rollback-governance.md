@@ -56,27 +56,67 @@ prevents root `npm-shrinkwrap.json`, root dependency changes, or nearer tracked
 modules from redirecting the trusted import. Root monorepo dependency files are
 deliberately not frozen.
 
+Candidate Git data is bounded before content loading. The base validator parses
+the complete tree metadata, validates expected paths, blob types and modes, and
+enforces at most 1,000 entries, 10 MiB per blob, and 10 MiB in aggregate before
+it reads any blob from that tree. It then reads blobs sequentially and verifies
+each returned byte count against the advertised metadata. This ordering bounds
+memory pressure before candidate-controlled content is materialized.
+
 The trust manifest cannot authorize its own replacement because the base
 validator compares candidate manifest and tree bytes directly with the trusted
 base before accepting history. Bootstrap is the only unprotected introduction
 and therefore requires the human review and post-merge probes in the bootstrap
 runbook.
 
-An active version is never mutated in place or assigned a reused status
-context. A transition adds v2 beside v1, validates retained history, proves
-positive and negative candidate-head probes, requires v2 alongside v1, and
-removes the v1 requirement only after v2 is effective. Changing the frozen
-workflow tree requires a narrowly authorized repository-policy transition, or
-an independently controlled GitHub App that can own the status identity.
+Each new row names an exact public validator commit that is included in its
+immutable release set. That commit is a stable trust identity: it must be an
+ancestor of the current trusted base and its v1 trust-base manifest, schema,
+protected workflow tree, and protected validator-runtime tree must match the
+current trusted base byte-for-byte, including path, mode, and blob contents.
+The history workflow fetches the full base ancestry to verify this relationship.
+An unrelated `main` advance therefore does not rotate the validator identity or
+prevent a correction to an existing release set. A non-ancestor, missing commit,
+or different trust state is rejected; a real trust-state change requires a new
+versioned trust contract.
+
+An active version never reuses its status context, and its schema, trust
+manifest, runtime, and historical evidence bytes remain available for retained
+history. The complete workflow-tree freeze means a replacement trust root
+cannot be simultaneously green under v1. A transition therefore merges one
+reviewed v2 trust-root replacement through a temporarily configured, named
+bypass actor under an authorization limited to that exact SHA while v1 remains
+required, then removes that bypass actor immediately.
+V1 deliberately continues to block every ordinary merge while positive and
+negative v2 candidate-head probes run. Repository policy adds the observed v2
+context and integration before removing v1, so it never has zero trusted
+evidence requirements. A failed v2 transition uses the same temporary named-actor
+mechanism under a new exact-SHA authorization to restore the reviewed v1
+workflow tree, removes the bypass actor immediately, and proves v1 effective
+again. An independently controlled GitHub App can remove this shared-App
+trust-transfer exception in a later design.
 
 ### 1. Atomic evidence rows
 
 Evidence is append-only and atomic. One row records one proof event for one stable event key; it must not collapse local validation, artifact closure, remote verification, deployment, runtime behavior, and rollback into a single pass.
 
-Allowed evidence results are `pass`, `fail`, `blocked`, and `expired`. Absence means not run, never pass. Corrections append a new row that explicitly supersedes the earlier row. For any event key, exactly one unsuperseded leaf may remain; conflicting leaves block the dependent gate.
+Allowed evidence results are `pass`, `fail`, `blocked`, and `expired`. Absence means not run, never pass. Corrections append a new row whose non-empty, unique `supersedesEvidenceIds` array names earlier rows for the same event key with earlier timestamps. A normal linear correction names one current leaf. The append-only graph may branch when multiple corrections name the same earlier parent; referencing that shared parent remains valid after another branch has superseded it. Each reference removes its ID only when it is a current leaf, and every appended row becomes a leaf. A resolution row must therefore name every current conflicting leaf. Missing, later, and foreign-key IDs are invalid. Exactly one unsuperseded leaf must remain for every event key after the full ledger is read.
+
+The trusted validator captures its start time before candidate reading. Every
+newly appended row must have `recordedUtc` no later than that start time plus a
+five-minute clock-skew allowance. The future-time bound applies only beyond the
+trusted base row count, preserving already accepted historical rows; timestamp
+syntax and the requirement that a correction be later than what it supersedes
+continue to apply to every row. This prevents a newly appended far-future value
+from pinning the correction graph without reinterpreting historical evidence
+against a later wall clock.
 
 The proof-event vocabulary is:
 
+- `baseline-inventory`
+- `classification-acceptance`
+- `accountability-acceptance`
+- `decision-acceptance`
 - `local-validation`
 - `exact-head-ci`
 - `local-mock-smoke`
@@ -90,7 +130,7 @@ The proof-event vocabulary is:
 - `rollback-artifacts-retained`
 - `rollback-drill`
 
-The event key is the stable combination of release-set ID, deployment-topology ID where applicable, phase or surface, export target, environment, and proof event. A row records the exact subject identity, validator version, timestamp, result, evidence references, and supersession reference. It may contain several observations from the same atomic event, but may not infer another proof event.
+The event key is the stable combination of release-set ID, deployment-topology ID where applicable, phase or surface, export target, environment, proof event, and typed proof-subject ID. A row records the exact subject identity, validator version, timestamp, result, evidence references, and supersession references. It may contain several observations from the same atomic event, but may not infer another proof event. Phase 0 records each accepted inventory, classification, accountability assignment, and decision separately with the corresponding governance event above, a `source` subject, and `exportTarget: source`; these are not aliases for `local-validation`.
 
 Examples of non-equivalence are governance rules:
 
@@ -111,20 +151,33 @@ Secrets must never be evidence payloads. Evidence may record the credential fami
 
 ### 3. Release-set and deployment-topology identity
 
-A release set groups the exact identities that are intended to ship together:
+A release set groups the exact identities that are intended to ship and work
+together from one clean source identity:
 
 - public source revisions or opaque protected-source revision evidence IDs;
 - UI source-profile version and digest;
 - package identities and final archive digests;
 - app resource manifests and, where used, shared-resource manifest identities;
-- export-target outputs and configuration identities;
+- the complete matrix of required `single`, `cdn`, `staging-cdn`, and
+  `standalone` outputs and configuration identities, with each target artifact
+  remaining independently identified;
 - evidence-schema and validator versions needed to interpret the set.
 
-Any change to a source revision, UI profile, dependency or package identity, archive, resource manifest, build input that affects output, or export-target output creates a new release set. Environment and deployment location do not change the release set.
+All required export-target artifacts for one candidate belong to this one immutable release-set manifest; they are not modeled as independent release sets. Adding or removing a required target, or changing any source revision, UI profile, dependency or package identity, archive, resource manifest, build input that affects output, configuration identity, or target output rotates the whole set and creates a new release-set ID. Environment and deployment location do not change the release set.
+
+The manifest's trusted `releaseSetProfile` prevents partial target sets from masquerading as complete candidates. `source-only` contains exactly the `source` export target, has no resource manifests or deployments, and is required for Phase 0 governance events. `application-matrix` contains exactly `source`, `single`, `cdn`, `staging-cdn`, and `standalone` in canonical order plus, for every represented `applicationId`, at least one non-report artifact bound to each deployable target. Coverage is evaluated per application; artifacts from different applications cannot aggregate into one complete matrix, and a report cannot satisfy output coverage. Artifact, resource, deployment, and rollback proof requires `application-matrix`; both rollback release identities use it. A candidate may not split its required target artifacts across several release-set IDs.
 
 A deployment-topology ID groups the CDN origin/configuration, App Catalog, tenant, site collection/test site, and relevant policy configuration used for an environment. Public records use an opaque topology ID; protected details stay in the approved private evidence system. Moving the same release set to a different topology creates new topology-dependent evidence, not a new release set.
 
 Mixed generations are invalid. Every deployed package, app-resource prefix, shared-resource generation, and manifest must resolve to the exact identities recorded by one release set.
+
+A rollback binds the same application and export target on both sides, but its
+candidate and prior must be materially different deployment generations.
+Different release-set, deployment, or package-artifact IDs alone are
+insufficient: the package digest or exact resource binding must differ. A
+`single` rollback therefore requires different package digests because both
+resource bindings are `null`; a `cdn` or `staging-cdn` rollback may instead or
+also differ by resource ID, resource release, or resource-manifest digest.
 
 ### 4. Export-target closure
 

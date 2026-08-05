@@ -317,6 +317,16 @@ base exists on the base branch, positive and negative probes prove its
 `spfx-kit/evidence-history-v1` status is attached to the exact candidate head,
 and that status is required on `main`.
 
+Later trust-version changes follow the fail-closed cutover in
+[`bootstrap-main-ruleset.md`](evidence/shadcn-migration/bootstrap-main-ruleset.md):
+a named bypass actor is configured temporarily under an authorization limited
+to the exact replacement SHA while v1 stays required, the bypass actor is
+removed immediately, and v1 blocks ordinary merges during v2 probes. Repository
+policy adds the proven v2 requirement before removing v1; a failed transition
+restores the reviewed v1 tree through the same temporary named-actor mechanism
+under a new exact-SHA authorization. Simultaneously green v1/v2 statuses are not
+claimed.
+
 Acceptance checklist:
 
 - [ ] Each repository baseline is tied to a commit SHA.
