@@ -1,0 +1,489 @@
+name: Codex review fix loop
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-review-fix-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    name: Guard intake and generate patch
+    if: github.event.pull_request != null
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    outputs:
+      attempt: ${{ steps.intake.outputs.attempt }}
+      finding_count: ${{ steps.intake.outputs.finding_count }}
+      has_patch: ${{ steps.capture.outputs.has_patch }}
+      head_ref: ${{ steps.intake.outputs.head_ref }}
+      head_sha: ${{ steps.intake.outputs.head_sha }}
+      pr_number: ${{ steps.intake.outputs.pr_number }}
+      review_id: ${{ steps.intake.outputs.review_id }}
+      should_fix: ${{ steps.intake.outputs.should_fix }}
+    steps:
+      - name: Check out trusted controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Check out exact reviewed head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: control/.nvmrc
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+
+      - name: Validate event, current head, stack position, and attempts
+        id: intake
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          node control/scripts/codex-review-loop.mjs intake
+          --template control/.github/codex/prompts/fix-review.md
+          --prompt-out target/.codex-review-task.md
+
+      - name: Require the one-time OpenAI credential
+        if: steps.intake.outputs.should_fix == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY is not configured; no patch can be generated." >&2
+            exit 1
+          fi
+
+      - name: Isolate the implementation worker
+        if: steps.intake.outputs.should_fix == 'true'
+        run: |
+          sudo useradd --create-home --shell /bin/bash codexfix
+          sudo chown -R codexfix:codexfix target
+          sudo chown -R "$(id -u):$(id -g)" target/.git
+
+      - name: Generate the smallest applicable fix
+        if: steps.intake.outputs.should_fix == 'true'
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: ${{ github.workspace }}/target/.codex-review-task.md
+          output-file: ${{ github.workspace }}/target/.codex-review-output.md
+          working-directory: ${{ github.workspace }}/target
+          permission-profile: ':workspace'
+          safety-strategy: unprivileged-user
+          codex-user: codexfix
+          allow-bot-users: chatgpt-codex-connector
+          codex-version: 0.146.1
+          effort: high
+          codex-args: '["--ephemeral","--ignore-user-config","--ignore-rules","-c","project_doc_max_bytes=0"]'
+
+      - name: Capture an inert patch artifact
+        id: capture
+        if: steps.intake.outputs.should_fix == 'true'
+        env:
+          PATCH_PATH: ${{ runner.temp }}/codex-review-fix/codex.patch
+          OUTPUT_PATH: ${{ runner.temp }}/codex-review-fix/codex-output.md
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" target
+          mkdir -p "$(dirname "$PATCH_PATH")"
+          if [ -f target/.codex-review-output.md ]; then
+            cp target/.codex-review-output.md "$OUTPUT_PATH"
+          else
+            : > "$OUTPUT_PATH"
+          fi
+          rm -f target/.codex-review-task.md target/.codex-review-output.md
+          git -C target add -N .
+          git -C target diff --binary --full-index --no-ext-diff HEAD -- . > "$PATCH_PATH"
+          if [ -s "$PATCH_PATH" ]; then
+            echo "has_patch=true" >> "$GITHUB_OUTPUT"
+            echo "patch_sha256=$(sha256sum "$PATCH_PATH" | cut -d ' ' -f1)" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload generated patch and model summary
+        if: steps.capture.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codex-review-fix-${{ github.run_id }}
+          path: ${{ runner.temp }}/codex-review-fix/
+          if-no-files-found: error
+          retention-days: 1
+
+  validate-core:
+    name: Validate build, lint, tests, and security
+    needs: generate
+    if: needs.generate.result == 'success' && needs.generate.outputs.has_patch == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      patch_sha256: ${{ steps.validated-patch.outputs.patch_sha256 }}
+    steps:
+      - name: Check out trusted controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Check out exact reviewed head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.generate.outputs.head_sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: codex-review-fix-${{ github.run_id }}
+          path: ${{ runner.temp }}/codex-review-fix
+
+      - name: Apply and inspect generated patch
+        env:
+          PATCH_PATH: ${{ runner.temp }}/codex-review-fix/codex.patch
+        run: |
+          git -C target apply --check --binary "$PATCH_PATH"
+          git -C target apply --index --binary "$PATCH_PATH"
+          node control/scripts/codex-review-loop.mjs inspect-worktree --repo target
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: target/.nvmrc
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+
+      - name: Install dependencies
+        working-directory: target
+        run: npm ci && npm install --include=optional --no-save
+
+      - name: Check formatting
+        working-directory: target
+        run: npm run format:check
+
+      - name: Build workspaces before tests
+        working-directory: target
+        run: npm run build
+
+      - name: Lint
+        working-directory: target
+        run: npm run lint
+
+      - name: Unit and integration tests
+        working-directory: target
+        run: npm test
+
+      - name: Public repository guard
+        working-directory: target
+        run: npm run guard:public
+
+      - name: Security regression tests
+        working-directory: target
+        timeout-minutes: 5
+        run: npm run test:security
+
+      - name: Audit production dependencies
+        working-directory: target
+        run: npm run security:audit
+
+      - name: Require no validation-generated source changes
+        working-directory: target
+        run: git diff --exit-code
+
+      - name: Preserve the exact validated patch
+        id: validated-patch
+        env:
+          GENERATED_PATCH_PATH: ${{ runner.temp }}/codex-review-fix/codex.patch
+          PATCH_PATH: ${{ runner.temp }}/validated-codex-review-fix/codex.patch
+        run: |
+          mkdir -p "$(dirname "$PATCH_PATH")"
+          git -C target diff --cached --binary --full-index --no-ext-diff HEAD -- . > "$PATCH_PATH"
+          generated_sha256=$(sha256sum "$GENERATED_PATCH_PATH" | cut -d ' ' -f1)
+          validated_sha256=$(sha256sum "$PATCH_PATH" | cut -d ' ' -f1)
+          test "$validated_sha256" = "$generated_sha256"
+          echo "patch_sha256=$validated_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload validated patch
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: validated-codex-review-fix-${{ github.run_id }}
+          path: ${{ runner.temp }}/validated-codex-review-fix/codex.patch
+          if-no-files-found: error
+          retention-days: 1
+
+  validate-browser:
+    name: Validate Lab browser and CDN behavior
+    needs: generate
+    if: needs.generate.result == 'success' && needs.generate.outputs.has_patch == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Check out exact reviewed head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.generate.outputs.head_sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: codex-review-fix-${{ github.run_id }}
+          path: ${{ runner.temp }}/codex-review-fix
+
+      - name: Apply and inspect generated patch
+        env:
+          PATCH_PATH: ${{ runner.temp }}/codex-review-fix/codex.patch
+        run: |
+          git -C target apply --check --binary "$PATCH_PATH"
+          git -C target apply --index --binary "$PATCH_PATH"
+          node control/scripts/codex-review-loop.mjs inspect-worktree --repo target
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: target/.nvmrc
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+
+      - name: Install dependencies
+        working-directory: target
+        run: npm ci && npm install --include=optional --no-save
+
+      - name: Install Chromium
+        working-directory: target
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser and CDN acceptance
+        working-directory: target
+        run: npm run test:e2e:cdn
+
+  validate-spfx:
+    name: Validate SPFx canary package
+    needs: generate
+    if: needs.generate.result == 'success' && needs.generate.outputs.has_patch == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Check out exact reviewed head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.generate.outputs.head_sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: codex-review-fix-${{ github.run_id }}
+          path: ${{ runner.temp }}/codex-review-fix
+
+      - name: Apply and inspect generated patch
+        env:
+          PATCH_PATH: ${{ runner.temp }}/codex-review-fix/codex.patch
+        run: |
+          git -C target apply --check --binary "$PATCH_PATH"
+          git -C target apply --index --binary "$PATCH_PATH"
+          node control/scripts/codex-review-loop.mjs inspect-worktree --repo target
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: target/.nvmrc
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+
+      - name: Install root dependencies
+        working-directory: target
+        run: npm ci && npm install --include=optional --no-save
+
+      - name: Build supported SPFx canary package
+        working-directory: target
+        run: npm run ship:canary
+
+      - name: Verify SPFx package artifact
+        working-directory: target
+        run: npm run verify:sppkg -- --app examples/hello-card-spfx
+
+      - name: Audit SPFx production dependencies
+        working-directory: target
+        run: npm run security:audit:canary
+
+  push:
+    name: Fast-forward the exact PR head
+    needs: [generate, validate-core, validate-browser, validate-spfx]
+    if: >-
+      needs.validate-core.result == 'success' &&
+      needs.validate-browser.result == 'success' &&
+      needs.validate-spfx.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      checks: write
+      contents: write
+      issues: write
+      pull-requests: read
+    outputs:
+      ci_dispatch_result: ${{ steps.ci_dispatch.outcome }}
+      pushed_sha: ${{ steps.push.outputs.pushed_sha }}
+      validation_check_result: ${{ steps.validation_check.outcome }}
+    steps:
+      - name: Check out trusted controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Check out exact reviewed head with ephemeral write auth
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.generate.outputs.head_sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: validated-codex-review-fix-${{ github.run_id }}
+          path: ${{ runner.temp }}/validated-codex-review-fix
+
+      - name: Verify validated patch digest
+        env:
+          EXPECTED_SHA256: ${{ needs.validate-core.outputs.patch_sha256 }}
+          PATCH_PATH: ${{ runner.temp }}/validated-codex-review-fix/codex.patch
+        run: |
+          actual_sha256=$(sha256sum "$PATCH_PATH" | cut -d ' ' -f1)
+          test -n "$EXPECTED_SHA256"
+          test "$actual_sha256" = "$EXPECTED_SHA256"
+
+      - name: Recheck exact live head before applying
+        env:
+          EXPECTED_HEAD: ${{ needs.generate.outputs.head_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ needs.generate.outputs.head_ref }}
+          PR_NUMBER: ${{ needs.generate.outputs.pr_number }}
+          REVIEW_ID: ${{ needs.generate.outputs.review_id }}
+        run: node control/scripts/codex-review-loop.mjs verify-head --pr "$PR_NUMBER" --head "$EXPECTED_HEAD" --ref "$HEAD_REF" --review "$REVIEW_ID"
+
+      - name: Apply the already-validated patch
+        env:
+          PATCH_PATH: ${{ runner.temp }}/validated-codex-review-fix/codex.patch
+        run: |
+          git -C target apply --check --binary "$PATCH_PATH"
+          git -C target apply --index --binary "$PATCH_PATH"
+          node control/scripts/codex-review-loop.mjs inspect-worktree --repo target
+
+      - name: Create one fix commit without repository hooks
+        env:
+          ATTEMPT: ${{ needs.generate.outputs.attempt }}
+          PR_NUMBER: ${{ needs.generate.outputs.pr_number }}
+        run: |
+          git -C target config user.name "github-actions[bot]"
+          git -C target config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C target -c core.hooksPath=/dev/null -c commit.gpgsign=false commit -m "fix(review): address Codex findings on PR #$PR_NUMBER (attempt $ATTEMPT)"
+
+      - name: Recheck live head immediately before push
+        env:
+          EXPECTED_HEAD: ${{ needs.generate.outputs.head_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ needs.generate.outputs.head_ref }}
+          PR_NUMBER: ${{ needs.generate.outputs.pr_number }}
+          REVIEW_ID: ${{ needs.generate.outputs.review_id }}
+        run: node control/scripts/codex-review-loop.mjs verify-head --pr "$PR_NUMBER" --head "$EXPECTED_HEAD" --ref "$HEAD_REF" --review "$REVIEW_ID"
+
+      - name: Push with an exact-head lease
+        id: push
+        env:
+          EXPECTED_HEAD: ${{ needs.generate.outputs.head_sha }}
+          HEAD_REF: ${{ needs.generate.outputs.head_ref }}
+        run: |
+          git -C target push \
+            --force-with-lease="refs/heads/$HEAD_REF:$EXPECTED_HEAD" \
+            origin "HEAD:refs/heads/$HEAD_REF"
+          echo "pushed_sha=$(git -C target rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish exact-head guarded validation check
+        id: validation_check
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PUSHED_SHA: ${{ steps.push.outputs.pushed_sha }}
+        run: node control/scripts/codex-review-loop.mjs publish-check --head "$PUSHED_SHA"
+
+      - name: Dispatch CI for the new exact head
+        id: ci_dispatch
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ needs.generate.outputs.head_ref }}
+        run: node control/scripts/codex-review-loop.mjs dispatch-ci --ref "$HEAD_REF"
+
+  report:
+    name: Update visible PR status
+    needs: [generate, validate-core, validate-browser, validate-spfx, push]
+    if: always() && needs.generate.outputs.should_fix == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out trusted controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
+      - name: Record the guarded outcome
+        env:
+          ATTEMPT: ${{ needs.generate.outputs.attempt }}
+          CHECK_RESULT: ${{ needs.push.outputs.validation_check_result }}
+          CI_DISPATCH_RESULT: ${{ needs.push.outputs.ci_dispatch_result }}
+          CORE_RESULT: ${{ needs.validate-core.result }}
+          E2E_RESULT: ${{ needs.validate-browser.result }}
+          GENERATE_RESULT: ${{ needs.generate.result }}
+          GITHUB_TOKEN: ${{ github.token }}
+          HAS_PATCH: ${{ needs.generate.outputs.has_patch }}
+          HEAD_SHA: ${{ needs.generate.outputs.head_sha }}
+          PR_NUMBER: ${{ needs.generate.outputs.pr_number }}
+          PUSHED_SHA: ${{ needs.push.outputs.pushed_sha }}
+          REVIEW_ID: ${{ needs.generate.outputs.review_id }}
+          SPFX_RESULT: ${{ needs.validate-spfx.result }}
+        run: node scripts/codex-review-loop.mjs report

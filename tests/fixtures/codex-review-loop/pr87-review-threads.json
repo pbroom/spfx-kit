@@ -1,0 +1,28 @@
+[
+  {
+    "id": "PRRT_kwDOTKm-F86WvxLA",
+    "isResolved": false,
+    "isOutdated": false,
+    "path": "apps/lab/src/components/LocalCdnBucketDialog.tsx",
+    "line": 104,
+    "comments": {
+      "nodes": [
+        {
+          "databaseId": 3722936525,
+          "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub> Avoid loading every app to render one source link\n\nOpening the dialog calls loadManagedLabApps(), which fans out to every clone remote.",
+          "path": "apps/lab/src/components/LocalCdnBucketDialog.tsx",
+          "line": 104,
+          "author": {
+            "login": "chatgpt-codex-connector"
+          },
+          "pullRequestReview": {
+            "databaseId": 4867398051,
+            "commit": {
+              "oid": "479d10ce6d3ddd187f20ac59e44de4d37fe8a72b"
+            }
+          }
+        }
+      ]
+    }
+  }
+]

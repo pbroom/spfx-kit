@@ -1,0 +1,26 @@
+{
+  "action": "submitted",
+  "repository": {
+    "full_name": "pbroom/spfx-kit"
+  },
+  "review": {
+    "id": 4867398051,
+    "state": "commented",
+    "commit_id": "479d10ce6d3ddd187f20ac59e44de4d37fe8a72b",
+    "user": {
+      "login": "chatgpt-codex-connector[bot]"
+    }
+  },
+  "pull_request": {
+    "number": 87,
+    "draft": false,
+    "author_association": "OWNER",
+    "head": {
+      "sha": "479d10ce6d3ddd187f20ac59e44de4d37fe8a72b",
+      "ref": "codex/cdn-source-runtime-links",
+      "repo": {
+        "full_name": "pbroom/spfx-kit"
+      }
+    }
+  }
+}
