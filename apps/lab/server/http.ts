@@ -52,9 +52,10 @@ export function isJsonRequest(req: IncomingMessage): boolean {
   return typeof contentType === 'string' && contentType.split(';', 1)[0]?.trim().toLowerCase() === 'application/json';
 }
 
-export function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+export function readJsonBody(req: IncomingMessage, maximumBytes = 1024 * 1024): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    let body = '';
+    const chunks: Buffer[] = [];
+    let receivedBytes = 0;
     let settled = false;
     const settle = (action: () => void) => {
       if (!settled) {
@@ -63,25 +64,45 @@ export function readJsonBody(req: IncomingMessage): Promise<Record<string, unkno
       }
     };
     req.on('data', (chunk) => {
-      body += String(chunk);
+      if (settled) {
+        return;
+      }
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      receivedBytes += bytes.length;
+      if (receivedBytes > maximumBytes) {
+        settle(() => reject(new JsonBodyError(413, `JSON request body exceeds the ${maximumBytes}-byte limit.`)));
+        return;
+      }
+      chunks.push(bytes);
     });
     req.on('end', () => {
       settle(() => {
         try {
+          const body = Buffer.concat(chunks).toString('utf8');
           resolve(body ? JSON.parse(body) : {});
-        } catch (error) {
-          reject(error);
+        } catch {
+          reject(new JsonBodyError(400, 'JSON request body is malformed.'));
         }
       });
     });
     req.on('error', (error) => {
-      settle(() => reject(error));
+      settle(() => reject(new JsonBodyError(400, 'JSON request body could not be read.', { cause: error })));
     });
     // Aborted/destroyed requests can close without ever emitting 'end'.
     req.on('close', () => {
-      settle(() => reject(new Error('Request closed before the body was fully received.')));
+      settle(() => reject(new JsonBodyError(400, 'Request closed before the JSON body was fully received.')));
     });
   });
+}
+
+export class JsonBodyError extends Error {
+  public constructor(
+    public readonly statusCode: 400 | 413,
+    message: string,
+    options?: ErrorOptions
+  ) {
+    super(message, options);
+  }
 }
 
 export function sendJson(res: ServerResponse, value: unknown) {

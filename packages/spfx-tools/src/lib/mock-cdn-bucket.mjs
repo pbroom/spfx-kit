@@ -64,24 +64,24 @@ export function mockCdnSharedReleaseBaseUrl(origin, bundleId, releaseId) {
   return `${normalizedOrigin}/shared/${encodeURIComponent(normalizedBundleId)}/versions/${encodeURIComponent(normalizedReleaseId)}/`;
 }
 
-export async function publishMockCdnAppStage({ bucketRoot, origin, stageDir, select = false }) {
+export async function publishMockCdnAppStage({
+  bucketRoot,
+  origin,
+  stageDir,
+  select = false,
+  expectedManifestSha256
+}) {
   const resolvedBucketRoot = path.resolve(bucketRoot);
   const bucketConfiguration = await assertConfiguredBucketRoot(resolvedBucketRoot, { allowMissing: true });
   const resolvedStageDir = path.resolve(stageDir);
-  const sourceManifestBytes = await readBoundedFile(
-    path.join(resolvedStageDir, deploymentManifestFileName),
-    10 * 1024 * 1024,
-    'CDN stage deployment manifest'
-  );
-  const sourceManifestValue = parseJson(sourceManifestBytes, 'CDN stage deployment manifest');
-  const sourceManifest = await verifyCdnStage(resolvedStageDir, sourceManifestValue, { allowLocalMockCdn: true });
-  const appId = normalizeBucketName(sourceManifest.slug, 'app id');
-  const releaseId = normalizeCdnReleaseId(sourceManifest.releaseId);
-  const expectedBaseUrl = mockCdnAppReleaseBaseUrl(origin, appId, releaseId);
-  if (sourceManifest.cdnBasePath !== expectedBaseUrl) {
-    throw new Error(`Staged CDN base path must exactly match the configured mock CDN release URL: ${expectedBaseUrl}`);
+  await assertRealDirectoryWithin(resolvedStageDir, resolvedStageDir, 'Mock CDN publish source');
+  const inspected = await inspectMockCdnAppStage({ origin, stageDir: resolvedStageDir });
+  if (expectedManifestSha256 !== undefined && inspected.manifestSha256 !== expectedManifestSha256) {
+    throw new Error('Staged CDN deployment manifest changed after the publish source was approved.');
   }
-  const publishedManifest = canonicalPublishedManifest(sourceManifest, sourceManifestValue.generatedAt);
+  const { manifest: sourceManifest } = inspected;
+  const { appId, releaseId, releaseBaseUrl: expectedBaseUrl } = inspected;
+  const publishedManifest = canonicalPublishedManifest(sourceManifest, sourceManifest.generatedAt);
   const publishedManifestBytes = Buffer.from(`${JSON.stringify(publishedManifest, null, 2)}\n`);
 
   await ensureSafeDirectory(resolvedBucketRoot, '');
@@ -132,6 +132,36 @@ export async function publishMockCdnAppStage({ bucketRoot, origin, stageDir, sel
     files: sourceManifest.files.length,
     published,
     selected: Boolean(select)
+  };
+}
+
+export async function inspectMockCdnAppStage({ origin, stageDir }) {
+  const resolvedStageDir = path.resolve(stageDir);
+  await assertRealDirectoryWithin(resolvedStageDir, resolvedStageDir, 'Mock CDN publish source');
+  const sourceManifestBytes = await readBoundedFile(
+    path.join(resolvedStageDir, deploymentManifestFileName),
+    10 * 1024 * 1024,
+    'CDN stage deployment manifest'
+  );
+  const sourceManifestValue = parseJson(sourceManifestBytes, 'CDN stage deployment manifest');
+  const rebuiltManifest = await verifyCdnStage(resolvedStageDir, sourceManifestValue, { allowLocalMockCdn: true });
+  const sourceManifest = Object.freeze({
+    ...rebuiltManifest,
+    generatedAt: sourceManifestValue.generatedAt
+  });
+  const appId = normalizeBucketName(sourceManifest.slug, 'app id');
+  const releaseId = normalizeCdnReleaseId(sourceManifest.releaseId);
+  const expectedBaseUrl = mockCdnAppReleaseBaseUrl(origin, appId, releaseId);
+  if (sourceManifest.cdnBasePath !== expectedBaseUrl) {
+    throw new Error(`Staged CDN base path must exactly match the configured mock CDN release URL: ${expectedBaseUrl}`);
+  }
+  return {
+    appId,
+    releaseId,
+    releaseBaseUrl: expectedBaseUrl,
+    manifest: sourceManifest,
+    manifestBytes: sourceManifestBytes,
+    manifestSha256: sha256(sourceManifestBytes)
   };
 }
 
@@ -229,7 +259,8 @@ export async function loadMockCdnAppRelease({ bucketRoot, origin, appId, release
     workspaceRoot: bucketConfiguration.workspaceRoot,
     realWorkspaceRoot: bucketConfiguration.realWorkspaceRoot,
     manifest,
-    manifestSha256: sha256(manifestBytes)
+    manifestSha256: sha256(manifestBytes),
+    manifestBytes: manifestBytes.length
   });
 }
 
@@ -322,6 +353,183 @@ export async function getMockCdnBucketStatus({ bucketRoot, origin, appId } = {})
     }
   }
   return { bucketRoot: resolvedBucketRoot, origin: normalizeMockCdnOrigin(origin), apps };
+}
+
+export async function getMockCdnBucketInventory({ bucketRoot, origin } = {}) {
+  const resolvedBucketRoot = path.resolve(bucketRoot);
+  const normalizedOrigin = normalizeMockCdnOrigin(origin);
+  try {
+    await assertRealDirectoryWithin(resolvedBucketRoot, resolvedBucketRoot, 'Mock CDN bucket');
+  } catch (error) {
+    if (isMissingError(error)) {
+      return emptyInventory(normalizedOrigin);
+    }
+    throw error;
+  }
+  const releases = [];
+  const selectedPointers = [];
+  const appsDir = safeLocalPath(resolvedBucketRoot, 'apps');
+  let appEntries;
+  try {
+    await assertRealDirectoryWithin(resolvedBucketRoot, appsDir, 'Mock CDN apps bucket');
+    appEntries = await readdir(appsDir, { withFileTypes: true });
+  } catch (error) {
+    if (!isMissingError(error)) {
+      throw error;
+    }
+    return emptyInventory(normalizedOrigin);
+  }
+
+  for (const appEntry of appEntries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!appEntry.isDirectory() || appEntry.isSymbolicLink()) {
+      continue;
+    }
+    let appId;
+    try {
+      appId = normalizeBucketName(appEntry.name, 'app id');
+    } catch {
+      continue;
+    }
+
+    let selected;
+    let selectedReleaseFound = false;
+    try {
+      selected = await readSelectedMockCdnAppReference({ bucketRoot: resolvedBucketRoot, appId });
+      selectedPointers.push({
+        appId,
+        releaseId: selected.releaseId,
+        manifestSha256: selected.deploymentManifestSha256,
+        status: 'pinned'
+      });
+    } catch (error) {
+      selectedPointers.push({ appId, status: isMissingError(error) ? 'none' : 'invalid' });
+    }
+
+    const versionsDir = safeLocalPath(resolvedBucketRoot, appVersionsRelativePath(appId));
+    let versionEntries;
+    try {
+      await assertRealDirectoryWithin(resolvedBucketRoot, versionsDir, 'Mock CDN app versions bucket');
+      versionEntries = await readdir(versionsDir, { withFileTypes: true });
+    } catch (error) {
+      if (selected || !isMissingError(error)) {
+        selectedPointers[selectedPointers.length - 1] = { appId, status: 'invalid' };
+      }
+      continue;
+    }
+
+    for (const versionEntry of versionEntries.sort((left, right) => left.name.localeCompare(right.name))) {
+      if (!versionEntry.isDirectory() || versionEntry.isSymbolicLink() || versionEntry.name.startsWith('.')) {
+        continue;
+      }
+      let releaseId;
+      try {
+        releaseId = normalizeCdnReleaseId(versionEntry.name);
+      } catch {
+        continue;
+      }
+      const selectedRelease = selected?.releaseId === releaseId;
+      if (selectedRelease) {
+        selectedReleaseFound = true;
+      }
+      try {
+        const release = await loadMockCdnAppRelease({
+          bucketRoot: resolvedBucketRoot,
+          origin: normalizedOrigin,
+          appId,
+          releaseId
+        });
+        const pointerMatches =
+          selectedRelease && selected.deploymentManifestSha256 === release.manifestSha256;
+        releases.push(describeInventoryRelease(release, pointerMatches));
+        if (selectedRelease && !pointerMatches) {
+          selectedPointers[selectedPointers.length - 1] = { appId, releaseId, status: 'invalid' };
+        } else if (pointerMatches) {
+          selectedPointers[selectedPointers.length - 1] = {
+            appId,
+            releaseId,
+            manifestSha256: release.manifestSha256,
+            status: 'selected-and-verified'
+          };
+        }
+      } catch {
+        releases.push({
+          namespace: 'app',
+          appId,
+          releaseId,
+          namespacePath: `${appReleaseRelativePath(appId, releaseId)}/`,
+          releaseBaseUrl: mockCdnAppReleaseBaseUrl(normalizedOrigin, appId, releaseId),
+          selected: Boolean(selectedRelease),
+          status: 'invalid'
+        });
+        if (selectedRelease) {
+          selectedPointers[selectedPointers.length - 1] = { appId, releaseId, status: 'invalid' };
+        }
+      }
+    }
+    if (
+      selected &&
+      (!selectedReleaseFound || selectedPointers[selectedPointers.length - 1]?.status === 'pinned')
+    ) {
+      selectedPointers[selectedPointers.length - 1] = {
+        appId,
+        releaseId: selected.releaseId,
+        status: 'invalid'
+      };
+    }
+  }
+
+  return {
+    schemaVersion: MOCK_CDN_BUCKET_SCHEMA_VERSION,
+    origin: normalizedOrigin,
+    namespaces: {
+      apps: { status: 'supported', releases },
+      shared: {
+        status: 'reserved-unsupported',
+        releases: [],
+        message: 'Shared resource publication is reserved until a canonical shared-resource verifier exists.'
+      }
+    },
+    selectedPointers
+  };
+}
+
+function emptyInventory(origin) {
+  return {
+    schemaVersion: MOCK_CDN_BUCKET_SCHEMA_VERSION,
+    origin,
+    namespaces: {
+      apps: { status: 'supported', releases: [] },
+      shared: {
+        status: 'reserved-unsupported',
+        releases: [],
+        message: 'Shared resource publication is reserved until a canonical shared-resource verifier exists.'
+      }
+    },
+    selectedPointers: []
+  };
+}
+
+function describeInventoryRelease(release, selected) {
+  return {
+    namespace: 'app',
+    appId: release.appId,
+    releaseId: release.releaseId,
+    releaseLabel: release.manifest.releaseLabel,
+    namespacePath: `${appReleaseRelativePath(release.appId, release.releaseId)}/`,
+    releaseBaseUrl: release.releaseBaseUrl,
+    selected: Boolean(selected),
+    status: 'verified',
+    generatedAt: release.manifest.generatedAt,
+    manifestSha256: release.manifestSha256,
+    manifestBytes: release.manifestBytes,
+    proof: { ...release.manifest.proof },
+    package: { ...release.manifest.package, status: 'verified' },
+    components: {
+      package: [...release.manifest.manifests.packageComponents],
+      generated: [...release.manifest.manifests.generatedComponents]
+    },
+    assets: release.manifest.files.map((file) => ({ ...file, status: 'verified' }))
+  };
 }
 
 function describeRelease(release) {

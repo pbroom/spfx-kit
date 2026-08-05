@@ -4,6 +4,102 @@ import { expect, test, type Locator } from '@playwright/test';
 const pinnedAppStorageKey = 'spfx-kit.lab.pinned-app.v1';
 const syntheticMockCdnOrigin = 'http://127.0.0.1:4400';
 
+function bucketInventory(selectedReleaseId: string, releaseIds: string[]) {
+  return {
+    schemaVersion: 1,
+    origin: syntheticMockCdnOrigin,
+    namespaces: {
+      apps: {
+        status: 'supported',
+        releases: releaseIds.map((releaseId, index) => {
+          const namespacePath = `apps/hello-card-spfx/versions/${releaseId}/`;
+          const releaseBaseUrl = `${syntheticMockCdnOrigin}/${namespacePath}`;
+          return {
+            namespace: 'app',
+            appId: 'hello-card-spfx',
+            releaseId,
+            namespacePath,
+            releaseBaseUrl,
+            selected: releaseId === selectedReleaseId,
+            status: 'verified',
+            generatedAt: '2026-08-04T15:00:00.000Z',
+            releaseLabel: index === 0 ? 'Release A' : 'Release B',
+            manifestSha256: 'a'.repeat(64),
+            manifestBytes: 2048,
+            proof: { localArtifact: 'passed', remoteCdn: 'not-run', sharePointAppCatalog: 'not-run' },
+            package: {
+              path: 'sharepoint/solution/hello-card-spfx.staging.cdn.sppkg',
+              bytes: 4096,
+              sha256: 'b'.repeat(64),
+              status: 'verified'
+            },
+            components: { package: ['component-a'], generated: ['component-a'] },
+            assets: [
+              {
+                path: 'hello-card.js',
+                url: `${releaseBaseUrl}hello-card.js`,
+                bytes: 128,
+                sha256: 'c'.repeat(64),
+                referencedBy: ['SPFx package:component-a:entry'],
+                status: 'verified'
+              }
+            ]
+          };
+        })
+      },
+      shared: {
+        status: 'reserved-unsupported',
+        releases: [],
+        message: 'Shared resource publication awaits a canonical verifier.'
+      }
+    },
+    selectedPointers: [
+      {
+        appId: 'hello-card-spfx',
+        releaseId: selectedReleaseId,
+        manifestSha256: 'a'.repeat(64),
+        status: 'selected-and-verified'
+      }
+    ],
+    publishSources: []
+  };
+}
+
+function cdnDescriptor(releaseId: string) {
+  const namespacePath = `apps/hello-card-spfx/versions/${releaseId}/`;
+  const releaseBaseUrl = `${syntheticMockCdnOrigin}/${namespacePath}`;
+  return {
+    mode: 'cdn',
+    appId: 'hello-card-spfx',
+    releaseId,
+    generatedAt: '2026-08-04T15:00:00.000Z',
+    cdnBasePath: releaseBaseUrl,
+    delivery: {
+      kind: 'local-mock-cdn',
+      origin: syntheticMockCdnOrigin,
+      bucketBaseUrl: `${syntheticMockCdnOrigin}/`,
+      namespaceKind: 'app-release',
+      namespacePath,
+      releaseBaseUrl,
+      releaseManifestUrl: `${releaseBaseUrl}deployment-manifest.json`,
+      status: 'published-and-verified'
+    },
+    packagePath: 'sharepoint/solution/hello-card-spfx.staging.cdn.sppkg',
+    assets: [
+      {
+        role: 'entry',
+        moduleId: 'hello-card',
+        assetPath: 'hello-card.js',
+        assetUrl: `${releaseBaseUrl}hello-card.js`,
+        bytes: 128,
+        sha256: 'c'.repeat(64),
+        stageStatus: 'allowed-and-verified'
+      }
+    ],
+    deferredResources: []
+  };
+}
+
 test('loads the committed web part and supports a core toolbar interaction', async ({ page }) => {
   await page.goto('/');
 
@@ -53,6 +149,153 @@ test('places package mode before display mode and keeps the controls independent
   await page.setViewportSize({ width: 800, height: 700 });
   await expect(page.locator('.package-mode-option .fui-Radio__label', { hasText: 'Standalone' })).toBeVisible();
   await expect(page.locator('.package-mode-option .fui-Radio__label', { hasText: 'CDN' })).toBeVisible();
+});
+
+test('opens a distinct accessible Local CDN inventory table with a truthful empty and reserved state', async ({ page }) => {
+  await page.route('**/api/local-cdn', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1,
+        origin: syntheticMockCdnOrigin,
+        namespaces: {
+          apps: { status: 'supported', releases: [] },
+          shared: {
+            status: 'reserved-unsupported',
+            releases: [],
+            message: 'Shared resource publication awaits a canonical verifier.'
+          }
+        },
+        selectedPointers: [],
+        publishSources: []
+      })
+    });
+  });
+
+  await page.goto('/');
+  const packageResources = page.getByRole('region', { name: 'Package resources' });
+  await packageResources.getByRole('button', { name: 'Local CDN bucket' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Local CDN bucket' });
+  await expect(dialog).toBeVisible();
+  const inventory = dialog.getByRole('region', { name: 'Local CDN bucket inventory' });
+  await expect(
+    inventory.getByRole('table', { name: 'Immutable app releases, selected pointers, packages, and assets' })
+  ).toBeVisible();
+  await expect(inventory.getByRole('columnheader')).toHaveText([
+    'Resource / path',
+    'Kind / role',
+    'Version / release',
+    'Integrity / delivery',
+    'Size',
+    'Origin'
+  ]);
+  await expect(inventory).toContainText('The local CDN bucket is empty.');
+  await expect(inventory).toContainText('Shared resources — reserved namespace');
+  await expect(inventory).toContainText('Shared resource publication awaits a canonical verifier.');
+  await expect(dialog).toContainText('cannot browse arbitrary files or overwrite a release');
+  await expect(inventory.getByRole('button')).toHaveCount(0);
+
+  await page.setViewportSize({ width: 480, height: 720 });
+  expect(
+    await inventory.evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
+  ).toMatchObject({ clientWidth: expect.any(Number), scrollWidth: expect.any(Number) });
+  expect(await inventory.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  const accessibility = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .exclude('[data-tabster-dummy]')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
+});
+
+test('identifies the exact release behind an invalid selected pointer', async ({ page }) => {
+  await page.route('**/api/local-cdn', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1,
+        origin: syntheticMockCdnOrigin,
+        namespaces: {
+          apps: { status: 'supported', releases: [] },
+          shared: {
+            status: 'reserved-unsupported',
+            releases: [],
+            message: 'Shared resource publication awaits a canonical verifier.'
+          }
+        },
+        selectedPointers: [{ appId: 'hello-card-spfx', releaseId: 'missing-release.1', status: 'invalid' }],
+        publishSources: []
+      })
+    });
+  });
+
+  await page.goto('/');
+  await page.getByRole('region', { name: 'Package resources' }).getByRole('button', { name: 'Local CDN bucket' }).click();
+
+  const pointer = page.getByRole('dialog', { name: 'Local CDN bucket' }).locator('[data-pointer-app="hello-card-spfx"]');
+  await expect(pointer).toContainText('missing-release.1');
+  await expect(pointer).toContainText('Invalid pointer — delivery blocked');
+});
+
+test('explicit bucket selection reloads the active CDN descriptor without standalone fallback', async ({ page }) => {
+  let selectedReleaseId = '1.2.3-admin-a';
+  let descriptorRequests = 0;
+  const selectedBodies: unknown[] = [];
+  const releases = ['1.2.3-admin-a', '1.2.3-admin-b'];
+
+  await page.route('**/api/local-cdn', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(bucketInventory(selectedReleaseId, releases)) });
+  });
+  await page.route('**/api/local-cdn/select', async (route) => {
+    const body = route.request().postDataJSON();
+    selectedBodies.push(body);
+    selectedReleaseId = body.releaseId;
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        appId: 'hello-card-spfx',
+        releaseId: selectedReleaseId,
+        manifestSha256: 'a'.repeat(64),
+        status: 'selected-and-verified'
+      })
+    });
+  });
+  await page.route('**/api/lab-packages/cdn?*', async (route) => {
+    descriptorRequests += 1;
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(cdnDescriptor(selectedReleaseId))
+    });
+  });
+  await page.route(`${syntheticMockCdnOrigin}/**`, async (route) => {
+    await route.fulfill({
+      contentType: 'text/javascript',
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: `define('hello-card-admin', [], function () { return {}; });`
+    });
+  });
+
+  await page.goto('/');
+  await page.getByRole('radio', { name: 'CDN' }).click();
+  const frame = page.locator('.preview-frame');
+  await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-admin-a');
+
+  await page.getByRole('region', { name: 'Package resources' }).getByRole('button', { name: 'Local CDN bucket' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Local CDN bucket' });
+  await dialog.getByRole('combobox', { name: 'Release used by Lab CDN mode' }).click();
+  await page.getByRole('option', { name: /hello-card-spfx · Release B/ }).click();
+  await dialog.getByRole('button', { name: 'Select for Lab' }).click();
+
+  await expect(dialog.getByRole('status')).toContainText('Selected release updated');
+  await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-admin-b');
+  await dialog.getByRole('button', { name: 'Close Local CDN bucket' }).click();
+  await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+  await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
+  expect(selectedBodies).toEqual([{ appId: 'hello-card-spfx', releaseId: '1.2.3-admin-b' }]);
+  expect(descriptorRequests).toBeGreaterThanOrEqual(2);
 });
 
 test('checks the selected staged scripts without invoking the package or rendering the standalone adapter', async ({ page }) => {

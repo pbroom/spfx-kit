@@ -16,8 +16,10 @@ interface PackageRuntimeSurfaceProps {
   boundsVisible: boolean;
   frameWidth: number;
   mode: LabPackageMode;
+  selectionRevision?: number;
   selected?: PackageRuntimeSelection;
   standaloneContent?: React.ReactNode;
+  onOpenBucket?: () => void;
 }
 
 export type PackageDescriptorState =
@@ -32,8 +34,10 @@ export function PackageRuntimeSurface({
   boundsVisible,
   frameWidth,
   mode,
+  selectionRevision = 0,
   selected,
-  standaloneContent
+  standaloneContent,
+  onOpenBucket = () => undefined
 }: PackageRuntimeSurfaceProps): JSX.Element {
   const [descriptorState, setDescriptorState] = React.useState<PackageDescriptorState>({ status: 'standalone' });
   const [loadAttempt, setLoadAttempt] = React.useState(0);
@@ -70,7 +74,7 @@ export function PackageRuntimeSurface({
       });
 
     return () => controller.abort();
-  }, [loadAttempt, mode, selected]);
+  }, [loadAttempt, mode, selected, selectionRevision]);
 
   const selectionKey = selected ? cdnPackageSelectionKey(selected) : '';
   const { descriptor, descriptorError, descriptorLoading } = descriptorViewFor(descriptorState, mode, selectionKey);
@@ -88,6 +92,7 @@ export function PackageRuntimeSurface({
         descriptorLoading={descriptorLoading}
         mode={mode}
         smoke={smokeStatus}
+        onOpenBucket={onOpenBucket}
         onRetry={retry}
       />
       <div className="preview-canvas">

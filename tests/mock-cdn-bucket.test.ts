@@ -7,6 +7,7 @@ import { strToU8, zipSync } from 'fflate';
 import { createCdnStageManifest } from '../packages/spfx-tools/src/lib/cdn-stage.mjs';
 // @ts-expect-error plain .mjs module without type declarations
 import {
+  getMockCdnBucketInventory,
   getMockCdnBucketStatus,
   mockCdnAppReleaseBaseUrl,
   mockCdnSharedReleaseBaseUrl,
@@ -90,6 +91,14 @@ describe('local mock CDN bucket contract', () => {
       published: true,
       selected: false
     });
+    await expect(
+      publishMockCdnAppStage({
+        bucketRoot,
+        origin,
+        stageDir,
+        expectedManifestSha256: '0'.repeat(64)
+      })
+    ).rejects.toThrow('changed after the publish source was approved');
     await expect(resolveSelectedMockCdnAppRelease({ bucketRoot, origin, appId })).rejects.toThrow();
 
     await selectMockCdnAppRelease({ bucketRoot, origin, appId, releaseId });
@@ -121,6 +130,77 @@ describe('local mock CDN bucket contract', () => {
     await expect(getMockCdnBucketStatus({ bucketRoot, origin })).resolves.toMatchObject({
       apps: [{ appId, releaseId, files: 2, status: 'selected-and-verified' }]
     });
+    await expect(getMockCdnBucketInventory({ bucketRoot, origin })).resolves.toMatchObject({
+      schemaVersion: 1,
+      origin,
+      namespaces: {
+        apps: {
+          status: 'supported',
+          releases: [
+            {
+              appId,
+              releaseId,
+              namespacePath: `apps/${appId}/versions/${releaseId}/`,
+              selected: true,
+              status: 'verified',
+              manifestBytes: expect.any(Number),
+              manifestSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+              proof: {
+                localArtifact: 'passed',
+                remoteCdn: 'not-run',
+                sharePointAppCatalog: 'not-run'
+              },
+              package: { bytes: expect.any(Number), status: 'verified' },
+              assets: [
+                expect.objectContaining({ path: 'main.js', bytes: expect.any(Number), status: 'verified' }),
+                expect.objectContaining({ path: 'styles.css', bytes: expect.any(Number), status: 'verified' })
+              ]
+            }
+          ]
+        },
+        shared: { status: 'reserved-unsupported', releases: [] }
+      },
+      selectedPointers: [{ appId, releaseId, status: 'selected-and-verified' }]
+    });
+  });
+
+  it('keeps valid sibling releases visible and marks missing or mismatched selections invalid', async () => {
+    const workspaceRoot = await temporaryDirectory();
+    const bucketRoot = resolveMockCdnBucketRoot(workspaceRoot);
+    const firstStage = await createStage(workspaceRoot, {
+      origin,
+      appId,
+      releaseId,
+      main: 'first();',
+      directoryName: 'first'
+    });
+    const secondReleaseId = '1.2.4-20260804T130000000Z-def456';
+    const secondStage = await createStage(workspaceRoot, {
+      origin,
+      appId,
+      releaseId: secondReleaseId,
+      main: 'second();',
+      directoryName: 'second'
+    });
+    await publishMockCdnAppStage({ bucketRoot, origin, stageDir: firstStage, select: true });
+    await publishMockCdnAppStage({ bucketRoot, origin, stageDir: secondStage });
+    await writeFile(path.join(bucketRoot, 'apps', appId, 'versions', secondReleaseId, 'upload', 'main.js'), 'changed');
+
+    const withInvalidSibling = await getMockCdnBucketInventory({ bucketRoot, origin });
+    expect(withInvalidSibling.namespaces.apps.releases).toEqual([
+      expect.objectContaining({ releaseId, selected: true, status: 'verified' }),
+      expect.objectContaining({ releaseId: secondReleaseId, selected: false, status: 'invalid' })
+    ]);
+    expect(withInvalidSibling.selectedPointers).toEqual([
+      expect.objectContaining({ appId, releaseId, status: 'selected-and-verified' })
+    ]);
+
+    await rm(path.join(bucketRoot, 'apps', appId, 'versions', releaseId), { recursive: true });
+    const withMissingSelection = await getMockCdnBucketInventory({ bucketRoot, origin });
+    expect(withMissingSelection.namespaces.apps.releases).toEqual([
+      expect.objectContaining({ releaseId: secondReleaseId, selected: false, status: 'invalid' })
+    ]);
+    expect(withMissingSelection.selectedPointers).toEqual([{ appId, releaseId, status: 'invalid' }]);
   });
 
   it('is idempotent only for identical releases and never overwrites conflicting bytes', async () => {

@@ -51,6 +51,7 @@ import { AddAppDrawer, AddAppMode } from './components/AddAppDrawer';
 import { ExportDrawer } from './components/ExportDrawer';
 import { AppManagementSidebar } from './components/AppManagementSidebar';
 import type { ExportPackageFormat } from './api/labApi';
+import { LocalCdnBucketDialog } from './components/LocalCdnBucketDialog';
 import {
   getBrowserStorage,
   getLabAppId,
@@ -89,6 +90,8 @@ export function LabApp(): JSX.Element {
   const [customBackground, setCustomBackground] = React.useState('#eef6ff');
   const [addDrawerOpen, setAddDrawerOpen] = React.useState(false);
   const [addMode, setAddMode] = React.useState<AddAppMode>('import');
+  const [localCdnBucketOpen, setLocalCdnBucketOpen] = React.useState(false);
+  const [cdnSelectionRevision, setCdnSelectionRevision] = React.useState(0);
   const [exportDrawerOpen, setExportDrawerOpen] = React.useState(false);
   const [exportTargets, setExportTargets] = React.useState<ExportPackageFormat[]>(['single', 'cdn']);
   const [panelCollapsed, setPanelCollapsed] = React.useState(false);
@@ -403,8 +406,10 @@ export function LabApp(): JSX.Element {
             boundsVisible={effectiveBoundsVisible}
             frameWidth={activeBreakpoint.width}
             mode={packageMode}
+            selectionRevision={cdnSelectionRevision}
             selected={selected}
             standaloneContent={standalonePreview}
+            onOpenBucket={() => setLocalCdnBucketOpen(true)}
           />
         </section>
 
@@ -513,6 +518,11 @@ export function LabApp(): JSX.Element {
           </>
         </aside>
 
+        <LocalCdnBucketDialog
+          open={localCdnBucketOpen}
+          onOpenChange={setLocalCdnBucketOpen}
+          onSelectionChanged={() => setCdnSelectionRevision((revision) => revision + 1)}
+        />
         {displayMode === 'edit' ? (
           <>
             <AddAppDrawer open={addDrawerOpen} mode={addMode} onOpenChange={setAddDrawerOpen} onModeChange={setAddMode} />
