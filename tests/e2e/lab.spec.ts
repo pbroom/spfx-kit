@@ -218,7 +218,7 @@ test('opens a distinct accessible Local CDN inventory table with a truthful empt
   expect((await inventory.boundingBox())?.height).toBeGreaterThan(100);
   await expect(dialog.getByRole('combobox', { name: 'Approved staged release' })).toBeVisible();
   await expect(dialog.getByRole('combobox', { name: 'Release used by Lab CDN mode' })).toBeVisible();
-  await expect(dialog).toContainText('Bucket inventory is the local control plane');
+  await expect(dialog.getByText('Bucket inventory is the local control plane')).toHaveCount(0);
   expect(
     await inventory.evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
   ).toMatchObject({ clientWidth: expect.any(Number), scrollWidth: expect.any(Number) });
@@ -242,7 +242,6 @@ test('opens a distinct accessible Local CDN inventory table with a truthful empt
   await dialog.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
-  await expect(dialog.getByText('Bucket inventory is the local control plane')).toBeVisible();
   await dialog.evaluate((element) => {
     element.scrollTop = 0;
   });
