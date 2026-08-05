@@ -4,8 +4,8 @@
   "statusContext": "spfx-kit/evidence-history-v1",
   "protectedTrees": {
     ".github/workflows": {
-      "entryCount": 2,
-      "sha256": "f50d1d24830c1c6785620f3ed2f5fa8e2718dca574e8da27fb24b1f8e221e828"
+      "entryCount": 3,
+      "sha256": "388e1acd287153250006c0fab8b118757484af059ee8b1086593df1b0f35cf13"
     },
     ".github/evidence-trust/v1": {
       "entryCount": 6,

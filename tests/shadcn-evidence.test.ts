@@ -18,6 +18,7 @@ const schemaBytes = readFileSync(schemaSource, 'utf8');
 const schemaSha256 = createHash('sha256').update(schemaBytes).digest('hex');
 const trustedFixturePaths = [
   path.join('.github', 'workflows', 'ci.yml'),
+  path.join('.github', 'workflows', 'codex-review-fix.yml'),
   path.join('.github', 'workflows', 'evidence-history.yml'),
   path.join('.github', 'evidence-trust', 'v1', '.npmrc'),
   path.join('.github', 'evidence-trust', 'v1', 'node-version'),
