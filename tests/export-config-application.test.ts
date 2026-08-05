@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { copyPortableSpfxSource } from '../packages/spfx-tools/src/lib/fs.mjs';
 import { withAppliedExportConfig } from '../packages/spfx-tools/src/lib/export/config.mjs';
 import { exportCdnPackage } from '../packages/spfx-tools/src/lib/export/targets.mjs';
+import { validGifBytes, validPngBytes } from './image-fixtures';
 
 const temporaryDirectories: string[] = [];
 
@@ -128,9 +129,11 @@ describe('export configuration application', () => {
           },
           paths: { zippedPackage: 'sharepoint/solution/configured-export.sppkg' }
         });
-        await expect(readFile(path.join(portableDir, 'sharepoint', 'assets', 'catalog-icon.png'))).resolves.toEqual(pngBytes());
+        await expect(readFile(path.join(portableDir, 'sharepoint', 'assets', 'catalog-icon.png'))).resolves.toEqual(
+          validPngBytes()
+        );
         await expect(readFile(path.join(portableDir, 'sharepoint', 'assets', 'screenshot.gif'))).resolves.toEqual(
-          Buffer.from('GIF89a', 'ascii')
+          validGifBytes()
         );
         await expect(readJson(path.join(portableDir, 'config', 'write-manifests.json'))).resolves.toMatchObject({
           cdnBasePath: 'https://cdn.configured.test/apps/export/'
@@ -180,7 +183,7 @@ describe('export configuration application', () => {
       }),
       writeJson(writeManifestsPath, { cdnBasePath: 'https://cdn.original.test/extension/' }),
       writeJson(path.join(appDir, '.spfx-kit', 'export-config.json'), legacyConfiguredOverrides),
-      writeFile(path.join(appDir, 'sharepoint', 'assets', 'catalog-icon.png'), pngBytes())
+      writeFile(path.join(appDir, 'sharepoint', 'assets', 'catalog-icon.png'), validPngBytes())
     ]);
     const originals = await Promise.all([
       readFile(packageJsonPath, 'utf8'),
@@ -356,8 +359,8 @@ async function createFixture() {
       preconfiguredEntries: [{ title: { default: 'Secondary web part' } }]
     }),
     writeJson(path.join(appDir, '.spfx-kit', 'export-config.json'), configuredOverrides),
-    writeFile(path.join(appDir, 'sharepoint', 'assets', 'catalog-icon.png'), pngBytes()),
-    writeFile(path.join(appDir, 'sharepoint', 'assets', 'screenshot.gif'), Buffer.from('GIF89a', 'ascii'))
+    writeFile(path.join(appDir, 'sharepoint', 'assets', 'catalog-icon.png'), validPngBytes()),
+    writeFile(path.join(appDir, 'sharepoint', 'assets', 'screenshot.gif'), validGifBytes())
   ]);
   return {
     root,
@@ -368,10 +371,6 @@ async function createFixture() {
     primaryManifestPath,
     secondaryManifestPath
   };
-}
-
-function pngBytes(): Buffer {
-  return Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 }
 
 async function readTrackedSource(fixture: Awaited<ReturnType<typeof createFixture>>) {

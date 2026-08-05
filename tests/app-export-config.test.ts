@@ -7,6 +7,7 @@ import {
   updateManagedAppExportConfig,
   validateExportConfig
 } from '../apps/lab/server/app-export-config';
+import { validGifBytes, validJpegBytes, validPngBytes } from './image-fixtures';
 
 const temporaryDirectories: string[] = [];
 
@@ -149,15 +150,66 @@ describe('managed app export configuration', () => {
       'does not exist'
     );
     await expect(validateExportConfig(appDir, { ...valid, catalogIconPath: 'assets/not-an-image.png' })).rejects.toThrow(
-      'contents do not match'
+      'corrupt or undecodable'
     );
     const outsideDir = await makeTemporaryDirectory('spfx-export-image-outside-');
     const outsideIcon = path.join(outsideDir, 'outside.png');
-    await writeFile(outsideIcon, pngBytes());
+    await writeFile(outsideIcon, validPngBytes());
     await symlink(outsideIcon, path.join(appDir, 'sharepoint', 'assets', 'linked.png'));
     await expect(validateExportConfig(appDir, { ...valid, catalogIconPath: 'assets/linked.png' })).rejects.toThrow(
       'symbolic links'
     );
+  });
+
+  it('accepts complete images and rejects truncated or excessive catalog image structures', async () => {
+    const appDir = await createFixture();
+    const assetsDir = path.join(appDir, 'sharepoint', 'assets');
+    const valid = {
+      appName: 'Fixture App',
+      fileName: 'fixture.sppkg',
+      description: '',
+      longDescription: '',
+      videoUrl: '',
+      appIcon: 'Page',
+      catalogIconPath: 'assets/catalog-icon.png',
+      screenshotPaths: ['assets/screenshot.gif', 'assets/screenshot.jpg'],
+      categories: [],
+      version: '1.2.3',
+      cdnUrl: '',
+      developerName: '',
+      developerWebsiteUrl: '',
+      privacyUrl: '',
+      termsOfUseUrl: '',
+      partnerId: ''
+    };
+    await writeFile(path.join(assetsDir, 'screenshot.jpg'), validJpegBytes());
+
+    await expect(validateExportConfig(appDir, valid)).resolves.toMatchObject({
+      catalogIconPath: 'assets/catalog-icon.png',
+      screenshotPaths: ['assets/screenshot.gif', 'assets/screenshot.jpg']
+    });
+
+    const corruptImages = [
+      ['truncated-signature.png', validPngBytes().subarray(0, 8)],
+      ['truncated-body.png', validPngBytes().subarray(0, -4)],
+      ['truncated-signature.gif', validGifBytes().subarray(0, 6)],
+      ['truncated-body.gif', validGifBytes().subarray(0, -1)],
+      ['truncated-signature.jpg', validJpegBytes().subarray(0, 3)],
+      ['truncated-body.jpg', validJpegBytes().subarray(0, -2)]
+    ] as const;
+    for (const [fileName, bytes] of corruptImages) {
+      await writeFile(path.join(assetsDir, fileName), bytes);
+      await expect(
+        validateExportConfig(appDir, { ...valid, catalogIconPath: '', screenshotPaths: [`assets/${fileName}`] })
+      ).rejects.toThrow(/truncated|missing|invalid|corrupt/i);
+    }
+
+    const excessiveGif = Buffer.from(validGifBytes());
+    excessiveGif.writeUInt16LE(8193, 6);
+    await writeFile(path.join(assetsDir, 'excessive.gif'), excessiveGif);
+    await expect(
+      validateExportConfig(appDir, { ...valid, catalogIconPath: '', screenshotPaths: ['assets/excessive.gif'] })
+    ).rejects.toThrow('dimensions');
   });
 
   it('migrates a legacy saved description while retaining package catalog defaults', async () => {
@@ -253,15 +305,11 @@ async function createFixture(): Promise<string> {
         }
       ]
     }),
-    writeFile(path.join(appDir, 'sharepoint', 'assets', 'catalog-icon.png'), pngBytes()),
-    writeFile(path.join(appDir, 'sharepoint', 'assets', 'screenshot.gif'), Buffer.from('GIF89a', 'ascii')),
+    writeFile(path.join(appDir, 'sharepoint', 'assets', 'catalog-icon.png'), validPngBytes()),
+    writeFile(path.join(appDir, 'sharepoint', 'assets', 'screenshot.gif'), validGifBytes()),
     writeFile(path.join(appDir, 'sharepoint', 'assets', 'not-an-image.png'), 'not an image')
   ]);
   return appDir;
-}
-
-function pngBytes(): Buffer {
-  return Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 }
 
 async function makeTemporaryDirectory(prefix: string): Promise<string> {
