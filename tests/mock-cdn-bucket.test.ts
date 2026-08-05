@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -52,6 +52,22 @@ describe('local mock CDN bucket contract', () => {
     const workspaceRoot = await temporaryDirectory();
     expect(resolveMockCdnBucketRoot(workspaceRoot)).toBe(path.join(workspaceRoot, '.spfx-kit', 'mock-cdn', 'v1'));
     expect(() => resolveMockCdnBucketRoot(workspaceRoot, '../outside')).toThrow('inside the workspace');
+  });
+
+  it('rejects a configured bucket whose root or ancestor resolves outside the real workspace', async () => {
+    const workspaceRoot = await temporaryDirectory();
+    const externalRoot = await temporaryDirectory();
+    const bucketRoot = resolveMockCdnBucketRoot(workspaceRoot);
+    await mkdir(path.dirname(bucketRoot), { recursive: true });
+    await symlink(externalRoot, bucketRoot, 'dir');
+
+    await expect(getMockCdnBucketStatus({ bucketRoot, origin })).rejects.toThrow('escapes its configured root');
+
+    await rm(bucketRoot);
+    const spfxKitDir = path.join(workspaceRoot, '.spfx-kit');
+    await rename(spfxKitDir, `${spfxKitDir}-original`);
+    await symlink(externalRoot, spfxKitDir, 'dir');
+    await expect(getMockCdnBucketStatus({ bucketRoot, origin })).rejects.toThrow('escapes its configured root');
   });
 
   it('publishes, explicitly selects, resolves, and reads one immutable verified app release', async () => {
@@ -210,17 +226,53 @@ describe('local mock CDN bucket contract', () => {
     await expect(resolveSelectedMockCdnAppRelease({ bucketRoot, origin, appId })).rejects.toThrow('pinned checksum');
   });
 
+  it('rejects a bucket-root swap before reading a selected release or cached release object', async () => {
+    const workspaceRoot = await temporaryDirectory();
+    const externalRoot = await temporaryDirectory();
+    const bucketRoot = resolveMockCdnBucketRoot(workspaceRoot);
+    const stageDir = await createStage(workspaceRoot, { origin, appId, releaseId, main: 'original();' });
+    await publishMockCdnAppStage({ bucketRoot, origin, stageDir, select: true });
+    const release = await resolveSelectedMockCdnAppRelease({ bucketRoot, origin, appId });
+    const preservedBucket = `${bucketRoot}-preserved`;
+    await rename(bucketRoot, preservedBucket);
+    await symlink(externalRoot, bucketRoot, 'dir');
+
+    await expect(resolveSelectedMockCdnAppRelease({ bucketRoot, origin, appId })).rejects.toThrow('escapes its configured root');
+    await expect(readMockCdnReleaseAsset(release, 'main.js')).rejects.toThrow('escapes its configured root');
+  });
+
   it('copies only the validated stage closure into the protected bucket', async () => {
     const workspaceRoot = await temporaryDirectory();
     const bucketRoot = resolveMockCdnBucketRoot(workspaceRoot);
-    const stageDir = await createStage(workspaceRoot, { origin, appId, releaseId, main: 'safe();' });
+    const stageDir = await createStage(workspaceRoot, {
+      origin,
+      appId,
+      releaseId,
+      main: 'safe();',
+      withGeneratedManifests: true
+    });
     await writeFile(path.join(stageDir, 'unrelated-secret.txt'), 'not published');
+    await writeFile(path.join(stageDir, 'manifests', 'unverified-note.txt'), 'not part of the verified closure');
+    await writeFile(path.join(stageDir, 'manifests', 'ignored.json'), '{"note":"not a component manifest"}\n');
     await publishMockCdnAppStage({ bucketRoot, origin, stageDir });
     const releaseDir = path.join(bucketRoot, 'apps', appId, 'versions', releaseId);
+    const publishedManifest = JSON.parse(await readFile(path.join(releaseDir, 'deployment-manifest.json'), 'utf8'));
 
+    expect(publishedManifest.manifests).toEqual({
+      root: null,
+      packageComponents: ['11111111-1111-4111-8111-111111111111'],
+      generatedComponents: [],
+      referencedFiles: 1
+    });
     await expect(access(path.join(releaseDir, 'unrelated-secret.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(access(path.join(releaseDir, 'README.md'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(access(path.join(releaseDir, 'manifests'))).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(access(path.join(releaseDir, 'upload', 'main.js'))).resolves.toBeUndefined();
+    await expect(resolveSelectedMockCdnAppRelease({ bucketRoot, origin, appId })).rejects.toThrow();
+    await selectMockCdnAppRelease({ bucketRoot, origin, appId, releaseId });
+    await expect(resolveSelectedMockCdnAppRelease({ bucketRoot, origin, appId })).resolves.toMatchObject({
+      manifest: { manifests: { root: null, generatedComponents: [] } }
+    });
   });
 });
 
@@ -232,7 +284,14 @@ async function temporaryDirectory(): Promise<string> {
 
 async function createStage(
   workspaceRoot: string,
-  options: { origin: string; appId: string; releaseId: string; main: string; directoryName?: string }
+  options: {
+    origin: string;
+    appId: string;
+    releaseId: string;
+    main: string;
+    directoryName?: string;
+    withGeneratedManifests?: boolean;
+  }
 ): Promise<string> {
   const stageDir = path.join(workspaceRoot, options.directoryName || 'stage');
   const uploadDir = path.join(stageDir, 'upload');
@@ -251,12 +310,20 @@ async function createStage(
     writeFileWithParents(path.join(uploadDir, 'main.js'), options.main),
     writeFileWithParents(path.join(uploadDir, 'styles.css'), '.fixture { color: red; }')
   ]);
+  const releaseManifestDir = options.withGeneratedManifests ? path.join(stageDir, 'manifests') : undefined;
+  if (releaseManifestDir) {
+    await writeFileWithParents(
+      path.join(releaseManifestDir, 'component.manifest.json'),
+      `${JSON.stringify(componentManifest, null, 2)}\n`
+    );
+  }
   const manifest = await createCdnStageManifest({
     allowLocalMockCdn: true,
     cdnBasePath,
     packageFile,
     releaseLabel: options.releaseId,
     releaseId: options.releaseId,
+    releaseManifestDir,
     slug: options.appId,
     stageDir,
     uploadDir

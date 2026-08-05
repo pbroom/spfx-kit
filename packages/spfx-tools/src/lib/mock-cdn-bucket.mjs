@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import { copyFile, lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { verifyCdnStage } from './cdn-stage.mjs';
@@ -11,6 +12,7 @@ export const DEFAULT_MOCK_CDN_BUCKET_PATH = '.spfx-kit/mock-cdn/v1';
 const selectedFileName = 'selected.json';
 const deploymentManifestFileName = 'deployment-manifest.json';
 const maximumSelectedBytes = 16 * 1024;
+const configuredBucketRoots = new Map();
 
 export function resolveMockCdnBucketRoot(workspaceRoot, configuredRoot = DEFAULT_MOCK_CDN_BUCKET_PATH) {
   const resolvedWorkspaceRoot = path.resolve(workspaceRoot);
@@ -19,6 +21,10 @@ export function resolveMockCdnBucketRoot(workspaceRoot, configuredRoot = DEFAULT
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error('The mock CDN bucket root must resolve inside the workspace.');
   }
+  configuredBucketRoots.set(resolvedBucketRoot, {
+    workspaceRoot: resolvedWorkspaceRoot,
+    realWorkspaceRoot: realpathSync(resolvedWorkspaceRoot)
+  });
   return resolvedBucketRoot;
 }
 
@@ -60,6 +66,7 @@ export function mockCdnSharedReleaseBaseUrl(origin, bundleId, releaseId) {
 
 export async function publishMockCdnAppStage({ bucketRoot, origin, stageDir, select = false }) {
   const resolvedBucketRoot = path.resolve(bucketRoot);
+  const bucketConfiguration = await assertConfiguredBucketRoot(resolvedBucketRoot, { allowMissing: true });
   const resolvedStageDir = path.resolve(stageDir);
   const sourceManifestBytes = await readBoundedFile(
     path.join(resolvedStageDir, deploymentManifestFileName),
@@ -74,6 +81,8 @@ export async function publishMockCdnAppStage({ bucketRoot, origin, stageDir, sel
   if (sourceManifest.cdnBasePath !== expectedBaseUrl) {
     throw new Error(`Staged CDN base path must exactly match the configured mock CDN release URL: ${expectedBaseUrl}`);
   }
+  const publishedManifest = canonicalPublishedManifest(sourceManifest, sourceManifestValue.generatedAt);
+  const publishedManifestBytes = Buffer.from(`${JSON.stringify(publishedManifest, null, 2)}\n`);
 
   await ensureSafeDirectory(resolvedBucketRoot, '');
   const versionsRelative = appVersionsRelativePath(appId);
@@ -85,7 +94,7 @@ export async function publishMockCdnAppStage({ bucketRoot, origin, stageDir, sel
 
   try {
     await mkdir(temporaryDir);
-    await copyValidatedStage(resolvedStageDir, temporaryDir, sourceManifest);
+    await copyValidatedStage(resolvedStageDir, temporaryDir, sourceManifest, publishedManifestBytes);
     const copiedManifestBytes = await readFile(path.join(temporaryDir, deploymentManifestFileName));
     const copiedManifest = await verifyCdnStage(
       temporaryDir,
@@ -95,6 +104,7 @@ export async function publishMockCdnAppStage({ bucketRoot, origin, stageDir, sel
     if (copiedManifest.cdnBasePath !== expectedBaseUrl) {
       throw new Error('Published CDN stage changed its configured release URL during intake.');
     }
+    await assertConfiguredBucketRoot(resolvedBucketRoot, { configuration: bucketConfiguration });
 
     try {
       await rename(temporaryDir, releaseDir);
@@ -103,13 +113,13 @@ export async function publishMockCdnAppStage({ bucketRoot, origin, stageDir, sel
       if (!isAlreadyExistsError(error)) {
         throw error;
       }
-      await assertIdenticalPublishedRelease(releaseDir, sourceManifestBytes, expectedBaseUrl);
+      await assertIdenticalPublishedRelease(releaseDir, publishedManifestBytes, expectedBaseUrl);
     }
   } finally {
     await rm(temporaryDir, { recursive: true, force: true });
   }
 
-  const manifestSha256 = sha256(sourceManifestBytes);
+  const manifestSha256 = sha256(publishedManifestBytes);
   if (select) {
     await selectMockCdnAppRelease({ bucketRoot: resolvedBucketRoot, origin, appId, releaseId });
   }
@@ -127,6 +137,7 @@ export async function publishMockCdnAppStage({ bucketRoot, origin, stageDir, sel
 
 export async function selectMockCdnAppRelease({ bucketRoot, origin, appId, releaseId }) {
   const resolvedBucketRoot = path.resolve(bucketRoot);
+  const bucketConfiguration = await assertConfiguredBucketRoot(resolvedBucketRoot);
   const normalizedAppId = normalizeBucketName(appId, 'app id');
   const normalizedReleaseId = normalizeCdnReleaseId(releaseId);
   const release = await loadMockCdnAppRelease({
@@ -143,12 +154,14 @@ export async function selectMockCdnAppRelease({ bucketRoot, origin, appId, relea
     releaseId: normalizedReleaseId,
     deploymentManifestSha256: release.manifestSha256
   };
+  await assertConfiguredBucketRoot(resolvedBucketRoot, { configuration: bucketConfiguration });
   await writeJsonAtomically(appDir, selectedFileName, pointer);
   return pointer;
 }
 
 export async function readSelectedMockCdnAppReference({ bucketRoot, appId }) {
   const resolvedBucketRoot = path.resolve(bucketRoot);
+  await assertConfiguredBucketRoot(resolvedBucketRoot);
   const normalizedAppId = normalizeBucketName(appId, 'app id');
   const appDir = safeLocalPath(resolvedBucketRoot, `apps/${normalizedAppId}`);
   await assertRealDirectoryWithin(resolvedBucketRoot, appDir, 'Mock CDN app bucket');
@@ -178,6 +191,7 @@ export async function resolveSelectedMockCdnAppRelease({ bucketRoot, origin, app
 
 export async function loadMockCdnAppRelease({ bucketRoot, origin, appId, releaseId }) {
   const resolvedBucketRoot = path.resolve(bucketRoot);
+  const bucketConfiguration = await assertConfiguredBucketRoot(resolvedBucketRoot);
   const normalizedAppId = normalizeBucketName(appId, 'app id');
   const normalizedReleaseId = normalizeCdnReleaseId(releaseId);
   const releaseDir = safeLocalPath(resolvedBucketRoot, appReleaseRelativePath(normalizedAppId, normalizedReleaseId));
@@ -211,12 +225,16 @@ export async function loadMockCdnAppRelease({ bucketRoot, origin, appId, release
     releaseId: normalizedReleaseId,
     releaseBaseUrl: expectedBaseUrl,
     releaseDir,
+    bucketRoot: resolvedBucketRoot,
+    workspaceRoot: bucketConfiguration.workspaceRoot,
+    realWorkspaceRoot: bucketConfiguration.realWorkspaceRoot,
     manifest,
     manifestSha256: sha256(manifestBytes)
   });
 }
 
 export async function readMockCdnReleaseAsset(release, assetPath) {
+  await assertReleaseBucketAnchor(release);
   assertPortableAssetPath(assetPath, 'Mock CDN asset path');
   const matches = release.manifest.files.filter((file) => file.path === assetPath);
   if (matches.length !== 1) {
@@ -239,6 +257,7 @@ export async function readMockCdnReleaseAsset(release, assetPath) {
 }
 
 export async function readMockCdnReleaseManifest(release) {
+  await assertReleaseBucketAnchor(release);
   const manifestFile = safeLocalPath(release.releaseDir, deploymentManifestFileName);
   const bytes = await readBoundedRealFile(
     release.releaseDir,
@@ -260,6 +279,7 @@ export async function readMockCdnReleaseManifest(release) {
 
 export async function getMockCdnBucketStatus({ bucketRoot, origin, appId } = {}) {
   const resolvedBucketRoot = path.resolve(bucketRoot);
+  await assertConfiguredBucketRoot(resolvedBucketRoot, { allowMissing: true });
   if (appId) {
     const release = await resolveSelectedMockCdnAppRelease({ bucketRoot: resolvedBucketRoot, origin, appId });
     return {
@@ -315,17 +335,28 @@ function describeRelease(release) {
   };
 }
 
-async function copyValidatedStage(sourceDir, targetDir, manifest) {
-  await writeFile(
-    path.join(targetDir, deploymentManifestFileName),
-    await readFile(path.join(sourceDir, deploymentManifestFileName))
-  );
+function canonicalPublishedManifest(sourceManifest, generatedAt) {
+  return {
+    ...sourceManifest,
+    generatedAt,
+    files: sourceManifest.files.map((file) => ({
+      ...file,
+      referencedBy: file.referencedBy.filter((reference) => reference.startsWith('SPFx package:'))
+    })),
+    manifests: {
+      root: null,
+      packageComponents: sourceManifest.manifests.packageComponents,
+      generatedComponents: [],
+      referencedFiles: sourceManifest.manifests.referencedFiles
+    }
+  };
+}
+
+async function copyValidatedStage(sourceDir, targetDir, manifest, publishedManifestBytes) {
+  await writeFile(path.join(targetDir, deploymentManifestFileName), publishedManifestBytes);
   await copyRealFile(sourceDir, targetDir, manifest.package.path);
   for (const file of manifest.files) {
     await copyRealFile(sourceDir, targetDir, `${manifest.uploadRoot}/${file.path}`);
-  }
-  if (manifest.manifests.root) {
-    await copyRealDirectory(sourceDir, targetDir, manifest.manifests.root);
   }
 }
 
@@ -335,26 +366,6 @@ async function copyRealFile(sourceRoot, targetRoot, relativePath) {
   await assertRealFileWithin(sourceRoot, source, 'Published mock CDN source file');
   await mkdir(path.dirname(target), { recursive: true });
   await copyFile(source, target);
-}
-
-async function copyRealDirectory(sourceRoot, targetRoot, relativePath) {
-  const source = safeLocalPath(sourceRoot, relativePath);
-  await assertRealDirectoryWithin(sourceRoot, source, 'Published mock CDN source directory');
-  const entries = await readdir(source, { withFileTypes: true });
-  await mkdir(safeLocalPath(targetRoot, relativePath), { recursive: true });
-  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    const entryRelativePath = `${relativePath}/${entry.name}`;
-    if (entry.isSymbolicLink()) {
-      throw new Error(`Published mock CDN source may not contain symbolic links: ${entryRelativePath}`);
-    }
-    if (entry.isDirectory()) {
-      await copyRealDirectory(sourceRoot, targetRoot, entryRelativePath);
-    } else if (entry.isFile()) {
-      await copyRealFile(sourceRoot, targetRoot, entryRelativePath);
-    } else {
-      throw new Error(`Published mock CDN source contains a non-regular entry: ${entryRelativePath}`);
-    }
-  }
 }
 
 async function assertIdenticalPublishedRelease(releaseDir, sourceManifestBytes, expectedBaseUrl) {
@@ -440,6 +451,68 @@ async function ensureSafeDirectory(rootDir, relativePath) {
   }
   await assertRealDirectoryWithin(resolvedRoot, current, 'Mock CDN bucket directory');
   return current;
+}
+
+async function assertReleaseBucketAnchor(release) {
+  if (
+    !release ||
+    typeof release.bucketRoot !== 'string' ||
+    typeof release.workspaceRoot !== 'string' ||
+    typeof release.realWorkspaceRoot !== 'string'
+  ) {
+    throw new Error('Mock CDN release is missing its workspace trust anchor.');
+  }
+  await assertConfiguredBucketRoot(release.bucketRoot, {
+    configuration: {
+      workspaceRoot: release.workspaceRoot,
+      realWorkspaceRoot: release.realWorkspaceRoot
+    }
+  });
+  await assertRealDirectoryWithin(release.bucketRoot, release.releaseDir, 'Mock CDN app release');
+}
+
+async function assertConfiguredBucketRoot(bucketRoot, { allowMissing = false, configuration } = {}) {
+  const resolvedBucketRoot = path.resolve(bucketRoot);
+  const registered = configuration || configuredBucketRoots.get(resolvedBucketRoot);
+  if (!registered) {
+    throw new Error('Mock CDN bucket root must be created by resolveMockCdnBucketRoot.');
+  }
+  const currentRealWorkspaceRoot = await realpath(registered.workspaceRoot);
+  if (currentRealWorkspaceRoot !== registered.realWorkspaceRoot) {
+    throw new Error('The mock CDN workspace root changed after bucket configuration.');
+  }
+  const lexicalRelative = path.relative(registered.workspaceRoot, resolvedBucketRoot);
+  if (!lexicalRelative || lexicalRelative.startsWith('..') || path.isAbsolute(lexicalRelative)) {
+    throw new Error('The mock CDN bucket root must remain inside the configured workspace.');
+  }
+  let existingPath = resolvedBucketRoot;
+  while (true) {
+    try {
+      await lstat(existingPath);
+      break;
+    } catch (error) {
+      if (!isMissingError(error)) {
+        throw error;
+      }
+      if (!allowMissing && existingPath === resolvedBucketRoot) {
+        throw error;
+      }
+      const parent = path.dirname(existingPath);
+      if (parent === existingPath) {
+        throw error;
+      }
+      existingPath = parent;
+    }
+  }
+  const realExistingPath = await realpath(existingPath);
+  assertContained(registered.realWorkspaceRoot, realExistingPath, 'Mock CDN bucket root');
+  if (existingPath === resolvedBucketRoot) {
+    const stats = await lstat(resolvedBucketRoot);
+    if (!stats.isDirectory() || stats.isSymbolicLink()) {
+      throw new Error('Mock CDN bucket root must be a real directory.');
+    }
+  }
+  return registered;
 }
 
 async function ensureDirectoryPath(directory) {
