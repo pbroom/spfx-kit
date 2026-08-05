@@ -59,23 +59,25 @@ test.describe('real local mock-CDN artifact', () => {
     await page.getByRole('button', { name: 'Local CDN bucket' }).click();
     const bucketDialog = page.getByRole('dialog', { name: 'Local CDN bucket' });
     await expect(bucketDialog).toBeVisible();
+    const inventory = bucketDialog.getByRole('region', { name: 'Local CDN bucket inventory' });
+    const sourceRelease = inventory.locator(`[data-release-id="${manifest.releaseId}"]`);
+    await expect(sourceRelease).toContainText('Published checksums anchored · verify on selection');
+    await expect(sourceRelease).toContainText(
+      'Source: GitHub staging (declared private) · example-private/hello-card-staging@0123456789ab…'
+    );
+    await expect(sourceRelease).toContainText('hello-card-spfx/browser-e2e/staging-cdn · source closure verified at publish');
+    await expect(sourceRelease.getByRole('link')).toHaveCount(0);
+    await expect(bucketDialog).not.toContainText(exportsRoot);
     const approvedSource = bucketDialog.getByRole('combobox', { name: 'Approved staged release' });
     await approvedSource.click();
-    await page.getByRole('option').filter({ hasText: 'browser-e2e' }).click();
-    await expect(approvedSource).toHaveAttribute('aria-expanded', 'false');
-    const publishButton = bucketDialog.getByRole('button', { name: 'Publish immutable release' });
-    await expect(publishButton).toBeEnabled();
+    await page.getByRole('option').filter({ hasText: 'browser-e2e-manual' }).click();
     const publishResponse = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return url.pathname === '/api/local-cdn/publish' && response.request().method() === 'POST';
     });
-    await publishButton.click();
+    await bucketDialog.getByRole('button', { name: 'Publish immutable release' }).click();
     expect((await publishResponse).status()).toBe(201);
     await expect(bucketDialog.getByRole('status')).toContainText('Immutable release published');
-    const inventory = bucketDialog.getByRole('region', { name: 'Local CDN bucket inventory' });
-    await expect(inventory.locator(`[data-release-id="${manifest.releaseId}"]`)).toContainText(
-      'Manifest verified · not selected'
-    );
     await bucketDialog.getByRole('button', { name: 'Close Local CDN bucket' }).click();
 
     const unavailableDescriptor = page.waitForResponse((response) => {
@@ -89,7 +91,7 @@ test.describe('real local mock-CDN artifact', () => {
 
     await page.getByRole('button', { name: 'Local CDN bucket' }).click();
     await bucketDialog.getByRole('combobox', { name: 'Release used by Lab CDN mode' }).click();
-    await page.getByRole('option').filter({ hasText: 'hello-card-spfx' }).click();
+    await page.getByRole('option').filter({ hasText: 'browser-e2e.1' }).click();
 
     const descriptorResponse = page.waitForResponse((response) => {
       const url = new URL(response.url());

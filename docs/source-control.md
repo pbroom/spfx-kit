@@ -124,6 +124,37 @@ The table is an inventory/control plane; the app-scoped **Package resources**
 table separately reports browser delivery evidence for the currently selected
 release.
 
+### Reviewed GitHub source for local staging
+
+Private GitHub content may feed the Lab staging path through a pinned source
+descriptor. The intended staging service authenticates to GitHub, pulls the
+descriptor's exact 40-character commit, and supplies the checkout or safely
+extracted archive to Kit's intake boundary. The current local adapter is:
+
+```sh
+npm run mock-cdn -- publish-source \
+  --descriptor ./github-staging-source.json \
+  --materialization /path/to/exact-checkout
+```
+
+The descriptor names `owner/repository`, a repository-relative directory, the
+full commit SHA, the deployment-manifest SHA-256, and the sorted size/hash
+closure of every file eligible for canonical publication. SPFx Kit does not
+fetch raw GitHub URLs, receive tokens, infer a branch, or extract archives. The
+staging service owns the authenticated pull; Kit verifies the bytes at the
+materialization adapter and delegates to the existing immutable staging bucket
+publisher. Selection remains a separate explicit action unless `--select` is
+supplied.
+
+The resulting chain is **private GitHub source -> staging CDN bucket -> Lab**.
+The loopback mock CDN implements that staging bucket for development. The local
+checkout is only the staging service adapter, not a reversed filesystem-to-CDN
+product flow. GitHub is source provenance, never the browser delivery origin.
+The descriptor declares private visibility; the authenticated staging service,
+not SPFx Kit, establishes that repository access.
+This does not replace production CDN publication, App Catalog upload, or
+SharePoint runtime validation.
+
 ## Third-party apps (repos shared with you)
 
 Use `clone:spfx` instead of `import:spfx` when you plan to send changes or

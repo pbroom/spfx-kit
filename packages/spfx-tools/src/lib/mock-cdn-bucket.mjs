@@ -3,7 +3,17 @@ import { realpathSync } from 'node:fs';
 import { copyFile, lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { verifyCdnStage } from './cdn-stage.mjs';
+import { parseCdnStageManifestV1 } from './cdn-stage-contract.mjs';
 import { assertPortableAssetPath, normalizeCdnReleaseId, safeLocalPath } from './cdn-stage-paths.mjs';
+import {
+  assertIdenticalMockCdnReleaseProvenance,
+  createMockCdnReleaseProvenance,
+  loadMockCdnReleaseRecord,
+  loadMockCdnSourceProvenance,
+  verifyMockCdnSourceProvenanceClosure,
+  writeMockCdnReleaseProvenance
+} from './mock-cdn-release-provenance.mjs';
+import { withMockCdnSourceSnapshot } from './mock-cdn-source-snapshot.mjs';
 
 export const MOCK_CDN_BUCKET_SCHEMA_VERSION = 1;
 export const DEFAULT_MOCK_CDN_ORIGIN = 'http://127.0.0.1:5174';
@@ -64,12 +74,21 @@ export function mockCdnSharedReleaseBaseUrl(origin, bundleId, releaseId) {
   return `${normalizedOrigin}/shared/${encodeURIComponent(normalizedBundleId)}/versions/${encodeURIComponent(normalizedReleaseId)}/`;
 }
 
-export async function publishMockCdnAppStage({
+export async function publishMockCdnAppStage(options) {
+  const { sourceRoot, stageDir, sourceProvenance, _sourceSnapshotTestHooks: hooks } = options;
+  return withMockCdnSourceSnapshot(
+    { sourceRoot, stageDir, sourceProvenance, hooks },
+    (stableSource) => publishMockCdnAppStageFromStableSource({ ...options, ...stableSource })
+  );
+}
+
+async function publishMockCdnAppStageFromStableSource({
   bucketRoot,
   origin,
   stageDir,
-  select = false,
-  expectedManifestSha256
+  select,
+  expectedManifestSha256,
+  sourceProvenance
 }) {
   const resolvedBucketRoot = path.resolve(bucketRoot);
   const bucketConfiguration = await assertConfiguredBucketRoot(resolvedBucketRoot, { allowMissing: true });
@@ -81,8 +100,22 @@ export async function publishMockCdnAppStage({
   }
   const { manifest: sourceManifest } = inspected;
   const { appId, releaseId, releaseBaseUrl: expectedBaseUrl } = inspected;
+  const validatedSourceProvenance = await verifyMockCdnSourceProvenanceClosure({
+    stageDir: resolvedStageDir,
+    manifest: sourceManifest,
+    sourceManifestSha256: inspected.manifestSha256,
+    sourceProvenance
+  });
   const publishedManifest = canonicalPublishedManifest(sourceManifest, sourceManifest.generatedAt);
   const publishedManifestBytes = Buffer.from(`${JSON.stringify(publishedManifest, null, 2)}\n`);
+  const manifestSha256 = sha256(publishedManifestBytes);
+  const releaseProvenance = createMockCdnReleaseProvenance({
+    schemaVersion: MOCK_CDN_BUCKET_SCHEMA_VERSION,
+    appId,
+    releaseId,
+    deploymentManifestSha256: manifestSha256,
+    sourceProvenance: validatedSourceProvenance
+  });
 
   await ensureSafeDirectory(resolvedBucketRoot, '');
   const versionsRelative = appVersionsRelativePath(appId);
@@ -94,7 +127,14 @@ export async function publishMockCdnAppStage({
 
   try {
     await mkdir(temporaryDir);
-    await copyValidatedStage(resolvedStageDir, temporaryDir, sourceManifest, publishedManifestBytes);
+    await copyValidatedStage(
+      resolvedStageDir,
+      temporaryDir,
+      sourceManifest,
+      publishedManifestBytes,
+      releaseProvenance.releaseRecordBytes,
+      releaseProvenance.sourceProvenanceBytes
+    );
     const copiedManifestBytes = await readFile(path.join(temporaryDir, deploymentManifestFileName));
     const copiedManifest = await verifyCdnStage(
       temporaryDir,
@@ -104,6 +144,21 @@ export async function publishMockCdnAppStage({
     if (copiedManifest.cdnBasePath !== expectedBaseUrl) {
       throw new Error('Published CDN stage changed its configured release URL during intake.');
     }
+    const copiedRecord = await loadMockCdnReleaseRecord({
+      releaseDir: temporaryDir,
+      schemaVersion: MOCK_CDN_BUCKET_SCHEMA_VERSION,
+      appId,
+      releaseId,
+      deploymentManifestSha256: sha256(copiedManifestBytes),
+      readBoundedRealFile
+    });
+    await loadMockCdnSourceProvenance({
+      releaseDir: temporaryDir,
+      manifest: copiedManifest,
+      deploymentManifestSha256: sha256(copiedManifestBytes),
+      releaseRecord: copiedRecord,
+      readBoundedRealFile
+    });
     await assertConfiguredBucketRoot(resolvedBucketRoot, { configuration: bucketConfiguration });
 
     try {
@@ -113,13 +168,18 @@ export async function publishMockCdnAppStage({
       if (!isAlreadyExistsError(error)) {
         throw error;
       }
-      await assertIdenticalPublishedRelease(releaseDir, publishedManifestBytes, expectedBaseUrl);
+      await assertIdenticalPublishedRelease(
+        releaseDir,
+        publishedManifestBytes,
+        expectedBaseUrl,
+        releaseProvenance.releaseRecordBytes,
+        releaseProvenance.sourceProvenanceBytes
+      );
     }
   } finally {
     await rm(temporaryDir, { recursive: true, force: true });
   }
 
-  const manifestSha256 = sha256(publishedManifestBytes);
   if (select) {
     await selectMockCdnAppRelease({ bucketRoot: resolvedBucketRoot, origin, appId, releaseId });
   }
@@ -131,7 +191,10 @@ export async function publishMockCdnAppStage({
     manifestSha256,
     files: sourceManifest.files.length,
     published,
-    selected: Boolean(select)
+    selected: Boolean(select),
+    ...(releaseProvenance.sourceProvenanceSummary
+      ? { sourceProvenance: releaseProvenance.sourceProvenanceSummary }
+      : {})
   };
 }
 
@@ -220,6 +283,16 @@ export async function resolveSelectedMockCdnAppRelease({ bucketRoot, origin, app
 }
 
 export async function loadMockCdnAppRelease({ bucketRoot, origin, appId, releaseId }) {
+  return loadMockCdnAppReleaseMetadata({ bucketRoot, origin, appId, releaseId, verifyFiles: true });
+}
+
+async function loadMockCdnAppReleaseMetadata({
+  bucketRoot,
+  origin,
+  appId,
+  releaseId,
+  verifyFiles = false
+}) {
   const resolvedBucketRoot = path.resolve(bucketRoot);
   const bucketConfiguration = await assertConfiguredBucketRoot(resolvedBucketRoot);
   const normalizedAppId = normalizeBucketName(appId, 'app id');
@@ -234,9 +307,9 @@ export async function loadMockCdnAppRelease({ bucketRoot, origin, appId, release
     'Mock CDN deployment manifest'
   );
   const persistedManifest = parseJson(manifestBytes, 'Mock CDN deployment manifest');
-  const rebuiltManifest = await verifyCdnStage(releaseDir, persistedManifest, {
-    allowLocalMockCdn: true
-  });
+  const rebuiltManifest = verifyFiles
+    ? await verifyCdnStage(releaseDir, persistedManifest, { allowLocalMockCdn: true })
+    : parseCdnStageManifestV1(persistedManifest, { allowLocalMockCdn: true });
   const expectedBaseUrl = mockCdnAppReleaseBaseUrl(origin, normalizedAppId, normalizedReleaseId);
   if (
     rebuiltManifest.slug !== normalizedAppId ||
@@ -249,6 +322,22 @@ export async function loadMockCdnAppRelease({ bucketRoot, origin, appId, release
     ...rebuiltManifest,
     generatedAt: persistedManifest.generatedAt
   });
+  const releaseRecord = await loadMockCdnReleaseRecord({
+    releaseDir,
+    schemaVersion: MOCK_CDN_BUCKET_SCHEMA_VERSION,
+    appId: normalizedAppId,
+    releaseId: normalizedReleaseId,
+    deploymentManifestSha256: sha256(manifestBytes),
+    readBoundedRealFile
+  });
+  const sourceProvenance = await loadMockCdnSourceProvenance({
+    releaseDir,
+    manifest,
+    deploymentManifestSha256: sha256(manifestBytes),
+    releaseRecord,
+    readBoundedRealFile,
+    anchorOnly: !verifyFiles
+  });
   return Object.freeze({
     namespace: 'app',
     appId: normalizedAppId,
@@ -260,7 +349,9 @@ export async function loadMockCdnAppRelease({ bucketRoot, origin, appId, release
     realWorkspaceRoot: bucketConfiguration.realWorkspaceRoot,
     manifest,
     manifestSha256: sha256(manifestBytes),
-    manifestBytes: manifestBytes.length
+    manifestBytes: manifestBytes.length,
+    metadataAnchored: Boolean(releaseRecord),
+    ...(sourceProvenance ? { sourceProvenance } : {})
   });
 }
 
@@ -432,15 +523,16 @@ export async function getMockCdnBucketInventory({ bucketRoot, origin } = {}) {
         selectedReleaseFound = true;
       }
       try {
-        const release = await loadMockCdnAppRelease({
+        const release = await loadMockCdnAppReleaseMetadata({
           bucketRoot: resolvedBucketRoot,
           origin: normalizedOrigin,
           appId,
-          releaseId
+          releaseId,
+          verifyFiles: selectedRelease
         });
         const pointerMatches =
           selectedRelease && selected.deploymentManifestSha256 === release.manifestSha256;
-        releases.push(describeInventoryRelease(release, pointerMatches));
+        releases.push(describeInventoryRelease(release, pointerMatches, selectedRelease));
         if (selectedRelease && !pointerMatches) {
           selectedPointers[selectedPointers.length - 1] = { appId, releaseId, status: 'invalid' };
         } else if (pointerMatches) {
@@ -509,7 +601,8 @@ function emptyInventory(origin) {
   };
 }
 
-function describeInventoryRelease(release, selected) {
+function describeInventoryRelease(release, selected, filesVerified) {
+  const integrityStatus = filesVerified ? 'verified' : release.metadataAnchored ? 'anchored' : 'recorded';
   return {
     namespace: 'app',
     appId: release.appId,
@@ -518,17 +611,18 @@ function describeInventoryRelease(release, selected) {
     namespacePath: `${appReleaseRelativePath(release.appId, release.releaseId)}/`,
     releaseBaseUrl: release.releaseBaseUrl,
     selected: Boolean(selected),
-    status: 'verified',
+    status: integrityStatus,
     generatedAt: release.manifest.generatedAt,
     manifestSha256: release.manifestSha256,
     manifestBytes: release.manifestBytes,
     proof: { ...release.manifest.proof },
-    package: { ...release.manifest.package, status: 'verified' },
+    package: { ...release.manifest.package, status: integrityStatus },
     components: {
       package: [...release.manifest.manifests.packageComponents],
       generated: [...release.manifest.manifests.generatedComponents]
     },
-    assets: release.manifest.files.map((file) => ({ ...file, status: 'verified' }))
+    assets: release.manifest.files.map((file) => ({ ...file, status: integrityStatus })),
+    ...(release.sourceProvenance ? { sourceProvenance: release.sourceProvenance.summary } : {})
   };
 }
 
@@ -560,8 +654,16 @@ function canonicalPublishedManifest(sourceManifest, generatedAt) {
   };
 }
 
-async function copyValidatedStage(sourceDir, targetDir, manifest, publishedManifestBytes) {
+async function copyValidatedStage(
+  sourceDir,
+  targetDir,
+  manifest,
+  publishedManifestBytes,
+  releaseRecordBytes,
+  sourceProvenanceBytes
+) {
   await writeFile(path.join(targetDir, deploymentManifestFileName), publishedManifestBytes);
+  await writeMockCdnReleaseProvenance({ targetDir, releaseRecordBytes, sourceProvenanceBytes });
   await copyRealFile(sourceDir, targetDir, manifest.package.path);
   for (const file of manifest.files) {
     await copyRealFile(sourceDir, targetDir, `${manifest.uploadRoot}/${file.path}`);
@@ -576,7 +678,13 @@ async function copyRealFile(sourceRoot, targetRoot, relativePath) {
   await copyFile(source, target);
 }
 
-async function assertIdenticalPublishedRelease(releaseDir, sourceManifestBytes, expectedBaseUrl) {
+async function assertIdenticalPublishedRelease(
+  releaseDir,
+  sourceManifestBytes,
+  expectedBaseUrl,
+  releaseRecordBytes,
+  sourceProvenanceBytes
+) {
   const existingManifestFile = safeLocalPath(releaseDir, deploymentManifestFileName);
   const existingManifestBytes = await readBoundedRealFile(
     releaseDir,
@@ -595,6 +703,17 @@ async function assertIdenticalPublishedRelease(releaseDir, sourceManifestBytes, 
   if (existing.cdnBasePath !== expectedBaseUrl) {
     throw new Error('Existing mock CDN release has a different configured base URL.');
   }
+  await assertIdenticalMockCdnReleaseProvenance({
+    releaseDir,
+    schemaVersion: MOCK_CDN_BUCKET_SCHEMA_VERSION,
+    appId: existing.slug,
+    releaseId: existing.releaseId,
+    manifest: existing,
+    deploymentManifestSha256: sha256(existingManifestBytes),
+    releaseRecordBytes,
+    sourceProvenanceBytes,
+    readBoundedRealFile
+  });
 }
 
 async function writeJsonAtomically(directory, fileName, value) {

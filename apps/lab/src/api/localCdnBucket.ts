@@ -21,7 +21,7 @@ export interface LocalCdnBucketInventory {
   publishSources: LocalCdnPublishSource[];
 }
 
-export type LocalCdnAppRelease = LocalCdnVerifiedRelease | LocalCdnInvalidRelease;
+export type LocalCdnAppRelease = LocalCdnInspectableRelease | LocalCdnInvalidRelease;
 
 interface LocalCdnReleaseIdentity {
   namespace: 'app';
@@ -32,8 +32,8 @@ interface LocalCdnReleaseIdentity {
   selected: boolean;
 }
 
-export interface LocalCdnVerifiedRelease extends LocalCdnReleaseIdentity {
-  status: 'verified';
+export interface LocalCdnInspectableRelease extends LocalCdnReleaseIdentity {
+  status: 'verified' | 'anchored' | 'recorded';
   generatedAt: string;
   releaseLabel: string;
   manifestSha256: string;
@@ -47,13 +47,27 @@ export interface LocalCdnVerifiedRelease extends LocalCdnReleaseIdentity {
     path: string;
     bytes: number;
     sha256: string;
-    status: 'verified';
+    status: 'verified' | 'anchored' | 'recorded';
   };
   components: {
     package: string[];
     generated: string[];
   };
   assets: LocalCdnBucketAsset[];
+  sourceProvenance?: GitHubStagingSourceProvenance;
+}
+
+export interface GitHubStagingSourceProvenance {
+  kind: 'github-directory';
+  visibility: 'private';
+  repository: string;
+  commit: string;
+  path: string;
+  descriptorSha256: string;
+  sourceManifestSha256: string;
+  releaseManifestSha256: string;
+  files: number;
+  status: 'staging-closure-verified';
 }
 
 export interface LocalCdnInvalidRelease extends LocalCdnReleaseIdentity {
@@ -66,7 +80,7 @@ export interface LocalCdnBucketAsset {
   bytes: number;
   sha256: string;
   referencedBy: string[];
-  status: 'verified';
+  status: 'verified' | 'anchored' | 'recorded';
 }
 
 export type LocalCdnSelectedPointer =
@@ -152,7 +166,7 @@ export function validateLocalCdnBucketInventory(value: unknown): LocalCdnBucketI
     uniqueReleases.add(key);
   }
   if (
-    releases.reduce((count, release) => count + (release.status === 'verified' ? release.assets.length : 0), 0) > MAX_TOTAL_ASSETS
+    releases.reduce((count, release) => count + (release.status === 'invalid' ? 0 : release.assets.length), 0) > MAX_TOTAL_ASSETS
   ) {
     throw new Error('Local CDN bucket inventory contains too many assets for browser inspection.');
   }
@@ -205,8 +219,12 @@ function validateRelease(value: unknown, origin: string, index: number): LocalCd
   if (release.status === 'invalid') {
     return { ...identity, status: 'invalid' };
   }
-  if (release.status !== 'verified') {
+  if (release.status !== 'verified' && release.status !== 'anchored' && release.status !== 'recorded') {
     throw new Error(`Local CDN release ${index} has an invalid integrity state.`);
+  }
+  const integrityStatus = release.status;
+  if (integrityStatus !== 'verified' && release.selected) {
+    throw new Error(`Local CDN release ${index} cannot claim selection without deep verification.`);
   }
 
   const generatedAt = requireString(release.generatedAt, `release ${index} generatedAt`);
@@ -219,8 +237,8 @@ function validateRelease(value: unknown, origin: string, index: number): LocalCd
   }
   const packageValue = requireRecord(release.package, `Local CDN release ${index} package`);
   const componentsValue = requireRecord(release.components, `Local CDN release ${index} components`);
-  if (packageValue.status !== 'verified') {
-    throw new Error(`Local CDN release ${index} package is not verified.`);
+  if (packageValue.status !== integrityStatus) {
+    throw new Error(`Local CDN release ${index} package integrity state is inconsistent.`);
   }
   if (
     !Array.isArray(componentsValue.package) ||
@@ -234,25 +252,32 @@ function validateRelease(value: unknown, origin: string, index: number): LocalCd
     throw new Error(`Local CDN release ${index} assets must be an array.`);
   }
 
-  const assets = release.assets.map((asset, assetIndex) => validateAsset(asset, releaseBaseUrl, index, assetIndex));
+  const assets = release.assets.map((asset, assetIndex) =>
+    validateAsset(asset, releaseBaseUrl, integrityStatus, index, assetIndex)
+  );
   assertUnique(
     assets.map((asset) => asset.path),
     `release ${index} asset paths`
   );
 
+  const manifestSha256 = validateSha256(release.manifestSha256, `release ${index} manifest checksum`);
+  const sourceProvenance =
+    release.sourceProvenance === undefined
+      ? undefined
+      : validateSourceProvenance(release.sourceProvenance, manifestSha256, index);
   return {
     ...identity,
-    status: 'verified',
+    status: integrityStatus,
     generatedAt,
     releaseLabel: requireString(release.releaseLabel, `release ${index} releaseLabel`),
-    manifestSha256: validateSha256(release.manifestSha256, `release ${index} manifest checksum`),
+    manifestSha256,
     manifestBytes: validateBytes(release.manifestBytes, `release ${index} manifest size`),
     proof: { localArtifact: 'passed', remoteCdn: 'not-run', sharePointAppCatalog: 'not-run' },
     package: {
       path: validatePortablePath(packageValue.path, `release ${index} package path`),
       bytes: validateBytes(packageValue.bytes, `release ${index} package size`),
       sha256: validateSha256(packageValue.sha256, `release ${index} package checksum`),
-      status: 'verified'
+      status: integrityStatus
     },
     components: {
       package: componentsValue.package.map((component, componentIndex) =>
@@ -262,18 +287,95 @@ function validateRelease(value: unknown, origin: string, index: number): LocalCd
         requireString(component, `release ${index} generated component ${componentIndex}`)
       )
     },
-    assets
+    assets,
+    ...(sourceProvenance ? { sourceProvenance } : {})
   };
 }
 
-function validateAsset(value: unknown, releaseBaseUrl: string, releaseIndex: number, assetIndex: number): LocalCdnBucketAsset {
+function validateSourceProvenance(value: unknown, manifestSha256: string, releaseIndex: number): GitHubStagingSourceProvenance {
+  const provenance = requireRecord(value, `Local CDN release ${releaseIndex} source provenance`);
+  const expectedKeys = [
+    'commit',
+    'descriptorSha256',
+    'files',
+    'kind',
+    'path',
+    'releaseManifestSha256',
+    'repository',
+    'sourceManifestSha256',
+    'status',
+    'visibility'
+  ];
+  if (JSON.stringify(Object.keys(provenance).sort()) !== JSON.stringify(expectedKeys)) {
+    throw new Error(`Local CDN release ${releaseIndex} source provenance has unsupported or missing fields.`);
+  }
+  if (provenance.kind !== 'github-directory') {
+    throw new Error(`Local CDN release ${releaseIndex} source provenance kind is invalid.`);
+  }
+  if (provenance.status !== 'staging-closure-verified') {
+    throw new Error(`Local CDN release ${releaseIndex} source provenance status is invalid.`);
+  }
+  if (provenance.visibility !== 'private') {
+    throw new Error(`Local CDN release ${releaseIndex} source visibility is invalid.`);
+  }
+  const repository = requireString(provenance.repository, `release ${releaseIndex} source repository`);
+  if (
+    !/^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?\/[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/.test(repository) ||
+    repository.includes('..')
+  ) {
+    throw new Error(`Local CDN release ${releaseIndex} source repository is invalid.`);
+  }
+  const commit = requireString(provenance.commit, `release ${releaseIndex} source commit`);
+  if (!/^[a-f0-9]{40}$/.test(commit)) {
+    throw new Error(`Local CDN release ${releaseIndex} source commit is not pinned.`);
+  }
+  const sourcePath = requireString(provenance.path, `release ${releaseIndex} source path`);
+  if (sourcePath !== '.') {
+    validatePortablePath(sourcePath, `release ${releaseIndex} source path`);
+  }
+  const releaseManifestSha256 = validateSha256(
+    provenance.releaseManifestSha256,
+    `release ${releaseIndex} source release-manifest checksum`
+  );
+  if (releaseManifestSha256 !== manifestSha256) {
+    throw new Error(`Local CDN release ${releaseIndex} source provenance is desynchronized from its manifest.`);
+  }
+  const sourceManifestSha256 = validateSha256(
+    provenance.sourceManifestSha256,
+    `release ${releaseIndex} source materialization manifest checksum`
+  );
+  const files = validateNonNegativeInteger(provenance.files, `release ${releaseIndex} source file count`);
+  if (!files) {
+    throw new Error(`Local CDN release ${releaseIndex} source file count is invalid.`);
+  }
+  return {
+    kind: 'github-directory',
+    visibility: 'private',
+    repository,
+    commit,
+    path: sourcePath,
+    descriptorSha256: validateSha256(provenance.descriptorSha256, `release ${releaseIndex} source descriptor checksum`),
+    sourceManifestSha256,
+    releaseManifestSha256,
+    files,
+    status: 'staging-closure-verified'
+  };
+}
+
+function validateAsset(
+  value: unknown,
+  releaseBaseUrl: string,
+  integrityStatus: 'verified' | 'anchored' | 'recorded',
+  releaseIndex: number,
+  assetIndex: number
+): LocalCdnBucketAsset {
   const asset = requireRecord(value, `Local CDN release ${releaseIndex} asset ${assetIndex}`);
   const path = validatePortablePath(asset.path, `release ${releaseIndex} asset ${assetIndex} path`);
   const url = requireString(asset.url, `release ${releaseIndex} asset ${assetIndex} URL`);
   if (url !== new URL(path.split('/').map(encodeURIComponent).join('/'), releaseBaseUrl).href) {
     throw new Error(`Local CDN release ${releaseIndex} asset ${assetIndex} URL does not match its immutable namespace.`);
   }
-  if (asset.status !== 'verified' || !Array.isArray(asset.referencedBy)) {
+  if (asset.status !== integrityStatus || !Array.isArray(asset.referencedBy)) {
     throw new Error(`Local CDN release ${releaseIndex} asset ${assetIndex} has invalid integrity metadata.`);
   }
   return {
@@ -284,7 +386,7 @@ function validateAsset(value: unknown, releaseBaseUrl: string, releaseIndex: num
     referencedBy: asset.referencedBy.map((reference, referenceIndex) =>
       requireString(reference, `release ${releaseIndex} asset ${assetIndex} reference ${referenceIndex}`)
     ),
-    status: 'verified'
+    status: integrityStatus
   };
 }
 

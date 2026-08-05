@@ -148,6 +148,74 @@ Lab's explicit same-origin intent header. Invalid, missing, ambiguous,
 symbolic-link, traversal, immutable-conflict, or checksum-mismatched sources are
 rejected without disclosing arbitrary local paths.
 
+#### GitHub staging-source intake
+
+A reviewed private GitHub directory can be the **source** for a Lab staging
+release without becoming its delivery origin. The intended staging service
+authenticates to GitHub, pulls an exact commit, and passes the resulting checkout
+or safely extracted archive to SPFx Kit's strict intake adapter together with a
+source descriptor:
+
+```json
+{
+  "schemaVersion": 1,
+  "source": {
+    "kind": "github-directory",
+    "visibility": "private",
+    "repository": "owner/private-staging-assets",
+    "commit": "0123456789abcdef0123456789abcdef01234567",
+    "path": "apps/hello-card/releases/local.1"
+  },
+  "releaseManifest": {
+    "path": "deployment-manifest.json",
+    "sha256": "<64 lowercase hex characters>"
+  },
+  "files": [
+    { "path": "deployment-manifest.json", "bytes": 1234, "sha256": "<64 lowercase hex characters>" },
+    { "path": "manifests/component.manifest.json", "bytes": 800, "sha256": "<64 lowercase hex characters>" },
+    { "path": "sharepoint/solution/app.staging.cdn.sppkg", "bytes": 42000, "sha256": "<64 lowercase hex characters>" },
+    { "path": "upload/app.js", "bytes": 18000, "sha256": "<64 lowercase hex characters>" }
+  ]
+}
+```
+
+`files` must be the sorted, exact checksum closure that the staging bucket
+publisher accepts: the deployment manifest, package, upload assets, and
+component manifests. This is the reviewed **source** closure. The immutable
+bucket separately records the checksum of its canonical published deployment
+manifest; source-only generated manifests are validated during intake but are
+not copied into the delivery bucket. Inventory reads those compact anchors,
+while selection and delivery re-verify the published package and upload bytes.
+The current CLI exposes the materialization boundary as a
+local adapter for staging-service development and tests:
+
+```sh
+npm run mock-cdn -- publish-source \
+  --descriptor ./github-staging-source.json \
+  --materialization /path/to/exact-checkout \
+  --select
+```
+
+SPFx Kit performs no GitHub authentication, request, archive extraction, or
+credential handling and accepts no clone URL or token. Those responsibilities
+belong to the staging service's authenticated GitHub pull. Kit requires a full
+commit identifier and validates the repository-relative path, manifest, file
+sizes, and hashes at the adapter boundary; the staging service attests that
+those bytes came from that commit. Kit then invokes the same create-only atomic
+staging bucket publisher. The bucket UI shows the declared GitHub source and verified closure
+without linking to or exposing the adapter's checkout. The intended flow is:
+
+```text
+private GitHub source -> staging CDN bucket -> Lab
+```
+
+The loopback mock CDN implements the staging bucket/delivery boundary for Lab
+development. The local materialization is only an implementation adapter for
+the staging service's authenticated pull; it is not the source of truth and is
+never a CDN delivery path. The `private` visibility is declared provenance; the
+authenticated staging service, not SPFx Kit, proves repository access. This is
+not a production CDN, SharePoint deployment, or App Catalog flow.
+
 If a staged script cannot be loaded or registered in the isolated worker, CDN
 mode fails visibly instead of substituting the Standalone adapter.
 

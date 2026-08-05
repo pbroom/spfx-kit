@@ -11,14 +11,18 @@ import {
   selectMockCdnAppRelease
 } from '../lib/mock-cdn-bucket.mjs';
 import { listenMockCdnServer, normalizeMockCdnLabOrigin } from '../lib/mock-cdn-server.mjs';
+import { publishGitHubStagingSource } from '../lib/github-staging-source.mjs';
 
 const usage = `Usage:
   mock-cdn publish --stage <export-dir>/staging-cdn [--select] [--origin http://127.0.0.1:5174] [--root .spfx-kit/mock-cdn/v1] [--json]
+  mock-cdn publish-source --descriptor <staging-source.json> --materialization <checkout-or-extracted-root> [--select] [--origin http://127.0.0.1:5174] [--root .spfx-kit/mock-cdn/v1] [--json]
   mock-cdn select --app <slug> --release <immutable-id> [--origin http://127.0.0.1:5174] [--root .spfx-kit/mock-cdn/v1] [--json]
   mock-cdn status [--app <slug>] [--origin http://127.0.0.1:5174] [--root .spfx-kit/mock-cdn/v1] [--json]
   mock-cdn serve [--origin http://127.0.0.1:5174] [--lab-origin http://127.0.0.1:5173] [--root .spfx-kit/mock-cdn/v1] [--json]
 
-The local mock CDN accepts only verified immutable staging-CDN releases whose recorded base URL exactly matches the configured mock origin. Publishing never overwrites a release. Selection is an explicit mutable local control-plane action.`;
+The local mock CDN accepts only verified immutable staging-CDN releases whose recorded base URL exactly matches the configured mock origin. Publishing never overwrites a release. Selection is an explicit mutable local control-plane action.
+
+publish-source performs no GitHub request and accepts no token or URL. It is the local adapter for an authenticated staging intake service: that service pulls the descriptor's exact pinned commit from private GitHub and supplies a checkout or safely extracted archive materialization. SPFx Kit verifies its declared checksum closure before using the same canonical immutable publish pipeline.`;
 
 async function main() {
   const [command, ...optionArguments] = process.argv.slice(2);
@@ -45,6 +49,25 @@ async function main() {
     });
     printResult(result, json, [
       `${result.published ? 'Published' : 'Already present'} mock CDN app release: ${result.appId}@${result.releaseId}`,
+      `  URL: ${result.releaseBaseUrl}`,
+      `  Files: ${result.files}`,
+      `  Selected: ${result.selected ? 'yes' : 'no'}`
+    ]);
+    return;
+  }
+
+  if (command === 'publish-source') {
+    const result = await publishGitHubStagingSource({
+      bucketRoot,
+      origin,
+      descriptorFile: path.resolve(required(args, 'descriptor', usage)),
+      materializationDir: path.resolve(required(args, 'materialization', usage)),
+      select: booleanFlag(args.select, 'select')
+    });
+    printResult(result, json, [
+      `${result.published ? 'Published' : 'Already present'} GitHub-sourced mock CDN app release: ${result.appId}@${result.releaseId}`,
+      `  Source: ${result.source.repository}@${result.source.commit} · ${result.source.path}`,
+      `  Descriptor: ${result.source.descriptorSha256}`,
       `  URL: ${result.releaseBaseUrl}`,
       `  Files: ${result.files}`,
       `  Selected: ${result.selected ? 'yes' : 'no'}`

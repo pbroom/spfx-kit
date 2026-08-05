@@ -17,8 +17,7 @@ import {
   type LocalCdnAppRelease,
   type LocalCdnBucketAsset,
   type LocalCdnBucketInventory,
-  type LocalCdnPublishSource,
-  type LocalCdnVerifiedRelease
+  type LocalCdnPublishSource
 } from '../api/localCdnBucket';
 
 interface LocalCdnBucketDialogProps {
@@ -126,8 +125,8 @@ export function LocalCdnBucketDialog({ open, onOpenChange, onSelectionChanged }:
 
   const selectRelease = async (): Promise<void> => {
     const release = inventory?.namespaces.apps.releases.find(
-      (candidate): candidate is LocalCdnVerifiedRelease =>
-        isVerifiedRelease(candidate) && releaseKey(candidate.appId, candidate.releaseId) === selectedReleaseKey
+      (candidate): candidate is InspectableRelease =>
+        isSelectableRelease(candidate) && releaseKey(candidate.appId, candidate.releaseId) === selectedReleaseKey
     );
     if (!release || mutationInFlight) {
       return;
@@ -165,7 +164,7 @@ export function LocalCdnBucketDialog({ open, onOpenChange, onSelectionChanged }:
   };
 
   const verifiedSources = inventory?.publishSources.filter(isVerifiedPublishSource) || [];
-  const verifiedReleases = inventory?.namespaces.apps.releases.filter(isVerifiedRelease) || [];
+  const selectableReleases = inventory?.namespaces.apps.releases.filter(isSelectableRelease) || [];
 
   return (
     <Dialog modalType="modal" open={open} onOpenChange={(_event, data) => onOpenChange(data.open)}>
@@ -240,13 +239,13 @@ export function LocalCdnBucketDialog({ open, onOpenChange, onSelectionChanged }:
                 <div>
                   <Dropdown
                     aria-labelledby="local-cdn-selection-label"
-                    disabled={mutationInFlight || !verifiedReleases.length}
+                    disabled={mutationInFlight || !selectableReleases.length}
                     onOptionSelect={(_event, data) => setSelectedReleaseKey(data.optionValue || '')}
-                    placeholder={verifiedReleases.length ? 'Choose a published release' : 'No published releases available'}
+                    placeholder={selectableReleases.length ? 'Choose a published release' : 'No published releases available'}
                     selectedOptions={selectedReleaseKey ? [selectedReleaseKey] : []}
-                    value={releaseLabelForKey(verifiedReleases, selectedReleaseKey)}
+                    value={releaseLabelForKey(selectableReleases, selectedReleaseKey)}
                   >
-                    {verifiedReleases.map((release) => (
+                    {selectableReleases.map((release) => (
                       <Option
                         key={releaseKey(release.appId, release.releaseId)}
                         text={`${release.appId} · ${release.releaseLabel}`}
@@ -396,13 +395,35 @@ function ReleaseRows({ origin, release }: { origin: string; release: LocalCdnApp
           <small>{release.releaseId}</small>
         </td>
         <td>
-          <BucketStatus state={release.selected ? 'selected' : 'verified'}>
-            {release.selected ? 'Selected · manifest verified' : 'Manifest verified · not selected'}
+          <BucketStatus state={release.selected ? 'selected' : release.status === 'verified' ? 'verified' : 'warning'}>
+            {release.selected
+              ? 'Selected · files verified'
+              : release.status === 'verified'
+                ? 'Files verified · not selected'
+                : release.status === 'anchored'
+                  ? 'Published checksums anchored · verify on selection'
+                  : 'Legacy manifest recorded · verify on selection'}
           </BucketStatus>
           <small>Local artifact passed · remote CDN and app catalog not run</small>
         </td>
         <td>{formatBytes(release.manifestBytes)}</td>
-        <td>Bucket at rest · {origin}</td>
+        <td>
+          Bucket at rest · {origin}
+          {release.sourceProvenance ? (
+            <>
+              <small>
+                Source: GitHub staging (declared private) · {release.sourceProvenance.repository}@
+                {shortHash(release.sourceProvenance.commit)}
+              </small>
+              <small>{release.sourceProvenance.path} · source closure verified at publish</small>
+              <small title={release.sourceProvenance.descriptorSha256}>
+                Descriptor SHA-256 {shortHash(release.sourceProvenance.descriptorSha256)}
+              </small>
+            </>
+          ) : (
+            <small>Source: local staged export</small>
+          )}
+        </td>
       </tr>
       <tr data-release-resource="package">
         <th scope="row">
@@ -412,7 +433,13 @@ function ReleaseRows({ origin, release }: { origin: string; release: LocalCdnApp
         <td>SPFx package / provenance</td>
         <td>{release.releaseId}</td>
         <td>
-          <BucketStatus state="verified">Package verified</BucketStatus>
+          <BucketStatus state={release.package.status === 'verified' ? 'verified' : 'warning'}>
+            {release.package.status === 'verified'
+              ? 'Package verified'
+              : release.package.status === 'anchored'
+                ? 'Package checksum anchored'
+                : 'Package metadata recorded'}
+          </BucketStatus>
           <small>Not served as a CDN asset</small>
           <small>
             Components: {release.components.package.length} packaged · {release.components.generated.length} generated
@@ -435,7 +462,7 @@ function AssetRow({
 }: {
   asset: LocalCdnBucketAsset;
   origin: string;
-  release: LocalCdnVerifiedRelease;
+  release: InspectableRelease;
 }): JSX.Element {
   return (
     <tr data-bucket-asset={asset.path}>
@@ -449,7 +476,13 @@ function AssetRow({
       </td>
       <td>{release.releaseId}</td>
       <td>
-        <BucketStatus state="verified">Hash and size verified</BucketStatus>
+        <BucketStatus state={asset.status === 'verified' ? 'verified' : 'warning'}>
+          {asset.status === 'verified'
+            ? 'Hash and size verified'
+            : asset.status === 'anchored'
+              ? 'Published hash and size anchored'
+              : 'Legacy hash and size recorded'}
+        </BucketStatus>
         <small>
           {release.selected ? 'Eligible for selected-release delivery' : 'At rest; not served unless explicitly selected'}
         </small>
@@ -473,7 +506,7 @@ function BucketStatus({
   return <span className={`local-cdn-admin__badge local-cdn-admin__badge--${state}`}>{children}</span>;
 }
 
-function releaseLabelForKey(releases: LocalCdnVerifiedRelease[], key: string): string {
+function releaseLabelForKey(releases: InspectableRelease[], key: string): string {
   const release = releases.find((candidate) => releaseKey(candidate.appId, candidate.releaseId) === key);
   return release ? `${release.appId} · ${release.releaseLabel}` : '';
 }
@@ -509,6 +542,8 @@ function isVerifiedPublishSource(source: LocalCdnPublishSource): source is Verif
   return source.status === 'verified';
 }
 
-function isVerifiedRelease(release: LocalCdnAppRelease): release is LocalCdnVerifiedRelease {
-  return release.status === 'verified';
+type InspectableRelease = Exclude<LocalCdnAppRelease, { status: 'invalid' }>;
+
+function isSelectableRelease(release: LocalCdnAppRelease): release is InspectableRelease {
+  return release.status !== 'invalid';
 }
