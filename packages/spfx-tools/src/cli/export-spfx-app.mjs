@@ -16,6 +16,7 @@ const usage = `Usage:
 Staging CDN target:
   --staging-cdn-base-url <https-url> --cdn-release <release-label>
   (or SPFX_KIT_STAGING_CDN_BASE_URL and SPFX_KIT_CDN_RELEASE)
+  --local-mock-cdn permits only an explicit http://127.0.0.1:<port> mock-CDN root
 
 With --json, stdout carries only the final JSON summary; all build logs go to stderr.`;
 
@@ -39,6 +40,7 @@ async function main() {
   }
   const stagingCdnRoot = String(args['staging-cdn-base-url'] || process.env.SPFX_KIT_STAGING_CDN_BASE_URL || '').trim();
   const cdnRelease = String(args['cdn-release'] || process.env.SPFX_KIT_CDN_RELEASE || '').trim();
+  const localMockCdn = args['local-mock-cdn'] === true || args['local-mock-cdn'] === 'true';
   if (targets.includes('staging-cdn') && (!stagingCdnRoot || !cdnRelease)) {
     throw new Error(
       'staging-cdn requires --staging-cdn-base-url and --cdn-release (or SPFX_KIT_STAGING_CDN_BASE_URL and SPFX_KIT_CDN_RELEASE).'
@@ -48,13 +50,13 @@ async function main() {
   const appDir = path.resolve(app);
   const releaseExportLock = await acquireAppExportLock(appDir);
   try {
-    await runExport({ appDir, args, cdnRelease, stagingCdnRoot, targets });
+    await runExport({ appDir, args, cdnRelease, localMockCdn, stagingCdnRoot, targets });
   } finally {
     await releaseExportLock();
   }
 }
 
-async function runExport({ appDir, args, cdnRelease, stagingCdnRoot, targets }) {
+async function runExport({ appDir, args, cdnRelease, localMockCdn, stagingCdnRoot, targets }) {
   const slug = appSlugFromDir(appDir);
   const outDir = path.resolve(args.out || path.join(process.cwd(), '.spfx-kit', 'exports', slug, timestamp()));
   const summary = {
@@ -83,6 +85,7 @@ async function runExport({ appDir, args, cdnRelease, stagingCdnRoot, targets }) 
     if (targets.includes('staging-cdn')) {
       summary.targets.push(
         await exportStagingCdnPackage(appDir, outDir, slug, {
+          localMockCdn,
           stagingCdnRoot,
           releaseLabel: cdnRelease
         })

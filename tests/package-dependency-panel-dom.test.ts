@@ -15,21 +15,32 @@ vi.mock('../apps/lab/src/api/packageRuntime', async (importOriginal) => {
   return { ...actual, loadCdnPackageDescriptor: loadCdnPackageDescriptorMock };
 });
 
-const sessionBase = 'http://lab.local/api/lab-packages/cdn-assets/11111111-1111-4111-8111-111111111111/';
+const mockOrigin = 'http://127.0.0.1:4400';
+const namespacePath = 'apps/hello-card-spfx/versions/1.2.3-panel.1/';
+const releaseBaseUrl = `${mockOrigin}/${namespacePath}`;
 const descriptor: CdnPackageDescriptor = {
   mode: 'cdn',
   appId: 'hello-card-spfx',
   releaseId: '1.2.3-panel.1',
   generatedAt: '2026-08-04T12:00:00.000Z',
-  cdnBasePath: 'https://staging.example.test/hello-card-spfx/versions/1.2.3-panel.1/',
-  assetBaseUrl: sessionBase,
+  cdnBasePath: releaseBaseUrl,
+  delivery: {
+    kind: 'local-mock-cdn',
+    origin: mockOrigin,
+    bucketBaseUrl: `${mockOrigin}/`,
+    namespaceKind: 'app-release',
+    namespacePath,
+    releaseBaseUrl,
+    releaseManifestUrl: `${releaseBaseUrl}deployment-manifest.json`,
+    status: 'published-and-verified'
+  },
   packagePath: 'sharepoint/solution/hello-card-spfx.staging.cdn.sppkg',
   assets: [
     {
       role: 'dependency',
       moduleId: 'WebPartStrings',
       assetPath: 'strings.js',
-      assetUrl: `${sessionBase}strings.js`,
+      assetUrl: `${releaseBaseUrl}strings.js`,
       bytes: 512,
       sha256: 'a'.repeat(64),
       stageStatus: 'allowed-and-verified'
@@ -38,7 +49,7 @@ const descriptor: CdnPackageDescriptor = {
       role: 'entry',
       moduleId: 'hello-card',
       assetPath: 'hello-card.js',
-      assetUrl: `${sessionBase}hello-card.js`,
+      assetUrl: `${releaseBaseUrl}hello-card.js`,
       bytes: 2048,
       sha256: 'b'.repeat(64),
       stageStatus: 'allowed-and-verified'
@@ -73,7 +84,7 @@ describe('PackageDependencyPanel', () => {
   it('does not claim a CDN session or dependency inventory in Standalone mode', () => {
     renderPanel({ status: 'idle', assetEvidence: [] }, { mode: 'standalone' });
 
-    expect(container.textContent).toContain('No staged CDN session is selected');
+    expect(container.textContent).toContain('No mock-CDN browser check is active');
     expect(container.textContent).not.toContain(descriptor.releaseId);
     expect(container.querySelectorAll('[data-asset-path]')).toHaveLength(0);
     expect(container.querySelector('[data-package-resource-state]')?.getAttribute('data-package-resource-state')).toBe(
@@ -94,12 +105,19 @@ describe('PackageDependencyPanel', () => {
     );
 
     expect(container.textContent).toContain(descriptor.releaseId);
+    expect(container.textContent).toContain(mockOrigin);
+    expect(container.textContent).toContain(namespacePath);
+    expect(container.textContent).toContain(descriptor.delivery.releaseManifestUrl);
     expect(container.textContent).toContain(descriptor.assets[0].sha256);
+    expect(container.textContent).toContain('Hash and size verified');
+    expect(container.textContent).toContain('Published and verified');
     expect(container.textContent).toContain('@microsoft/sp-webpart-base');
     expect(container.textContent).toContain('Deferred — SharePoint loader required');
     expect(container.textContent).toContain('do not imply that arbitrary npm packages are hosted on a CDN');
     expect(assetRow('strings.js').getAttribute('data-asset-status')).toBe('loaded');
     expect(assetRow('hello-card.js').getAttribute('data-asset-status')).toBe('loading');
+    expect(assetRow('strings.js').textContent).toContain('Delivered — top-level code executed');
+    expect(assetRow('hello-card.js').textContent).toContain('Loading from mock CDN');
 
     renderPanel(
       {
@@ -115,7 +133,8 @@ describe('PackageDependencyPanel', () => {
 
     expect(assetRow('strings.js').getAttribute('data-asset-status')).toBe('loaded');
     expect(assetRow('hello-card.js').getAttribute('data-asset-status')).toBe('failed');
-    expect(container.textContent).toContain('Smoke check failed');
+    expect(container.textContent).toContain('Delivery check failed');
+    expect(assetRow('hello-card.js').textContent).toContain('Delivery or execution failed');
   });
 
   it('shows a single actionable descriptor error without inventing resource rows', () => {
@@ -189,7 +208,7 @@ describe('PackageDependencyPanel', () => {
     expect(container.textContent).not.toContain(descriptorA.releaseId);
 
     await renderRuntime('standalone', appB);
-    expect(container.textContent).toContain('No staged CDN session is selected');
+    expect(container.textContent).toContain('No mock-CDN browser check is active');
     expect(container.textContent).not.toContain(descriptorB.releaseId);
 
     // Keep the unused fixture explicit: app A never becomes visible even if its old promise resolves late.

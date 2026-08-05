@@ -5,8 +5,10 @@ import { deterministicManifestCore, parseCdnStageManifestV1 } from './cdn-stage-
 import {
   assetUrl,
   createImmutableCdnReleaseId,
+  localMockCdnBasePath,
   normalizeCdnReleaseId,
   normalizeExactCdnBasePath,
+  normalizeLocalMockCdnRoot,
   normalizeStagingCdnRoot,
   safeLocalPath,
   stagingCdnBasePath
@@ -14,7 +16,14 @@ import {
 import { readSppkgComponentManifests } from './sppkg.mjs';
 
 export { verifyRemoteCdnFiles } from './cdn-stage-remote.mjs';
-export { createImmutableCdnReleaseId, normalizeCdnReleaseId, normalizeStagingCdnRoot, stagingCdnBasePath };
+export {
+  createImmutableCdnReleaseId,
+  localMockCdnBasePath,
+  normalizeCdnReleaseId,
+  normalizeLocalMockCdnRoot,
+  normalizeStagingCdnRoot,
+  stagingCdnBasePath
+};
 
 export async function clearGeneratedCdnOutputs(appDir) {
   await Promise.all(
@@ -65,6 +74,7 @@ export async function mergeCdnAssetTree(sourceDir, uploadDir) {
 }
 
 export async function createCdnStageManifest({
+  allowLocalMockCdn = false,
   cdnBasePath,
   packageFile,
   releaseLabel,
@@ -74,7 +84,7 @@ export async function createCdnStageManifest({
   stageDir,
   uploadDir
 }) {
-  const normalizedBasePath = normalizeExactCdnBasePath(cdnBasePath);
+  const normalizedBasePath = normalizeExactCdnBasePath(cdnBasePath, { allowLocalMockCdn });
   const normalizedRelease = normalizeCdnReleaseId(releaseId);
   const packageManifests = await readPackageComponentManifests(packageFile);
   if (!packageManifests.length) {
@@ -83,11 +93,17 @@ export async function createCdnStageManifest({
   const releaseManifests = releaseManifestDir
     ? await readReleaseComponentManifests(releaseManifestDir)
     : [];
-  const packageReferences = validateComponentManifests(packageManifests, normalizedBasePath, 'SPFx package');
+  const packageReferences = validateComponentManifests(
+    packageManifests,
+    normalizedBasePath,
+    'SPFx package',
+    { allowLocalMockCdn }
+  );
   const releaseReferences = validateComponentManifests(
     releaseManifests,
     normalizedBasePath,
-    'generated release manifests'
+    'generated release manifests',
+    { allowLocalMockCdn }
   );
   if (releaseManifests.length) {
     assertManifestAgreement(packageManifests, releaseManifests);
@@ -138,8 +154,8 @@ export async function createCdnStageManifest({
   };
 }
 
-export async function verifyCdnStage(stageDir, manifest) {
-  const persisted = parseCdnStageManifestV1(manifest);
+export async function verifyCdnStage(stageDir, manifest, { allowLocalMockCdn = false } = {}) {
+  const persisted = parseCdnStageManifestV1(manifest, { allowLocalMockCdn });
   const packageFile = safeLocalPath(stageDir, persisted.package.path);
   await assertRealPathWithin(stageDir, packageFile, 'staged SPFx package');
   const packageStats = await lstat(packageFile);
@@ -155,6 +171,7 @@ export async function verifyCdnStage(stageDir, manifest) {
     await assertRealPathWithin(stageDir, releaseManifestDir, 'generated manifest root');
   }
   const rebuilt = await createCdnStageManifest({
+    allowLocalMockCdn,
     cdnBasePath: persisted.cdnBasePath,
     packageFile,
     releaseLabel: persisted.releaseLabel,
@@ -273,14 +290,19 @@ function normalizeComponentManifest(manifest, source) {
   return { ...manifest, id, source };
 }
 
-function validateComponentManifests(manifests, cdnBasePath, sourceLabel) {
+function validateComponentManifests(
+  manifests,
+  cdnBasePath,
+  sourceLabel,
+  { allowLocalMockCdn = false } = {}
+) {
   const references = [];
   for (const manifest of manifests) {
     const baseUrls = manifest.loaderConfig?.internalModuleBaseUrls;
     if (
       !Array.isArray(baseUrls) ||
       baseUrls.length !== 1 ||
-      normalizeExactCdnBasePath(baseUrls[0]) !== cdnBasePath
+      normalizeExactCdnBasePath(baseUrls[0], { allowLocalMockCdn }) !== cdnBasePath
     ) {
       throw new Error(
         `${sourceLabel} component ${manifest.id} must use exactly the staged CDN base path: ${cdnBasePath}`

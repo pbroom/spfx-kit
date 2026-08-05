@@ -11,6 +11,7 @@ import {
   clearGeneratedCdnOutputs,
   createImmutableCdnReleaseId,
   createCdnStageManifest,
+  localMockCdnBasePath,
   mergeCdnAssetTree,
   stagingCdnBasePath,
   verifyCdnStage
@@ -82,19 +83,28 @@ export async function exportCdnPackage(appDir, outDir, slug, options = {}) {
 export async function exportStagingCdnPackage(appDir, outDir, slug, options) {
   const releaseLabel = options?.releaseLabel;
   const releaseId = createImmutableCdnReleaseId(releaseLabel);
-  const cdnBasePath = stagingCdnBasePath(options?.stagingCdnRoot, slug, releaseId);
+  const allowLocalMockCdn = options?.localMockCdn === true;
+  const cdnBasePath = allowLocalMockCdn
+    ? localMockCdnBasePath(options?.stagingCdnRoot, slug, releaseId)
+    : stagingCdnBasePath(options?.stagingCdnRoot, slug, releaseId);
   reportTargetProgress('staging-cdn', 'configuring', 0.08, 'Configuring immutable staging CDN package.');
   reportTargetProgress('staging-cdn', 'building', 0.18, 'Running ship build for staging CDN assets.');
   const build = await buildExternalAssetsPackage(appDir, cdnBasePath, { clearGeneratedOutputs: true });
 
   return assembleStagingCdnPackage(build, outDir, slug, {
+    allowLocalMockCdn,
     cdnBasePath,
     releaseId,
     releaseLabel
   });
 }
 
-export async function assembleStagingCdnPackage(build, outDir, slug, { cdnBasePath, releaseId, releaseLabel }) {
+export async function assembleStagingCdnPackage(
+  build,
+  outDir,
+  slug,
+  { allowLocalMockCdn = false, cdnBasePath, releaseId, releaseLabel }
+) {
   reportTargetProgress('staging-cdn', 'assembling', 0.68, 'Collecting the exact staging CDN upload tree.');
   const targetDir = path.join(outDir, 'staging-cdn');
   const solutionDir = path.join(targetDir, 'sharepoint', 'solution');
@@ -112,6 +122,7 @@ export async function assembleStagingCdnPackage(build, outDir, slug, { cdnBasePa
 
   reportTargetProgress('staging-cdn', 'validating', 0.84, 'Validating package URLs and staging asset hashes.');
   const deploymentManifest = await createCdnStageManifest({
+    allowLocalMockCdn,
     cdnBasePath,
     packageFile,
     releaseLabel,
@@ -122,7 +133,7 @@ export async function assembleStagingCdnPackage(build, outDir, slug, { cdnBasePa
     uploadDir
   });
   const deploymentManifestFile = path.join(targetDir, 'deployment-manifest.json');
-  await verifyCdnStage(targetDir, deploymentManifest);
+  await verifyCdnStage(targetDir, deploymentManifest, { allowLocalMockCdn });
   await writeJson(deploymentManifestFile, deploymentManifest);
   const readmeFile = await writeCdnStageReadme(
     targetDir,

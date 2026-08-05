@@ -3,12 +3,13 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { CDN_SMOKE_MESSAGE_SOURCE, parseCdnSmokeMessage } from '../apps/lab/src/lib/cdnSmokeProtocol';
 
-const origin = 'http://lab.local';
-const sessionBase = `${origin}/api/lab-packages/cdn-assets/session-id/`;
+const origin = 'http://127.0.0.1:4173';
+const mockOrigin = 'http://127.0.0.1:4174';
+const releaseBaseUrl = `${mockOrigin}/apps/hello-card-spfx/versions/1.0.0-20260804T120000000Z-browser01/`;
 const workerSource = readFileSync(new URL('../apps/lab/src/workers/cdnSmokeWorker.js', import.meta.url), 'utf8');
 
 describe('actual staged CDN smoke-check worker', () => {
-  it('loads only safe, same-origin Lab assets and reports registration evidence per asset', () => {
+  it('loads only assets under the selected immutable mock-CDN release and reports registration evidence', () => {
     const harness = createWorkerHarness((url, worker) => {
       if (url.endsWith('/strings.js')) {
         worker.define?.('WebPartStrings', [], () => undefined);
@@ -19,13 +20,15 @@ describe('actual staged CDN smoke-check worker', () => {
 
     harness.dispatch({
       requestId: 'request-1',
+      deliveryOrigin: mockOrigin,
+      releaseBaseUrl,
       assets: [
-        { path: 'strings.js', url: `${sessionBase}strings.js` },
-        { path: 'assets/hello-card.js', url: `${sessionBase}assets/hello-card.js` }
+        { path: 'strings.js', url: `${releaseBaseUrl}strings.js` },
+        { path: 'assets/hello-card.js', url: `${releaseBaseUrl}assets/hello-card.js` }
       ]
     });
 
-    expect(harness.loadedUrls).toEqual([`${sessionBase}strings.js`, `${sessionBase}assets/hello-card.js`]);
+    expect(harness.loadedUrls).toEqual([`${releaseBaseUrl}strings.js`, `${releaseBaseUrl}assets/hello-card.js`]);
     expect(harness.messages.at(-1)).toEqual(
       expect.objectContaining({
         source: CDN_SMOKE_MESSAGE_SOURCE,
@@ -65,21 +68,27 @@ describe('actual staged CDN smoke-check worker', () => {
   });
 
   it.each([
-    ['cross-origin URL', 'https://evil.example/api/lab-packages/cdn-assets/session-id/entry.js'],
-    ['non-API URL', `${origin}/entry.js`],
-    ['query-bearing URL', `${sessionBase}entry.js?untrusted=1`],
-    ['encoded traversal URL', `${sessionBase}%2e%2e/secret.js`]
+    ['wrong origin URL', 'http://127.0.0.1:4199/apps/hello-card-spfx/versions/1.0.0/entry.js'],
+    ['Lab-origin URL', `${origin}/apps/hello-card-spfx/versions/1.0.0/entry.js`],
+    ['wrong release URL', `${mockOrigin}/apps/hello-card-spfx/versions/2.0.0/entry.js`],
+    ['query-bearing URL', `${releaseBaseUrl}entry.js?untrusted=1`],
+    ['encoded traversal URL', `${releaseBaseUrl}%2e%2e/secret.js`]
   ])('rejects a %s before importScripts runs', (_label, url) => {
     const harness = createWorkerHarness();
 
-    harness.dispatch({ requestId: 'request-1', assets: [{ path: 'assets/hello-card.js', url }] });
+    harness.dispatch({
+      requestId: 'request-1',
+      deliveryOrigin: mockOrigin,
+      releaseBaseUrl,
+      assets: [{ path: 'entry.js', url }]
+    });
 
     expect(harness.loadedUrls).toEqual([]);
     expect(harness.messages.at(-1)).toEqual(
       expect.objectContaining({
         requestId: 'request-1',
         status: 'error',
-        message: expect.stringContaining('Lab CDN asset API')
+        message: expect.stringContaining('selected mock-CDN release')
       })
     );
   });
@@ -93,9 +102,11 @@ describe('actual staged CDN smoke-check worker', () => {
 
     harness.dispatch({
       requestId: 'request-1',
+      deliveryOrigin: mockOrigin,
+      releaseBaseUrl,
       assets: [
-        { path: 'strings.js', url: `${sessionBase}strings.js` },
-        { path: 'assets/hello-card.js', url: `${sessionBase}assets/hello-card.js` }
+        { path: 'strings.js', url: `${releaseBaseUrl}strings.js` },
+        { path: 'assets/hello-card.js', url: `${releaseBaseUrl}assets/hello-card.js` }
       ]
     });
 
@@ -124,9 +135,11 @@ describe('actual staged CDN smoke-check worker', () => {
 
     harness.dispatch({
       requestId: 'request-1',
+      deliveryOrigin: mockOrigin,
+      releaseBaseUrl,
       assets: [
-        { path: 'strings.js', url: `${sessionBase}strings.js` },
-        { path: 'assets/hello-card.js', url: `${sessionBase}assets/hello-card.js` }
+        { path: 'strings.js', url: `${releaseBaseUrl}strings.js` },
+        { path: 'assets/hello-card.js', url: `${releaseBaseUrl}assets/hello-card.js` }
       ]
     });
 
@@ -158,13 +171,15 @@ describe('actual staged CDN smoke-check worker', () => {
 
     harness.dispatch({
       requestId: 'request-1',
+      deliveryOrigin: mockOrigin,
+      releaseBaseUrl,
       assets: [
-        { path: 'strings.js', url: `${sessionBase}strings.js` },
-        { path: 'assets/hello-card.js', url: `${sessionBase}assets/hello-card.js` }
+        { path: 'strings.js', url: `${releaseBaseUrl}strings.js` },
+        { path: 'assets/hello-card.js', url: `${releaseBaseUrl}assets/hello-card.js` }
       ]
     });
 
-    expect(harness.loadedUrls).toEqual([`${sessionBase}strings.js`, `${sessionBase}assets/hello-card.js`]);
+    expect(harness.loadedUrls).toEqual([`${releaseBaseUrl}strings.js`, `${releaseBaseUrl}assets/hello-card.js`]);
     expect(harness.messages.at(-1)).toEqual(expect.objectContaining({ requestId: 'request-1', status: 'ready' }));
   });
 });

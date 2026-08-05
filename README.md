@@ -52,31 +52,82 @@ The lab is for fast local authoring and visual QA. Before deployment, still run 
 
 ### Lab Package Mode
 
-The Lab previews the selected app in **Standalone** mode by default. To check a
-staged CDN bundle, first export a local `staging-cdn` artifact, then switch the
-Lab to CDN mode. The Lab pins one validated release and loads its recorded AMD
-entry and package-local dependency scripts through an immutable, hash-checked,
-session-scoped CDN asset path. The scripts load in an isolated worker that
-executes their top-level code and records AMD module registration. The Lab does
-not invoke registered AMD factories.
+The Lab previews the selected app in **Standalone** mode by default. CDN mode
+uses SPFx Kit's separate-origin local mock CDN. Export a `staging-cdn` artifact
+for that exact mock origin, publish and select it in the local bucket, and run
+the mock-CDN service before switching modes. The Lab resolves only the selected
+checksum-pinned release; it does not scan exports, choose a latest build, or
+fall back to Lab-served or Standalone assets. The scripts load from the mock
+origin in an isolated worker that executes their top-level code and records AMD
+module registration. The Lab does not invoke registered AMD factories.
 
-The **Package resources** panel reports the selected app and pinned release,
-then lists the exact package-local scripts selected for the default-locale
-smoke path. Each row shows its module role, immutable path, verified size and
-SHA-256 digest, plus browser loading or execution status. Locale-specific
+The **Package resources** panel reports the selected app, immutable namespace,
+release manifest, and mock-CDN origin, then lists the exact package-local
+scripts selected for the default-locale smoke path. It distinguishes staged
+hash/size verification, protected-bucket publication, and browser delivery or
+top-level execution evidence. Locale-specific
 alternatives are not exercised. SPFx component references that SharePoint
 would resolve are shown separately as deferred loader resources; they are not
 claimed to be staged files or evidence that arbitrary npm dependencies are
 available from a CDN. In Standalone mode, the panel explicitly reports that no
 CDN session is selected.
 
-If the staging artifact is missing, invalid, or does not contain a valid entry
-asset, the Lab shows the error and does not fall back to Standalone mode. This
-is a bounded **staged CDN bundle smoke check**, not a SharePoint or
+If the selected release, mock-CDN service, origin, CORS response, staged asset,
+or hash is missing or invalid, the Lab shows the error and does not fall back
+to Standalone mode. This is a bounded **staged CDN bundle smoke check**, not a SharePoint or
 deployment-equivalent preview. It does not instantiate the web part or exercise
 dynamic chunks, external component modules, SPFx lifecycle, service scope,
 property-pane, loader, CSP, or deployment behavior. It also does not upload CDN
 assets, deploy a package, or change a SharePoint App Catalog.
+
+### Local Mock CDN
+
+The ignored `.spfx-kit/mock-cdn/v1` directory is an SPFx Kit-wide local bucket,
+not an app-specific fixture. It can retain immutable versioned releases for
+multiple apps. Public URLs use a normal CDN-shaped contract:
+
+```text
+http://127.0.0.1:5174/apps/<app>/versions/<release>/<asset>
+http://127.0.0.1:5174/shared/<bundle>/versions/<release>/<asset>  # reserved
+```
+
+Only the configured base origin differs from a real CDN integration. App
+publishing accepts an operator-approved staging directory, reruns the canonical
+package/manifest/path/hash verification, copies real files into a same-filesystem
+temporary directory, validates the copy, and atomically creates the immutable
+release. Existing releases cannot be overwritten. `--select` atomically updates
+one checksum-pinned pointer for that app. The same JSON-capable CLI is suitable
+for deliberate manual intake or local packaging agents; there is no HTTP upload
+endpoint and the server never exposes arbitrary repository files.
+
+Create, publish, and serve a local release:
+
+```sh
+npm run export:spfx -- \
+  --app .spfx-kit/apps/<app-slug> \
+  --target staging-cdn \
+  --staging-cdn-base-url http://127.0.0.1:5174 \
+  --local-mock-cdn \
+  --cdn-release local.1
+
+npm run mock-cdn -- publish \
+  --stage <export-dir>/staging-cdn \
+  --select
+
+npm run mock-cdn -- serve \
+  --origin http://127.0.0.1:5174 \
+  --lab-origin http://127.0.0.1:5173
+```
+
+`mock-cdn status --json` lists selected app releases, and `mock-cdn select`
+selects a previously published exact version after validating it. The service
+binds only to explicit `127.0.0.1` HTTP origins, serves GET/HEAD for the selected
+manifest closure, rechecks every asset's size and SHA-256 before responding,
+and emits exact-origin CORS, immutable caching, MIME, ETag, and `nosniff`
+headers. App and shared namespaces are disjoint. Shared bundle publishing is
+intentionally deferred until it has its own canonical manifest verifier; the
+reserved namespace is not evidence that npm packages or shared resources are
+already CDN-hosted.
 
 If a staged script cannot be loaded or registered in the isolated worker, CDN
 mode fails visibly instead of substituting the Standalone adapter.
@@ -291,7 +342,9 @@ Exports are profile-specific:
 - `staging-cdn` produces an `.sppkg` pinned to a generated immutable staging prefix, one
   exact `upload/` tree, and a locally verified deployment manifest. It requires
   `--staging-cdn-base-url` plus `--cdn-release` (or
-  `SPFX_KIT_STAGING_CDN_BASE_URL` plus `SPFX_KIT_CDN_RELEASE`).
+  `SPFX_KIT_STAGING_CDN_BASE_URL` plus `SPFX_KIT_CDN_RELEASE`). Add
+  `--local-mock-cdn` only for the explicit `http://127.0.0.1:<port>` local
+  bucket contract; ordinary staging and remote verification remain HTTPS-only.
 - `standalone` produces a clean standalone repo with root-level `config/`,
   `src/`, `sharepoint/`, `release/`, `cdn-handoff/`, `tsconfig.json`,
   `package.json`, `package-lock.json`, `CLAUDE.md`, `.spfx-kit` import metadata,

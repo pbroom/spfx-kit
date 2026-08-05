@@ -45,6 +45,8 @@ export function PackageDependencyPanel({
       aria-busy={mode === 'cdn' && (descriptorLoading || smoke.status === 'loading')}
       aria-labelledby={headingId}
       className={`package-dependency-panel package-dependency-panel--${mode}`}
+      data-package-delivery-kind={descriptor?.delivery.kind}
+      data-package-delivery-origin={descriptor?.delivery.origin}
       data-package-resource-state={summary.state}
     >
       <div className="package-dependency-panel__header">
@@ -57,17 +59,17 @@ export function PackageDependencyPanel({
 
       {mode === 'standalone' ? (
         <p className="package-dependency-panel__standalone">
-          The local standalone adapter is active. No staged CDN session is selected, and its resources are not assumed to be
-          CDN-hosted. Select CDN to validate a staging export for this app.
+          The local standalone adapter is active. No mock-CDN browser check is active. Select CDN to resolve the app's explicitly
+          selected staged release and load its allowlisted scripts from the separate local mock CDN.
         </p>
       ) : descriptorLoading ? (
         <p className="package-dependency-panel__message" role="status">
-          Validating and pinning one local staging-CDN release for {appTitle}.
+          Resolving the app's selected immutable release and validating its mock-CDN manifest closure.
         </p>
       ) : descriptorError ? (
         <div className="package-dependency-panel__error" role="alert">
           <div>
-            <strong>Staged CDN resources unavailable</strong>
+            <strong>CDN resources unavailable</strong>
             <span>{descriptorError}</span>
           </div>
           <button type="button" onClick={onRetry}>
@@ -78,16 +80,28 @@ export function PackageDependencyPanel({
         <div className="package-dependency-panel__body">
           <dl className="package-release-details">
             <div>
-              <dt>Release</dt>
+              <dt>Staged release</dt>
               <dd>{descriptor.releaseId}</dd>
             </div>
             <div>
-              <dt>Manifest</dt>
+              <dt>Generated</dt>
               <dd>{descriptor.generatedAt}</dd>
             </div>
             <div>
               <dt>Package</dt>
               <dd>{descriptor.packagePath}</dd>
+            </div>
+            <div>
+              <dt>Mock CDN origin</dt>
+              <dd>{descriptor.delivery.origin}</dd>
+            </div>
+            <div>
+              <dt>Bucket namespace</dt>
+              <dd>{descriptor.delivery.namespacePath}</dd>
+            </div>
+            <div>
+              <dt>Release manifest</dt>
+              <dd>{descriptor.delivery.releaseManifestUrl}</dd>
             </div>
           </dl>
 
@@ -96,7 +110,7 @@ export function PackageDependencyPanel({
           </div>
 
           <section aria-labelledby={`${headingId}-staged`} className="package-resource-group">
-            <h3 id={`${headingId}-staged`}>Staged scripts — selected default paths</h3>
+            <h3 id={`${headingId}-staged`}>App scripts — selected default paths</h3>
             <ul className="package-resource-list">
               {descriptor.assets.map((asset) => (
                 <StagedAssetRow
@@ -107,8 +121,8 @@ export function PackageDependencyPanel({
               ))}
             </ul>
             <p className="package-resource-group__note">
-              For localized script resources, this list shows the package's selected default-locale path. Locale-specific
-              alternatives are not loaded by this smoke check.
+              Staged integrity is verified before publication. Browser delivery and top-level execution are tracked separately.
+              For localized resources, only the selected default-locale path is loaded.
             </p>
           </section>
 
@@ -147,8 +161,9 @@ export function PackageDependencyPanel({
           </section>
 
           <p className="package-dependency-panel__limitation">
-            This smoke check executes staged scripts' top-level code only. It does not invoke AMD factories or exercise the
-            SharePoint loader, web-part lifecycle, services, property pane, CSP, or deployment behavior.
+            The local mock CDN is an app-independent development bucket; this check uses its app-release namespace. It executes
+            staged scripts' top-level code only and does not invoke AMD factories or exercise the SharePoint loader, web-part
+            lifecycle, services, property pane, CSP, or deployment behavior.
           </p>
         </div>
       ) : null}
@@ -172,6 +187,14 @@ function StagedAssetRow({ asset, status }: StagedAssetRowProps): JSX.Element {
         <span className={`package-resource-status package-resource-status--${status}`}>{assetStatusLabel(status)}</span>
       </div>
       <dl className="package-resource-row__details">
+        <div>
+          <dt>Staged</dt>
+          <dd>Hash and size verified</dd>
+        </div>
+        <div>
+          <dt>Mock bucket</dt>
+          <dd>Published and verified</dd>
+        </div>
         <div>
           <dt>Path</dt>
           <dd>{asset.assetPath}</dd>
@@ -200,13 +223,13 @@ export function assetStatus(asset: CdnPackageScriptAsset, smoke: CdnSmokeStatus)
 function assetStatusLabel(status: CdnAssetLoadStatus): string {
   switch (status) {
     case 'loaded':
-      return 'Loaded — top-level code executed';
+      return 'Delivered — top-level code executed';
     case 'loading':
-      return 'Loading';
+      return 'Loading from mock CDN';
     case 'failed':
-      return 'Failed or blocked';
+      return 'Delivery or execution failed';
     default:
-      return 'Allowed — hash and size verified';
+      return 'Waiting for browser delivery';
   }
 }
 
@@ -219,35 +242,35 @@ function packageSummary(
   loadedCount: number
 ): { state: string; label: string; announcement: string } {
   if (mode === 'standalone') {
-    return { state: 'standalone', label: 'Standalone', announcement: 'Standalone mode. No CDN session is selected.' };
+    return { state: 'standalone', label: 'Standalone', announcement: 'Standalone mode. No mock-CDN browser check is active.' };
   }
   if (descriptorLoading) {
-    return { state: 'loading', label: 'Pinning stage', announcement: 'Validating and pinning a staged CDN release.' };
+    return { state: 'loading', label: 'Connecting', announcement: 'Connecting a validated release to the local mock CDN.' };
   }
   if (descriptorError) {
-    return { state: 'error', label: 'Unavailable', announcement: `Staged CDN resources unavailable. ${descriptorError}` };
+    return { state: 'error', label: 'Unavailable', announcement: `CDN resources unavailable. ${descriptorError}` };
   }
   if (!descriptor) {
-    return { state: 'loading', label: 'Preparing', announcement: 'Preparing staged CDN resources.' };
+    return { state: 'loading', label: 'Connecting', announcement: 'Preparing local mock-CDN delivery.' };
   }
   if (smoke.status === 'error') {
     return {
       state: 'error',
-      label: 'Smoke check failed',
-      announcement: `Staged CDN smoke check failed. ${loadedCount} of ${descriptor.assets.length} scripts loaded.`
+      label: 'Delivery check failed',
+      announcement: `Mock-CDN delivery or staged-script execution failed. ${loadedCount} of ${descriptor.assets.length} scripts loaded.`
     };
   }
   if (smoke.status === 'ready') {
     return {
       state: 'ready',
-      label: `${loadedCount}/${descriptor.assets.length} loaded`,
-      announcement: `Staged CDN smoke check passed. ${loadedCount} of ${descriptor.assets.length} scripts loaded.`
+      label: `${loadedCount}/${descriptor.assets.length} delivered`,
+      announcement: `Local mock-CDN smoke check passed. ${loadedCount} of ${descriptor.assets.length} scripts loaded.`
     };
   }
   return {
     state: 'loading',
-    label: `${loadedCount}/${descriptor.assets.length} loading`,
-    announcement: `${loadedCount} of ${descriptor.assets.length} staged scripts loaded.`
+    label: `${loadedCount}/${descriptor.assets.length} delivered`,
+    announcement: `${loadedCount} of ${descriptor.assets.length} staged scripts delivered by the local mock CDN.`
   };
 }
 

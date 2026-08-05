@@ -105,6 +105,49 @@ describe('external-assets export target', () => {
       `release label \`${releaseLabel}\``
     );
   });
+
+  it('assembles a local mock stage only when the narrow policy is explicit', async () => {
+    const sourceDir = await temporaryDirectory();
+    const outDir = await temporaryDirectory();
+    const releaseLabel = '1.2.3-local.1';
+    const releaseId = '1.2.3-local.1-20260804T120000000Z-abc123';
+    const cdnBasePath = `http://127.0.0.1:4174/apps/team/versions/${releaseId}/`;
+    const componentManifest = {
+      id: 'component-id',
+      loaderConfig: {
+        internalModuleBaseUrls: [cdnBasePath],
+        entryModuleId: 'main',
+        scriptResources: { main: { type: 'path', path: 'main.js' } }
+      }
+    };
+    const build = {
+      packageFile: path.join(sourceDir, 'sharepoint', 'solution', 'team.sppkg'),
+      releaseAssetsDir: path.join(sourceDir, 'release', 'assets'),
+      releaseManifestDir: path.join(sourceDir, 'release', 'manifests'),
+      deployAssetsDir: path.join(sourceDir, 'temp', 'deploy')
+    };
+    await Promise.all([
+      writePackage(build.packageFile, componentManifest),
+      writeFileWithParents(path.join(build.releaseAssetsDir, 'main.js'), 'main();'),
+      writeJson(path.join(build.releaseManifestDir, 'component.manifest.json'), componentManifest)
+    ]);
+
+    await expect(
+      assembleStagingCdnPackage(build, outDir, 'team', {
+        cdnBasePath,
+        releaseId,
+        releaseLabel
+      })
+    ).rejects.toThrow('credential-free HTTPS');
+    await expect(
+      assembleStagingCdnPackage(build, outDir, 'team', {
+        allowLocalMockCdn: true,
+        cdnBasePath,
+        releaseId,
+        releaseLabel
+      })
+    ).resolves.toMatchObject({ cdnBasePath, releaseId });
+  });
 });
 
 async function writePackage(file: string, componentManifest?: object) {

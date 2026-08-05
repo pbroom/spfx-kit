@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator } from '@playwright/test';
 
 const pinnedAppStorageKey = 'spfx-kit.lab.pinned-app.v1';
+const syntheticMockCdnOrigin = 'http://127.0.0.1:4400';
 
 test('loads the committed web part and supports a core toolbar interaction', async ({ page }) => {
   await page.goto('/');
@@ -13,7 +14,7 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(page.getByRole('radio', { name: 'Standalone' })).toBeChecked();
   await expect(page.getByRole('radio', { name: 'CDN' })).not.toBeChecked();
   const packageResources = page.getByRole('region', { name: 'Package resources' });
-  await expect(packageResources).toContainText('No staged CDN session is selected');
+  await expect(packageResources).toContainText('No mock-CDN browser check is active');
   await expect(packageResources).toHaveAttribute('data-package-resource-state', 'standalone');
 
   await expect(page.getByRole('button', { name: 'Manage apps' })).toHaveCount(0);
@@ -55,6 +56,9 @@ test('places package mode before display mode and keeps the controls independent
 });
 
 test('checks the selected staged scripts without invoking the package or rendering the standalone adapter', async ({ page }) => {
+  const releaseId = '1.2.3-test.abc123';
+  const namespacePath = `apps/hello-card-spfx/versions/${releaseId}/`;
+  const releaseBaseUrl = `${syntheticMockCdnOrigin}/${namespacePath}`;
   const assetRequests: string[] = [];
   let releaseEntryAsset!: () => void;
   const entryAssetGate = new Promise<void>((resolve) => {
@@ -68,17 +72,26 @@ test('checks the selected staged scripts without invoking the package or renderi
         body: JSON.stringify({
           mode: 'cdn',
           appId: 'hello-card-spfx',
-          releaseId: '1.2.3-test.abc123',
+          releaseId,
           generatedAt: '2026-08-04T12:00:00.000Z',
-          cdnBasePath: 'https://staging-cdn.example.com/spfx/hello-card-spfx/versions/1.2.3-test.abc123/',
-          assetBaseUrl: '/api/lab-packages/cdn-assets/11111111-1111-4111-8111-111111111111/',
+          cdnBasePath: releaseBaseUrl,
+          delivery: {
+            kind: 'local-mock-cdn',
+            origin: syntheticMockCdnOrigin,
+            bucketBaseUrl: `${syntheticMockCdnOrigin}/`,
+            namespaceKind: 'app-release',
+            namespacePath,
+            releaseBaseUrl,
+            releaseManifestUrl: `${releaseBaseUrl}deployment-manifest.json`,
+            status: 'published-and-verified'
+          },
           packagePath: 'sharepoint/solution/hello-card-spfx.staging.cdn.sppkg',
           assets: [
             {
               role: 'dependency',
               moduleId: 'WebPartStrings',
               assetPath: 'strings-panel-proof.js',
-              assetUrl: '/api/lab-packages/cdn-assets/11111111-1111-4111-8111-111111111111/strings-panel-proof.js',
+              assetUrl: `${releaseBaseUrl}strings-panel-proof.js`,
               bytes: 97,
               sha256: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
               stageStatus: 'allowed-and-verified'
@@ -87,7 +100,7 @@ test('checks the selected staged scripts without invoking the package or renderi
               role: 'entry',
               moduleId: 'hello-card',
               assetPath: 'hello-card-web-part.js',
-              assetUrl: '/api/lab-packages/cdn-assets/11111111-1111-4111-8111-111111111111/hello-card-web-part.js',
+              assetUrl: `${releaseBaseUrl}hello-card-web-part.js`,
               bytes: 205,
               sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
               stageStatus: 'allowed-and-verified'
@@ -107,19 +120,24 @@ test('checks the selected staged scripts without invoking the package or renderi
       });
       return;
     }
+    await route.abort();
+  });
+  await page.route(`${syntheticMockCdnOrigin}/**`, async (route) => {
+    const url = new URL(route.request().url());
+    assetRequests.push(url.href);
     if (url.pathname.endsWith('/strings-panel-proof.js')) {
-      assetRequests.push(url.pathname);
       await route.fulfill({
         contentType: 'text/javascript',
+        headers: { 'Access-Control-Allow-Origin': '*' },
         body: `define('WebPartStrings', [], function () { return {}; });`
       });
       return;
     }
     if (url.pathname.endsWith('/hello-card-web-part.js')) {
-      assetRequests.push(url.pathname);
       await entryAssetGate;
       await route.fulfill({
         contentType: 'text/javascript',
+        headers: { 'Access-Control-Allow-Origin': '*' },
         body: `define('cdn-fixture', ['@microsoft/sp-webpart-base'], function () {
           throw new Error('The smoke check must not invoke this package factory.');
         });`
@@ -135,9 +153,13 @@ test('checks the selected staged scripts without invoking the package or renderi
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
   await page.getByRole('radio', { name: 'CDN' }).click();
 
-  await expect(frame.getByRole('status')).toContainText('Checking staged CDN bundle');
+  await expect(frame.getByRole('status')).toContainText('Checking mock-CDN delivery');
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
   await expect(packageResources).toContainText('1.2.3-test.abc123');
+  await expect(packageResources).toContainText(syntheticMockCdnOrigin);
+  await expect(packageResources).toContainText(namespacePath);
+  await expect(packageResources).toContainText('Hash and size verified');
+  await expect(packageResources).toContainText('Published and verified');
   await expect(packageResources.locator('[data-asset-path="strings-panel-proof.js"]')).toHaveAttribute(
     'data-asset-status',
     'loaded'
@@ -151,7 +173,7 @@ test('checks the selected staged scripts without invoking the package or renderi
   await expect(packageResources).toContainText('do not imply that arbitrary npm packages are hosted on a CDN');
   releaseEntryAsset();
   const smokeCheck = frame.locator('[data-cdn-smoke-check="ready"]');
-  await expect(smokeCheck.getByText('Staged CDN bundle smoke check passed', { exact: true })).toBeVisible();
+  await expect(smokeCheck.getByText('Local mock-CDN smoke check passed', { exact: true })).toBeVisible();
   await expect(smokeCheck).toContainText('The Lab did not invoke registered AMD factories');
   await expect(smokeCheck).toContainText('not a SharePoint or deployment preview');
   await expect(frame).toHaveAttribute('data-package-mode', 'cdn');
@@ -161,37 +183,49 @@ test('checks the selected staged scripts without invoking the package or renderi
     'data-asset-status',
     'loaded'
   );
-  await expect(packageResources).toContainText('2/2 loaded');
+  await expect(packageResources).toContainText('2/2 delivered');
   expect(assetRequests).toHaveLength(2);
+  expect(assetRequests.every((requestUrl) => new URL(requestUrl).origin === syntheticMockCdnOrigin)).toBe(true);
 
   await page.getByRole('tab', { name: 'Viewer' }).click();
   await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
   await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-test.abc123');
   await expect(frame.locator('[data-cdn-smoke-check="ready"]')).toBeVisible();
-  await expect(packageResources).toContainText('2/2 loaded');
+  await expect(packageResources).toContainText('2/2 delivered');
 });
 
 test('keeps completed evidence and marks a blocked staged asset failed without falling back', async ({ page }) => {
+  const releaseId = '1.2.3-blocked.1';
+  const namespacePath = `apps/hello-card-spfx/versions/${releaseId}/`;
+  const releaseBaseUrl = `${syntheticMockCdnOrigin}/${namespacePath}`;
   await page.route('**/api/lab-packages/**', async (route) => {
     const url = new URL(route.request().url());
-    const assetBaseUrl = '/api/lab-packages/cdn-assets/22222222-2222-4222-8222-222222222222/';
     if (url.pathname === '/api/lab-packages/cdn') {
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
           mode: 'cdn',
           appId: 'hello-card-spfx',
-          releaseId: '1.2.3-blocked.1',
+          releaseId,
           generatedAt: '2026-08-04T12:00:00.000Z',
-          cdnBasePath: 'https://staging-cdn.example.com/spfx/hello-card-spfx/versions/1.2.3-blocked.1/',
-          assetBaseUrl,
+          cdnBasePath: releaseBaseUrl,
+          delivery: {
+            kind: 'local-mock-cdn',
+            origin: syntheticMockCdnOrigin,
+            bucketBaseUrl: `${syntheticMockCdnOrigin}/`,
+            namespaceKind: 'app-release',
+            namespacePath,
+            releaseBaseUrl,
+            releaseManifestUrl: `${releaseBaseUrl}deployment-manifest.json`,
+            status: 'published-and-verified'
+          },
           packagePath: 'sharepoint/solution/hello-card-spfx.staging.cdn.sppkg',
           assets: [
             {
               role: 'dependency',
               moduleId: 'WebPartStrings',
               assetPath: 'loaded-before-failure.js',
-              assetUrl: `${assetBaseUrl}loaded-before-failure.js`,
+              assetUrl: `${releaseBaseUrl}loaded-before-failure.js`,
               bytes: 73,
               sha256: 'c'.repeat(64),
               stageStatus: 'allowed-and-verified'
@@ -200,7 +234,7 @@ test('keeps completed evidence and marks a blocked staged asset failed without f
               role: 'entry',
               moduleId: 'hello-card',
               assetPath: 'blocked-entry.js',
-              assetUrl: `${assetBaseUrl}blocked-entry.js`,
+              assetUrl: `${releaseBaseUrl}blocked-entry.js`,
               bytes: 205,
               sha256: 'd'.repeat(64),
               stageStatus: 'allowed-and-verified'
@@ -211,9 +245,14 @@ test('keeps completed evidence and marks a blocked staged asset failed without f
       });
       return;
     }
+    await route.abort();
+  });
+  await page.route(`${syntheticMockCdnOrigin}/**`, async (route) => {
+    const url = new URL(route.request().url());
     if (url.pathname.endsWith('/loaded-before-failure.js')) {
       await route.fulfill({
         contentType: 'text/javascript',
+        headers: { 'Access-Control-Allow-Origin': '*' },
         body: `define('WebPartStrings', [], function () { return {}; });`
       });
       return;
@@ -234,7 +273,7 @@ test('keeps completed evidence and marks a blocked staged asset failed without f
   const packageResources = page.getByRole('region', { name: 'Package resources' });
   await page.getByRole('radio', { name: 'CDN' }).click();
 
-  await expect(frame.getByRole('alert')).toContainText('Staged CDN bundle smoke check failed');
+  await expect(frame.getByRole('alert')).toContainText('Mock-CDN delivery or staged-script execution failed');
   await expect(packageResources.locator('[data-asset-path="loaded-before-failure.js"]')).toHaveAttribute(
     'data-asset-status',
     'loaded'
@@ -258,7 +297,7 @@ test('shows a clear CDN error without falling back to the standalone package', a
   await page.getByRole('radio', { name: 'CDN' }).click();
 
   const alert = page.getByRole('alert');
-  await expect(alert).toContainText('Staged CDN resources unavailable');
+  await expect(alert).toContainText('CDN resources unavailable');
   await expect(alert).toContainText('No validated staging CDN export exists for hello-card-spfx.');
   await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
   await expect(page.locator('.preview-frame')).toHaveAttribute('data-package-mode', 'cdn');
@@ -271,6 +310,64 @@ test('shows a clear CDN error without falling back to the standalone package', a
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();
   expect(accessibility.violations).toEqual([]);
+});
+
+test('rejects a same-origin mock CDN descriptor without requesting assets or falling back', async ({ page }) => {
+  await page.goto('/');
+  const labOrigin = new URL(page.url()).origin;
+  const releaseId = '1.2.3-invalid-origin.1';
+  const namespacePath = `apps/hello-card-spfx/versions/${releaseId}/`;
+  const releaseBaseUrl = `${labOrigin}/${namespacePath}`;
+  let assetRequestCount = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith(`/${namespacePath}`)) {
+      assetRequestCount += 1;
+    }
+  });
+  await page.route('**/api/lab-packages/cdn?*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        mode: 'cdn',
+        appId: 'hello-card-spfx',
+        releaseId,
+        generatedAt: '2026-08-04T12:00:00.000Z',
+        cdnBasePath: releaseBaseUrl,
+        delivery: {
+          kind: 'local-mock-cdn',
+          origin: labOrigin,
+          bucketBaseUrl: `${labOrigin}/`,
+          namespaceKind: 'app-release',
+          namespacePath,
+          releaseBaseUrl,
+          releaseManifestUrl: `${releaseBaseUrl}deployment-manifest.json`,
+          status: 'published-and-verified'
+        },
+        packagePath: 'sharepoint/solution/hello-card-spfx.staging.cdn.sppkg',
+        assets: [
+          {
+            role: 'entry',
+            moduleId: 'hello-card',
+            assetPath: 'hello-card.js',
+            assetUrl: `${releaseBaseUrl}hello-card.js`,
+            bytes: 205,
+            sha256: 'a'.repeat(64),
+            stageStatus: 'allowed-and-verified'
+          }
+        ],
+        deferredResources: []
+      })
+    });
+  });
+
+  await page.getByRole('radio', { name: 'CDN' }).click();
+
+  const alert = page.getByRole('alert');
+  await expect(alert).toContainText('CDN resources unavailable');
+  await expect(alert).toContainText('separate credential-free http://127.0.0.1 origin');
+  await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+  await expect(page.locator('.preview-frame').getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
+  expect(assetRequestCount).toBe(0);
 });
 
 test('keeps viewer controls anchored while collapsing the options content', async ({ page }) => {

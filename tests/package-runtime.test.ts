@@ -2,21 +2,32 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadCdnPackageDescriptor, type CdnPackageDescriptor } from '../apps/lab/src/api/packageRuntime';
 
 const digest = 'a'.repeat(64);
-const sessionBase = 'http://lab.local/api/lab-packages/cdn-assets/0c5f3a9a-c636-4b43-8b01-48e03f46121d/';
+const mockOrigin = 'http://127.0.0.1:4400';
+const namespacePath = 'apps/hello-card-spfx/versions/1.0.0-20260804/';
+const releaseBaseUrl = `${mockOrigin}/${namespacePath}`;
 const descriptor: CdnPackageDescriptor = {
   mode: 'cdn',
   appId: 'hello-card-spfx',
   releaseId: '1.0.0-20260804',
   generatedAt: '2026-08-04T12:00:00.000Z',
-  cdnBasePath: 'https://cdn.contoso.example/spfx/hello-card/versions/1.0.0-20260804/',
-  assetBaseUrl: sessionBase,
+  cdnBasePath: releaseBaseUrl,
+  delivery: {
+    kind: 'local-mock-cdn',
+    origin: mockOrigin,
+    bucketBaseUrl: `${mockOrigin}/`,
+    namespaceKind: 'app-release',
+    namespacePath,
+    releaseBaseUrl,
+    releaseManifestUrl: `${releaseBaseUrl}deployment-manifest.json`,
+    status: 'published-and-verified'
+  },
   packagePath: 'sharepoint/solution/hello-card.sppkg',
   assets: [
     {
       role: 'entry',
       moduleId: 'hello-card',
       assetPath: 'assets/hello-card.js',
-      assetUrl: `${sessionBase}assets/hello-card.js`,
+      assetUrl: `${releaseBaseUrl}assets/hello-card.js`,
       bytes: 2048,
       sha256: digest,
       stageStatus: 'allowed-and-verified'
@@ -71,7 +82,11 @@ describe('loadCdnPackageDescriptor', () => {
     ['a different app', { ...descriptor, appId: 'another-app' }, 'does not match the selected app'],
     ['an invalid release id', { ...descriptor, releaseId: 'latest' }, 'releaseId is invalid'],
     ['an invalid generated time', { ...descriptor, generatedAt: 'yesterday' }, 'generatedAt is invalid'],
-    ['an insecure CDN base', { ...descriptor, cdnBasePath: 'http://cdn.contoso.example/assets/' }, 'credential-free HTTPS'],
+    [
+      'a CDN base that differs from mock delivery',
+      { ...descriptor, cdnBasePath: 'https://cdn.contoso.example/assets/' },
+      'must match the selected local mock CDN release URL'
+    ],
     [
       'an unsafe entry path',
       { ...descriptor, assets: [{ ...descriptor.assets[0], assetPath: '../entry.js' }] },
@@ -82,20 +97,87 @@ describe('loadCdnPackageDescriptor', () => {
     ['an invalid entry digest', { ...descriptor, assets: [{ ...descriptor.assets[0], sha256: 'nope' }] }, 'lowercase SHA-256'],
     ['missing assets', { ...descriptor, assets: undefined }, 'assets must contain'],
     ['missing deferred resources', { ...descriptor, deferredResources: undefined }, 'deferredResources must be an array'],
+    ['missing delivery metadata', { ...descriptor, delivery: undefined }, 'delivery must be an object'],
     [
-      'an off-origin asset base',
-      { ...descriptor, assetBaseUrl: 'https://evil.example/api/lab-packages/cdn-assets/session/' },
-      'Lab CDN asset API'
+      'the Lab origin as delivery origin',
+      {
+        ...descriptor,
+        delivery: { ...descriptor.delivery, origin: 'http://lab.local', bucketBaseUrl: 'http://lab.local/' }
+      },
+      'http://127.0.0.1 origin with an explicit port'
     ],
-    ['a non-API asset base', { ...descriptor, assetBaseUrl: 'http://lab.local/assets/' }, 'Lab CDN asset API'],
     [
-      'an entry outside its session',
+      'a non-loopback delivery origin',
+      {
+        ...descriptor,
+        delivery: {
+          ...descriptor.delivery,
+          origin: 'https://cdn.example.test',
+          bucketBaseUrl: 'https://cdn.example.test/'
+        }
+      },
+      'http://127.0.0.1 origin with an explicit port'
+    ],
+    [
+      'localhost instead of the canonical loopback host',
+      {
+        ...descriptor,
+        delivery: { ...descriptor.delivery, origin: 'http://localhost:4400', bucketBaseUrl: 'http://localhost:4400/' }
+      },
+      'http://127.0.0.1 origin with an explicit port'
+    ],
+    [
+      'loopback HTTPS instead of local HTTP',
+      {
+        ...descriptor,
+        delivery: { ...descriptor.delivery, origin: 'https://127.0.0.1:4400', bucketBaseUrl: 'https://127.0.0.1:4400/' }
+      },
+      'http://127.0.0.1 origin with an explicit port'
+    ],
+    [
+      'a loopback origin without an explicit port',
+      {
+        ...descriptor,
+        delivery: { ...descriptor.delivery, origin: 'http://127.0.0.1', bucketBaseUrl: 'http://127.0.0.1/' }
+      },
+      'http://127.0.0.1 origin with an explicit port'
+    ],
+    [
+      'a mismatched app namespace',
+      { ...descriptor, delivery: { ...descriptor.delivery, namespacePath: 'apps/other/versions/1.0.0-20260804/' } },
+      'namespace does not match'
+    ],
+    [
+      'a forged release base URL',
+      { ...descriptor, delivery: { ...descriptor.delivery, releaseBaseUrl: `${mockOrigin}/apps/other/versions/1.0.0/` } },
+      'does not match its immutable namespace'
+    ],
+    [
+      'a release URL with a query',
+      { ...descriptor, delivery: { ...descriptor.delivery, releaseBaseUrl: `${releaseBaseUrl}?latest=1` } },
+      'selected local mock CDN origin'
+    ],
+    [
+      'a release manifest outside the immutable release',
+      {
+        ...descriptor,
+        delivery: { ...descriptor.delivery, releaseManifestUrl: `${mockOrigin}/deployment-manifest.json` }
+      },
+      'does not match its immutable release'
+    ],
+    [
+      'an asset on another origin',
+      { ...descriptor, assets: [{ ...descriptor.assets[0], assetUrl: 'http://127.0.0.1:4401/assets/hello-card.js' }] },
+      'selected local mock CDN origin'
+    ],
+    [
+      'an entry outside its immutable release',
       {
         ...descriptor,
         assets: [
           {
             ...descriptor.assets[0],
-            assetUrl: 'http://lab.local/api/lab-packages/cdn-assets/another-session/assets/hello-card.js'
+            assetUrl: `${mockOrigin}/apps/hello-card-spfx/versions/another-release/assets/hello-card.js`
           }
         ]
       },
@@ -109,6 +191,15 @@ describe('loadCdnPackageDescriptor', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  it('rejects a mock CDN that resolves to the Lab origin', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(descriptor));
+    stubBrowser(fetchMock, mockOrigin);
+
+    await expect(loadCdnPackageDescriptor('hello-card-spfx', undefined, new AbortController().signal)).rejects.toThrow(
+      'separate credential-free http://127.0.0.1 origin'
+    );
+  });
+
   it('validates ordered assets and explicitly deferred SharePoint component resources', async () => {
     const value: CdnPackageDescriptor = {
       ...descriptor,
@@ -117,7 +208,7 @@ describe('loadCdnPackageDescriptor', () => {
           role: 'dependency',
           moduleId: 'WebPartStrings',
           assetPath: 'strings.js',
-          assetUrl: `${sessionBase}strings.js`,
+          assetUrl: `${releaseBaseUrl}strings.js`,
           bytes: 512,
           sha256: 'b'.repeat(64),
           stageStatus: 'allowed-and-verified'
@@ -153,7 +244,7 @@ describe('loadCdnPackageDescriptor', () => {
             role: 'dependency',
             moduleId: 'helper',
             assetPath: 'helper.js',
-            assetUrl: `${sessionBase}helper.js`
+            assetUrl: `${releaseBaseUrl}helper.js`
           }
         ]
       },
@@ -208,8 +299,8 @@ describe('loadCdnPackageDescriptor', () => {
   });
 });
 
-function stubBrowser(fetchMock: ReturnType<typeof vi.fn>): void {
-  vi.stubGlobal('window', { location: { origin: 'http://lab.local' } });
+function stubBrowser(fetchMock: ReturnType<typeof vi.fn>, labOrigin = 'http://lab.local'): void {
+  vi.stubGlobal('window', { location: { origin: labOrigin } });
   vi.stubGlobal('fetch', fetchMock);
 }
 

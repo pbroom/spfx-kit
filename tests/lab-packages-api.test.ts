@@ -3,99 +3,104 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
-import { createCdnRuntimeSessionStore, parseCdnAssetRoute } from '../apps/lab/server/lab-packages-api';
+import { createCdnRuntimeSessionStore } from '../apps/lab/server/lab-packages-api';
 // @ts-expect-error plain .mjs module without type declarations
 import { createCdnStageManifest } from '../packages/spfx-tools/src/lib/cdn-stage.mjs';
+// @ts-expect-error plain .mjs module without type declarations
+import {
+  publishMockCdnAppStage,
+  resolveMockCdnBucketRoot,
+  selectMockCdnAppRelease
+} from '../packages/spfx-tools/src/lib/mock-cdn-bucket.mjs';
 
 const temporaryDirectories: string[] = [];
 const appId = 'fixture-spfx';
 const componentId = '0df27fc4-65de-4cd9-9cad-52f0b84e960b';
+const mockCdnOrigin = 'http://127.0.0.1:4174';
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
-describe('Lab staging CDN runtime', () => {
-  it('fails with actionable guidance when the CDN simulation is not configured', async () => {
+describe('Lab local mock CDN runtime', () => {
+  it('fails with actionable guidance when no selected mock-CDN release exists', async () => {
     const workspaceRoot = await temporaryDirectory();
-
     await expect(createCdnRuntimeSessionStore(workspaceRoot).resolveDescriptor(appId)).rejects.toThrow(
-      'The local staging CDN artifact is missing, invalid, or incomplete. Export a new staging-cdn package and retry.'
+      'The selected local mock CDN release is missing, invalid, or incomplete.'
     );
   });
 
-  it('supports a workspace-contained exports root override and rejects paths outside the workspace', async () => {
+  it('supports a workspace-contained bucket override and rejects paths outside the workspace', async () => {
     const workspaceRoot = await temporaryDirectory();
-    await createStage(workspaceRoot, {
-      exportId: 'override',
-      exportsRoot: '.spfx-kit/e2e-cdn-exports',
-      generatedAt: '2026-08-02T12:00:00.000Z',
-      releaseId: '1.0.0-20260802T120000000Z-override',
-      entryContents: 'override();'
+    const bucketRoot = resolveMockCdnBucketRoot(workspaceRoot, '.spfx-kit/custom-mock-cdn');
+    await createAndPublishStage(workspaceRoot, {
+      bucketRoot,
+      releaseId: '1.0.0-20260804T120000000Z-override',
+      entryContents: 'override();',
+      select: true
     });
 
     await expect(
-      createCdnRuntimeSessionStore(workspaceRoot, { exportsRoot: '.spfx-kit/e2e-cdn-exports' }).resolveDescriptor(appId)
+      createCdnRuntimeSessionStore(workspaceRoot, {
+        bucketRoot: '.spfx-kit/custom-mock-cdn',
+        mockCdnOrigin
+      }).resolveDescriptor(appId)
     ).resolves.toMatchObject({
       assets: expect.arrayContaining([expect.objectContaining({ role: 'entry', assetPath: 'main.js' })])
     });
-    expect(() => createCdnRuntimeSessionStore(workspaceRoot, { exportsRoot: '../outside' })).toThrow(
+    expect(() => createCdnRuntimeSessionStore(workspaceRoot, { bucketRoot: '../outside' })).toThrow(
       'must resolve inside the workspace'
     );
   });
 
-  it('describes the real component entry from the latest validated artifact without leaking local paths', async () => {
+  it('describes the selected release with exact separate-origin delivery URLs and no local paths', async () => {
     const workspaceRoot = await temporaryDirectory();
-    await createStage(workspaceRoot, {
-      exportId: 'older',
-      generatedAt: '2026-08-01T12:00:00.000Z',
-      releaseId: '1.0.0-20260801T120000000Z-aaaaaa',
-      entryContents: 'older();'
-    });
-    const latest = await createStage(workspaceRoot, {
-      exportId: 'latest',
-      generatedAt: '2026-08-02T12:00:00.000Z',
-      releaseId: '1.0.1-20260802T120000000Z-bbbbbb',
-      entryContents: 'latest();'
+    const selected = await createAndPublishStage(workspaceRoot, {
+      releaseId: '1.0.1-20260804T120000000Z-bbbbbb',
+      entryContents: 'selected();',
+      select: true
     });
 
-    const descriptor = await createCdnRuntimeSessionStore(workspaceRoot).resolveDescriptor(appId);
-
+    const descriptor = await createCdnRuntimeSessionStore(workspaceRoot, { mockCdnOrigin }).resolveDescriptor(appId);
+    const releaseBaseUrl = `${mockCdnOrigin}/apps/${appId}/versions/${selected.releaseId}/`;
     expect(descriptor).toEqual({
       mode: 'cdn',
       appId,
-      releaseId: latest.releaseId,
-      generatedAt: latest.generatedAt,
-      cdnBasePath: latest.cdnBasePath,
-      assetBaseUrl: expect.stringMatching(/^\/api\/lab-packages\/cdn-assets\/[a-f0-9-]{36}\/$/),
+      releaseId: selected.releaseId,
+      generatedAt: expect.any(String),
+      cdnBasePath: releaseBaseUrl,
+      delivery: {
+        kind: 'local-mock-cdn',
+        origin: mockCdnOrigin,
+        bucketBaseUrl: `${mockCdnOrigin}/`,
+        namespaceKind: 'app-release',
+        namespacePath: `apps/${appId}/versions/${selected.releaseId}/`,
+        releaseBaseUrl,
+        releaseManifestUrl: `${releaseBaseUrl}deployment-manifest.json`,
+        status: 'published-and-verified'
+      },
       assets: [
-        {
+        expect.objectContaining({
           role: 'dependency',
           moduleId: 'helper',
           assetPath: 'helper.js',
-          assetUrl: expect.stringMatching(/\/helper\.js$/),
-          bytes: 9,
-          sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+          assetUrl: `${releaseBaseUrl}helper.js`,
           stageStatus: 'allowed-and-verified'
-        },
-        {
+        }),
+        expect.objectContaining({
           role: 'dependency',
           moduleId: 'labels',
           assetPath: 'labels_en-us.js',
-          assetUrl: expect.stringMatching(/\/labels_en-us\.js$/),
-          bytes: 16,
-          sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+          assetUrl: `${releaseBaseUrl}labels_en-us.js`,
           stageStatus: 'allowed-and-verified'
-        },
-        {
+        }),
+        expect.objectContaining({
           role: 'entry',
           moduleId: 'main',
           assetPath: 'main.js',
-          assetUrl: expect.stringMatching(/^\/api\/lab-packages\/cdn-assets\/[a-f0-9-]{36}\/main\.js$/),
-          bytes: 9,
-          sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+          assetUrl: `${releaseBaseUrl}main.js`,
           stageStatus: 'allowed-and-verified'
-        }
+        })
       ],
       deferredResources: [
         {
@@ -110,57 +115,33 @@ describe('Lab staging CDN runtime', () => {
       packagePath: `sharepoint/solution/${appId}.staging.cdn.sppkg`
     });
     expect(JSON.stringify(descriptor)).not.toContain(workspaceRoot);
+    expect(JSON.stringify(descriptor)).not.toContain('/api/lab-packages/cdn-assets');
   });
 
-  it('serves only manifest-listed bytes for the exact validated release', async () => {
-    const workspaceRoot = await temporaryDirectory();
-    await createStage(workspaceRoot, {
-      exportId: 'only',
-      generatedAt: '2026-08-02T12:00:00.000Z',
-      releaseId: '2.0.0-20260802T120000000Z-cccccc',
-      entryContents: 'entry();'
-    });
-    const store = createCdnRuntimeSessionStore(workspaceRoot);
-    const descriptor = await store.resolveDescriptor(appId);
-    const entryAsset = descriptor.assets.find((asset) => asset.role === 'entry');
-    expect(entryAsset).toBeDefined();
-    const route = parseCdnAssetRoute(entryAsset!.assetUrl.replace('/api/lab-packages', ''));
-    const asset = await store.readAsset(route.sessionId, route.assetPath);
-
-    expect(asset.bytes.toString('utf8')).toBe('entry();');
-    expect(asset.contentType).toBe('text/javascript; charset=utf-8');
-    expect(asset.etag).toMatch(/^"sha256-[a-f0-9]{64}"$/);
-    await expect(store.readAsset(route.sessionId, 'unlisted.js')).rejects.toThrow(
-      'The local staging CDN artifact is missing, invalid, or incomplete.'
-    );
-  });
-
-  it('requires a component id only for multi-component packages and supports localized default entries', async () => {
+  it('requires a component id only for multi-component packages and uses localized default assets', async () => {
     const multiWorkspace = await temporaryDirectory();
-    const multi = await createStage(multiWorkspace, {
-      exportId: 'multi',
-      generatedAt: '2026-08-02T12:00:00.000Z',
-      releaseId: '2.1.0-20260802T120000000Z-multi01',
+    await createAndPublishStage(multiWorkspace, {
+      releaseId: '2.1.0-20260804T120000000Z-multi01',
       entryContents: 'entry();',
-      additionalComponent: true
+      additionalComponent: true,
+      select: true
     });
-
-    const multiStore = createCdnRuntimeSessionStore(multiWorkspace);
+    const multiStore = createCdnRuntimeSessionStore(multiWorkspace, { mockCdnOrigin });
     await expect(multiStore.resolveDescriptor(appId)).rejects.toThrow('the Lab adapter must supply a component id');
     await expect(multiStore.resolveDescriptor(appId, componentId)).resolves.toMatchObject({
-      releaseId: multi.releaseId,
       assets: expect.arrayContaining([expect.objectContaining({ role: 'entry', assetPath: 'main.js' })])
     });
 
     const localizedWorkspace = await temporaryDirectory();
-    await createStage(localizedWorkspace, {
-      exportId: 'localized',
-      generatedAt: '2026-08-02T13:00:00.000Z',
-      releaseId: '2.2.0-20260802T130000000Z-local01',
+    await createAndPublishStage(localizedWorkspace, {
+      releaseId: '2.2.0-20260804T130000000Z-local01',
       entryContents: 'defaultLocale();',
-      localizedEntry: true
+      localizedEntry: true,
+      select: true
     });
-    await expect(createCdnRuntimeSessionStore(localizedWorkspace).resolveDescriptor(appId)).resolves.toMatchObject({
+    await expect(
+      createCdnRuntimeSessionStore(localizedWorkspace, { mockCdnOrigin }).resolveDescriptor(appId)
+    ).resolves.toMatchObject({
       assets: [
         expect.objectContaining({ moduleId: 'helper', assetPath: 'helper.js' }),
         expect.objectContaining({ moduleId: 'labels', assetPath: 'labels_en-us.js' }),
@@ -169,150 +150,68 @@ describe('Lab staging CDN runtime', () => {
     });
   });
 
-  it('ignores invalid historical debris but fails closed when the selected newest artifact is invalid', async () => {
-    const debrisWorkspace = await temporaryDirectory();
-    const oldInvalid = await createStage(debrisWorkspace, {
-      exportId: 'old-invalid',
-      generatedAt: '2026-08-01T12:00:00.000Z',
-      releaseId: '2.9.0-20260801T120000000Z-cccccc',
-      entryContents: 'before();'
+  it('uses only the explicitly selected release and never scans or falls back to another version', async () => {
+    const workspaceRoot = await temporaryDirectory();
+    const older = await createAndPublishStage(workspaceRoot, {
+      releaseId: '3.0.0-20260804T120000000Z-older01',
+      entryContents: 'older();',
+      select: true
     });
-    await writeFile(path.join(oldInvalid.uploadDir, 'main.js'), 'tampered();');
-    await writeFileWithParents(
-      path.join(debrisWorkspace, '.spfx-kit', 'exports', appId, 'malformed', 'staging-cdn', 'deployment-manifest.json'),
-      '{broken'
-    );
-    const latestValid = await createStage(debrisWorkspace, {
-      exportId: 'latest-valid',
-      generatedAt: '2026-08-02T12:00:00.000Z',
-      releaseId: '3.0.0-20260802T120000000Z-dddddd',
-      entryContents: 'valid();'
+    const newer = await createAndPublishStage(workspaceRoot, {
+      releaseId: '3.1.0-20260804T130000000Z-newer01',
+      entryContents: 'newer();',
+      select: false
+    });
+    await writeFile(path.join(newer.publishedReleaseDir, 'upload', 'main.js'), 'tampered();');
+
+    await expect(createCdnRuntimeSessionStore(workspaceRoot, { mockCdnOrigin }).resolveDescriptor(appId)).resolves.toMatchObject({
+      releaseId: older.releaseId
     });
 
-    await expect(createCdnRuntimeSessionStore(debrisWorkspace).resolveDescriptor(appId)).resolves.toMatchObject({
-      releaseId: latestValid.releaseId
+    await selectMockCdnAppRelease({
+      bucketRoot: older.bucketRoot,
+      origin: mockCdnOrigin,
+      appId,
+      releaseId: newer.releaseId
+    }).catch(() => undefined);
+    await expect(createCdnRuntimeSessionStore(workspaceRoot, { mockCdnOrigin }).resolveDescriptor(appId)).resolves.toMatchObject({
+      releaseId: older.releaseId
     });
-
-    const invalidWorkspace = await temporaryDirectory();
-    await createStage(invalidWorkspace, {
-      exportId: 'valid',
-      generatedAt: '2026-08-01T12:00:00.000Z',
-      releaseId: '3.1.0-20260801T120000000Z-dddddd',
-      entryContents: 'valid();'
-    });
-    const invalid = await createStage(invalidWorkspace, {
-      exportId: 'invalid',
-      generatedAt: '2026-08-02T12:00:00.000Z',
-      releaseId: '3.1.1-20260802T120000000Z-eeeeee',
-      entryContents: 'before();'
-    });
-    await writeFile(path.join(invalid.uploadDir, 'main.js'), 'tampered();');
-
-    await expect(createCdnRuntimeSessionStore(invalidWorkspace).resolveDescriptor(appId, componentId)).rejects.toThrow(
-      'The local staging CDN artifact is missing, invalid, or incomplete.'
-    );
-
-    const ambiguousWorkspace = await temporaryDirectory();
-    await createStage(ambiguousWorkspace, {
-      exportId: 'one',
-      generatedAt: '2026-08-03T12:00:00.000Z',
-      releaseId: '4.0.0-20260803T120000000Z-ffffff',
-      entryContents: 'one();'
-    });
-    await createStage(ambiguousWorkspace, {
-      exportId: 'two',
-      generatedAt: '2026-08-03T12:00:00.000Z',
-      releaseId: '4.0.1-20260803T120000000Z-gggggg',
-      entryContents: 'two();'
-    });
-
-    await expect(createCdnRuntimeSessionStore(ambiguousWorkspace).resolveDescriptor(appId, componentId)).rejects.toThrow(
-      'The local staging CDN artifact is missing, invalid, or incomplete.'
-    );
   });
 
-  it('pins one release session without rescanning and rechecks the selected asset hash on every read', async () => {
+  it('fails closed when selected package bytes mutate after publication', async () => {
     const workspaceRoot = await temporaryDirectory();
-    const selected = await createStage(workspaceRoot, {
-      exportId: 'selected',
-      generatedAt: '2026-08-02T12:00:00.000Z',
-      releaseId: '5.0.0-20260802T120000000Z-hhhhhh',
-      entryContents: 'selected();'
-    });
-    const store = createCdnRuntimeSessionStore(workspaceRoot);
-    const descriptor = await store.resolveDescriptor(appId);
-    const entryAsset = descriptor.assets.find((asset) => asset.role === 'entry');
-    expect(entryAsset).toBeDefined();
-    const route = parseCdnAssetRoute(entryAsset!.assetUrl.replace('/api/lab-packages', ''));
-
-    const laterInvalid = await createStage(workspaceRoot, {
-      exportId: 'later-invalid',
-      generatedAt: '2026-08-03T12:00:00.000Z',
-      releaseId: '5.0.1-20260803T120000000Z-iiiiii',
-      entryContents: 'later();'
-    });
-    await writeFile(path.join(laterInvalid.uploadDir, 'main.js'), 'tampered();');
-
-    await expect(store.readAsset(route.sessionId, route.assetPath)).resolves.toMatchObject({
-      bytes: Buffer.from('selected();')
-    });
-
-    await writeFile(path.join(selected.uploadDir, 'main.js'), 'changed!!!');
-    await expect(store.readAsset(route.sessionId, route.assetPath)).rejects.toThrow(
-      'The local staging CDN artifact is missing, invalid, or incomplete.'
-    );
-  });
-
-  it('rejects a staged package whose bytes changed after its deployment manifest was generated', async () => {
-    const workspaceRoot = await temporaryDirectory();
-    const stage = await createStage(workspaceRoot, {
-      exportId: 'mutated-package',
-      generatedAt: '2026-08-02T12:00:00.000Z',
-      releaseId: '5.1.0-20260802T120000000Z-jjjjjj',
-      entryContents: 'selected();'
+    const selected = await createAndPublishStage(workspaceRoot, {
+      releaseId: '4.0.0-20260804T140000000Z-package1',
+      entryContents: 'entry();',
+      select: true
     });
     await writeFile(
-      stage.packageFile,
-      packageBytes([
-        {
-          id: 'replacement-component',
-          loaderConfig: {
-            entryModuleId: 'replacement',
-            scriptResources: { replacement: { type: 'path', path: 'main.js' } }
-          }
-        }
-      ])
+      path.join(selected.publishedReleaseDir, 'sharepoint', 'solution', `${appId}.staging.cdn.sppkg`),
+      packageBytes([])
     );
-
-    await expect(createCdnRuntimeSessionStore(workspaceRoot).resolveDescriptor(appId)).rejects.toThrow(
-      'The local staging CDN artifact is missing, invalid, or incomplete.'
+    await expect(createCdnRuntimeSessionStore(workspaceRoot, { mockCdnOrigin }).resolveDescriptor(appId)).rejects.toThrow(
+      'The selected local mock CDN release is missing, invalid, or incomplete.'
     );
-  });
-
-  it('rejects encoded traversal and path separators before artifact resolution', () => {
-    const sessionId = '12345678-1234-4123-8123-123456789abc';
-    expect(() => parseCdnAssetRoute(`/cdn-assets/${sessionId}/%2e%2e/secret.js`)).toThrow();
-    expect(() => parseCdnAssetRoute(`/cdn-assets/${sessionId}/folder%2fsecret.js`)).toThrow();
-    expect(() => parseCdnAssetRoute(`/cdn-assets/${sessionId}/folder%5csecret.js`)).toThrow();
   });
 });
 
 interface StageOptions {
-  exportId: string;
-  exportsRoot?: string;
-  generatedAt: string;
+  bucketRoot?: string;
   releaseId: string;
   entryContents: string;
+  select: boolean;
   additionalComponent?: boolean;
   localizedEntry?: boolean;
 }
 
-async function createStage(workspaceRoot: string, options: StageOptions) {
-  const stageDir = path.join(workspaceRoot, options.exportsRoot || '.spfx-kit/exports', appId, options.exportId, 'staging-cdn');
+async function createAndPublishStage(workspaceRoot: string, options: StageOptions) {
+  const bucketRoot = options.bucketRoot || resolveMockCdnBucketRoot(workspaceRoot);
+  const stageDir = path.join(workspaceRoot, 'fixtures', options.releaseId, 'staging-cdn');
   const uploadDir = path.join(stageDir, 'upload');
   const manifestsDir = path.join(stageDir, 'manifests');
   const packageFile = path.join(stageDir, 'sharepoint', 'solution', `${appId}.staging.cdn.sppkg`);
-  const cdnBasePath = `https://staging.contoso.test/spfx/${appId}/versions/${options.releaseId}/`;
+  const cdnBasePath = `${mockCdnOrigin}/apps/${appId}/versions/${options.releaseId}/`;
   const entryResource = options.localizedEntry
     ? { type: 'localizedPath', defaultPath: 'main_en-us.js', paths: { 'fr-fr': 'main_fr-fr.js' } }
     : { type: 'path', path: 'main.js' };
@@ -324,7 +223,11 @@ async function createStage(workspaceRoot: string, options: StageOptions) {
       scriptResources: {
         main: entryResource,
         helper: { type: 'path', path: 'helper.js' },
-        labels: { type: 'localizedPath', defaultPath: 'labels_en-us.js', paths: { 'fr-fr': 'labels_fr-fr.js' } },
+        labels: {
+          type: 'localizedPath',
+          defaultPath: 'labels_en-us.js',
+          paths: { 'fr-fr': 'labels_fr-fr.js' }
+        },
         react: { type: 'component', id: 'react-component-id', version: '17.0.1' }
       }
     }
@@ -334,14 +237,11 @@ async function createStage(workspaceRoot: string, options: StageOptions) {
     loaderConfig: {
       internalModuleBaseUrls: [cdnBasePath],
       entryModuleId: 'secondary',
-      scriptResources: {
-        secondary: { type: 'path', path: 'secondary.js' }
-      }
+      scriptResources: { secondary: { type: 'path', path: 'secondary.js' } }
     }
   };
   const componentManifests = options.additionalComponent ? [componentManifest, additionalComponentManifest] : [componentManifest];
-
-  const files = [
+  const writes = [
     writeFileWithParents(path.join(uploadDir, options.localizedEntry ? 'main_en-us.js' : 'main.js'), options.entryContents),
     writeFileWithParents(path.join(uploadDir, 'helper.js'), 'helper();'),
     writeFileWithParents(path.join(uploadDir, 'labels_en-us.js'), 'labelsDefault();'),
@@ -350,10 +250,10 @@ async function createStage(workspaceRoot: string, options: StageOptions) {
     writeFileWithParents(packageFile, packageBytes(componentManifests))
   ];
   if (options.localizedEntry) {
-    files.push(writeFileWithParents(path.join(uploadDir, 'main_fr-fr.js'), 'localeFr();'));
+    writes.push(writeFileWithParents(path.join(uploadDir, 'main_fr-fr.js'), 'localeFr();'));
   }
   if (options.additionalComponent) {
-    files.push(
+    writes.push(
       writeFileWithParents(path.join(uploadDir, 'secondary.js'), 'secondary();'),
       writeFileWithParents(
         path.join(manifestsDir, 'secondary.manifest.json'),
@@ -361,8 +261,9 @@ async function createStage(workspaceRoot: string, options: StageOptions) {
       )
     );
   }
-  await Promise.all(files);
+  await Promise.all(writes);
   const manifest = await createCdnStageManifest({
+    allowLocalMockCdn: true,
     cdnBasePath,
     packageFile,
     releaseLabel: options.releaseId,
@@ -372,9 +273,18 @@ async function createStage(workspaceRoot: string, options: StageOptions) {
     stageDir,
     uploadDir
   });
-  manifest.generatedAt = options.generatedAt;
   await writeFile(path.join(stageDir, 'deployment-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  return { ...options, cdnBasePath, packageFile, stageDir, uploadDir };
+  await publishMockCdnAppStage({
+    bucketRoot,
+    origin: mockCdnOrigin,
+    stageDir,
+    select: options.select
+  });
+  return {
+    bucketRoot,
+    releaseId: options.releaseId,
+    publishedReleaseDir: path.join(bucketRoot, 'apps', appId, 'versions', options.releaseId)
+  };
 }
 
 function packageBytes(componentManifests: object[]): Uint8Array {
