@@ -177,6 +177,8 @@ export interface LabRenderProps<Props extends LabPropertyBag = LabPropertyBag> {
 export interface LabWebPart<Props extends LabPropertyBag = LabPropertyBag> {
   id: string;
   appId: string;
+  /** SPFx component manifest id. Required to disambiguate multi-component CDN packages. */
+  componentId?: string;
   title: string;
   description: string;
   group?: string;
