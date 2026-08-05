@@ -108,11 +108,19 @@ Evidence values:
 - `expired`
 
 The absence of a ledger row means that the event has not run. Append a new row
-to correct or repeat evidence; never overwrite history. The new row must name
-the prior row in `Supersedes evidence ID`.
+to correct or repeat evidence; never overwrite history. A correction names one
+or more earlier rows for the same event key in `Supersedes evidence IDs`. A
+normal linear correction names its current leaf. Concurrent corrections may
+independently name the same historical parent and create sibling leaves; a
+conflict-resolution row names every current leaf so the completed append-only
+graph returns to one current row.
 
 Proof-event values:
 
+- `baseline-inventory`
+- `classification-acceptance`
+- `accountability-acceptance`
+- `decision-acceptance`
 - `local-validation`
 - `exact-head-ci`
 - `local-mock-smoke`
@@ -126,28 +134,40 @@ Proof-event values:
 - `rollback-artifacts-retained`
 - `rollback-drill`
 
-Each ledger row records one proof event. No event implies another event. For
-example, a SharePoint runtime pass does not prove exact remote bytes or response
-headers, and a merged PR does not prove deployment. `local-mock-smoke` means
-only the Lab/mock route passed. `remote-bytes` requires configured HTTPS
-exact-prefix byte and checksum verification. `remote-headers` separately
-requires the intended origin and header policy. `sharepoint-runtime` requires a
-real browser loading the exact package and resource release on the target
-SharePoint origin.
+Each ledger row records one proof event. Phase 0 records each inventory,
+classification, accountability assignment, and accepted decision as its own
+`baseline-inventory`, `classification-acceptance`,
+`accountability-acceptance`, or `decision-acceptance` row, scoped to the
+specific criterion by phase/surface. These governance events bind the reviewed
+source revision and public-safe repository evidence; they are not technical
+`local-validation` results. No event implies another event. For example, a
+SharePoint runtime pass does not prove exact remote bytes or response headers,
+and a merged PR does not prove deployment. `local-mock-smoke` means only the
+Lab/mock route passed. `remote-bytes` requires configured HTTPS exact-prefix
+byte and checksum verification. `remote-headers` separately requires the
+intended origin and header policy. `sharepoint-runtime` requires a real browser
+loading the exact package and resource release on the target SharePoint origin.
 
 ### Evidence Ledger
 
-| Evidence ID | Event key | Supersedes evidence ID | Release set | Deployment topology ID | Phase/surface | Source revision | PR exact head | Export target | Package/archive SHA-256 | Deployment/resource-manifest SHA-256 | Environment class + opaque ID | Proof event | Result | Public evidence reference | Recorded UTC | Accountability |
-| ----------- | --------- | ---------------------- | ----------- | ---------------------- | ------------- | --------------- | ------------- | ------------- | ----------------------- | ------------------------------------ | ----------------------------- | ----------- | ------ | ------------------------- | ------------ | -------------- |
-| —           | —         | —                      | —           | —                      | —             | —               | —             | —             | —                       | —                                    | —                             | —           | —      | No evidence recorded      | —            | —              |
+| Evidence ID | Event key | Supersedes evidence IDs | Release set | Deployment topology ID | Phase/surface | Source revision | PR exact head | Export target | Package/archive SHA-256 | Deployment/resource-manifest SHA-256 | Environment class + opaque ID | Proof event | Result | Public evidence reference | Recorded UTC | Accountability |
+| ----------- | --------- | ----------------------- | ----------- | ---------------------- | ------------- | --------------- | ------------- | ------------- | ----------------------- | ------------------------------------ | ----------------------------- | ----------- | ------ | ------------------------- | ------------ | -------------- |
+| —           | —         | —                       | —           | —                      | —             | —               | —             | —             | —                       | —                                    | —                             | —           | —      | No evidence recorded      | —            | —              |
 
-An immutable release-set manifest groups the exact public repository revisions
-or private revision evidence IDs, UI profiles, packages, archives, and resource
-manifests that must work together. A new source revision, profile, package,
-archive, manifest, or export target creates a new release set. An environment
-does not: environment-specific rows share the release set. A deployment
-topology ID groups the intended CDN origin, App Catalog, tenant, and test site
-without exposing private identifiers.
+An immutable release-set manifest declares a trusted profile. `source-only`
+contains exactly the `source` target and may bind source-subject governance or
+technical proof, but cannot satisfy an application or delivery gate; Phase 0
+governance proof requires this profile. `application-matrix` contains
+`source`, `single`, `cdn`, `staging-cdn`, and `standalone`, with a bound artifact
+for each deployable target. All four target outputs for one candidate therefore
+share one set rather than becoming four partial sets. The manifest also groups
+the exact public repository revisions or private revision evidence IDs, UI
+profiles, packages, archives, and resource manifests that must work together.
+Adding or removing a required target, or changing any source revision, profile,
+package, archive, manifest, configuration identity, or target output rotates the
+entire set. An environment does not: environment-specific rows share the release
+set. A deployment topology ID groups the intended CDN origin, App Catalog,
+tenant, and test site without exposing private identifiers.
 
 Use `source`, `single`, `cdn`, `staging-cdn`, or `standalone` for the export
 target. Record a literal repository/SHA and PR exact head only for public
@@ -157,8 +177,10 @@ environments and deployment topologies.
 
 The event key is the stable combination of release set, topology, phase or
 surface, export target, environment, and proof event. Its current result is the
-unique row not superseded by another row with that key. Multiple unsuperseded
-leaves are a conflict and block completion. A phase reaches `complete` only
+unique leaf in the full correction graph for that key. Multiple leaves,
+including concurrent sibling corrections from one historical parent, block
+completion until one later row supersedes every current leaf. A phase reaches
+`complete` only
 when every required matrix cell has a current `pass` row for the same release
 set and applicable topology, all of its code is merged, no current row is
 failed, blocked, or expired, and it has no open blocker or expired exception.
@@ -226,10 +248,32 @@ Included work:
   Better List color fields.
 - Record the public Google Fonts behavior in Better Text as a separate asset
   policy decision. Do not add another font origin by default.
+- Inventory the Lab and Workbench Monaco runtime, including the current
+  jsDelivr origin and its modules, CSS, workers, Codicon, and support assets.
+  Assign an owner and issue/ADR that requires removal to bundled/local assets
+  or the complete shared-resource proof before retention; never permit an
+  implicit public-CDN fallback.
 - Define the evidence-ledger storage and required terminal event matrix.
 - Define the authorized non-production rollback-drill playbook.
 - Inventory supported persisted Code Workbench sources and decide their owned
   module migration and compatibility policy.
+
+Phase 0 ledger mapping:
+
+- Repository heads and source, emitted-artifact, Workbench, font, and Monaco
+  inventories require separate `baseline-inventory` rows for their scopes.
+- Source, app-asset, app-CDN, and optional shared-resource classifications
+  require `classification-acceptance` rows.
+- A0-A7 assignments, approvers, issue/ADR links, risk owners, and removal owners
+  require `accountability-acceptance` rows.
+- Registry, rollback, color, font, Monaco delivery, Workbench compatibility,
+  evidence-contract, and other ADR/policy decisions require
+  `decision-acceptance` rows.
+
+A criterion spanning more than one category requires every named event. For
+example, the Monaco criterion requires its inventory, accountability, and
+decision rows. The post-merge trust-bootstrap probes are external observations;
+they do not substitute for these first post-bootstrap ledger rows.
 
 Acceptance checklist:
 
@@ -239,6 +283,9 @@ Acceptance checklist:
 - [ ] The registry update and rollback process is accepted.
 - [ ] The color-control and font-policy decisions are recorded or explicitly
       blocked with owners.
+- [ ] The Lab/Workbench Monaco jsDelivr runtime has a named owner, complete
+      closure inventory, and removal-or-proof gate; bundled/local delivery is
+      the default and no implicit public-CDN fallback is allowed.
 - [ ] Accountability rows A0-A7 name concrete people or teams, approvers, and
       issue/ADR IDs; no `Unassigned`, `Unlinked`, or generic role remains.
 - [ ] Every open risk and exception links to a concrete accountable row and
@@ -286,8 +333,12 @@ Acceptance checklist:
       pass for multiple roots in one document.
 - [ ] A host-style lifecycle test proves mount, theme change, and unmount do not
       alter SharePoint-owned styles or nodes.
-- [ ] Embedded and app-CDN builds both contain the generated UI CSS and its
-      relative assets.
+- [ ] `single`/embedded, `cdn`, `staging-cdn`, and `standalone` export/build
+      paths contain or correctly reference the generated UI CSS and its full
+      relative-asset closure from the same source revision.
+- [ ] A clean standalone install/build outside the monorepo reproduces that CSS
+      closure, and the staging upload tree and strict deployment manifest
+      reconcile every generated CSS-relative asset.
 
 Exit evidence: pinned profile manifest, focused compatibility suite, emitted
 CSS report, SPFx canary package, and local browser record.
@@ -510,6 +561,10 @@ Acceptance checklist:
       supported persisted-source fixtures pass, and no exception authorizes
       direct Fluent/Griffel application code.
 - [ ] Root and app exact-head CI is green.
+- [ ] Root, workspace, app, and canary package manifests contain no direct
+      Fluent component, Fluent icon, or Griffel dependency; lockfile and
+      dependency-tree evidence proves every remaining Fluent package is
+      reachable only through SPFx transitive ancestry.
 - [ ] Embedded, app-CDN, staging-CDN, and standalone artifacts are reconciled
       to the same source revisions.
 - [ ] Applicable `remote-bytes`, `remote-headers`,
@@ -729,31 +784,33 @@ the roadmap summary.
 
 ## Decision Log
 
-| ID  | Status   | Decision                                                                                                       | Accountability | Recorded   | Evidence/ADR                        | Revisit condition                                                        |
-| --- | -------- | -------------------------------------------------------------------------------------------------------------- | -------------- | ---------- | ----------------------------------- | ------------------------------------------------------------------------ |
-| D1  | Accepted | Keep React and ReactDOM at `17.0.1`.                                                                           | A1             | 2026-08-05 | SPFx matrix and `toolchain.md`      | Microsoft's supported SPFx runtime changes.                              |
-| D2  | Proposed | Use a pinned shadcn profile backed by Base UI.                                                                 | A1             | 2026-08-05 | Unlinked — blocks Phase 0           | Compatibility spike fails or primitive support changes.                  |
-| D3  | Proposed | Distribute UI components as reviewed source with deterministic digests.                                        | A1             | 2026-08-05 | Unlinked — blocks Phase 0           | Standalone or drift enforcement cannot be proven.                        |
-| D4  | Proposed | Compile generated UI CSS per app and keep it essential/app-owned.                                              | A1             | 2026-08-05 | Unlinked — blocks Phase 0           | CSS closure, isolation, or parity gates fail.                            |
-| D5  | Accepted | Keep app-CDN and shared-resource contracts separate.                                                           | A7             | 2026-08-05 | Current app export contracts        | One contract proves both lifecycles without weakening either validator.  |
-| D6  | Accepted | Keep the `/shared/...` runtime namespace closed.                                                               | A7             | 2026-08-05 | Reserved mock route and validators  | Production closure, provider deployment, and browser runtime are proven. |
-| D7  | Accepted | Keep Better List's source editor canonical.                                                                    | A2             | 2026-08-05 | Existing shared-editor architecture | A separately approved replacement becomes canonical.                     |
-| D8  | Proposed | Migrate the foundation, canonical editor/Lab, Better Text, Better Divider, Better List, then platform cleanup. | A0             | 2026-08-05 | Unlinked — blocks Phase 0           | Phase dependencies or compatibility evidence require resequencing.       |
+| ID  | Status   | Decision                                                                                                                                                                   | Accountability | Recorded   | Evidence/ADR                        | Revisit condition                                                          |
+| --- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- | ----------------------------------- | -------------------------------------------------------------------------- |
+| D1  | Accepted | Keep React and ReactDOM at `17.0.1`.                                                                                                                                       | A1             | 2026-08-05 | SPFx matrix and `toolchain.md`      | Microsoft's supported SPFx runtime changes.                                |
+| D2  | Proposed | Use a pinned shadcn profile backed by Base UI.                                                                                                                             | A1             | 2026-08-05 | Unlinked — blocks Phase 0           | Compatibility spike fails or primitive support changes.                    |
+| D3  | Proposed | Distribute UI components as reviewed source with deterministic digests.                                                                                                    | A1             | 2026-08-05 | Unlinked — blocks Phase 0           | Standalone or drift enforcement cannot be proven.                          |
+| D4  | Proposed | Compile generated UI CSS per app and keep it essential/app-owned.                                                                                                          | A1             | 2026-08-05 | Unlinked — blocks Phase 0           | CSS closure, isolation, or parity gates fail.                              |
+| D5  | Accepted | Keep app-CDN and shared-resource contracts separate.                                                                                                                       | A7             | 2026-08-05 | Current app export contracts        | One contract proves both lifecycles without weakening either validator.    |
+| D6  | Accepted | Keep the `/shared/...` runtime namespace closed.                                                                                                                           | A7             | 2026-08-05 | Reserved mock route and validators  | Production closure, provider deployment, and browser runtime are proven.   |
+| D7  | Accepted | Keep Better List's source editor canonical.                                                                                                                                | A2             | 2026-08-05 | Existing shared-editor architecture | A separately approved replacement becomes canonical.                       |
+| D8  | Proposed | Migrate the foundation, canonical editor/Lab, Better Text, Better Divider, Better List, then platform cleanup.                                                             | A0             | 2026-08-05 | Unlinked — blocks Phase 0           | Phase dependencies or compatibility evidence require resequencing.         |
+| D9  | Proposed | Replace the Lab/Workbench jsDelivr Monaco runtime with bundled/local assets unless the full shared-resource contract is proven; never use an implicit public-CDN fallback. | A2/A7          | 2026-08-05 | Unlinked — blocks Phase 0           | A complete immutable resource closure and real-browser proof are accepted. |
 
 ## Risks And Blockers
 
-| Risk or blocker                                                     | Accountability | State | Effect                                              | Required response                                                                       | Tracking issue/ADR        | Due gate           |
-| ------------------------------------------------------------------- | -------------- | ----- | --------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------- | ------------------ |
-| A selected shadcn dependency requires React 18/19.                  | A1             | Open  | Breaks the SPFx runtime contract.                   | Reject or adapt the component source; never force the peer graph.                       | Unlinked — blocks Phase 0 | Phase 1 start      |
-| Tailwind selectors are hashed as CSS Modules.                       | A1             | Open  | Literal component classes stop working.             | Use the targeted global-CSS contract and assert emitted selectors.                      | Unlinked — blocks Phase 0 | Phase 1 acceptance |
-| Preflight or tokens escape the owned root.                          | A1             | Open  | SharePoint or another web part changes appearance.  | Fail CSS and host-style lifecycle gates.                                                | Unlinked — blocks Phase 0 | Phase 1 acceptance |
-| A portal targets global `document.body` without scope.              | A1/A2          | Open  | Theme, focus, document ownership, or z-order fails. | Require the UI context's portal host.                                                   | Unlinked — blocks Phase 0 | Phase 2 acceptance |
-| Better Divider/Better List color control lacks parity.              | A4/A5          | Open  | Blocks complete Fluent removal.                     | Decide the contract, owner, and issue in Phase 0; implement and validate it in Phase 2. | Unlinked — blocks Phase 0 | Phase 2 acceptance |
-| Ordinary `cdn` output contains stale assets.                        | A1/A7          | Open  | Mixed generations may pass a weak handoff.          | Clear generated sources and prefer strict staging proof.                                | Unlinked — blocks Phase 0 | Phase 1 acceptance |
-| CSS-relative fonts/images or lazy chunks are absent.                | A1/A7          | Open  | Local manifest passes but production breaks.        | Add closure checks and real browser network proof.                                      | Unlinked — blocks Phase 0 | Before CDN claim   |
-| Protected CDN verification works but browser auth fails.            | A7             | Open  | Server-side proof overstates runtime readiness.     | Prove the actual browser auth/CORS/CSP model before adoption.                           | Unlinked — blocks Phase 0 | Before CDN claim   |
-| A shared resource version is removed too early.                     | A7             | Open  | Deployed apps fail after rollback or cache expiry.  | Maintain reverse references and retention policy.                                       | Unlinked — blocks Phase 0 | Before publication |
-| Source scan reports zero Fluent imports while emitted code remains. | A3-A7          | Open  | False completion.                                   | Inspect production bundles, CSS, packages, and runtime requests.                        | Unlinked — blocks Phase 0 | Phase 7 acceptance |
+| Risk or blocker                                                     | Accountability | State | Effect                                                                    | Required response                                                                                                                                     | Tracking issue/ADR        | Due gate           |
+| ------------------------------------------------------------------- | -------------- | ----- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------ |
+| A selected shadcn dependency requires React 18/19.                  | A1             | Open  | Breaks the SPFx runtime contract.                                         | Reject or adapt the component source; never force the peer graph.                                                                                     | Unlinked — blocks Phase 0 | Phase 1 start      |
+| Tailwind selectors are hashed as CSS Modules.                       | A1             | Open  | Literal component classes stop working.                                   | Use the targeted global-CSS contract and assert emitted selectors.                                                                                    | Unlinked — blocks Phase 0 | Phase 1 acceptance |
+| Preflight or tokens escape the owned root.                          | A1             | Open  | SharePoint or another web part changes appearance.                        | Fail CSS and host-style lifecycle gates.                                                                                                              | Unlinked — blocks Phase 0 | Phase 1 acceptance |
+| A portal targets global `document.body` without scope.              | A1/A2          | Open  | Theme, focus, document ownership, or z-order fails.                       | Require the UI context's portal host.                                                                                                                 | Unlinked — blocks Phase 0 | Phase 2 acceptance |
+| Better Divider/Better List color control lacks parity.              | A4/A5          | Open  | Blocks complete Fluent removal.                                           | Decide the contract, owner, and issue in Phase 0; implement and validate it in Phase 2.                                                               | Unlinked — blocks Phase 0 | Phase 2 acceptance |
+| Ordinary `cdn` output contains stale assets.                        | A1/A7          | Open  | Mixed generations may pass a weak handoff.                                | Clear generated sources and prefer strict staging proof.                                                                                              | Unlinked — blocks Phase 0 | Phase 1 acceptance |
+| CSS-relative fonts/images or lazy chunks are absent.                | A1/A7          | Open  | Local manifest passes but production breaks.                              | Add closure checks and real browser network proof.                                                                                                    | Unlinked — blocks Phase 0 | Before CDN claim   |
+| Lab/Workbench Monaco still loads from jsDelivr.                     | A2/A7          | Open  | An implicit public runtime origin can break private, CSP, or offline use. | Inventory its full closure and owner; remove it to bundled/local assets or satisfy the complete shared-resource contract without public-CDN fallback. | Unlinked — blocks Phase 0 | Phase 0 acceptance |
+| Protected CDN verification works but browser auth fails.            | A7             | Open  | Server-side proof overstates runtime readiness.                           | Prove the actual browser auth/CORS/CSP model before adoption.                                                                                         | Unlinked — blocks Phase 0 | Before CDN claim   |
+| A shared resource version is removed too early.                     | A7             | Open  | Deployed apps fail after rollback or cache expiry.                        | Maintain reverse references and retention policy.                                                                                                     | Unlinked — blocks Phase 0 | Before publication |
+| Source scan reports zero Fluent imports while emitted code remains. | A3-A7          | Open  | False completion.                                                         | Inspect production bundles, CSS, packages, and runtime requests.                                                                                      | Unlinked — blocks Phase 0 | Phase 7 acceptance |
 
 ## Update Protocol
 
