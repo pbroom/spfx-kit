@@ -1,8 +1,9 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { exists, writeJson } from '../fs.mjs';
+import { validateExportConfig } from './export-config-validation.mjs';
 
-const exportConfigFields = ['appName', 'fileName', 'description', 'appIcon', 'version', 'cdnUrl'];
+export { validateExportConfig } from './export-config-validation.mjs';
 
 /**
  * Applies the app-local export sidecar to the tracked SPFx source files for the
@@ -12,7 +13,9 @@ const exportConfigFields = ['appName', 'fileName', 'description', 'appIcon', 've
  */
 export async function withAppliedExportConfig(appDir, callback) {
   const sidecarPath = path.join(appDir, '.spfx-kit', 'export-config.json');
-  const exportConfig = (await exists(sidecarPath)) ? validateExportConfig(await readJsonObject(sidecarPath)) : undefined;
+  const exportConfig = (await exists(sidecarPath))
+    ? await validateExportConfig(appDir, await readJsonObject(sidecarPath))
+    : undefined;
   const sourcePaths = await exportSourcePaths(appDir, Boolean(exportConfig));
   const originals = await snapshotFiles(sourcePaths);
   let applied = originals;
@@ -61,6 +64,9 @@ async function applyExportConfig(appDir, sourcePaths, exportConfig) {
   packageSolution.solution = asObject(packageSolution.solution) || {};
   packageSolution.solution.name = exportConfig.appName;
   packageSolution.solution.version = `${exportConfig.version}.0`;
+  applyOptionalValue(packageSolution.solution, 'iconPath', exportConfig.catalogIconPath);
+  applyCatalogMetadata(packageSolution.solution, exportConfig);
+  applyDeveloperMetadata(packageSolution.solution, exportConfig);
   if (Array.isArray(packageSolution.solution.features)) {
     for (const feature of packageSolution.solution.features) {
       if (asObject(feature)) {
@@ -145,39 +151,65 @@ async function restoreFiles(snapshot) {
   }
 }
 
-function validateExportConfig(value) {
-  const config = asObject(value);
-  if (!config) {
-    throw new Error('Export configuration must be a JSON object.');
+function applyCatalogMetadata(solution, exportConfig) {
+  const metadata = asObject(solution.metadata) || {};
+  applyLocalizedDefault(metadata, 'shortDescription', exportConfig.description);
+  applyLocalizedDefault(metadata, 'longDescription', exportConfig.longDescription);
+  applyOptionalValue(metadata, 'videoUrl', exportConfig.videoUrl);
+  applyOptionalArray(metadata, 'screenshotPaths', exportConfig.screenshotPaths);
+  applyOptionalArray(metadata, 'categories', exportConfig.categories);
+  if (Object.keys(metadata).length) {
+    solution.metadata = metadata;
+  } else {
+    delete solution.metadata;
   }
-  for (const field of exportConfigFields) {
-    if (typeof config[field] !== 'string') {
-      throw new Error(`Export configuration field ${field} must be text.`);
+}
+
+function applyDeveloperMetadata(solution, exportConfig) {
+  const developer = { ...(asObject(solution.developer) || {}) };
+  const values = {
+    name: exportConfig.developerName,
+    websiteUrl: exportConfig.developerWebsiteUrl,
+    privacyUrl: exportConfig.privacyUrl,
+    termsOfUseUrl: exportConfig.termsOfUseUrl,
+    mpnId: exportConfig.partnerId
+  };
+  if (Object.values(values).some(Boolean)) {
+    solution.developer = { ...developer, ...values };
+  } else {
+    for (const key of Object.keys(values)) {
+      delete developer[key];
+    }
+    if (Object.keys(developer).length) {
+      solution.developer = developer;
+    } else {
+      delete solution.developer;
     }
   }
-  const normalized = Object.fromEntries(exportConfigFields.map((field) => [field, config[field].trim()]));
-  if (!normalized.appName) {
-    throw new Error('Export configuration appName is required.');
+}
+
+function applyLocalizedDefault(container, key, value) {
+  if (value) {
+    container[key] = localizedValue(container[key], value);
+  } else {
+    delete container[key];
   }
-  if (path.basename(normalized.fileName) !== normalized.fileName || path.extname(normalized.fileName).toLowerCase() !== '.sppkg') {
-    throw new Error('Export configuration fileName must be a .sppkg file name without a directory path.');
+}
+
+function applyOptionalValue(container, key, value) {
+  if (value) {
+    container[key] = value;
+  } else {
+    delete container[key];
   }
-  if (!/^\d+\.\d+\.\d+$/.test(normalized.version)) {
-    throw new Error('Export configuration version must use x.y.z format.');
+}
+
+function applyOptionalArray(container, key, value) {
+  if (value.length) {
+    container[key] = [...value];
+  } else {
+    delete container[key];
   }
-  if (normalized.cdnUrl) {
-    let parsed;
-    try {
-      parsed = new URL(normalized.cdnUrl);
-    } catch {
-      throw new Error('Export configuration cdnUrl must be an absolute HTTP or HTTPS URL.');
-    }
-    const host = parsed.hostname.toLowerCase();
-    if (parsed.protocol !== 'https:' || host === 'localhost' || host === '127.0.0.1' || host === '::1') {
-      throw new Error('Export configuration cdnUrl must be an absolute non-localhost HTTPS URL.');
-    }
-  }
-  return normalized;
 }
 
 function localizedValue(value, defaultValue) {

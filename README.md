@@ -240,6 +240,15 @@ Managed apps keep portable lab metadata under `.spfx-kit/lab/register.tsx`.
 The older `src/lab/register.tsx` location still works for compatibility, but
 new imports and created apps use `.spfx-kit/lab`.
 
+The Lab's **App settings → App export config** also supports optional
+SharePoint App Catalog listing metadata. The existing **App Icon** setting is
+now labeled **Toolbox icon**; it remains the web part toolbox icon and is
+separate from the package-local App Catalog
+icon and screenshots shown on the app details page. See
+[`docs/toolchain.md`](docs/toolchain.md#app-catalog-metadata-in-exports) for the
+exact `package-solution.json` mapping, asset-path rules, localization boundary,
+and properties that remain under App Catalog administrator control.
+
 Exports are profile-specific:
 
 - `single` produces an `.sppkg` with `includeClientSideAssets=true`.

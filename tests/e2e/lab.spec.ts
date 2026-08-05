@@ -190,10 +190,39 @@ test('shows selected app state, saves export config, and can pin a source releas
   await expect(fileNameOverlay).toHaveCSS('pointer-events', 'none');
   await expect(fileNameSuffix).not.toHaveAttribute('tabindex', /.+/);
   await expectFileNameSuffixToTrail(fileNameControl, fileNameMirror, fileNameSuffix);
-  await expect(sidebar.getByRole('textbox', { name: 'Export description' })).toHaveValue('A friendly card web part.');
-  await expect(sidebar.getByRole('textbox', { name: 'Export app icon' })).toHaveValue('Page');
   await expect(sidebar.getByRole('textbox', { name: 'Export version' })).toHaveValue('1.3.0');
   await expect(sidebar.getByRole('textbox', { name: 'Export CDN URL' })).toHaveValue('https://cdn.example.com/spfx/hello-card/');
+
+  const listingGroup = sidebar.getByText('Listing & About', { exact: true });
+  const visualsGroup = sidebar.getByText('Visuals', { exact: true });
+  const supportGroup = sidebar.getByText('Details & Support', { exact: true });
+  await listingGroup.click();
+  await visualsGroup.click();
+  await supportGroup.click();
+  await expect(sidebar.getByRole('textbox', { name: 'App catalog short description' })).toHaveValue('A friendly card web part.');
+  await expect(sidebar.getByRole('textbox', { name: 'App catalog long description' })).toHaveValue(
+    'A longer introduction to Hello Card.'
+  );
+  await expect(sidebar.getByRole('textbox', { name: 'App catalog video URL' })).toHaveValue(
+    'https://www.youtube.com/watch?v=fixture'
+  );
+  await expect(sidebar.getByRole('textbox', { name: 'Web part toolbox icon' })).toHaveValue('Page');
+  await expect(sidebar.getByRole('textbox', { name: 'App catalog icon path' })).toHaveValue('assets/catalog-icon.png');
+  await expect(sidebar.getByRole('textbox', { name: 'App catalog screenshot paths' })).toHaveValue(
+    'assets/screenshot-one.png\nhttps://cdn.example.com/screenshot-two.png'
+  );
+  await expect(sidebar.getByRole('combobox', { name: 'App catalog categories' })).toContainText('2 categories selected');
+  await expect(sidebar.getByRole('textbox', { name: 'App catalog developer name' })).toHaveValue('Contoso');
+  await expect(sidebar.getByRole('textbox', { name: 'App catalog developer website URL' })).toHaveValue(
+    'https://contoso.example/'
+  );
+  await expect(sidebar.getByRole('textbox', { name: 'App catalog privacy URL' })).toHaveValue('https://contoso.example/privacy');
+  await expect(sidebar.getByRole('textbox', { name: 'App catalog terms of use URL' })).toHaveValue(
+    'https://contoso.example/terms'
+  );
+  await expect(sidebar.getByRole('textbox', { name: 'App catalog partner ID' })).toHaveValue('Partner-123');
+  await expect(sidebar.getByText('localized listing text remains managed in the app’s source files.')).toBeVisible();
+  await expect(sidebar.getByText(/Publisher, support URL, and featured status/)).toBeVisible();
 
   const accessibility = await new AxeBuilder({ page })
     .include('#app-management-sidebar')
@@ -207,7 +236,17 @@ test('shows selected app state, saves export config, and can pin a source releas
     appName: 'Hello Card Enterprise',
     fileName: 'hello-card-enterprise.sppkg',
     description: 'Enterprise-ready card web part.',
+    longDescription: 'A detailed enterprise listing for Hello Card.',
+    videoUrl: 'https://vimeo.com/123456789',
     appIcon: 'AppGeneric',
+    catalogIconPath: 'assets/enterprise-catalog-icon.png',
+    screenshotPaths: ['assets/enterprise-one.png', 'https://cdn.example.com/enterprise-two.png'],
+    categories: ['Collaboration', 'Productivity', 'Workflow & Process Management'],
+    developerName: 'Contoso Engineering',
+    developerWebsiteUrl: 'https://engineering.contoso.example/',
+    privacyUrl: 'https://engineering.contoso.example/privacy',
+    termsOfUseUrl: 'https://engineering.contoso.example/terms',
+    partnerId: 'Partner-456',
     version: '2.0.0',
     cdnUrl: 'https://cdn.example.com/spfx/hello-card-enterprise/'
   };
@@ -216,8 +255,21 @@ test('shows selected app state, saves export config, and can pin a source releas
   await expect(fileNameInput).toHaveValue('hello-card-enterprise');
   await expect(fileNameMirror).toHaveText('hello-card-enterprise');
   await expectFileNameSuffixToTrail(fileNameControl, fileNameMirror, fileNameSuffix);
-  await sidebar.getByRole('textbox', { name: 'Export description' }).fill(savedConfig.description);
-  await sidebar.getByRole('textbox', { name: 'Export app icon' }).fill(savedConfig.appIcon);
+  await sidebar.getByRole('textbox', { name: 'App catalog short description' }).fill(savedConfig.description);
+  await sidebar.getByRole('textbox', { name: 'App catalog long description' }).fill(savedConfig.longDescription);
+  await sidebar.getByRole('textbox', { name: 'App catalog video URL' }).fill(savedConfig.videoUrl);
+  await sidebar.getByRole('textbox', { name: 'Web part toolbox icon' }).fill(savedConfig.appIcon);
+  await sidebar.getByRole('textbox', { name: 'App catalog icon path' }).fill(savedConfig.catalogIconPath);
+  await sidebar.getByRole('textbox', { name: 'App catalog screenshot paths' }).fill(savedConfig.screenshotPaths.join('\n'));
+  const categoryDropdown = sidebar.getByRole('combobox', { name: 'App catalog categories' });
+  await categoryDropdown.click();
+  await page.getByRole('menuitemcheckbox', { name: 'Workflow & Process Management' }).click();
+  await categoryDropdown.press('Escape');
+  await sidebar.getByRole('textbox', { name: 'App catalog developer name' }).fill(savedConfig.developerName);
+  await sidebar.getByRole('textbox', { name: 'App catalog developer website URL' }).fill(savedConfig.developerWebsiteUrl);
+  await sidebar.getByRole('textbox', { name: 'App catalog privacy URL' }).fill(savedConfig.privacyUrl);
+  await sidebar.getByRole('textbox', { name: 'App catalog terms of use URL' }).fill(savedConfig.termsOfUseUrl);
+  await sidebar.getByRole('textbox', { name: 'App catalog partner ID' }).fill(savedConfig.partnerId);
   await sidebar.getByRole('textbox', { name: 'Export version' }).fill(savedConfig.version);
   await sidebar.getByRole('textbox', { name: 'Export CDN URL' }).fill(savedConfig.cdnUrl);
   await sidebar.getByRole('button', { name: 'Save app export config' }).click();
@@ -403,7 +455,17 @@ interface ManagedAppFixture {
     appName: string;
     fileName: string;
     description: string;
+    longDescription: string;
+    videoUrl: string;
     appIcon: string;
+    catalogIconPath: string;
+    screenshotPaths: string[];
+    categories: string[];
+    developerName: string;
+    developerWebsiteUrl: string;
+    privacyUrl: string;
+    termsOfUseUrl: string;
+    partnerId: string;
     version: string;
     cdnUrl: string;
   };
@@ -428,7 +490,17 @@ function managedAppFixtures(
     appName: 'Hello Card',
     fileName: 'hello-card.sppkg',
     description: 'A friendly card web part.',
+    longDescription: 'A longer introduction to Hello Card.',
+    videoUrl: 'https://www.youtube.com/watch?v=fixture',
     appIcon: 'Page',
+    catalogIconPath: 'assets/catalog-icon.png',
+    screenshotPaths: ['assets/screenshot-one.png', 'https://cdn.example.com/screenshot-two.png'],
+    categories: ['Collaboration', 'Productivity'],
+    developerName: 'Contoso',
+    developerWebsiteUrl: 'https://contoso.example/',
+    privacyUrl: 'https://contoso.example/privacy',
+    termsOfUseUrl: 'https://contoso.example/terms',
+    partnerId: 'Partner-123',
     version: latestVersion,
     cdnUrl: 'https://cdn.example.com/spfx/hello-card/'
   }
@@ -463,7 +535,17 @@ function managedAppFixtures(
         appName: 'Dirty App',
         fileName: 'dirty-app.sppkg',
         description: 'A dirty fixture app.',
+        longDescription: '',
+        videoUrl: '',
         appIcon: 'Page',
+        catalogIconPath: '',
+        screenshotPaths: [],
+        categories: [],
+        developerName: '',
+        developerWebsiteUrl: '',
+        privacyUrl: '',
+        termsOfUseUrl: '',
+        partnerId: '',
         version: '2.0.0',
         cdnUrl: 'https://cdn.example.com/spfx/dirty-app/'
       },

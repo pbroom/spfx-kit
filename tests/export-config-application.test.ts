@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { copyPortableSpfxSource } from '../packages/spfx-tools/src/lib/fs.mjs';
 import { withAppliedExportConfig } from '../packages/spfx-tools/src/lib/export/config.mjs';
 import { exportCdnPackage } from '../packages/spfx-tools/src/lib/export/targets.mjs';
+import { validPngBytes } from './image-fixtures';
 
 const temporaryDirectories: string[] = [];
 
@@ -62,8 +63,25 @@ describe('export configuration application', () => {
           solution: {
             name: 'Configured Export App',
             version: '2.4.6.0',
+            iconPath: 'assets/catalog-icon.png',
             includeClientSideAssets: true,
-            features: [{ title: 'Original feature', version: '2.4.6.0', description: 'Configured export description' }]
+            features: [{ title: 'Original feature', version: '2.4.6.0', description: 'Configured export description' }],
+            metadata: {
+              shortDescription: { default: 'Configured export description', fr: 'Description courte originale' },
+              longDescription: { default: 'Configured long description', fr: 'Description longue originale' },
+              screenshotPaths: ['assets/screenshot.png', 'https://images.configured.test/tour.jpg'],
+              videoUrl: 'https://youtu.be/configured',
+              categories: ['Collaboration', 'Productivity'],
+              futureMetadata: { keep: true }
+            },
+            developer: {
+              name: 'Configured Org',
+              websiteUrl: 'https://configured.test/',
+              privacyUrl: 'https://configured.test/privacy',
+              termsOfUseUrl: 'https://configured.test/terms',
+              mpnId: 'configured-partner',
+              futureDeveloperSetting: true
+            }
           },
           paths: { zippedPackage: 'sharepoint/solution/configured-export.sppkg' }
         });
@@ -99,9 +117,24 @@ describe('export configuration application', () => {
           description: 'Configured export description'
         });
         await expect(readJson(path.join(portableDir, 'config', 'package-solution.json'))).resolves.toMatchObject({
-          solution: { name: 'Configured Export App', version: '2.4.6.0' },
+          solution: {
+            name: 'Configured Export App',
+            version: '2.4.6.0',
+            iconPath: 'assets/catalog-icon.png',
+            metadata: {
+              shortDescription: { default: 'Configured export description' },
+              longDescription: { default: 'Configured long description' }
+            },
+            developer: { name: 'Configured Org', mpnId: 'configured-partner' }
+          },
           paths: { zippedPackage: 'sharepoint/solution/configured-export.sppkg' }
         });
+        await expect(readFile(path.join(portableDir, 'sharepoint', 'assets', 'catalog-icon.png'))).resolves.toEqual(
+          validPngBytes()
+        );
+        await expect(readFile(path.join(portableDir, 'sharepoint', 'assets', 'screenshot.png'))).resolves.toEqual(
+          validPngBytes()
+        );
         await expect(readJson(path.join(portableDir, 'config', 'write-manifests.json'))).resolves.toMatchObject({
           cdnBasePath: 'https://cdn.configured.test/apps/export/'
         });
@@ -113,7 +146,7 @@ describe('export configuration application', () => {
     await expect(readTrackedSource(fixture)).resolves.toEqual(originals);
   });
 
-  it('applies and restores sidecar overrides for extension-only projects', async () => {
+  it('migrates an old six-field sidecar and preserves source catalog metadata for extension-only projects', async () => {
     const root = await makeTemporaryDirectory('spfx-export-config-extension-');
     const appDir = path.join(root, 'extension-app-spfx');
     const packageJsonPath = path.join(appDir, 'package.json');
@@ -121,16 +154,36 @@ describe('export configuration application', () => {
     const writeManifestsPath = path.join(appDir, 'config', 'write-manifests.json');
     await Promise.all([
       mkdir(path.dirname(packageSolutionPath), { recursive: true }),
-      mkdir(path.join(appDir, '.spfx-kit'), { recursive: true })
+      mkdir(path.join(appDir, '.spfx-kit'), { recursive: true }),
+      mkdir(path.join(appDir, 'sharepoint', 'assets'), { recursive: true })
     ]);
     await Promise.all([
       writeJson(packageJsonPath, { name: 'extension-app-spfx', version: '1.0.0', description: 'Original description' }),
       writeJson(packageSolutionPath, {
-        solution: { name: 'Original Extension', version: '1.0.0.0' },
+        solution: {
+          name: 'Original Extension',
+          version: '1.0.0.0',
+          iconPath: 'assets/catalog-icon.png',
+          metadata: {
+            shortDescription: { default: 'Original short description', fr: 'Description courte' },
+            longDescription: { default: 'Original long description', fr: 'Description longue' },
+            screenshotPaths: ['https://images.original.test/tour.gif'],
+            videoUrl: 'https://vimeo.com/123',
+            categories: ['Reference']
+          },
+          developer: {
+            name: 'Original Org',
+            websiteUrl: 'https://original.test/',
+            privacyUrl: 'https://original.test/privacy',
+            termsOfUseUrl: 'https://original.test/terms',
+            mpnId: 'original-partner'
+          }
+        },
         paths: { zippedPackage: 'sharepoint/solution/original-extension.sppkg' }
       }),
       writeJson(writeManifestsPath, { cdnBasePath: 'https://cdn.original.test/extension/' }),
-      writeJson(path.join(appDir, '.spfx-kit', 'export-config.json'), configuredOverrides)
+      writeJson(path.join(appDir, '.spfx-kit', 'export-config.json'), legacyConfiguredOverrides),
+      writeFile(path.join(appDir, 'sharepoint', 'assets', 'catalog-icon.png'), validPngBytes())
     ]);
     const originals = await Promise.all([
       readFile(packageJsonPath, 'utf8'),
@@ -139,13 +192,36 @@ describe('export configuration application', () => {
     ]);
 
     await withAppliedExportConfig(appDir, async ({ exportConfig }) => {
-      expect(exportConfig).toEqual(configuredOverrides);
+      expect(exportConfig).toEqual({
+        ...legacyConfiguredOverrides,
+        longDescription: 'Original long description',
+        videoUrl: 'https://vimeo.com/123',
+        catalogIconPath: 'assets/catalog-icon.png',
+        screenshotPaths: ['https://images.original.test/tour.gif'],
+        categories: ['Reference'],
+        developerName: 'Original Org',
+        developerWebsiteUrl: 'https://original.test/',
+        privacyUrl: 'https://original.test/privacy',
+        termsOfUseUrl: 'https://original.test/terms',
+        partnerId: 'original-partner'
+      });
       await expect(readJson(packageJsonPath)).resolves.toMatchObject({
         version: '2.4.6',
         description: 'Configured export description'
       });
       await expect(readJson(packageSolutionPath)).resolves.toMatchObject({
-        solution: { name: 'Configured Export App', version: '2.4.6.0' },
+        solution: {
+          name: 'Configured Export App',
+          version: '2.4.6.0',
+          iconPath: 'assets/catalog-icon.png',
+          metadata: {
+            shortDescription: { default: 'Configured export description', fr: 'Description courte' },
+            longDescription: { default: 'Original long description', fr: 'Description longue' },
+            screenshotPaths: ['https://images.original.test/tour.gif'],
+            categories: ['Reference']
+          },
+          developer: { name: 'Original Org', mpnId: 'original-partner' }
+        },
         paths: { zippedPackage: 'sharepoint/solution/configured-export.sppkg' }
       });
       await expect(readJson(writeManifestsPath)).resolves.toMatchObject({
@@ -207,6 +283,25 @@ const configuredOverrides = {
   appName: 'Configured Export App',
   fileName: 'configured-export.sppkg',
   description: 'Configured export description',
+  longDescription: 'Configured long description',
+  videoUrl: 'https://youtu.be/configured',
+  appIcon: 'https://cdn.configured.test/icons/app.png',
+  catalogIconPath: 'assets/catalog-icon.png',
+  screenshotPaths: ['assets/screenshot.png', 'https://images.configured.test/tour.jpg'],
+  categories: ['Collaboration', 'Productivity'],
+  version: '2.4.6',
+  cdnUrl: 'https://cdn.configured.test/apps/export/',
+  developerName: 'Configured Org',
+  developerWebsiteUrl: 'https://configured.test/',
+  privacyUrl: 'https://configured.test/privacy',
+  termsOfUseUrl: 'https://configured.test/terms',
+  partnerId: 'configured-partner'
+};
+
+const legacyConfiguredOverrides = {
+  appName: 'Configured Export App',
+  fileName: 'configured-export.sppkg',
+  description: 'Configured export description',
   appIcon: 'https://cdn.configured.test/icons/app.png',
   version: '2.4.6',
   cdnUrl: 'https://cdn.configured.test/apps/export/'
@@ -224,7 +319,8 @@ async function createFixture() {
     mkdir(path.dirname(packageSolutionPath), { recursive: true }),
     mkdir(path.dirname(primaryManifestPath), { recursive: true }),
     mkdir(path.dirname(secondaryManifestPath), { recursive: true }),
-    mkdir(path.join(appDir, '.spfx-kit'), { recursive: true })
+    mkdir(path.join(appDir, '.spfx-kit'), { recursive: true }),
+    mkdir(path.join(appDir, 'sharepoint', 'assets'), { recursive: true })
   ]);
   await Promise.all([
     writeFile(
@@ -237,7 +333,13 @@ async function createFixture() {
         name: 'Original App',
         version: '1.2.3.0',
         includeClientSideAssets: true,
-        features: [{ title: 'Original feature', version: '1.2.3.0', description: 'Original feature description' }]
+        features: [{ title: 'Original feature', version: '1.2.3.0', description: 'Original feature description' }],
+        metadata: {
+          shortDescription: { default: 'Original short description', fr: 'Description courte originale' },
+          longDescription: { default: 'Original long description', fr: 'Description longue originale' },
+          futureMetadata: { keep: true }
+        },
+        developer: { futureDeveloperSetting: true }
       },
       paths: { zippedPackage: 'sharepoint/solution/original-app.sppkg' }
     }),
@@ -256,7 +358,9 @@ async function createFixture() {
       componentType: 'WebPart',
       preconfiguredEntries: [{ title: { default: 'Secondary web part' } }]
     }),
-    writeJson(path.join(appDir, '.spfx-kit', 'export-config.json'), configuredOverrides)
+    writeJson(path.join(appDir, '.spfx-kit', 'export-config.json'), configuredOverrides),
+    writeFile(path.join(appDir, 'sharepoint', 'assets', 'catalog-icon.png'), validPngBytes()),
+    writeFile(path.join(appDir, 'sharepoint', 'assets', 'screenshot.png'), validPngBytes())
   ]);
   return {
     root,

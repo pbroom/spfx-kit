@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -117,7 +118,17 @@ try {
     appName: 'Security Fixture',
     fileName: 'security-fixture.sppkg',
     description: 'Security validation fixture',
+    longDescription: '',
+    videoUrl: '',
     appIcon: 'Shield',
+    catalogIconPath: '',
+    screenshotPaths: [],
+    categories: [],
+    developerName: '',
+    developerWebsiteUrl: '',
+    privacyUrl: '',
+    termsOfUseUrl: '',
+    partnerId: '',
     version: '1.2.3',
     cdnUrl: 'https://cdn.example.test/spfx/security-fixture/'
   };
@@ -212,6 +223,36 @@ try {
     }),
     'CDN URL must be an absolute non-localhost HTTPS URL.'
   );
+  await expectErrorContains(
+    'non-video host is rejected for export configuration video URL',
+    post('/api/spfx-apps/export-config', {
+      origin: baseUrl,
+      intent: true,
+      contentType: 'application/json',
+      body: { appId: exportConfigAppId, exportConfig: { ...validExportConfig, videoUrl: 'https://example.test/demo' } }
+    }),
+    'YouTube or Vimeo'
+  );
+  await expectErrorContains(
+    'catalog icon traversal is rejected',
+    post('/api/spfx-apps/export-config', {
+      origin: baseUrl,
+      intent: true,
+      contentType: 'application/json',
+      body: { appId: exportConfigAppId, exportConfig: { ...validExportConfig, catalogIconPath: '../icon.png' } }
+    }),
+    'Catalog icon'
+  );
+  await expectErrorContains(
+    'unknown catalog category is rejected',
+    post('/api/spfx-apps/export-config', {
+      origin: baseUrl,
+      intent: true,
+      contentType: 'application/json',
+      body: { appId: exportConfigAppId, exportConfig: { ...validExportConfig, categories: ['Not a category'] } }
+    }),
+    'category'
+  );
   await expectMissing('rejected export configuration writes do not create a sidecar', exportConfigSidecarPath);
 
   externalExportConfigDir = await mkdtemp(path.join(os.tmpdir(), 'spfx-kit-export-config-escape-'));
@@ -243,9 +284,7 @@ try {
     200
   );
   const savedExportConfig = JSON.parse(await readFile(exportConfigSidecarPath, 'utf8'));
-  if (JSON.stringify(savedExportConfig) !== JSON.stringify(validExportConfig)) {
-    throw new Error(`export configuration sidecar did not match the validated payload: ${JSON.stringify(savedExportConfig)}`);
-  }
+  assert.deepStrictEqual(savedExportConfig, validExportConfig, 'export configuration sidecar must match the validated payload');
 
   await expectStatus(
     'export-output archive path downloads',
@@ -351,7 +390,10 @@ async function expectMissing(label, filePath) {
 }
 
 async function createExportConfigFixture() {
-  await mkdir(path.join(exportConfigAppDir, 'config'), { recursive: true });
+  await Promise.all([
+    mkdir(path.join(exportConfigAppDir, 'config'), { recursive: true }),
+    mkdir(path.join(exportConfigAppDir, 'sharepoint', 'assets'), { recursive: true })
+  ]);
   await Promise.all([
     writeFile(
       path.join(exportConfigAppDir, 'package.json'),

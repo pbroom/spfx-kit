@@ -13,7 +13,7 @@ import {
   Switch,
   Textarea
 } from '@fluentui/react-components';
-import { Check, Download, FolderInput, RefreshCw, Save, X } from 'lucide-react';
+import { Check, ChevronRight, Download, FolderInput, RefreshCw, Save, X } from 'lucide-react';
 import type { LabWebPart } from '@spfx-kit/spfx-lab-runtime';
 import {
   ExportPackageFormat,
@@ -57,7 +57,17 @@ const EMPTY_EXPORT_CONFIG: ManagedAppExportConfig = {
   appName: '',
   fileName: '',
   description: '',
+  longDescription: '',
+  videoUrl: '',
   appIcon: '',
+  catalogIconPath: '',
+  screenshotPaths: [],
+  categories: [],
+  developerName: '',
+  developerWebsiteUrl: '',
+  privacyUrl: '',
+  termsOfUseUrl: '',
+  partnerId: '',
   version: '',
   cdnUrl: ''
 };
@@ -65,6 +75,25 @@ const EMPTY_EXPORT_CONFIG: ManagedAppExportConfig = {
 const SYNC_SUCCESS_DURATION_MS = 1_500;
 const SPPKG_EXTENSION = '.sppkg';
 const SPPKG_EXTENSION_PATTERN = /\.sppkg$/i;
+const MAX_CATALOG_CATEGORIES = 3;
+const CATALOG_CATEGORY_OPTIONS = [
+  'Accounting + Finance',
+  'Collaboration',
+  'Content management',
+  'CRM',
+  'Data + analytics',
+  'File managers',
+  'IT/admin',
+  'Legal + HR',
+  'News + weather',
+  'Productivity',
+  'Project management',
+  'Reference',
+  'Sales + marketing',
+  'Site Design',
+  'Social',
+  'Workflow & Process Management'
+] as const;
 
 export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Element {
   const {
@@ -208,7 +237,17 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
   const selectedConfigAppName = selectedConfig?.appName || '';
   const selectedConfigFileName = selectedConfig?.fileName || '';
   const selectedConfigDescription = selectedConfig?.description || '';
+  const selectedConfigLongDescription = selectedConfig?.longDescription || '';
+  const selectedConfigVideoUrl = selectedConfig?.videoUrl || '';
   const selectedConfigAppIcon = selectedConfig?.appIcon || '';
+  const selectedConfigCatalogIconPath = selectedConfig?.catalogIconPath || '';
+  const selectedConfigScreenshotPaths = selectedConfig?.screenshotPaths || EMPTY_EXPORT_CONFIG.screenshotPaths;
+  const selectedConfigCategories = selectedConfig?.categories || EMPTY_EXPORT_CONFIG.categories;
+  const selectedConfigDeveloperName = selectedConfig?.developerName || '';
+  const selectedConfigDeveloperWebsiteUrl = selectedConfig?.developerWebsiteUrl || '';
+  const selectedConfigPrivacyUrl = selectedConfig?.privacyUrl || '';
+  const selectedConfigTermsOfUseUrl = selectedConfig?.termsOfUseUrl || '';
+  const selectedConfigPartnerId = selectedConfig?.partnerId || '';
   const selectedConfigVersion = selectedConfig?.version || '';
   const selectedConfigCdnUrl = selectedConfig?.cdnUrl || '';
 
@@ -217,7 +256,17 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
       appName: selectedConfigAppName,
       fileName: selectedConfigFileName,
       description: selectedConfigDescription,
+      longDescription: selectedConfigLongDescription,
+      videoUrl: selectedConfigVideoUrl,
       appIcon: selectedConfigAppIcon,
+      catalogIconPath: selectedConfigCatalogIconPath,
+      screenshotPaths: selectedConfigScreenshotPaths,
+      categories: selectedConfigCategories,
+      developerName: selectedConfigDeveloperName,
+      developerWebsiteUrl: selectedConfigDeveloperWebsiteUrl,
+      privacyUrl: selectedConfigPrivacyUrl,
+      termsOfUseUrl: selectedConfigTermsOfUseUrl,
+      partnerId: selectedConfigPartnerId,
       version: selectedConfigVersion,
       cdnUrl: selectedConfigCdnUrl
     });
@@ -226,12 +275,25 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
     selectedConfigAppName,
     selectedConfigFileName,
     selectedConfigDescription,
+    selectedConfigLongDescription,
+    selectedConfigVideoUrl,
     selectedConfigAppIcon,
+    selectedConfigCatalogIconPath,
+    selectedConfigScreenshotPaths,
+    selectedConfigCategories,
+    selectedConfigDeveloperName,
+    selectedConfigDeveloperWebsiteUrl,
+    selectedConfigPrivacyUrl,
+    selectedConfigTermsOfUseUrl,
+    selectedConfigPartnerId,
     selectedConfigVersion,
     selectedConfigCdnUrl
   ]);
 
-  const updateExportConfig = (field: keyof ManagedAppExportConfig, value: string): void => {
+  const updateExportConfig = <FieldName extends keyof ManagedAppExportConfig>(
+    field: FieldName,
+    value: ManagedAppExportConfig[FieldName]
+  ): void => {
     setExportConfig((current) => ({ ...current, [field]: value }));
   };
 
@@ -510,23 +572,6 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                 </span>
               </div>
             </Field>
-            <Field className="app-management-sidebar__wide-field" label="Description" size="small">
-              <Textarea
-                aria-label="Export description"
-                disabled={!selectedManagedApp || selectedAppBusy}
-                resize="vertical"
-                value={exportConfig.description}
-                onChange={(_event, data) => updateExportConfig('description', data.value)}
-              />
-            </Field>
-            <Field label="App Icon" size="small">
-              <Input
-                aria-label="Export app icon"
-                disabled={!selectedManagedApp || selectedAppBusy}
-                value={exportConfig.appIcon}
-                onChange={(_event, data) => updateExportConfig('appIcon', data.value)}
-              />
-            </Field>
             <Field label="Version" size="small">
               <Input
                 aria-label="Export version"
@@ -544,6 +589,194 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                 onChange={(_event, data) => updateExportConfig('cdnUrl', data.value)}
               />
             </Field>
+          </div>
+
+          <div className="app-management-sidebar__catalog-intro">
+            <h3>App catalog details</h3>
+            <p>Optional information shown on the SharePoint app details page. Leave a field blank to omit it from the package.</p>
+          </div>
+
+          <div className="app-management-sidebar__catalog-groups">
+            <details className="app-management-sidebar__catalog-group">
+              <summary>
+                <span className="app-management-sidebar__catalog-summary-label">
+                  <ChevronRight aria-hidden="true" className="app-management-sidebar__catalog-chevron" size={15} />
+                  <span>Listing &amp; About</span>
+                </span>
+                <small>Optional</small>
+              </summary>
+              <div className="app-management-sidebar__catalog-fields">
+                <Field
+                  hint="The concise description used by the package and app listing. Existing Description values are preserved here."
+                  label="Short description"
+                  size="small"
+                >
+                  <Textarea
+                    aria-label="App catalog short description"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    resize="vertical"
+                    value={exportConfig.description}
+                    onChange={(_event, data) => updateExportConfig('description', data.value)}
+                  />
+                </Field>
+                <Field hint="Additional About content for the SharePoint app details page." label="Long description" size="small">
+                  <Textarea
+                    aria-label="App catalog long description"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    resize="vertical"
+                    value={exportConfig.longDescription}
+                    onChange={(_event, data) => updateExportConfig('longDescription', data.value)}
+                  />
+                </Field>
+                <Field hint="Optional YouTube or Vimeo video for the app details page." label="Video URL" size="small">
+                  <Input
+                    aria-label="App catalog video URL"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    type="url"
+                    value={exportConfig.videoUrl}
+                    onChange={(_event, data) => updateExportConfig('videoUrl', data.value)}
+                  />
+                </Field>
+              </div>
+            </details>
+
+            <details className="app-management-sidebar__catalog-group">
+              <summary>
+                <span className="app-management-sidebar__catalog-summary-label">
+                  <ChevronRight aria-hidden="true" className="app-management-sidebar__catalog-chevron" size={15} />
+                  <span>Visuals</span>
+                </span>
+                <small>Optional</small>
+              </summary>
+              <div className="app-management-sidebar__catalog-fields">
+                <Field
+                  hint="Fabric icon name or image URL/path used in the web part toolbox. This does not set the App Catalog listing image."
+                  label="Toolbox icon"
+                  size="small"
+                >
+                  <Input
+                    aria-label="Web part toolbox icon"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    value={exportConfig.appIcon}
+                    onChange={(_event, data) => updateExportConfig('appIcon', data.value)}
+                  />
+                </Field>
+                <Field
+                  hint="Package-directory-relative path to the PNG bundled for the App Catalog listing."
+                  label="App Catalog icon"
+                  size="small"
+                >
+                  <Input
+                    aria-label="App catalog icon path"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    value={exportConfig.catalogIconPath}
+                    onChange={(_event, data) => updateExportConfig('catalogIconPath', data.value)}
+                  />
+                </Field>
+                <Field
+                  hint="Up to five package-directory-relative PNG paths or credential-free HTTPS image URLs, one per line."
+                  label="Screenshots"
+                  size="small"
+                >
+                  <Textarea
+                    aria-label="App catalog screenshot paths"
+                    className="app-management-sidebar__path-list"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    resize="vertical"
+                    value={exportConfig.screenshotPaths.join('\n')}
+                    onChange={(_event, data) => updateExportConfig('screenshotPaths', linesToValues(data.value))}
+                  />
+                </Field>
+              </div>
+            </details>
+
+            <details className="app-management-sidebar__catalog-group">
+              <summary>
+                <span className="app-management-sidebar__catalog-summary-label">
+                  <ChevronRight aria-hidden="true" className="app-management-sidebar__catalog-chevron" size={15} />
+                  <span>Details &amp; Support</span>
+                </span>
+                <small>Optional</small>
+              </summary>
+              <div className="app-management-sidebar__catalog-fields">
+                <Field hint="Choose up to three categories." label="Categories" size="small">
+                  <Dropdown
+                    aria-label="App catalog categories"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    multiselect
+                    placeholder="Select categories"
+                    selectedOptions={exportConfig.categories}
+                    value={categorySelectionLabel(exportConfig.categories)}
+                    onOptionSelect={(_event, data) => {
+                      if (data.selectedOptions.length <= MAX_CATALOG_CATEGORIES) {
+                        updateExportConfig('categories', data.selectedOptions);
+                      }
+                    }}
+                  >
+                    {CATALOG_CATEGORY_OPTIONS.map((category) => (
+                      <Option
+                        disabled={
+                          exportConfig.categories.length >= MAX_CATALOG_CATEGORIES && !exportConfig.categories.includes(category)
+                        }
+                        key={category}
+                        text={category}
+                        value={category}
+                      >
+                        {category}
+                      </Option>
+                    ))}
+                  </Dropdown>
+                </Field>
+                <Field label="Developer or organization name" size="small">
+                  <Input
+                    aria-label="App catalog developer name"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    value={exportConfig.developerName}
+                    onChange={(_event, data) => updateExportConfig('developerName', data.value)}
+                  />
+                </Field>
+                <Field label="Website URL" size="small">
+                  <Input
+                    aria-label="App catalog developer website URL"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    type="url"
+                    value={exportConfig.developerWebsiteUrl}
+                    onChange={(_event, data) => updateExportConfig('developerWebsiteUrl', data.value)}
+                  />
+                </Field>
+                <Field label="Privacy URL" size="small">
+                  <Input
+                    aria-label="App catalog privacy URL"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    type="url"
+                    value={exportConfig.privacyUrl}
+                    onChange={(_event, data) => updateExportConfig('privacyUrl', data.value)}
+                  />
+                </Field>
+                <Field label="Terms-of-use URL" size="small">
+                  <Input
+                    aria-label="App catalog terms of use URL"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    type="url"
+                    value={exportConfig.termsOfUseUrl}
+                    onChange={(_event, data) => updateExportConfig('termsOfUseUrl', data.value)}
+                  />
+                </Field>
+                <Field hint="Microsoft Partner Network identifier, when applicable." label="Partner ID" size="small">
+                  <Input
+                    aria-label="App catalog partner ID"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    value={exportConfig.partnerId}
+                    onChange={(_event, data) => updateExportConfig('partnerId', data.value)}
+                  />
+                </Field>
+                <p className="app-management-sidebar__hint">
+                  This export writes the package’s default metadata. App Catalog administrators can override listing details, and
+                  localized listing text remains managed in the app’s source files. Publisher, support URL, and featured status
+                  are catalog-admin settings rather than SPFx package fields.
+                </p>
+              </div>
+            </details>
           </div>
           <Button
             appearance="primary"
@@ -638,6 +871,20 @@ interface ExportConfigSaveResult {
 
 function fileNameStem(value: string): string {
   return value.replace(SPPKG_EXTENSION_PATTERN, '');
+}
+
+function linesToValues(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function categorySelectionLabel(categories: string[]): string {
+  if (!categories.length) {
+    return '';
+  }
+  return categories.length === 1 ? categories[0] : `${categories.length} categories selected`;
 }
 
 function titleForManagedApp(app: ManagedLabApp, webPartsByAppId: Map<string, LabWebPart[]>): string {

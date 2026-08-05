@@ -12,7 +12,17 @@ export interface ManagedAppExportConfig {
   appName: string;
   fileName: string;
   description: string;
+  longDescription: string;
+  videoUrl: string;
   appIcon: string;
+  catalogIconPath: string;
+  screenshotPaths: string[];
+  categories: string[];
+  developerName: string;
+  developerWebsiteUrl: string;
+  privacyUrl: string;
+  termsOfUseUrl: string;
+  partnerId: string;
   version: string;
   cdnUrl: string;
 }

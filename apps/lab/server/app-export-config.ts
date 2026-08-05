@@ -1,17 +1,43 @@
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { validateExportConfig as validateCanonicalExportConfig } from '../../../packages/spfx-tools/src/lib/export/export-config-validation.mjs';
 
 const exportConfigFileName = 'export-config.json';
-const exportConfigFields = ['appName', 'fileName', 'description', 'appIcon', 'version', 'cdnUrl'] as const;
-
+const exportConfigStringFields = [
+  'appName',
+  'fileName',
+  'description',
+  'longDescription',
+  'videoUrl',
+  'appIcon',
+  'catalogIconPath',
+  'version',
+  'cdnUrl',
+  'developerName',
+  'developerWebsiteUrl',
+  'privacyUrl',
+  'termsOfUseUrl',
+  'partnerId'
+] as const;
+const exportConfigArrayFields = ['screenshotPaths', 'categories'] as const;
 export interface ManagedAppExportConfig {
   appName: string;
   fileName: string;
   description: string;
+  longDescription: string;
+  videoUrl: string;
   appIcon: string;
+  catalogIconPath: string;
+  screenshotPaths: string[];
+  categories: string[];
   version: string;
   cdnUrl: string;
+  developerName: string;
+  developerWebsiteUrl: string;
+  privacyUrl: string;
+  termsOfUseUrl: string;
+  partnerId: string;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -42,6 +68,8 @@ export async function describeManagedAppExportConfig(appDir: string): Promise<Ma
   ]);
 
   const solution = asObject(packageSolution?.solution);
+  const metadata = asObject(solution?.metadata);
+  const developer = asObject(solution?.developer);
   const paths = asObject(packageSolution?.paths);
   const entry = firstObject(manifest?.preconfiguredEntries);
   const manifestTitle = localizedDefault(entry?.title);
@@ -51,17 +79,27 @@ export async function describeManagedAppExportConfig(appDir: string): Promise<Ma
   const defaults: ManagedAppExportConfig = {
     appName: stringValue(solution?.name) || manifestTitle || unscopedPackageName(stringValue(packageJson?.name)),
     fileName: configuredPackagePath ? path.basename(configuredPackagePath) : '',
-    description: stringValue(packageJson?.description) || manifestDescription,
+    description: localizedDefault(metadata?.shortDescription) || stringValue(packageJson?.description) || manifestDescription,
+    longDescription: localizedDefault(metadata?.longDescription),
+    videoUrl: stringValue(metadata?.videoUrl),
     appIcon: stringValue(entry?.iconImageUrl) || stringValue(entry?.officeFabricIconFontName),
+    catalogIconPath: stringValue(solution?.iconPath),
+    screenshotPaths: stringArray(metadata?.screenshotPaths),
+    categories: stringArray(metadata?.categories),
     version: stringValue(packageJson?.version) || packageVersionFromSolution(stringValue(solution?.version)),
-    cdnUrl: stringValue(writeManifests?.cdnBasePath)
+    cdnUrl: stringValue(writeManifests?.cdnBasePath),
+    developerName: stringValue(developer?.name),
+    developerWebsiteUrl: stringValue(developer?.websiteUrl),
+    privacyUrl: stringValue(developer?.privacyUrl),
+    termsOfUseUrl: stringValue(developer?.termsOfUseUrl),
+    partnerId: stringValue(developer?.mpnId)
   };
 
   return overlaySavedConfig(defaults, savedConfig);
 }
 
 export async function updateManagedAppExportConfig(appDir: string, value: unknown): Promise<ManagedAppExportConfig> {
-  const exportConfig = validateExportConfig(value);
+  const exportConfig = await validateExportConfig(appDir, value);
   const configPath = await resolveExportConfigPath(appDir, true);
   const current = (await readJsonIfPresent<JsonObject>(configPath)) || {};
   const next = { ...current, ...exportConfig };
@@ -77,48 +115,8 @@ export async function updateManagedAppExportConfig(appDir: string, value: unknow
   return exportConfig;
 }
 
-export function validateExportConfig(value: unknown): ManagedAppExportConfig {
-  const input = asObject(value);
-  if (!input) {
-    throw new Error('Export configuration is required.');
-  }
-
-  const appName = requiredText(input.appName, 'App name is required.', 256);
-  const fileName = requiredText(input.fileName, 'File name is required.', 255);
-  if (path.basename(fileName) !== fileName || fileName.includes('/') || fileName.includes('\\')) {
-    throw new Error('File name must not include a directory path.');
-  }
-  if (path.extname(fileName).toLowerCase() !== '.sppkg') {
-    throw new Error('File name must end in .sppkg.');
-  }
-
-  const version = requiredText(input.version, 'Version is required.', 64);
-  if (!/^\d+\.\d+\.\d+$/.test(version)) {
-    throw new Error('Version must use x.y.z format.');
-  }
-
-  const cdnUrl = optionalText(input.cdnUrl, 'CDN URL', 2048);
-  if (cdnUrl) {
-    let parsed: URL;
-    try {
-      parsed = new URL(cdnUrl);
-    } catch {
-      throw new Error('CDN URL must be an absolute HTTP or HTTPS URL.');
-    }
-    const host = parsed.hostname.toLowerCase();
-    if (parsed.protocol !== 'https:' || host === 'localhost' || host === '127.0.0.1' || host === '::1') {
-      throw new Error('CDN URL must be an absolute non-localhost HTTPS URL.');
-    }
-  }
-
-  return {
-    appName,
-    fileName,
-    description: optionalText(input.description, 'Description', 2048),
-    appIcon: optionalText(input.appIcon, 'App icon', 2048),
-    version,
-    cdnUrl
-  };
+export async function validateExportConfig(appDir: string, value: unknown): Promise<ManagedAppExportConfig> {
+  return validateCanonicalExportConfig(appDir, value);
 }
 
 async function readSavedExportConfig(appDir: string): Promise<JsonObject | undefined> {
@@ -184,10 +182,16 @@ function overlaySavedConfig(defaults: ManagedAppExportConfig, savedConfig: JsonO
     return defaults;
   }
   const result = { ...defaults };
-  for (const field of exportConfigFields) {
+  for (const field of exportConfigStringFields) {
     const value = savedConfig[field];
     if (typeof value === 'string') {
       result[field] = value;
+    }
+  }
+  for (const field of exportConfigArrayFields) {
+    const value = savedConfig[field];
+    if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+      result[field] = [...value];
     }
   }
   return result;
@@ -209,39 +213,16 @@ function stringValue(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()) : [];
+}
+
 function unscopedPackageName(packageName: string): string {
   return packageName.includes('/') ? packageName.slice(packageName.lastIndexOf('/') + 1) : packageName;
 }
 
 function packageVersionFromSolution(solutionVersion: string): string {
   return /^\d+\.\d+\.\d+\.0$/.test(solutionVersion) ? solutionVersion.slice(0, -2) : solutionVersion;
-}
-
-function requiredText(value: unknown, message: string, maximumLength: number): string {
-  const normalized = optionalText(value, message.replace(/ is required\.$/, ''), maximumLength);
-  if (!normalized) {
-    throw new Error(message);
-  }
-  return normalized;
-}
-
-function optionalText(value: unknown, label: string, maximumLength: number): string {
-  if (typeof value !== 'string') {
-    throw new Error(`${label} must be text.`);
-  }
-  const normalized = value.trim();
-  if (normalized.length > maximumLength) {
-    throw new Error(`${label} is too long.`);
-  }
-  if (
-    [...normalized].some((character) => {
-      const code = character.charCodeAt(0);
-      return code <= 31 || code === 127;
-    })
-  ) {
-    throw new Error(`${label} contains unsupported control characters.`);
-  }
-  return normalized;
 }
 
 async function readJsonIfPresent<T extends JsonObject>(filePath: string): Promise<T | undefined> {
