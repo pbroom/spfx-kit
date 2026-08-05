@@ -27,7 +27,8 @@ npm run test:security
 
 - Default URL: `http://127.0.0.1:5173/`
 - In cloud agents, bind with `SPFX_LAB_HOST=0.0.0.0` so the preview is reachable.
-- If port 5173 is busy, use `SPFX_LAB_PORT=5174 npm run dev`.
+- If port 5173 is busy, use `SPFX_LAB_PORT=5175 npm run dev`; port 5174 is
+  reserved for the local mock CDN started by the same command.
 - Fresh clones include `examples/hello-card-spfx`; managed apps live under
   ignored `.spfx-kit/apps`.
 

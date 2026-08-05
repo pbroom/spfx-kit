@@ -12,7 +12,7 @@ export default defineConfig({
     dedupe: ['react', 'react-dom']
   },
   server: {
-    strictPort: false,
+    strictPort: true,
     fs: {
       allow: [rootDir]
     }

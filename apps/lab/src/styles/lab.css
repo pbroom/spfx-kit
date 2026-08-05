@@ -1648,6 +1648,11 @@ textarea {
   background: var(--colorPaletteRedBackground1, #fff4f4);
 }
 
+.package-runtime-state--error > span {
+  justify-self: stretch;
+  text-align: left;
+}
+
 .package-dependency-panel {
   display: flex;
   flex: 0 0 auto;

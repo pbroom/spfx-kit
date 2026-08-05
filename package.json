@@ -14,7 +14,9 @@
   },
   "scripts": {
     "prepare": "test \"$(git rev-parse --show-toplevel 2>/dev/null)\" = \"$PWD\" && git config --local core.hooksPath scripts/git-hooks || exit 0",
-    "dev": "npm run sync:lab && turbo run dev --filter @spfx-kit/lab",
+    "dev": "npm run sync:lab && node scripts/dev.mjs",
+    "dev:lab": "turbo run dev --filter @spfx-kit/lab",
+    "dev:cdn": "node packages/spfx-tools/src/cli/mock-cdn.mjs serve",
     "prebuild": "npm run sync:source-editor -- --check",
     "build": "npm run sync:lab && turbo run build",
     "ship": "turbo run ship && npm run ship:canary",
