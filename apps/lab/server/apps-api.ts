@@ -16,6 +16,7 @@ import {
   runWorkspaceNodeCommand,
   syncLabRegistry,
   unlinkLabApp,
+  updateManagedLabAppExportConfig,
   updateManagedLabAppVersion
 } from './workspace';
 
@@ -94,6 +95,22 @@ export function spfxAppApi(): Plugin {
               appId,
               message: result.message,
               syncedAdapters: result.syncedAdapters,
+              apps: await listManagedLabApps()
+            });
+            return;
+          }
+
+          if (req.method === 'POST' && url.pathname === '/export-config') {
+            if (!verifyStateChangingLabRequest(req, res)) {
+              return;
+            }
+            const body = await readJsonBody(req);
+            const appId = sanitizeSlug(String(body.appId || ''));
+            const exportConfig = await updateManagedLabAppExportConfig(appId, body.exportConfig);
+            sendJson(res, {
+              appId,
+              message: `Saved export configuration for ${appPathForMessage(appId)}.`,
+              exportConfig,
               apps: await listManagedLabApps()
             });
             return;

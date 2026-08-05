@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, readdir, realpath, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { describeManagedAppExportConfig, ManagedAppExportConfig, updateManagedAppExportConfig } from './app-export-config';
 import { appPathForMessage, legacyAppsDir, managedAppsDir, rootDir } from './paths';
 import { describeManagedAppVersion, ManagedAppVersionInfo, selectManagedAppVersion } from './app-versions';
 
@@ -14,6 +15,7 @@ export interface ManagedLabApp {
   adapterPath?: string;
   disabledAdapterPath?: string;
   version: ManagedAppVersionInfo;
+  exportConfig: ManagedAppExportConfig;
 }
 
 export interface WorkspaceApp {
@@ -75,13 +77,18 @@ export async function listManagedLabApps(): Promise<ManagedLabApp[]> {
         return undefined;
       }
 
-      const [adapter, version] = await Promise.all([describeLabAdapter(app.dir), describeManagedAppVersion(app.dir)]);
+      const [adapter, version, exportConfig] = await Promise.all([
+        describeLabAdapter(app.dir),
+        describeManagedAppVersion(app.dir),
+        describeManagedAppExportConfig(app.dir)
+      ]);
       return {
         id: app.id,
         packageName: app.packageName,
         relativeDir: app.relativeDir,
         status: adapter.status,
         version,
+        exportConfig,
         ...(adapter.activePath ? { adapterPath: path.relative(rootDir, adapter.activePath).replace(/\\/g, '/') } : {}),
         ...((await exists(adapter.disabledPath))
           ? { disabledAdapterPath: path.relative(rootDir, adapter.disabledPath).replace(/\\/g, '/') }
@@ -91,6 +98,11 @@ export async function listManagedLabApps(): Promise<ManagedLabApp[]> {
   );
 
   return apps.filter((app): app is ManagedLabApp => Boolean(app)).sort((a, b) => a.id.localeCompare(b.id));
+}
+
+export async function updateManagedLabAppExportConfig(appId: string, value: unknown): Promise<ManagedAppExportConfig> {
+  const app = await requireWorkspaceApp(appId);
+  return updateManagedAppExportConfig(app.dir, value);
 }
 
 export async function updateManagedLabAppVersion(

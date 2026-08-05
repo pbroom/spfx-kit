@@ -8,7 +8,6 @@ import {
   FluentProvider,
   Menu,
   MenuButton,
-  MenuItem,
   MenuItemRadio,
   MenuList,
   MenuPopover,
@@ -29,12 +28,8 @@ import {
   Columns3,
   Columns2,
   Eye,
-  FolderInput,
-  FolderPlus,
   Menu as MenuIcon,
-  Pencil,
-  Settings,
-  Upload
+  Pencil
 } from 'lucide-react';
 import {
   createLabTheme,
@@ -51,7 +46,8 @@ import { registerGeneratedWebParts } from './generated/lab-registry';
 import { PropertyPane } from './components/PropertyPane';
 import { AddAppDrawer, AddAppMode } from './components/AddAppDrawer';
 import { ExportDrawer } from './components/ExportDrawer';
-import { ManageAppsDialog } from './components/ManageAppsDialog';
+import { AppManagementSidebar } from './components/AppManagementSidebar';
+import type { ExportPackageFormat } from './api/labApi';
 import {
   getBrowserStorage,
   getLabAppId,
@@ -60,7 +56,6 @@ import {
   resolveInitialWebPartId,
   resolvePinnedAppId
 } from './lib/pinnedApp';
-import { getPrimaryShortcutLabel } from './lib/text';
 
 type PropsByWebPart = Record<string, LabPropertyBag>;
 
@@ -83,14 +78,14 @@ export function LabApp(): JSX.Element {
   const [breakpointId, setBreakpointId] = React.useState<LabBreakpoint['id']>('one-column');
   const [displayMode, setDisplayMode] = React.useState<LabDisplayMode>('edit');
   const [boundsVisible, setBoundsVisible] = React.useState(false);
-  const [appMenuOpen, setAppMenuOpen] = React.useState(false);
+  const [appSidebarOpen, setAppSidebarOpen] = React.useState(false);
   const [themeMode, setThemeMode] = React.useState<LabThemeMode>('light');
   const [themeMenuOpen, setThemeMenuOpen] = React.useState(false);
   const [customBackground, setCustomBackground] = React.useState('#eef6ff');
   const [addDrawerOpen, setAddDrawerOpen] = React.useState(false);
   const [addMode, setAddMode] = React.useState<AddAppMode>('import');
-  const [manageAppsOpen, setManageAppsOpen] = React.useState(false);
   const [exportDrawerOpen, setExportDrawerOpen] = React.useState(false);
+  const [exportTargets, setExportTargets] = React.useState<ExportPackageFormat[]>(['single', 'cdn']);
   const [panelCollapsed, setPanelCollapsed] = React.useState(false);
   const [webPartPickerOpen, setWebPartPickerOpen] = React.useState(false);
   const [pinAnnouncement, setPinAnnouncement] = React.useState('');
@@ -116,7 +111,7 @@ export function LabApp(): JSX.Element {
       }
 
       event.preventDefault();
-      setAppMenuOpen(false);
+      setAppSidebarOpen(false);
 
       if (key === 'o' || key === 'n') {
         setExportDrawerOpen(false);
@@ -126,6 +121,7 @@ export function LabApp(): JSX.Element {
       }
 
       setAddDrawerOpen(false);
+      setExportTargets(['single', 'cdn']);
       setExportDrawerOpen(true);
     };
 
@@ -138,9 +134,6 @@ export function LabApp(): JSX.Element {
   const fluentTheme = themeMode === 'dark' ? webDarkTheme : webLightTheme;
   const activeProps = selected ? propsByWebPart[selected.id] || selected.defaultProps : {};
   const webPartsByAppId = React.useMemo(() => groupWebPartsByAppId(webParts), [webParts]);
-  const importShortcutLabel = React.useMemo(() => getPrimaryShortcutLabel('O'), []);
-  const createShortcutLabel = React.useMemo(() => getPrimaryShortcutLabel('N'), []);
-  const exportShortcutLabel = React.useMemo(() => getPrimaryShortcutLabel('E'), []);
   const context = React.useMemo(() => createMockSpfxContext(), []);
   const viewerMode = displayMode === 'viewer';
   const panelHeaderOnly = viewerMode || panelCollapsed;
@@ -169,33 +162,36 @@ export function LabApp(): JSX.Element {
 
   const selectDisplayMode = (mode: LabDisplayMode): void => {
     setDisplayMode(mode);
-    setAppMenuOpen(false);
+    setAppSidebarOpen(false);
     setThemeMenuOpen(false);
     if (mode === 'edit') {
       setPanelCollapsed(false);
     }
     if (mode === 'viewer') {
       setAddDrawerOpen(false);
-      setManageAppsOpen(false);
       setExportDrawerOpen(false);
     }
   };
 
-  const openManageApps = (): void => {
-    setManageAppsOpen(true);
+  const openAppSidebar = (): void => {
+    selectDisplayMode('edit');
+    setAddDrawerOpen(false);
+    setExportDrawerOpen(false);
+    setAppSidebarOpen(true);
   };
 
   const openAddAppDrawer = (mode: AddAppMode): void => {
     selectDisplayMode('edit');
     setAddMode(mode);
     setExportDrawerOpen(false);
-    setManageAppsOpen(false);
+    setAppSidebarOpen(false);
     setAddDrawerOpen(true);
   };
 
-  const openExportDrawer = (): void => {
-    setAppMenuOpen(false);
+  const openExportDrawer = (targets: ExportPackageFormat[] = ['single', 'cdn']): void => {
+    setAppSidebarOpen(false);
     setAddDrawerOpen(false);
+    setExportTargets(targets);
     setExportDrawerOpen(true);
   };
 
@@ -205,6 +201,20 @@ export function LabApp(): JSX.Element {
     setPinnedAppId(nextPinnedAppId);
     persistPinnedAppId(getBrowserStorage(), nextPinnedAppId);
     setPinAnnouncement(nextPinnedAppId ? `${webPart.title} pinned as the startup app.` : `${webPart.title} is no longer pinned.`);
+  };
+
+  const togglePinnedAppById = (appId: string): void => {
+    const webPart = webPartsByAppId.get(appId)?.[0];
+    if (webPart) {
+      togglePinnedApp(webPart);
+    }
+  };
+
+  const selectApp = (appId: string): void => {
+    const webPart = webPartsByAppId.get(appId)?.[0];
+    if (webPart) {
+      setSelectedId(webPart.id);
+    }
   };
 
   const expandOptionsPanel = (): void => {
@@ -222,50 +232,29 @@ export function LabApp(): JSX.Element {
         data-display-mode={displayMode}
         style={{ '--lab-section-background': theme.background } as React.CSSProperties}
       >
+        <AppManagementSidebar
+          open={appSidebarOpen}
+          pinnedAppId={pinnedAppId}
+          selectedAppId={selected?.appId || ''}
+          webPartsByAppId={webPartsByAppId}
+          onOpenChange={setAppSidebarOpen}
+          onOpenExport={openExportDrawer}
+          onOpenImport={() => openAddAppDrawer('import')}
+          onSelectApp={selectApp}
+          onTogglePinned={togglePinnedAppById}
+        />
+
         <section className="preview-area" aria-label="Web part preview area">
           <div className={`lab-toolbar lab-toolbar--preview lab-toolbar--${displayMode}`}>
             {displayMode === 'edit' ? (
               <div className="app-menu-control" aria-label="App menu">
-                <Menu
-                  open={appMenuOpen}
-                  positioning={{ position: 'below', align: 'start' }}
-                  onOpenChange={(_event, data) => setAppMenuOpen(data.open)}
+                <IconButton
+                  controls="app-management-sidebar"
+                  expanded={appSidebarOpen}
+                  label="Open app menu"
+                  onClick={appSidebarOpen ? () => setAppSidebarOpen(false) : openAppSidebar}
                 >
-                  <MenuTrigger disableButtonEnhancement>
-                    <MenuButton
-                      appearance="subtle"
-                      aria-label="Open app menu"
-                      className="app-menu-button"
-                      icon={<MenuIcon size={16} />}
-                      size="small"
-                      title="Open app menu"
-                    />
-                  </MenuTrigger>
-                  <MenuPopover className="app-menu-popover">
-                    <MenuList>
-                      <MenuItem icon={<FolderInput size={14} />} onClick={() => openAddAppDrawer('import')}>
-                        <span className="app-menu-command">
-                          <span>Import SPFx app</span>
-                          <kbd className="app-menu-shortcut">{importShortcutLabel}</kbd>
-                        </span>
-                      </MenuItem>
-                      <MenuItem icon={<FolderPlus size={14} />} onClick={() => openAddAppDrawer('create')}>
-                        <span className="app-menu-command">
-                          <span>Create SPFx app</span>
-                          <kbd className="app-menu-shortcut">{createShortcutLabel}</kbd>
-                        </span>
-                      </MenuItem>
-                      <MenuItem icon={<Upload size={14} />} onClick={openExportDrawer}>
-                        <span className="app-menu-command">
-                          <span>Export package</span>
-                          <kbd className="app-menu-shortcut">{exportShortcutLabel}</kbd>
-                        </span>
-                      </MenuItem>
-                    </MenuList>
-                  </MenuPopover>
-                </Menu>
-                <IconButton label="Export package" onClick={openExportDrawer}>
-                  <Upload size={16} />
+                  <MenuIcon size={16} />
                 </IconButton>
               </div>
             ) : (
@@ -478,9 +467,6 @@ export function LabApp(): JSX.Element {
               <span aria-live="polite" className="visually-hidden" role="status">
                 {pinAnnouncement}
               </span>
-              <IconButton label="Manage apps" onClick={openManageApps}>
-                <Settings size={16} />
-              </IconButton>
               <IconButton
                 label={
                   panelHeaderOnly
@@ -499,13 +485,6 @@ export function LabApp(): JSX.Element {
           </>
         </aside>
 
-        <ManageAppsDialog
-          open={manageAppsOpen}
-          onOpenChange={setManageAppsOpen}
-          webPartsByAppId={webPartsByAppId}
-          onOpenAddAppDrawer={openAddAppDrawer}
-        />
-
         {displayMode === 'edit' ? (
           <>
             <AddAppDrawer open={addDrawerOpen} mode={addMode} onOpenChange={setAddDrawerOpen} onModeChange={setAddMode} />
@@ -515,6 +494,7 @@ export function LabApp(): JSX.Element {
               onOpenChange={setExportDrawerOpen}
               webParts={webParts}
               selected={selected}
+              initialTargets={exportTargets}
               onSelectApp={setSelectedId}
             />
           </>
@@ -525,6 +505,8 @@ export function LabApp(): JSX.Element {
 }
 
 interface IconButtonProps {
+  controls?: string;
+  expanded?: boolean;
   label: string;
   pressed?: boolean;
   onClick: () => void;
@@ -535,6 +517,8 @@ function IconButton(props: IconButtonProps): JSX.Element {
   return (
     <Button
       appearance={props.pressed ? 'secondary' : 'subtle'}
+      aria-controls={props.controls}
+      aria-expanded={props.expanded}
       aria-label={props.label}
       aria-pressed={props.pressed}
       className="icon-button"

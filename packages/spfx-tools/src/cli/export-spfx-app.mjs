@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs, required } from '../lib/args.mjs';
 import { appSlugFromDir } from '../lib/spfx.mjs';
@@ -8,6 +8,7 @@ import { writeExportReadme } from '../lib/export/docs.mjs';
 import { acquireAppExportLock } from '../lib/export/lock.mjs';
 import { configureExportOutput, isJsonOutput, reportExportProgress } from '../lib/export/output.mjs';
 import { exportCdnPackage, exportSingleBundle, exportStagingCdnPackage, exportStandaloneRepo } from '../lib/export/targets.mjs';
+import { withAppliedExportConfig } from '../lib/export/config.mjs';
 
 const usage = `Usage:
   export-spfx-app --app .spfx-kit/apps/<slug>-spfx --target single,cdn,staging-cdn,standalone [--out <dir>] [--json] [--progress-json]
@@ -56,10 +57,6 @@ async function main() {
 async function runExport({ appDir, args, cdnRelease, stagingCdnRoot, targets }) {
   const slug = appSlugFromDir(appDir);
   const outDir = path.resolve(args.out || path.join(process.cwd(), '.spfx-kit', 'exports', slug, timestamp()));
-  const packageSolutionPath = path.join(appDir, 'config', 'package-solution.json');
-  const writeManifestPath = path.join(appDir, 'config', 'write-manifests.json');
-  const originalPackageSolution = await readFile(packageSolutionPath, 'utf8');
-  const originalWriteManifest = await readFile(writeManifestPath, 'utf8');
   const summary = {
     app: path.relative(process.cwd(), appDir),
     slug,
@@ -72,12 +69,16 @@ async function runExport({ appDir, args, cdnRelease, stagingCdnRoot, targets }) 
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
 
-  try {
+  await withAppliedExportConfig(appDir, async ({ exportConfig, restoreAppliedSource }) => {
     if (targets.includes('single')) {
       summary.targets.push(await exportSingleBundle(appDir, outDir, slug));
     }
     if (targets.includes('cdn')) {
-      summary.targets.push(await exportCdnPackage(appDir, outDir, slug));
+      summary.targets.push(
+        await exportCdnPackage(appDir, outDir, slug, {
+          cdnBasePath: exportConfig?.cdnUrl || undefined
+        })
+      );
     }
     if (targets.includes('staging-cdn')) {
       summary.targets.push(
@@ -88,16 +89,13 @@ async function runExport({ appDir, args, cdnRelease, stagingCdnRoot, targets }) 
       );
     }
     if (targets.includes('standalone')) {
-      // Package targets mutate config in place; restore the originals so the
-      // standalone repo copies pristine configuration.
-      await writeFile(packageSolutionPath, originalPackageSolution);
-      await writeFile(writeManifestPath, originalWriteManifest);
+      // Package targets mutate config in place. Return to the sidecar-applied
+      // baseline so the standalone repo gets overrides without target-specific
+      // includeClientSideAssets or staging CDN changes.
+      await restoreAppliedSource();
       summary.targets.push(await exportStandaloneRepo(appDir, outDir, slug));
     }
-  } finally {
-    await writeFile(packageSolutionPath, originalPackageSolution);
-    await writeFile(writeManifestPath, originalWriteManifest);
-  }
+  });
 
   summary.archivePath = path.join(outDir, `${slug}-${targets.map((target) => archiveSegmentForTarget(target)).join('-')}.tar.gz`);
   await writeExportReadme(outDir, slug, summary.targets);

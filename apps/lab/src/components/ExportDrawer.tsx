@@ -23,6 +23,7 @@ import {
 import { slugify, sppkgFileNameFromAppId } from '../lib/text';
 
 type ExportSelections = Record<ExportPackageFormat, boolean>;
+const DEFAULT_EXPORT_TARGETS: ExportPackageFormat[] = ['single', 'cdn'];
 
 interface ExportProgressState {
   phase: ExportProgressPhase;
@@ -48,6 +49,7 @@ interface ExportPackageOption {
 }
 
 interface ExportDrawerProps {
+  initialTargets?: ExportPackageFormat[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   webParts: LabWebPart[];
@@ -56,7 +58,7 @@ interface ExportDrawerProps {
 }
 
 export function ExportDrawer(props: ExportDrawerProps): JSX.Element {
-  const { open, onOpenChange, webParts, selected, onSelectApp } = props;
+  const { initialTargets = DEFAULT_EXPORT_TARGETS, open, onOpenChange, webParts, selected, onSelectApp } = props;
   const [exportSelections, setExportSelections] = React.useState<ExportSelections>({
     single: true,
     cdn: true,
@@ -80,6 +82,12 @@ export function ExportDrawer(props: ExportDrawerProps): JSX.Element {
 
   React.useEffect(() => {
     if (open && !exporting) {
+      const selectedTargets = new Set(initialTargets);
+      setExportSelections({
+        single: selectedTargets.has('single'),
+        cdn: selectedTargets.has('cdn'),
+        standalone: selectedTargets.has('standalone')
+      });
       setExportProgress({ phase: 'idle', message: '' });
       setExportTargetProgress({});
       setExportError('');
@@ -87,7 +95,7 @@ export function ExportDrawer(props: ExportDrawerProps): JSX.Element {
     // Reset transient progress whenever the drawer is (re)opened while no
     // export is running, matching the previous inline drawer behavior.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [initialTargets, open]);
 
   React.useEffect(() => {
     if (!selected?.appId) {
