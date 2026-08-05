@@ -446,6 +446,12 @@ export function validateLedgerSemantics(events, releaseSets, trustedSchemaSha256
     }
     if (event.proofEvent === 'exact-head-ci') {
       assert(event.prExactHead, `Evidence ledger row ${row} exact-head CI requires prExactHead.`);
+      if (event.sourceRevision.kind === 'public-git') {
+        assert(
+          event.prExactHead.kind === 'public-git',
+          `Evidence ledger row ${row} public exact-head CI requires a public prExactHead.`
+        );
+      }
     }
 
     assertSubjectBinding(event, releaseSet, releaseSets, row);
@@ -575,6 +581,19 @@ async function listGitTreeEntries(rootDirectory, commitSha, relativeTreePath) {
       return { mode, type, relativePath, contents };
     })
   );
+}
+
+async function readRegularGitFile(rootDirectory, commitSha, relativePath) {
+  const normalizedPath = normalizeRepositoryPath(relativePath);
+  const entries = await listGitTreeEntries(rootDirectory, commitSha, normalizedPath);
+  assert(entries.length === 1, `${normalizedPath} must resolve to exactly one Git file.`);
+  const [entry] = entries;
+  assert(
+    normalizeRepositoryPath(entry.relativePath) === normalizedPath,
+    `${normalizedPath} must resolve to exactly one Git file.`
+  );
+  assert(entry.mode === '100644', `${normalizedPath} must use mode 100644.`);
+  return entry.contents;
 }
 
 async function listLocalTreeEntries(rootDirectory, relativeTreePath) {
@@ -834,24 +853,22 @@ async function verifyInstalledTrustRuntime(rootDirectory, manifest) {
 }
 
 async function listGitReleaseSetEntries(rootDirectory, commitSha) {
-  const { stdout } = await execFileAsync(
-    'git',
-    ['ls-tree', '-r', '-z', '--name-only', commitSha, '--', normalizeRepositoryPath(RELEASE_SET_DIRECTORY)],
-    { cwd: rootDirectory, encoding: 'utf8', maxBuffer: MAX_EVIDENCE_BYTES + 1 }
+  const entries = (await listGitTreeEntries(rootDirectory, commitSha, RELEASE_SET_DIRECTORY)).sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath)
   );
-  const paths = stdout.split('\0').filter(Boolean).sort();
-  assert(paths.length <= MAX_RELEASE_SET_COUNT, 'Release-set directory exceeds the manifest count limit.');
-  const unsupported = paths.filter(
-    (relativePath) =>
-      path.posix.dirname(relativePath) !== normalizeRepositoryPath(RELEASE_SET_DIRECTORY) || !relativePath.endsWith('.json')
+  assert(entries.length <= MAX_RELEASE_SET_COUNT, 'Release-set directory exceeds the manifest count limit.');
+  const unsupported = entries.filter(
+    (entry) =>
+      path.posix.dirname(normalizeRepositoryPath(entry.relativePath)) !== normalizeRepositoryPath(RELEASE_SET_DIRECTORY) ||
+      !entry.relativePath.endsWith('.json')
   );
-  assert(unsupported.length === 0, `Release-set directory contains unsupported entries: ${unsupported.join(', ')}.`);
-  return Promise.all(
-    paths.map(async (relativePath) => ({
-      relativePath,
-      contents: await readGitPath(rootDirectory, commitSha, relativePath)
-    }))
+  assert(
+    unsupported.length === 0,
+    `Release-set directory contains unsupported entries: ${unsupported.map((entry) => entry.relativePath).join(', ')}.`
   );
+  const nonRegular = entries.filter((entry) => entry.mode !== '100644').map((entry) => entry.relativePath);
+  assert(nonRegular.length === 0, `Release-set manifests must use mode 100644: ${nonRegular.join(', ')}.`);
+  return entries.map(({ relativePath, contents }) => ({ relativePath, contents }));
 }
 
 function loadReleaseSets(entries, validateReleaseSetManifest) {
@@ -964,8 +981,7 @@ export async function validateShadcnEvidence({ rootDirectory, baseRef, candidate
     assert(localSchemaContents === baseSchemaContents, 'Working tree schema is not the trusted base schema.');
     const candidateSchemaContents = await readGitPath(resolvedRoot, candidateCommit, SCHEMA_PATH);
     assert(candidateSchemaContents !== undefined, `Candidate ${candidateCommit} deletes schema v1.`);
-    const candidateLedger = await readGitPath(resolvedRoot, candidateCommit, LEDGER_PATH);
-    assert(candidateLedger !== undefined, `Candidate ${candidateCommit} deletes ledger v1.`);
+    const candidateLedger = await readRegularGitFile(resolvedRoot, candidateCommit, LEDGER_PATH);
     candidate = {
       schemaContents: candidateSchemaContents,
       ledgerContents: candidateLedger,

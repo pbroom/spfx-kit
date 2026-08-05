@@ -5,11 +5,11 @@
   "protectedTrees": {
     ".github/workflows": {
       "entryCount": 2,
-      "sha256": "366641ab63464efc236544d3e89f024a5c541d19bac1582bacf794753363d4f4"
+      "sha256": "f50d1d24830c1c6785620f3ed2f5fa8e2718dca574e8da27fb24b1f8e221e828"
     },
     ".github/evidence-trust/v1": {
       "entryCount": 6,
-      "sha256": "8e0537b7a5840113a32b3d4aacdce1b4e420957443ce68d176b048f4f0c445e6"
+      "sha256": "523a771146c9e95ba565feeaebd4871e87dc852814c129f142bd776a06316f00"
     }
   },
   "schema": {

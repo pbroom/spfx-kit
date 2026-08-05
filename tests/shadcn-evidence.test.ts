@@ -641,6 +641,13 @@ describe('shadcn migration evidence validator', () => {
     const missingHeadDirectory = await createFixture({ events: [missingHead] });
     await expect(validateShadcnEvidence({ rootDirectory: missingHeadDirectory })).rejects.toThrow('requires prExactHead');
 
+    const opaqueHead = validEvent('exact-head-ci');
+    opaqueHead.prExactHead = { kind: 'private-opaque', exactHeadEvidenceId: 'priv-1111111111111111' };
+    const opaqueHeadDirectory = await createFixture({ events: [opaqueHead] });
+    await expect(validateShadcnEvidence({ rootDirectory: opaqueHeadDirectory })).rejects.toThrow(
+      'public exact-head CI requires a public prExactHead'
+    );
+
     const mismatchedHead = validEvent('exact-head-ci');
     mismatchedHead.prExactHead = { ...mismatchedHead.prExactHead, commitSha: commitB };
     const headDirectory = await createFixture({ events: [mismatchedHead] });
@@ -807,6 +814,43 @@ describe('shadcn migration evidence validator', () => {
     await expect(
       validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: schemaCandidate })
     ).rejects.toThrow('v1 bytes are immutable');
+  });
+
+  it('rejects symlinked release-set manifests and candidate ledgers', async () => {
+    const releaseSetDirectory = await createFixture();
+    await initializeGit(releaseSetDirectory);
+    const releaseSetBase = await commitAll(releaseSetDirectory, 'base');
+    const releaseSetPath = path.join(
+      releaseSetDirectory,
+      'docs',
+      'evidence',
+      'shadcn-migration',
+      'release-sets',
+      `${ids.release}.json`
+    );
+    await rm(releaseSetPath);
+    await symlink(`${ids.priorRelease}.json`, releaseSetPath);
+    const releaseSetCandidate = await commitAll(releaseSetDirectory, 'symlink release set');
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', releaseSetBase], { cwd: releaseSetDirectory });
+    await expect(
+      validateShadcnEvidence({
+        rootDirectory: releaseSetDirectory,
+        baseRef: releaseSetBase,
+        candidateRef: releaseSetCandidate
+      })
+    ).rejects.toThrow('Release-set manifests must use mode 100644');
+
+    const ledgerDirectory = await createFixture();
+    await initializeGit(ledgerDirectory);
+    const ledgerBase = await commitAll(ledgerDirectory, 'base');
+    const ledgerPath = path.join(ledgerDirectory, 'docs', 'evidence', 'shadcn-migration', 'ledger.v1.jsonl');
+    await rm(ledgerPath);
+    await symlink(path.join('release-sets', `${ids.release}.json`), ledgerPath);
+    const ledgerCandidate = await commitAll(ledgerDirectory, 'symlink ledger');
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', ledgerBase], { cwd: ledgerDirectory });
+    await expect(
+      validateShadcnEvidence({ rootDirectory: ledgerDirectory, baseRef: ledgerBase, candidateRef: ledgerCandidate })
+    ).rejects.toThrow('ledger.v1.jsonl must use mode 100644');
   });
 
   it.each([
@@ -1093,7 +1137,7 @@ describe('shadcn migration evidence validator', () => {
     expect(Object.keys(workflow.on)).toEqual(['pull_request_target']);
     expect(workflow.on.pull_request_target).toEqual({
       branches: ['main'],
-      types: ['opened', 'synchronize', 'reopened']
+      types: ['opened', 'synchronize', 'reopened', 'edited']
     });
     expect(workflow.permissions).toEqual({ contents: 'read', 'pull-requests': 'read', statuses: 'write' });
 
