@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import * as prettierYaml from 'prettier/plugins/yaml';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -314,6 +315,68 @@ async function createInstalledTrustRuntime(directory: string, versionOverrides: 
       `${JSON.stringify({ name: path.basename(packagePath), version: versionOverrides[packagePath] ?? manifest.runtime.packages[packagePath] })}\n`
     );
   }
+}
+
+async function createExecutableTrustRuntimeSource(directory: string) {
+  const sourceDirectory = path.join(directory, 'trusted-runtime-source');
+  const manifest = JSON.parse(
+    await readFile(path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'trust-base.v1.json'), 'utf8')
+  );
+  for (const packagePath of trustedRuntimePackagePaths) {
+    const packageDirectory = path.join(sourceDirectory, packagePath);
+    const packageManifest = {
+      name: path.basename(packagePath),
+      version: manifest.runtime.packages[packagePath],
+      ...(packagePath === 'node_modules/ajv' ? { type: 'module', exports: './index.js' } : {})
+    };
+    await mkdir(packageDirectory, { recursive: true });
+    await writeFile(path.join(packageDirectory, 'package.json'), `${JSON.stringify(packageManifest)}\n`);
+  }
+  await writeFile(
+    path.join(sourceDirectory, 'node_modules', 'ajv', 'index.js'),
+    [
+      'export default class Ajv {',
+      '  compile() {}',
+      '  getSchema() {',
+      '    const validate = () => true;',
+      '    validate.errors = [];',
+      '    return validate;',
+      '  }',
+      '}',
+      ''
+    ].join('\n')
+  );
+  return sourceDirectory;
+}
+
+async function copyExecutableTrustRuntime(directory: string, sourceDirectory: string) {
+  const runtimeDirectory = path.join(directory, '.github', 'evidence-trust', 'v1');
+  const manifest = JSON.parse(
+    await readFile(path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'trust-base.v1.json'), 'utf8')
+  );
+  for (const packagePath of trustedRuntimePackagePaths) {
+    const source = path.join(sourceDirectory, packagePath);
+    const installedPackage = JSON.parse(await readFile(path.join(source, 'package.json'), 'utf8'));
+    const expectedVersion = manifest.runtime.packages[packagePath];
+    if (installedPackage.version !== expectedVersion) {
+      throw new Error(
+        `Test runtime package ${packagePath} has version ${installedPackage.version}; expected trust-base version ${expectedVersion}.`
+      );
+    }
+    await cp(source, path.join(runtimeDirectory, packagePath), { recursive: true });
+  }
+}
+
+async function createHostileAjv(packageDirectory: string, label: string) {
+  await mkdir(packageDirectory, { recursive: true });
+  await writeFile(
+    path.join(packageDirectory, 'package.json'),
+    `${JSON.stringify({ name: 'ajv', version: '0.0.0-hostile', type: 'module', exports: './index.js' })}\n`
+  );
+  await writeFile(
+    path.join(packageDirectory, 'index.js'),
+    `throw new Error(${JSON.stringify(`hostile Ajv loaded from ${label}`)});\n`
+  );
 }
 
 async function commitAll(directory, message) {
@@ -832,6 +895,69 @@ describe('shadcn migration evidence validator', () => {
       eventCount: 0,
       releaseSetCount: 2
     });
+  });
+
+  it('resolves Ajv from the canonical isolated runtime despite hostile ancestor and NODE_PATH packages', async () => {
+    const directory = await createTrustedFixture();
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'trusted base');
+    const runtimeSource = await createExecutableTrustRuntimeSource(directory);
+    await copyExecutableTrustRuntime(directory, runtimeSource);
+
+    const ancestorDirectories = [directory, path.join(directory, '.github'), path.join(directory, '.github', 'evidence-trust')];
+    for (const [index, ancestorDirectory] of ancestorDirectories.entries()) {
+      await mkdir(ancestorDirectory, { recursive: true });
+      await writeFile(
+        path.join(ancestorDirectory, 'package.json'),
+        `${JSON.stringify({ name: `hostile-ancestor-${index}`, private: true, type: 'commonjs', dependencies: { ajv: '0.0.0-hostile' } })}\n`
+      );
+      await writeFile(path.join(ancestorDirectory, 'package-lock.json'), '{"lockfileVersion":3}\n');
+      await writeFile(path.join(ancestorDirectory, 'npm-shrinkwrap.json'), '{"lockfileVersion":3}\n');
+      await createHostileAjv(path.join(ancestorDirectory, 'node_modules', 'ajv'), `ancestor ${index}`);
+    }
+
+    const hostileNodePath = path.join(directory, 'hostile-node-path');
+    await createHostileAjv(path.join(hostileNodePath, 'ajv'), 'NODE_PATH');
+
+    const resolverHookPath = path.join(directory, 'observe-resolution.mjs');
+    await writeFile(
+      resolverHookPath,
+      [
+        'export async function resolve(specifier, context, nextResolve) {',
+        '  const resolution = await nextResolve(specifier, context);',
+        "  if (specifier === 'ajv') process.stderr.write(`AJV_RESOLVED=${resolution.url}\\n`);",
+        '  return resolution;',
+        '}',
+        ''
+      ].join('\n')
+    );
+    const registerHookPath = path.join(directory, 'register-resolution-hook.mjs');
+    await writeFile(
+      registerHookPath,
+      `import { register } from 'node:module';\nregister(${JSON.stringify(pathToFileURL(resolverHookPath).href)}, import.meta.url);\n`
+    );
+
+    const validatorPath = path.join(directory, '.github', 'evidence-trust', 'v1', 'validate-shadcn-evidence.mjs');
+    const validatorRunnerPath = path.join(directory, 'run-canonical-validator.mjs');
+    await writeFile(
+      validatorRunnerPath,
+      `import { runEvidenceCli } from ${JSON.stringify(pathToFileURL(validatorPath).href)};\nawait runEvidenceCli(process.argv.slice(2));\n`
+    );
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      ['--import', registerHookPath, validatorRunnerPath, '--root', directory, '--base-ref', base],
+      {
+        cwd: directory,
+        env: { ...process.env, NODE_PATH: hostileNodePath }
+      }
+    );
+    const expectedAjvUrl = pathToFileURL(
+      await realpath(path.join(directory, '.github', 'evidence-trust', 'v1', 'node_modules', 'ajv', 'index.js'))
+    ).href;
+
+    expect(stdout).toBe('Validated 0 shadcn evidence event(s) and 2 release-set manifest(s).\n');
+    expect(stderr).toContain(`AJV_RESOLVED=${expectedAjvUrl}\n`);
+    expect(stderr).not.toContain('hostile Ajv loaded');
   });
 
   it('rejects an installed trusted package that differs from the locked runtime version', async () => {
