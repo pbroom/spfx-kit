@@ -19,12 +19,13 @@ import type { LabWebPart } from '@spfx-kit/spfx-lab-runtime';
 import {
   ExportPackageFormat,
   labApiWriteHeaders,
+  loadManagedLabApps,
   ManagedAppExportConfig,
   ManagedLabApp,
-  ManagedLabAppsApiResult,
   ManageAppsApiResult,
   readApiJson
 } from '../api/labApi';
+import { loadLocalCdnBucketInventory, selectedLocalCdnRelease, type LocalCdnBucketInventory } from '../api/localCdnBucket';
 import { managedAppPath, titleFromSlug } from '../lib/text';
 
 type AppManagementPhase = 'idle' | 'loading' | 'running' | 'complete' | 'error';
@@ -125,6 +126,7 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
   const [lastSyncedAt, setLastSyncedAt] = React.useState<Date | null>(null);
   const [showSyncSuccess, setShowSyncSuccess] = React.useState(false);
   const [exportConfig, setExportConfig] = React.useState<ManagedAppExportConfig>(EMPTY_EXPORT_CONFIG);
+  const [localCdnInventory, setLocalCdnInventory] = React.useState<LocalCdnBucketInventory>();
   const [sidebarSelectedAppId, setSidebarSelectedAppId] = React.useState(selectedAppId);
   const [selectedAppPickerOpen, setSelectedAppPickerOpen] = React.useState(false);
   const [pinAnnouncement, setPinAnnouncement] = React.useState('');
@@ -152,8 +154,7 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
     let autoUpdating = false;
     let updatedCount = 0;
     try {
-      const response = await fetch('/api/spfx-apps/');
-      const result = await readApiJson<ManagedLabAppsApiResult>(response);
+      const result = await loadManagedLabApps();
       let apps = result.apps;
       setManagedApps(apps);
       const updates = apps.filter(
@@ -220,6 +221,21 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
     if (!open) {
       return undefined;
     }
+    const controller = new AbortController();
+    void loadLocalCdnBucketInventory(controller.signal)
+      .then(setLocalCdnInventory)
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setLocalCdnInventory(undefined);
+        }
+      });
+    return () => controller.abort();
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
     const timer = window.setInterval(() => {
       void refreshManagedApps({ quiet: true });
     }, 60_000);
@@ -272,6 +288,7 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
   const selectedConfigPartnerId = selectedConfig?.partnerId || '';
   const selectedConfigVersion = selectedConfig?.version || '';
   const selectedConfigCdnUrl = selectedConfig?.cdnUrl || '';
+  const activeLocalCdnRelease = selectedApp ? selectedLocalCdnRelease(localCdnInventory, selectedApp.id) : undefined;
 
   React.useEffect(() => {
     setExportConfig({
@@ -461,6 +478,10 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
     onTogglePinned(appId);
     setPinAnnouncement(nextPinnedAppId ? `${app.title} pinned as the startup app.` : `${app.title} is no longer pinned.`);
   };
+  const activeLocalCdnManifestUrl = activeLocalCdnRelease
+    ? `${activeLocalCdnRelease.releaseBaseUrl}deployment-manifest.json`
+    : undefined;
+  const sourceRepositoryUrl = selectedManagedApp?.version.repositoryUrl;
 
   return (
     <Drawer
@@ -662,7 +683,42 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                 onChange={(_event, data) => updateExportConfig('version', data.value)}
               />
             </Field>
-            <Field className="app-management-sidebar__wide-field" label="CDN URL" size="small">
+            <Field className="app-management-sidebar__wide-field" label="GitHub source repository" size="small">
+              {sourceRepositoryUrl ? (
+                <a
+                  aria-label={`Open GitHub source repository for ${selectedApp?.title || selectedManagedApp?.id || 'selected app'}`}
+                  className="app-management-sidebar__url-link"
+                  href={sourceRepositoryUrl}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {sourceRepositoryUrl}
+                </a>
+              ) : (
+                <span className="app-management-sidebar__url-unavailable">No tracked GitHub source repository.</span>
+              )}
+            </Field>
+            <Field
+              className="app-management-sidebar__wide-field"
+              hint="Selected immutable release used only by the Lab's loopback CDN runtime."
+              label="Active local CDN runtime manifest"
+              size="small"
+            >
+              {activeLocalCdnManifestUrl ? (
+                <a
+                  aria-label={`Open active local CDN runtime manifest for ${selectedApp?.title || selectedManagedApp?.id || 'selected app'}`}
+                  className="app-management-sidebar__url-link"
+                  href={activeLocalCdnManifestUrl}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {activeLocalCdnManifestUrl}
+                </a>
+              ) : (
+                <span className="app-management-sidebar__url-unavailable">No local CDN release is selected.</span>
+              )}
+            </Field>
+            <Field className="app-management-sidebar__wide-field" label="Deployment CDN URL" size="small">
               <Input
                 aria-label="Export CDN URL"
                 disabled={!selectedManagedApp || selectedAppBusy}

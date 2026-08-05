@@ -39,6 +39,15 @@ describe('managed app export configuration', () => {
     });
   });
 
+  it('does not expose the standard SPFx CDN template sentinel as a configured URL', async () => {
+    const appDir = await createFixture();
+    await writeJson(path.join(appDir, 'config', 'write-manifests.json'), {
+      cdnBasePath: '<!-- PATH TO CDN -->'
+    });
+
+    await expect(describeManagedAppExportConfig(appDir)).resolves.toMatchObject({ cdnUrl: '' });
+  });
+
   it('atomically saves an ignored sidecar overlay without modifying tracked SPFx JSON', async () => {
     const appDir = await createFixture();
     const solutionPath = path.join(appDir, 'config', 'package-solution.json');

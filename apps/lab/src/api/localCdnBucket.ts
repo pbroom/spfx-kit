@@ -115,6 +115,16 @@ export async function selectLocalCdnRelease(appId: string, releaseId: string): P
   await requestBucketMutation('/select', { appId, releaseId });
 }
 
+export function selectedLocalCdnRelease(
+  inventory: LocalCdnBucketInventory | undefined,
+  appId: string
+): LocalCdnInspectableRelease | undefined {
+  return inventory?.namespaces.apps.releases.find(
+    (release): release is LocalCdnInspectableRelease =>
+      release.appId === appId && release.selected && release.status === 'verified'
+  );
+}
+
 async function requestBucketMutation(path: string, body: Record<string, string>): Promise<void> {
   const response = await fetch(`${LOCAL_CDN_ENDPOINT}${path}`, {
     method: 'POST',

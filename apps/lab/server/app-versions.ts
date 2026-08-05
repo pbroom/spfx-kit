@@ -16,6 +16,7 @@ export interface ManagedAppVersionInfo {
   canSelect: boolean;
   updateAvailable: boolean;
   source: 'clone' | 'import' | 'local';
+  repositoryUrl?: string;
   detail?: string;
 }
 
@@ -79,6 +80,7 @@ async function describeManagedAppVersionUnsafe(appDir: string): Promise<ManagedA
     };
   }
 
+  const repositoryUrl = configuredGitHubRepositoryUrl(cloneMetadata.source);
   const source = await resolveCloneSource(appDir, cloneMetadata);
   if (!source || !(await isIndependentGitRepository(appDir))) {
     return {
@@ -90,6 +92,7 @@ async function describeManagedAppVersionUnsafe(appDir: string): Promise<ManagedA
       canSelect: false,
       updateAvailable: false,
       source: 'local',
+      ...(repositoryUrl ? { repositoryUrl } : {}),
       detail: 'This app is not an independent Git clone.'
     };
   }
@@ -132,6 +135,7 @@ async function describeManagedAppVersionUnsafe(appDir: string): Promise<ManagedA
       updateAvailable:
         selected === 'latest' ? latestRelationship === 'behind' : Boolean(selectedVersion && head !== selectedVersion.sha),
       source: 'clone',
+      ...(repositoryUrl ? { repositoryUrl } : {}),
       ...(selected === 'current'
         ? {
             detail: branch
@@ -163,9 +167,41 @@ async function describeManagedAppVersionUnsafe(appDir: string): Promise<ManagedA
       canSelect: false,
       updateAvailable: false,
       source: 'clone',
+      ...(repositoryUrl ? { repositoryUrl } : {}),
       detail: error instanceof Error ? `Could not check versions: ${error.message}` : 'Could not check versions.'
     };
   }
+}
+
+export function configuredGitHubRepositoryUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const source = value.trim();
+  const scpMatch = source.match(/^git@github\.com:([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?$/i);
+  if (scpMatch) {
+    return `https://github.com/${scpMatch[1]}/${scpMatch[2]}`;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(source);
+  } catch {
+    return undefined;
+  }
+  if (
+    !['https:', 'ssh:'].includes(url.protocol) ||
+    url.hostname.toLowerCase() !== 'github.com' ||
+    url.port ||
+    url.search ||
+    url.hash ||
+    (url.protocol === 'https:' && (url.username || url.password)) ||
+    (url.protocol === 'ssh:' && url.username !== 'git')
+  ) {
+    return undefined;
+  }
+  const pathMatch = url.pathname.match(/^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/);
+  return pathMatch ? `https://github.com/${pathMatch[1]}/${pathMatch[2]}` : undefined;
 }
 
 export async function selectManagedAppVersion(

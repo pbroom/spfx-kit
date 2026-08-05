@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateLocalCdnBucketInventory } from '../apps/lab/src/api/localCdnBucket';
+import { selectedLocalCdnRelease, validateLocalCdnBucketInventory } from '../apps/lab/src/api/localCdnBucket';
 
 const origin = 'http://127.0.0.1:5174';
 const appId = 'hello-card-spfx';
@@ -97,6 +97,8 @@ describe('Local CDN bucket browser contract', () => {
       releases: [],
       message: 'Shared resource publication awaits a canonical verifier.'
     });
+    expect(selectedLocalCdnRelease(result, appId)?.releaseBaseUrl).toBe(releaseBaseUrl);
+    expect(selectedLocalCdnRelease(result, 'another-app')).toBeUndefined();
   });
 
   it('distinguishes anchored historical metadata from a deeply verified selected release', () => {
@@ -113,6 +115,7 @@ describe('Local CDN bucket browser contract', () => {
       package: { status: 'anchored' },
       assets: [{ status: 'anchored' }]
     });
+    expect(selectedLocalCdnRelease(validateLocalCdnBucketInventory(anchored), appId)).toBeUndefined();
   });
 
   it('labels legacy releases without immutable record anchors as recorded only', () => {

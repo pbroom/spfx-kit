@@ -4,6 +4,7 @@ import path from 'node:path';
 import { validateExportConfig as validateCanonicalExportConfig } from '../../../packages/spfx-tools/src/lib/export/export-config-validation.mjs';
 
 const exportConfigFileName = 'export-config.json';
+const spfxCdnPlaceholder = '<!-- PATH TO CDN -->';
 const exportConfigStringFields = [
   'appName',
   'fileName',
@@ -87,7 +88,7 @@ export async function describeManagedAppExportConfig(appDir: string): Promise<Ma
     screenshotPaths: stringArray(metadata?.screenshotPaths),
     categories: stringArray(metadata?.categories),
     version: stringValue(packageJson?.version) || packageVersionFromSolution(stringValue(solution?.version)),
-    cdnUrl: stringValue(writeManifests?.cdnBasePath),
+    cdnUrl: deploymentCdnUrl(stringValue(writeManifests?.cdnBasePath)),
     developerName: stringValue(developer?.name),
     developerWebsiteUrl: stringValue(developer?.websiteUrl),
     privacyUrl: stringValue(developer?.privacyUrl),
@@ -211,6 +212,10 @@ function asObject(value: unknown): JsonObject | undefined {
 
 function stringValue(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function deploymentCdnUrl(value: string): string {
+  return value === spfxCdnPlaceholder ? '' : value;
 }
 
 function stringArray(value: unknown): string[] {

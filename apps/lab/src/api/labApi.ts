@@ -44,6 +44,7 @@ export interface ManagedLabApp {
     canSelect: boolean;
     updateAvailable: boolean;
     source: 'clone' | 'import' | 'local';
+    repositoryUrl?: string;
     detail?: string;
   };
 }
@@ -100,6 +101,10 @@ export async function readApiJson<T>(response: Response): Promise<T> {
     throw new Error(message);
   }
   return value as T;
+}
+
+export async function loadManagedLabApps(signal?: AbortSignal): Promise<ManagedLabAppsApiResult> {
+  return readApiJson<ManagedLabAppsApiResult>(await fetch('/api/spfx-apps/', { signal }));
 }
 
 export async function readExportStream(response: Response, onEvent: (event: ExportStreamEvent) => void): Promise<void> {
