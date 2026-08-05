@@ -1,11 +1,13 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import * as prettierYaml from 'prettier/plugins/yaml';
 import { afterEach, describe, expect, it } from 'vitest';
+import { publishPendingStatus, publishTerminalStatus } from '../.github/evidence-trust/v1/publish-status.mjs';
 import { createEventKey, createProofSubjectId, validateShadcnEvidence } from '../scripts/validate-shadcn-evidence.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -13,11 +15,35 @@ const temporaryDirectories: string[] = [];
 const schemaSource = path.join(process.cwd(), 'docs', 'evidence', 'shadcn-migration', 'schema.v1.json');
 const schemaBytes = readFileSync(schemaSource, 'utf8');
 const schemaSha256 = createHash('sha256').update(schemaBytes).digest('hex');
+const trustedFixturePaths = [
+  path.join('.github', 'workflows', 'ci.yml'),
+  path.join('.github', 'workflows', 'evidence-history.yml'),
+  path.join('.github', 'evidence-trust', 'v1', '.npmrc'),
+  path.join('.github', 'evidence-trust', 'v1', 'node-version'),
+  path.join('.github', 'evidence-trust', 'v1', 'package.json'),
+  path.join('.github', 'evidence-trust', 'v1', 'package-lock.json'),
+  path.join('.github', 'evidence-trust', 'v1', 'publish-status.mjs'),
+  path.join('.github', 'evidence-trust', 'v1', 'validate-shadcn-evidence.mjs'),
+  path.join('docs', 'evidence', 'shadcn-migration', 'trust-base.v1.json')
+];
+const trustedRuntimePackagePaths = [
+  'node_modules/ajv',
+  'node_modules/fast-deep-equal',
+  'node_modules/fast-uri',
+  'node_modules/json-schema-traverse',
+  'node_modules/require-from-string'
+];
 const shaA = 'a'.repeat(64);
 const shaB = 'b'.repeat(64);
 const shaC = 'c'.repeat(64);
 const commitA = 'a'.repeat(40);
 const commitB = 'b'.repeat(40);
+
+const parseYaml = (
+  prettierYaml as unknown as {
+    __parsePrettierYamlConfig: (source: string) => unknown;
+  }
+).__parsePrettierYamlConfig;
 
 const ids = {
   release: 'rs-1111111111111111',
@@ -184,7 +210,7 @@ function proofEvent(overrides = {}) {
       name: 'spfx-kit-shadcn-evidence',
       repository: 'pbroom/spfx-kit',
       commitSha: commitA,
-      scriptPath: 'scripts/validate-shadcn-evidence.mjs',
+      scriptPath: '.github/evidence-trust/v1/validate-shadcn-evidence.mjs',
       schemaSha256
     },
     exportTarget: 'source',
@@ -264,6 +290,30 @@ async function createFixture({ manifests = [releaseSet(), priorReleaseSet()], ev
     await writeFile(path.join(releaseSetDirectory, `${manifest.releaseSetId}.json`), `${JSON.stringify(manifest)}\n`);
   }
   return directory;
+}
+
+async function createTrustedFixture(options = {}) {
+  const directory = await createFixture(options);
+  for (const relativePath of trustedFixturePaths) {
+    const destination = path.join(directory, relativePath);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await cp(path.join(process.cwd(), relativePath), destination);
+  }
+  return directory;
+}
+
+async function createInstalledTrustRuntime(directory: string, versionOverrides: Record<string, string> = {}) {
+  const manifest = JSON.parse(
+    await readFile(path.join(directory, 'docs', 'evidence', 'shadcn-migration', 'trust-base.v1.json'), 'utf8')
+  );
+  for (const packagePath of trustedRuntimePackagePaths) {
+    const destination = path.join(directory, '.github', 'evidence-trust', 'v1', packagePath, 'package.json');
+    await mkdir(path.dirname(destination), { recursive: true });
+    await writeFile(
+      destination,
+      `${JSON.stringify({ name: path.basename(packagePath), version: versionOverrides[packagePath] ?? manifest.runtime.packages[packagePath] })}\n`
+    );
+  }
 }
 
 async function commitAll(directory, message) {
@@ -696,12 +746,278 @@ describe('shadcn migration evidence validator', () => {
     ).rejects.toThrow('v1 bytes are immutable');
   });
 
-  it('keeps the trusted workflow on base code and candidate Git data', async () => {
-    const workflow = await readFile(path.join(process.cwd(), '.github', 'workflows', 'evidence-history.yml'), 'utf8');
-    expect(workflow).toContain('pull_request_target:');
-    expect(workflow).toContain('ref: ${{ github.event.pull_request.base.sha }}');
-    expect(workflow).toContain('npm ci --ignore-scripts');
-    expect(workflow).toContain('--candidate-ref "$CANDIDATE_SHA"');
-    expect(workflow).not.toContain('ref: ${{ github.event.pull_request.head.sha }}');
+  it.each([
+    ['edit', path.join('.github', 'workflows', 'evidence-history.yml')],
+    ['delete', path.join('.github', 'workflows', 'evidence-history.yml')],
+    ['edit', path.join('.github', 'evidence-trust', 'v1', 'validate-shadcn-evidence.mjs')],
+    ['delete', path.join('.github', 'evidence-trust', 'v1', 'validate-shadcn-evidence.mjs')],
+    ['edit', path.join('.github', 'evidence-trust', 'v1', 'package-lock.json')],
+    ['delete', path.join('.github', 'evidence-trust', 'v1', 'package-lock.json')],
+    ['edit', path.join('docs', 'evidence', 'shadcn-migration', 'trust-base.v1.json')],
+    ['delete', path.join('docs', 'evidence', 'shadcn-migration', 'trust-base.v1.json')],
+    ['edit', path.join('.github', 'evidence-trust', 'v1', '.npmrc')],
+    ['delete', path.join('.github', 'evidence-trust', 'v1', '.npmrc')]
+  ] as const)('rejects a candidate that tries to %s immutable trust-base path %s', async (operation, relativePath) => {
+    const directory = await createTrustedFixture();
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'trusted base');
+    const target = path.join(directory, relativePath);
+    if (operation === 'edit') {
+      await writeFile(target, `${await readFile(target, 'utf8')}\n`);
+    } else {
+      await rm(target);
+    }
+    const candidate = await commitAll(directory, `${operation} ${relativePath}`);
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', base], { cwd: directory });
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: candidate })).rejects.toThrow(
+      /trust-base|immutable|protected tree|requires/
+    );
+  });
+
+  it.each([
+    [path.join('.github', 'workflows', 'rogue-status.yml'), 'name: Rogue status\non: push\n'],
+    [path.join('.github', 'evidence-trust', 'v1', 'npm-shrinkwrap.json'), '{}\n'],
+    [path.join('.github', 'evidence-trust', 'v1', 'node_modules', 'ajv', 'index.js'), 'export default {};\n']
+  ])('rejects a candidate addition inside protected tree path %s', async (relativePath, contents) => {
+    const directory = await createTrustedFixture();
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'trusted base');
+    const target = path.join(directory, relativePath);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, contents);
+    const candidate = await commitAll(directory, `add ${relativePath}`);
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', base], { cwd: directory });
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base, candidateRef: candidate })).rejects.toThrow(
+      /protected tree|trust-base/
+    );
+  });
+
+  it('rejects mode and symlink changes in the protected runtime tree', async () => {
+    const modeDirectory = await createTrustedFixture();
+    await initializeGit(modeDirectory);
+    const modeBase = await commitAll(modeDirectory, 'trusted base');
+    const validatorPath = path.join(modeDirectory, '.github', 'evidence-trust', 'v1', 'validate-shadcn-evidence.mjs');
+    await chmod(validatorPath, 0o755);
+    const modeCandidate = await commitAll(modeDirectory, 'make validator executable');
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', modeBase], { cwd: modeDirectory });
+    await expect(
+      validateShadcnEvidence({ rootDirectory: modeDirectory, baseRef: modeBase, candidateRef: modeCandidate })
+    ).rejects.toThrow(/protected tree|mode 100644/);
+
+    const linkDirectory = await createTrustedFixture();
+    await initializeGit(linkDirectory);
+    const linkBase = await commitAll(linkDirectory, 'trusted base');
+    const npmrcPath = path.join(linkDirectory, '.github', 'evidence-trust', 'v1', '.npmrc');
+    await rm(npmrcPath);
+    await symlink('node-version', npmrcPath);
+    const linkCandidate = await commitAll(linkDirectory, 'replace npm config with symlink');
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', linkBase], { cwd: linkDirectory });
+    await expect(
+      validateShadcnEvidence({ rootDirectory: linkDirectory, baseRef: linkBase, candidateRef: linkCandidate })
+    ).rejects.toThrow(/protected tree|mode 100644/);
+  });
+
+  it('allows unrelated root runtime files because the trusted install is isolated', async () => {
+    const directory = await createTrustedFixture();
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'trusted base');
+    await writeFile(path.join(directory, '.nvmrc'), '99.0.0\n');
+    await writeFile(path.join(directory, 'package.json'), '{"private":true}\n');
+    await writeFile(path.join(directory, 'package-lock.json'), '{"lockfileVersion":3}\n');
+    await writeFile(path.join(directory, 'npm-shrinkwrap.json'), '{"lockfileVersion":3}\n');
+
+    await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base })).resolves.toMatchObject({
+      eventCount: 0,
+      releaseSetCount: 2
+    });
+  });
+
+  it('rejects an installed trusted package that differs from the locked runtime version', async () => {
+    const directory = await createTrustedFixture();
+    await initializeGit(directory);
+    const base = await commitAll(directory, 'trusted base');
+    await createInstalledTrustRuntime(directory, { 'node_modules/fast-uri': '3.1.4' });
+    const previousRequired = process.env.EVIDENCE_REQUIRE_ISOLATED_RUNTIME;
+    const previousNpmVersion = process.env.EVIDENCE_TRUST_NPM_VERSION;
+    process.env.EVIDENCE_REQUIRE_ISOLATED_RUNTIME = '1';
+    process.env.EVIDENCE_TRUST_NPM_VERSION = '10.9.8';
+    try {
+      await expect(validateShadcnEvidence({ rootDirectory: directory, baseRef: base })).rejects.toThrow(
+        'Installed trusted runtime package node_modules/fast-uri has version 3.1.4'
+      );
+    } finally {
+      if (previousRequired === undefined) delete process.env.EVIDENCE_REQUIRE_ISOLATED_RUNTIME;
+      else process.env.EVIDENCE_REQUIRE_ISOLATED_RUNTIME = previousRequired;
+      if (previousNpmVersion === undefined) delete process.env.EVIDENCE_TRUST_NPM_VERSION;
+      else process.env.EVIDENCE_TRUST_NPM_VERSION = previousNpmVersion;
+    }
+  });
+
+  it('publishes pending and successful terminal statuses on the exact candidate SHA', async () => {
+    const calls: Array<{ url: string; options: RequestInit }> = [];
+    const fetchImpl = async (input: string | URL | Request, options: RequestInit = {}) => {
+      const url = String(input);
+      calls.push({ url, options });
+      if (options.method === undefined) {
+        return new Response(JSON.stringify({ head: { sha: commitA } }), { status: 200 });
+      }
+      return new Response('{}', { status: 201 });
+    };
+    const env = {
+      GITHUB_API_URL: 'https://api.github.com',
+      GITHUB_REPOSITORY: 'pbroom/spfx-kit',
+      GITHUB_TOKEN: 'test-token',
+      CANDIDATE_SHA: commitA,
+      PR_NUMBER: '88',
+      RUN_URL: 'https://github.com/pbroom/spfx-kit/actions/runs/123',
+      VALIDATION_OUTCOME: 'success'
+    };
+
+    await expect(publishPendingStatus({ env, fetchImpl })).resolves.toMatchObject({ state: 'pending' });
+    expect(JSON.parse(String(calls[0].options.body))).toMatchObject({
+      state: 'pending',
+      context: 'spfx-kit/evidence-history-v1'
+    });
+    calls.length = 0;
+
+    await expect(publishTerminalStatus({ env, fetchImpl })).resolves.toMatchObject({ state: 'success' });
+    expect(calls).toHaveLength(2);
+    expect(calls[0].url).toContain('/pulls/88');
+    expect(JSON.parse(String(calls[1].options.body))).toMatchObject({
+      state: 'success',
+      context: 'spfx-kit/evidence-history-v1'
+    });
+    expect(calls[1].url).toContain(`/statuses/${commitA}`);
+  });
+
+  it.each(['failure', 'cancelled', undefined])(
+    'publishes a failing terminal status when validation outcome is %s',
+    async (validationOutcome) => {
+      const calls: Array<{ url: string; options: RequestInit }> = [];
+      const fetchImpl = async (input: string | URL | Request, options: RequestInit = {}) => {
+        calls.push({ url: String(input), options });
+        if (options.method === undefined) {
+          return new Response(JSON.stringify({ head: { sha: commitA } }), { status: 200 });
+        }
+        return new Response('{}', { status: 201 });
+      };
+      const env: Record<string, string> = {
+        GITHUB_API_URL: 'https://api.github.com',
+        GITHUB_REPOSITORY: 'pbroom/spfx-kit',
+        GITHUB_TOKEN: 'test-token',
+        CANDIDATE_SHA: commitA,
+        PR_NUMBER: '88',
+        RUN_URL: 'https://github.com/pbroom/spfx-kit/actions/runs/123'
+      };
+      if (validationOutcome !== undefined) env.VALIDATION_OUTCOME = validationOutcome;
+
+      await expect(publishTerminalStatus({ env, fetchImpl })).rejects.toThrow('failure status published');
+      expect(calls).toHaveLength(2);
+      expect(JSON.parse(String(calls[1].options.body))).toMatchObject({
+        state: 'failure',
+        context: 'spfx-kit/evidence-history-v1'
+      });
+    }
+  );
+
+  it('does not publish a terminal status for a superseded candidate head', async () => {
+    const calls: Array<{ url: string; options: RequestInit }> = [];
+    const fetchImpl = async (input: string | URL | Request, options: RequestInit = {}) => {
+      calls.push({ url: String(input), options });
+      return new Response(JSON.stringify({ head: { sha: commitB } }), { status: 200 });
+    };
+    const env = {
+      GITHUB_API_URL: 'https://api.github.com',
+      GITHUB_REPOSITORY: 'pbroom/spfx-kit',
+      GITHUB_TOKEN: 'test-token',
+      CANDIDATE_SHA: commitA,
+      PR_NUMBER: '88',
+      RUN_URL: 'https://github.com/pbroom/spfx-kit/actions/runs/123',
+      VALIDATION_OUTCOME: 'success'
+    };
+
+    await expect(publishTerminalStatus({ env, fetchImpl })).resolves.toMatchObject({ state: 'stale' });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain('/pulls/88');
+  });
+
+  it('structurally keeps the trusted workflow on base code and candidate Git data', async () => {
+    const source = await readFile(path.join(process.cwd(), '.github', 'workflows', 'evidence-history.yml'), 'utf8');
+    const workflow = parseYaml(source) as {
+      on: Record<string, { branches: string[]; types: string[] }>;
+      permissions: Record<string, string>;
+      jobs: Record<
+        string,
+        {
+          'runs-on': string;
+          steps: Array<{
+            name?: string;
+            uses?: string;
+            if?: string;
+            env?: Record<string, string>;
+            run?: string;
+            with?: Record<string, string | number | boolean>;
+          }>;
+        }
+      >;
+    };
+
+    expect(Object.keys(workflow.on)).toEqual(['pull_request_target']);
+    expect(workflow.on.pull_request_target).toEqual({
+      branches: ['main'],
+      types: ['opened', 'synchronize', 'reopened']
+    });
+    expect(workflow.permissions).toEqual({ contents: 'read', 'pull-requests': 'read', statuses: 'write' });
+
+    const job = workflow.jobs['verify-history'];
+    expect(job['runs-on']).toBe('ubuntu-24.04');
+    const checkout = job.steps[0];
+    expect(checkout.uses).toBe('actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1');
+    expect(checkout.with).toEqual({
+      ref: '${{ github.event.pull_request.base.sha }}',
+      'fetch-depth': 1,
+      'persist-credentials': false
+    });
+
+    const setupNode = job.steps[1];
+    expect(setupNode.uses).toBe('actions/setup-node@820762786026740c76f36085b0efc47a31fe5020');
+    expect(setupNode.with).toEqual({ 'node-version-file': '.github/evidence-trust/v1/node-version' });
+
+    const steps = new Map(job.steps.filter((step) => step.name).map((step) => [step.name, step]));
+    const pending = steps.get('Mark candidate history validation pending');
+    expect(pending?.env?.CANDIDATE_SHA).toBe('${{ github.event.pull_request.head.sha }}');
+    expect(pending?.run).toBe('node .github/evidence-trust/v1/publish-status.mjs pending');
+
+    const install = steps.get('Install trusted validator dependencies');
+    expect(install?.run).toContain('[[ "$(node --version)" == v22.22.3 ]]');
+    expect(install?.run).toContain('[[ "$(npm --version)" == 10.9.8 ]]');
+    expect(install?.run).toContain('npm ci --ignore-scripts --prefix .github/evidence-trust/v1');
+
+    const fetchCandidate = steps.get('Fetch candidate as inert Git data');
+    expect(fetchCandidate?.env).toEqual({
+      EXPECTED_HEAD_SHA: '${{ github.event.pull_request.head.sha }}',
+      PR_NUMBER: '${{ github.event.pull_request.number }}'
+    });
+    expect(fetchCandidate?.run).toContain('+refs/pull/${PR_NUMBER}/head:${candidate_ref}');
+    expect(fetchCandidate?.run).toContain('[[ "$actual_sha" == "$EXPECTED_HEAD_SHA" ]]');
+
+    const validate = steps.get('Validate candidate with trusted base code');
+    expect(validate?.env).toEqual({
+      BASE_SHA: '${{ github.event.pull_request.base.sha }}',
+      CANDIDATE_SHA: '${{ github.event.pull_request.head.sha }}',
+      EVIDENCE_REQUIRE_ISOLATED_RUNTIME: '1',
+      EVIDENCE_TRUST_NPM_VERSION: '10.9.8'
+    });
+    expect(validate?.run).toContain('node .github/evidence-trust/v1/validate-shadcn-evidence.mjs');
+    expect(validate?.run).toContain('--candidate-ref "$CANDIDATE_SHA"');
+
+    const terminal = steps.get('Publish candidate-head history status');
+    expect(terminal?.if).toBe('${{ always() }}');
+    expect(terminal?.env?.CANDIDATE_SHA).toBe('${{ github.event.pull_request.head.sha }}');
+    expect(terminal?.env?.PR_NUMBER).toBe('${{ github.event.pull_request.number }}');
+    expect(terminal?.env?.VALIDATION_OUTCOME).toBe('${{ steps.validate.outcome }}');
+    expect(terminal?.run).toBe('node .github/evidence-trust/v1/publish-status.mjs terminal');
   });
 });

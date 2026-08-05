@@ -24,6 +24,11 @@ operator records values from the proof that actually ran.
 - `baseline-artifacts-2026-08-05.md` records clean exact-head local builds and
   emitted-package identities; it does not claim hosted, remote, SharePoint, or
   rollback proof.
+- `bootstrap-main-ruleset.md` defines the guarded post-merge probe and required
+  candidate-head status procedure; it grants no merge or settings authority.
+- `trust-base.v1.json` binds the reviewed workflow tree, isolated validator
+  runtime tree, schema, status context, and exact Node/npm/Ajv closure. After
+  bootstrap, its bytes and every protected tree entry are immutable under v1.
 - `release-sets/<releaseSetId>.json` is a write-once release-set manifest. Its
   filename must exactly match `releaseSetId`.
 
@@ -121,21 +126,52 @@ code cannot establish append-only trust. `.github/workflows/evidence-history.yml
 therefore uses `pull_request_target` solely for the narrow history check. It:
 
 1. checks out the exact base commit;
-2. installs dependencies from the base lockfile with lifecycle scripts disabled;
+2. asserts Node `22.22.3` and npm `10.9.8`, then installs only the isolated
+   `.github/evidence-trust/v1` dependency closure from its integrity-bearing
+   base lockfile with lifecycle scripts disabled;
 3. fetches and verifies the event's PR-head SHA without checking it out; and
 4. executes the base validator and base schema with `--candidate-ref`, reading
-   candidate schema, ledger, and manifests only through Git object commands.
+   candidate protected trees, schema, ledger, and manifests only through Git
+   object commands; and
+5. uses the dependency-free, protected status publisher to write pending and
+   terminal state to that exact candidate SHA.
 
 It never executes candidate JavaScript, package scripts, actions, schemas, or
-configuration and has only `contents: read`. The stable job
-`Evidence governance / Verify append-only evidence` must be required by the
-`main` branch ruleset after the bootstrap merge.
+configuration. The entire `.github/workflows` tree and the exact
+`.github/evidence-trust/v1` tree are base-anchored: candidate additions,
+deletions, edits, symlinks, or mode changes fail. This prevents a candidate from
+adding another GitHub Actions workflow that publishes the reserved v1 context,
+or redirecting npm/Node resolution through a shrinkwrap or nearer
+`node_modules`. Root `.nvmrc`, `package.json`, and lockfiles remain outside this
+closure and may evolve independently.
+
+The trusted workflow has `contents: read` plus the narrow `statuses: write`
+permission needed to publish `spfx-kit/evidence-history-v1` on the exact
+verified PR-head SHA. The status is set to failure from an `always()` step when
+trusted validation does not finish successfully. Require that candidate-head
+status—not the `pull_request_target` job check—after the bootstrap merge.
+
+This distinction is mandatory because `pull_request_target` executes in the
+default-branch context and its `GITHUB_SHA` is the default-branch commit. The
+workflow verifies `github.event.pull_request.head.sha`, fetches that exact
+commit only as inert Git data, and publishes the terminal status to that same
+SHA. Follow [`bootstrap-main-ruleset.md`](bootstrap-main-ruleset.md) and prove
+the behavior on a post-merge probe PR before activating a requirement.
 
 This pull request introduces the trusted workflow, so the workflow cannot
 protect its own bootstrap: `pull_request_target` executes only workflows already
 present on the default branch. Do not claim the trusted job ran for this PR.
-Merge the empty-ledger bootstrap under human review, make the stable job
-required, and only then accept evidence rows.
+Merge the empty-ledger bootstrap under human review, require the stable
+candidate-head status, and only then accept evidence rows.
+
+An active v1 workflow, runtime tree, schema, or trust manifest is never edited
+in place. A change adds a parallel v2 runtime and a new
+`spfx-kit/evidence-history-v2` context, proves positive and negative probes,
+requires v2 alongside v1, and removes the v1 requirement only after v2 is
+effective. The retained v1 bytes remain available to validate historical
+evidence. Because GitHub Actions shares one App identity across workflows, this
+transition requires a narrowly authorized repository-policy change unless an
+independently controlled status App is introduced.
 
 ## Runtime and delivery boundaries
 

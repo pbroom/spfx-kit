@@ -19,10 +19,13 @@ passing by this ADR.
 
 The bootstrap PR keeps the ledger empty. A base-trusted
 `pull_request_target` check cannot protect the PR that first introduces its
-workflow and validator. After that PR is merged and the stable trusted check is
-required by repository policy, a later stacked PR may add the first release-set
-manifest and evidence rows. Bootstrap validation is reported as ordinary PR CI,
-not appended as self-attested immutable evidence.
+workflow and validator. Its job also runs in the default-branch context rather
+than on the candidate SHA. After this PR is merged, a probe PR must prove the
+trusted workflow publishes terminal commit status
+`spfx-kit/evidence-history-v1` on the exact verified candidate head. Only after
+that candidate-head status is required by repository policy may a later stacked
+PR add the first release-set manifest and evidence rows. Bootstrap validation is
+reported as ordinary PR CI, not appended as self-attested immutable evidence.
 
 ## Context
 
@@ -31,6 +34,40 @@ SPFx Kit has four distinct export products: `single`, `cdn`, `staging-cdn`, and 
 The governance contract therefore needs to preserve exact artifact identity, distinguish each proof event, keep private operational data out of public records, prevent mixed or mutable resource generations, and require a real non-production restoration drill before rollback is described as proven.
 
 ## Decision
+
+### 0. Base-anchored candidate-head gate
+
+The stable required context is `spfx-kit/evidence-history-v1`, published on the
+exact PR-head commit by a `pull_request_target` workflow that checks out and
+executes only base code. The v1 trust base consists of:
+
+- the complete `.github/workflows` Git tree, including entry paths, blob type,
+  file mode, and bytes;
+- the complete `.github/evidence-trust/v1` Git tree, containing the canonical
+  validator, dependency-free status publisher, exact Node/npm configuration,
+  and a minimal integrity-bearing Ajv lockfile;
+- the exact `schema.v1.json` mode and bytes; and
+- `trust-base.v1.json`, which binds those trees, the reserved context, and the
+  expected runtime versions.
+
+Once v1 is active on `main`, candidate additions, deletions, edits, symlinks, or
+mode changes anywhere in either protected tree fail. The isolated runtime
+prevents root `npm-shrinkwrap.json`, root dependency changes, or nearer tracked
+modules from redirecting the trusted import. Root monorepo dependency files are
+deliberately not frozen.
+
+The trust manifest cannot authorize its own replacement because the base
+validator compares candidate manifest and tree bytes directly with the trusted
+base before accepting history. Bootstrap is the only unprotected introduction
+and therefore requires the human review and post-merge probes in the bootstrap
+runbook.
+
+An active version is never mutated in place or assigned a reused status
+context. A transition adds v2 beside v1, validates retained history, proves
+positive and negative candidate-head probes, requires v2 alongside v1, and
+removes the v1 requirement only after v2 is effective. Changing the frozen
+workflow tree requires a narrowly authorized repository-policy transition, or
+an independently controlled GitHub App that can own the status identity.
 
 ### 1. Atomic evidence rows
 

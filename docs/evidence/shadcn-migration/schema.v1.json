@@ -54,7 +54,7 @@
         "name": { "const": "spfx-kit-shadcn-evidence" },
         "repository": { "const": "pbroom/spfx-kit" },
         "commitSha": { "$ref": "#/$defs/gitSha" },
-        "scriptPath": { "const": "scripts/validate-shadcn-evidence.mjs" },
+        "scriptPath": { "const": ".github/evidence-trust/v1/validate-shadcn-evidence.mjs" },
         "schemaSha256": { "$ref": "#/$defs/sha256" }
       }
     },
