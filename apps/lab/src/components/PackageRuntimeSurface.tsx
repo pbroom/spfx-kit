@@ -19,7 +19,6 @@ interface PackageRuntimeSurfaceProps {
   selectionRevision?: number;
   selected?: PackageRuntimeSelection;
   standaloneContent?: React.ReactNode;
-  onOpenBucket?: () => void;
 }
 
 export type PackageDescriptorState =
@@ -36,8 +35,7 @@ export function PackageRuntimeSurface({
   mode,
   selectionRevision = 0,
   selected,
-  standaloneContent,
-  onOpenBucket = () => undefined
+  standaloneContent
 }: PackageRuntimeSurfaceProps): JSX.Element {
   const [descriptorState, setDescriptorState] = React.useState<PackageDescriptorState>({ status: 'standalone' });
   const [loadAttempt, setLoadAttempt] = React.useState(0);
@@ -92,7 +90,6 @@ export function PackageRuntimeSurface({
         descriptorLoading={descriptorLoading}
         mode={mode}
         smoke={smokeStatus}
-        onOpenBucket={onOpenBucket}
         onRetry={retry}
       />
       <div className={`preview-canvas ${mode === 'cdn' && smokeStatus.status === 'ready' ? 'preview-canvas--cdn-ready' : ''}`}>

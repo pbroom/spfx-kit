@@ -108,7 +108,8 @@ describe('PackageDependencyPanel', () => {
     expect(container.textContent).toContain(mockOrigin);
     expect(container.textContent).toContain(namespacePath);
     expect(container.textContent).toContain(descriptor.delivery.releaseManifestUrl);
-    expect(container.textContent).toContain(descriptor.assets[0].sha256);
+    expect(container.textContent).not.toContain(descriptor.assets[0].sha256);
+    expect(container.textContent).not.toContain(descriptor.assets[1].sha256);
     expect(container.textContent).toContain('Hash and size verified');
     expect(container.textContent).toContain('Published and verified');
     expect(container.textContent).toContain('@microsoft/sp-webpart-base');
@@ -130,9 +131,12 @@ describe('PackageDependencyPanel', () => {
       'Origin'
     ]);
     expect(container.querySelectorAll('.package-resource-table-frame[role="region"][tabindex="0"]')).toHaveLength(2);
-    expect(container.querySelector('.package-dependency-panel__bucket-button')?.textContent).toBe('Local CDN bucket');
     expect(assetRow('strings.js').getAttribute('data-asset-status')).toBe('loaded');
     expect(assetRow('hello-card.js').getAttribute('data-asset-status')).toBe('loading');
+    expect(assetRow('strings.js').querySelector('.package-resource-table__path')?.textContent).toBe('strings.js');
+    expect(assetRow('strings.js').querySelector('.package-resource-status--loaded')?.textContent).toBe(
+      'Delivered — top-level code executed'
+    );
     expect(assetRow('strings.js').textContent).toContain('Delivered — top-level code executed');
     expect(assetRow('hello-card.js').textContent).toContain('Loading from mock CDN');
 

@@ -124,8 +124,8 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(preview).toBeVisible();
   await expect(preview.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Select web part' })).toHaveText('Hello Card');
-  await expect(page.getByRole('radio', { name: 'Standalone' })).toBeChecked();
-  await expect(page.getByRole('radio', { name: 'CDN' })).not.toBeChecked();
+  await expect(page.getByRole('tab', { name: 'Standalone', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'false');
   const packageResources = page.getByRole('region', { name: 'Package resources' });
   await expect(packageResources).toContainText('No mock-CDN browser check is active');
   await expect(packageResources).toHaveAttribute('data-package-resource-state', 'standalone');
@@ -144,28 +144,49 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(page.locator('main.lab-shell')).toHaveClass(/lab-shell--dark/);
 });
 
-test('places package mode before display mode and keeps the controls independent', async ({ page }) => {
+test('orders the segmented package mode and bucket controls after export while keeping display mode independent', async ({
+  page
+}) => {
   await page.goto('/');
 
-  const packageModes = page.getByRole('radiogroup', { name: 'App package mode' });
+  const exportButton = page.getByRole('button', { name: 'Export package' });
+  const packageModes = page.getByRole('tablist', { name: 'App package mode' });
+  const bucketButton = page.getByRole('button', { name: 'Local CDN bucket' });
   const displayModes = page.getByRole('tablist', { name: 'Lab display mode' });
-  const packageModesBox = await packageModes.boundingBox();
-  const displayModesBox = await displayModes.boundingBox();
-  expect(packageModesBox).not.toBeNull();
-  expect(displayModesBox).not.toBeNull();
-  expect(packageModesBox!.x + packageModesBox!.width).toBeLessThanOrEqual(displayModesBox!.x);
+  const [exportBox, packageBox, bucketBox] = await Promise.all([
+    exportButton.boundingBox(),
+    packageModes.boundingBox(),
+    bucketButton.boundingBox()
+  ]);
+  expect(exportBox).not.toBeNull();
+  expect(packageBox).not.toBeNull();
+  expect(bucketBox).not.toBeNull();
+  expect(exportBox!.x + exportBox!.width).toBeLessThanOrEqual(packageBox!.x);
+  expect(packageBox!.x + packageBox!.width).toBeLessThanOrEqual(bucketBox!.x);
+  await expect(packageModes).toHaveClass(/lab-mode-tabs/);
+  await expect(displayModes).toHaveClass(/lab-mode-tabs/);
+
+  await page.getByRole('tab', { name: 'CDN', exact: true }).focus();
+  await page.keyboard.press('ArrowLeft');
+  const standalonePackageTab = page.getByRole('tab', { name: 'Standalone', exact: true });
+  await expect(standalonePackageTab).toHaveAttribute('aria-selected', 'true');
+  await standalonePackageTab.press('ArrowRight');
+  const cdnPackageTab = page.getByRole('tab', { name: 'CDN', exact: true });
+  await expect(cdnPackageTab).toBeFocused();
+  await cdnPackageTab.press('Space');
+  await expect(cdnPackageTab).toHaveAttribute('aria-selected', 'true');
 
   await page.getByRole('tab', { name: 'Viewer' }).click();
-  await expect(page.getByRole('radio', { name: 'Standalone' })).toBeChecked();
+  await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(
     page.getByRole('region', { name: 'Web part preview area' }).getByRole('heading', { name: 'Hello Card' })
-  ).toBeVisible();
+  ).toHaveCount(0);
   await page.getByRole('tab', { name: 'Edit' }).click();
-  await expect(page.getByRole('radio', { name: 'Standalone' })).toBeChecked();
+  await page.getByRole('tab', { name: 'Standalone', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Standalone', exact: true })).toHaveAttribute('aria-selected', 'true');
 
-  await page.setViewportSize({ width: 800, height: 700 });
-  await expect(page.locator('.package-mode-option .fui-Radio__label', { hasText: 'Standalone' })).toBeVisible();
-  await expect(page.locator('.package-mode-option .fui-Radio__label', { hasText: 'CDN' })).toBeVisible();
+  await bucketButton.click();
+  await expect(page.getByRole('dialog', { name: 'Local CDN bucket' })).toBeVisible();
 });
 
 test('opens a distinct accessible Local CDN inventory table with a truthful empty and reserved state', async ({ page }) => {
@@ -190,8 +211,7 @@ test('opens a distinct accessible Local CDN inventory table with a truthful empt
   });
 
   await page.goto('/');
-  const packageResources = page.getByRole('region', { name: 'Package resources' });
-  await packageResources.getByRole('button', { name: 'Local CDN bucket' }).click();
+  await page.getByRole('button', { name: 'Local CDN bucket' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Local CDN bucket' });
   await expect(dialog).toBeVisible();
@@ -272,7 +292,7 @@ test('keeps controls fixed while a populated bucket inventory scrolls independen
   });
 
   await page.goto('/');
-  await page.getByRole('region', { name: 'Package resources' }).getByRole('button', { name: 'Local CDN bucket' }).click();
+  await page.getByRole('button', { name: 'Local CDN bucket' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Local CDN bucket' });
   const controls = dialog.locator('.local-cdn-admin__controls');
@@ -310,7 +330,7 @@ test('distinguishes a legacy recorded release from anchored and deeply verified 
   });
 
   await page.goto('/');
-  await page.getByRole('region', { name: 'Package resources' }).getByRole('button', { name: 'Local CDN bucket' }).click();
+  await page.getByRole('button', { name: 'Local CDN bucket' }).click();
 
   const legacyRelease = page.getByRole('dialog', { name: 'Local CDN bucket' }).locator(`[data-release-id="${legacyReleaseId}"]`);
   await expect(legacyRelease).toContainText('Legacy manifest recorded · verify on selection');
@@ -340,7 +360,7 @@ test('identifies the exact release behind an invalid selected pointer', async ({
   });
 
   await page.goto('/');
-  await page.getByRole('region', { name: 'Package resources' }).getByRole('button', { name: 'Local CDN bucket' }).click();
+  await page.getByRole('button', { name: 'Local CDN bucket' }).click();
 
   const pointer = page.getByRole('dialog', { name: 'Local CDN bucket' }).locator('[data-pointer-app="hello-card-spfx"]');
   await expect(pointer).toContainText('missing-release.1');
@@ -386,11 +406,11 @@ test('explicit bucket selection reloads the active CDN descriptor without standa
   });
 
   await page.goto('/');
-  await page.getByRole('radio', { name: 'CDN' }).click();
+  await page.getByRole('tab', { name: 'CDN', exact: true }).click();
   const frame = page.locator('.preview-frame');
   await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-admin-a');
 
-  await page.getByRole('region', { name: 'Package resources' }).getByRole('button', { name: 'Local CDN bucket' }).click();
+  await page.getByRole('button', { name: 'Local CDN bucket' }).click();
   const dialog = page.getByRole('dialog', { name: 'Local CDN bucket' });
   await dialog.getByRole('combobox', { name: 'Release used by Lab CDN mode' }).click();
   await page.getByRole('option', { name: /hello-card-spfx · Release B/ }).click();
@@ -399,7 +419,7 @@ test('explicit bucket selection reloads the active CDN descriptor without standa
   await expect(dialog.getByRole('status')).toContainText('Selected release updated');
   await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-admin-b');
   await dialog.getByRole('button', { name: 'Close Local CDN bucket' }).click();
-  await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+  await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
   expect(selectedBodies).toEqual([{ appId: 'hello-card-spfx', releaseId: '1.2.3-admin-b' }]);
   expect(descriptorRequests).toBeGreaterThanOrEqual(2);
@@ -501,7 +521,7 @@ test('checks the selected staged scripts without invoking the package or renderi
   const frame = page.locator('.preview-frame');
   const packageResources = page.getByRole('region', { name: 'Package resources' });
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
-  await page.getByRole('radio', { name: 'CDN' }).click();
+  await page.getByRole('tab', { name: 'CDN', exact: true }).click();
 
   await expect(frame.getByRole('status')).toContainText('Checking mock-CDN delivery');
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
@@ -536,6 +556,17 @@ test('checks the selected staged scripts without invoking the package or renderi
     'data-asset-status',
     'loaded'
   );
+  const deliveredRow = packageResources.locator('[data-asset-path="hello-card-web-part.js"]');
+  const deliveredStatus = deliveredRow.locator('.package-resource-status--loaded');
+  const deliveredPath = deliveredRow.locator('.package-resource-table__path');
+  await expect(deliveredStatus).toContainText('Delivered — top-level code executed');
+  await expect(deliveredStatus).toHaveCSS('border-top-width', '0px');
+  await expect(deliveredStatus).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(deliveredRow).not.toContainText('SHA-256');
+  await expect(deliveredRow).not.toContainText('a'.repeat(64));
+  await expect
+    .poll(() => deliveredPath.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)))
+    .toBeGreaterThanOrEqual(11);
   await expect(packageResources).toContainText('2/2 delivered');
   const stagedResources = packageResources.locator('.package-resource-group--primary .package-resource-table-frame');
   await expect(stagedResources).toBeVisible();
@@ -552,13 +583,25 @@ test('checks the selected staged scripts without invoking the package or renderi
   expect(assetRequests.every((requestUrl) => new URL(requestUrl).origin === syntheticMockCdnOrigin)).toBe(true);
 
   await page.getByRole('tab', { name: 'Viewer' }).click();
-  await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+  await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(frame).toHaveAttribute('data-package-artifact', '1.2.3-test.abc123');
   await expect(packageResources).toContainText('2/2 delivered');
   await expect(page.locator('.preview-canvas')).toBeHidden();
 
   await page.setViewportSize({ width: 520, height: 720 });
   await expect(packageResources).toBeVisible();
+  const previewToolbar = page.locator('.lab-toolbar--preview');
+  const optionsPanel = page.getByRole('complementary', { name: 'Options panel' });
+  const [toolbarBox, optionsBox] = await Promise.all([previewToolbar.boundingBox(), optionsPanel.boundingBox()]);
+  expect(toolbarBox).not.toBeNull();
+  expect(optionsBox).not.toBeNull();
+  expect(toolbarBox!.height).toBe(40);
+  expect(toolbarBox!.y + toolbarBox!.height).toBeLessThanOrEqual(optionsBox!.y);
+  await expect.poll(() => previewToolbar.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await expect(page.getByRole('tablist', { name: 'App package mode' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Local CDN bucket' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Viewer' }).focus();
+  await expect(page.getByRole('tab', { name: 'Viewer' })).toBeFocused();
   await expect.poll(() => stagedResources.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   const stagedScroll = await stagedResources.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
@@ -570,7 +613,7 @@ test('checks the selected staged scripts without invoking the package or renderi
   expect(accessibility.violations).toEqual([]);
   await expect(page.getByRole('button', { name: 'Local CDN bucket' })).toBeVisible();
   await page.getByRole('tab', { name: 'Edit' }).click();
-  await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+  await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(packageResources).toHaveClass(/package-dependency-panel--workspace/);
 });
 
@@ -651,7 +694,7 @@ test('keeps completed evidence and marks a blocked staged asset failed without f
   await page.goto('/');
   const frame = page.locator('.preview-frame');
   const packageResources = page.getByRole('region', { name: 'Package resources' });
-  await page.getByRole('radio', { name: 'CDN' }).click();
+  await page.getByRole('tab', { name: 'CDN', exact: true }).click();
 
   await expect(frame.getByRole('alert')).toContainText('Mock-CDN delivery or staged-script execution failed');
   await expect(packageResources.locator('[data-asset-path="loaded-before-failure.js"]')).toHaveAttribute(
@@ -659,8 +702,12 @@ test('keeps completed evidence and marks a blocked staged asset failed without f
     'loaded'
   );
   await expect(packageResources.locator('[data-asset-path="blocked-entry.js"]')).toHaveAttribute('data-asset-status', 'failed');
+  await expect(packageResources.locator('[data-asset-path="blocked-entry.js"] .package-resource-status--failed')).toHaveCSS(
+    'border-top-width',
+    '1px'
+  );
   await expect(packageResources).toHaveAttribute('data-package-resource-state', 'error');
-  await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+  await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
 });
 
@@ -674,12 +721,12 @@ test('shows a clear CDN error without falling back to the standalone package', a
   });
 
   await page.goto('/');
-  await page.getByRole('radio', { name: 'CDN' }).click();
+  await page.getByRole('tab', { name: 'CDN', exact: true }).click();
 
   const alert = page.getByRole('alert');
   await expect(alert).toContainText('CDN resources unavailable');
   await expect(alert).toContainText('No validated staging CDN export exists for hello-card-spfx.');
-  await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+  await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.preview-frame')).toHaveAttribute('data-package-mode', 'cdn');
   await expect(page.locator('.preview-frame').getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Package resources' })).toHaveAttribute('data-package-resource-state', 'error');
@@ -740,12 +787,12 @@ test('rejects a same-origin mock CDN descriptor without requesting assets or fal
     });
   });
 
-  await page.getByRole('radio', { name: 'CDN' }).click();
+  await page.getByRole('tab', { name: 'CDN', exact: true }).click();
 
   const alert = page.getByRole('alert');
   await expect(alert).toContainText('CDN resources unavailable');
   await expect(alert).toContainText('separate credential-free http://127.0.0.1 origin');
-  await expect(page.getByRole('radio', { name: 'CDN' })).toBeChecked();
+  await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.preview-frame').getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
   expect(assetRequestCount).toBe(0);
 });
