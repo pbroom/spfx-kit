@@ -541,6 +541,7 @@ test('checks the selected staged scripts without invoking the package or renderi
   await expect(packageResources).toContainText('@microsoft/sp-webpart-base');
   await expect(packageResources).toContainText('Deferred — SharePoint loader required');
   await expect(packageResources).toContainText('do not imply that arbitrary npm packages are hosted on a CDN');
+  await expectPlainTextResourceStatuses(packageResources);
   releaseEntryAsset();
   await expect(packageResources).toHaveAttribute('data-package-resource-state', 'ready');
   await expect(page.getByText('Local mock-CDN smoke check passed', { exact: true })).toHaveCount(0);
@@ -560,8 +561,7 @@ test('checks the selected staged scripts without invoking the package or renderi
   const deliveredStatus = deliveredRow.locator('.package-resource-status--loaded');
   const deliveredPath = deliveredRow.locator('.package-resource-table__path');
   await expect(deliveredStatus).toContainText('Delivered — top-level code executed');
-  await expect(deliveredStatus).toHaveCSS('border-top-width', '0px');
-  await expect(deliveredStatus).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expectPlainTextResourceStatuses(packageResources);
   await expect(deliveredRow).not.toContainText('SHA-256');
   await expect(deliveredRow).not.toContainText('a'.repeat(64));
   await expect
@@ -590,6 +590,7 @@ test('checks the selected staged scripts without invoking the package or renderi
 
   await page.setViewportSize({ width: 520, height: 720 });
   await expect(packageResources).toBeVisible();
+  await expectPlainTextResourceStatuses(packageResources);
   const previewToolbar = page.locator('.lab-toolbar--preview');
   const optionsPanel = page.getByRole('complementary', { name: 'Options panel' });
   const [toolbarBox, optionsBox] = await Promise.all([previewToolbar.boundingBox(), optionsPanel.boundingBox()]);
@@ -702,10 +703,7 @@ test('keeps completed evidence and marks a blocked staged asset failed without f
     'loaded'
   );
   await expect(packageResources.locator('[data-asset-path="blocked-entry.js"]')).toHaveAttribute('data-asset-status', 'failed');
-  await expect(packageResources.locator('[data-asset-path="blocked-entry.js"] .package-resource-status--failed')).toHaveCSS(
-    'border-top-width',
-    '1px'
-  );
+  await expectPlainTextResourceStatuses(packageResources);
   await expect(packageResources).toHaveAttribute('data-package-resource-state', 'error');
   await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
@@ -1335,4 +1333,46 @@ function managedAppFixtures(
       }
     }
   ];
+}
+
+async function expectPlainTextResourceStatuses(container: Locator): Promise<void> {
+  const statuses = container.locator('.package-resource-status');
+  expect(await statuses.count()).toBeGreaterThan(0);
+  const styles = await statuses.evaluateAll((elements) =>
+    elements.map((element) => {
+      const style = getComputedStyle(element);
+      return {
+        backgroundColor: style.backgroundColor,
+        borderBottomWidth: style.borderBottomWidth,
+        borderLeftWidth: style.borderLeftWidth,
+        borderRadius: style.borderRadius,
+        borderRightWidth: style.borderRightWidth,
+        borderTopWidth: style.borderTopWidth,
+        boxShadow: style.boxShadow,
+        display: style.display,
+        fontWeight: style.fontWeight,
+        paddingBottom: style.paddingBottom,
+        paddingLeft: style.paddingLeft,
+        paddingRight: style.paddingRight,
+        paddingTop: style.paddingTop
+      };
+    })
+  );
+  for (const style of styles) {
+    expect(style).toEqual({
+      backgroundColor: 'rgba(0, 0, 0, 0)',
+      borderBottomWidth: '0px',
+      borderLeftWidth: '0px',
+      borderRadius: '0px',
+      borderRightWidth: '0px',
+      borderTopWidth: '0px',
+      boxShadow: 'none',
+      display: 'inline',
+      fontWeight: '400',
+      paddingBottom: '0px',
+      paddingLeft: '0px',
+      paddingRight: '0px',
+      paddingTop: '0px'
+    });
+  }
 }
