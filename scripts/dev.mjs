@@ -49,12 +49,12 @@ export function resolveDevConfig(environment = process.env) {
   if (publicCdnOrigin === cdnOrigin && cdnListenPort !== getEffectiveOriginPort(cdnUrl)) {
     throw new Error('SPFX_KIT_MOCK_CDN_LISTEN_PORT must match SPFX_KIT_MOCK_CDN_ORIGIN without a public CDN origin.');
   }
-  if (isUnspecifiedListenHost(labHost)) {
+  if (!isLoopbackHostname(normalizedLabHost)) {
     if (publicCdnOrigin === cdnOrigin) {
-      throw new Error('SPFX_LAB_HOST=0.0.0.0 requires an HTTPS SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN.');
+      throw new Error('An externally bound SPFX_LAB_HOST requires an HTTPS SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN.');
     }
     if (!isForwardedHttpsOrigin(labOrigin)) {
-      throw new Error('SPFX_LAB_HOST=0.0.0.0 requires an HTTPS SPFX_KIT_MOCK_CDN_LAB_ORIGIN.');
+      throw new Error('An externally bound SPFX_LAB_HOST requires an HTTPS SPFX_KIT_MOCK_CDN_LAB_ORIGIN.');
     }
     if (labOrigin === publicCdnOrigin) {
       throw new Error(
@@ -80,7 +80,12 @@ export function resolveDevConfig(environment = process.env) {
 
 function isForwardedHttpsOrigin(value) {
   const url = new URL(value);
-  return url.protocol === 'https:' && !isUnspecifiedHostname(url.hostname) && !isLoopbackHostname(url.hostname);
+  return url.protocol === 'https:' && isRoutableForwardedHostname(url.hostname);
+}
+
+function isRoutableForwardedHostname(value) {
+  const host = String(value).trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return !isUnspecifiedHostname(host) && !isLoopbackHostname(host) && !/^25[0-5](?:\.25[0-5]){3}$/.test(host) && !/^(?:22[4-9]|23\d)\./.test(host) && !/^ff[0-9a-f]{2}:/i.test(host);
 }
 
 function getEffectiveOriginPort(url) {

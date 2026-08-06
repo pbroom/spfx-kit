@@ -26,6 +26,7 @@ const maximumExportEntries = 5_000;
 interface LocalCdnAdminOptions {
   bucketRoot?: string;
   mockCdnOrigin?: string;
+  labOrigin?: string;
 }
 
 interface ApprovedPublishSource {
@@ -44,7 +45,8 @@ interface ApprovedPublishSource {
 export function spfxLocalCdnAdminApi(): Plugin {
   const options: LocalCdnAdminOptions = {
     bucketRoot: process.env.SPFX_KIT_MOCK_CDN_ROOT || DEFAULT_MOCK_CDN_BUCKET_PATH,
-    mockCdnOrigin: process.env.SPFX_KIT_MOCK_CDN_ORIGIN || DEFAULT_MOCK_CDN_ORIGIN
+    mockCdnOrigin: process.env.SPFX_KIT_MOCK_CDN_ORIGIN || DEFAULT_MOCK_CDN_ORIGIN,
+    labOrigin: process.env.SPFX_KIT_MOCK_CDN_LAB_ORIGIN || 'http://127.0.0.1:5173'
   };
   return {
     name: 'spfx-kit-local-cdn-admin-api',
@@ -68,7 +70,7 @@ export function createLocalCdnAdminRequestHandler(workspaceRoot: string, options
     }
     res.setHeader('Cache-Control', 'no-store');
 
-    if (!isLoopbackAdminRequest(req)) {
+    if (!isLoopbackAdminRequest(req, options.labOrigin)) {
       res.statusCode = 403;
       sendJson(res, { error: 'Local CDN administration is available only from the loopback Lab.' });
       return;
@@ -302,13 +304,16 @@ async function assertRealDirectoryWithin(root: string, directory: string, label:
   }
 }
 
-function isLoopbackAdminRequest(req: IncomingMessage): boolean {
+function isLoopbackAdminRequest(req: IncomingMessage, configuredLabOrigin?: string): boolean {
   const host = req.headers.host;
   if (!host) {
     return false;
   }
   try {
-    if (new URL(`http://${host}`).hostname !== '127.0.0.1') {
+    const configuredUrl = new URL(configuredLabOrigin || 'http://127.0.0.1:5173');
+    const requestUrl = new URL(`http://${host}`);
+    const isLoopbackLab = configuredUrl.hostname === '127.0.0.1';
+    if (isLoopbackLab ? requestUrl.hostname !== '127.0.0.1' : host.toLowerCase() !== configuredUrl.host.toLowerCase()) {
       return false;
     }
   } catch {
