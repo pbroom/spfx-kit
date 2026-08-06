@@ -27,7 +27,8 @@ export function resolveDevConfig(environment = process.env) {
 
   const labPort = normalizePort(environment.SPFX_LAB_PORT || DEFAULT_LAB_PORT, 'SPFX_LAB_PORT');
   const labOrigin = normalizeMockCdnLabOrigin(environment.SPFX_KIT_MOCK_CDN_LAB_ORIGIN || `http://127.0.0.1:${labPort}`);
-  if (new URL(labOrigin).hostname === '127.0.0.1' && Number(new URL(labOrigin).port) !== labPort) {
+  const labOriginUrl = new URL(labOrigin);
+  if (labOriginUrl.hostname === '127.0.0.1' && getEffectiveOriginPort(labOriginUrl) !== labPort) {
     throw new Error('SPFX_KIT_MOCK_CDN_LAB_ORIGIN must use the configured SPFX_LAB_PORT.');
   }
 
@@ -42,7 +43,7 @@ export function resolveDevConfig(environment = process.env) {
   if (cdnListenPort === labPort) {
     throw new Error('The SPFx Lab and local CDN must use different ports.');
   }
-  if (labHost === '0.0.0.0') {
+  if (isUnspecifiedListenHost(labHost)) {
     if (publicCdnOrigin === cdnOrigin) {
       throw new Error('SPFX_LAB_HOST=0.0.0.0 requires an HTTPS SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN.');
     }
@@ -76,6 +77,13 @@ function isForwardedHttpsOrigin(value) {
   return url.protocol === 'https:' && !isUnspecifiedHostname(url.hostname) && !isLoopbackHostname(url.hostname);
 }
 
+function getEffectiveOriginPort(url) {
+  if (url.port) {
+    return Number(url.port);
+  }
+  return url.protocol === 'https:' ? 443 : 80;
+}
+
 function normalizeListenHost(value) {
   const host = String(value).trim();
   if (!host) {
@@ -98,6 +106,10 @@ function isUnspecifiedHostname(value) {
     .toLowerCase()
     .replace(/^\[|\]$/g, '');
   return hostname === '0.0.0.0' || hostname === '::';
+}
+
+function isUnspecifiedListenHost(value) {
+  return isUnspecifiedHostname(normalizeListenHost(value));
 }
 
 function isLoopbackHostname(value) {

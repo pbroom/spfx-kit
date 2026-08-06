@@ -71,16 +71,23 @@ describe('SPFx Kit development launcher', () => {
     });
   });
 
-  it('accepts an explicit externally visible HTTPS Lab origin for cloud previews', () => {
+  it('accepts an HTTP default port after URL normalization', () => {
+    expect(resolveDevConfig({ SPFX_LAB_PORT: '80' })).toMatchObject({
+      labOrigin: 'http://127.0.0.1',
+      labPort: 80
+    });
+  });
+
+  it.each(['0.0.0.0', '::', '0'])('accepts an explicit externally visible HTTPS Lab origin for cloud previews: %s', (labHost) => {
     expect(
       resolveDevConfig({
-        SPFX_LAB_HOST: '0.0.0.0',
+        SPFX_LAB_HOST: labHost,
         SPFX_KIT_MOCK_CDN_LAB_ORIGIN: 'https://preview.example.test',
         SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN: 'https://cdn-preview.example.test',
         SPFX_KIT_MOCK_CDN_LISTEN_HOST: '0.0.0.0'
       })
     ).toMatchObject({
-      labHost: '0.0.0.0',
+      labHost,
       labOrigin: 'https://preview.example.test',
       labAllowedHost: 'preview.example.test',
       labPort: 5173,
@@ -90,8 +97,8 @@ describe('SPFx Kit development launcher', () => {
     });
   });
 
-  it('fails closed instead of sending loopback CDN URLs to cloud browsers', () => {
-    expect(() => resolveDevConfig({ SPFX_LAB_HOST: '0.0.0.0' })).toThrow('requires an HTTPS SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN');
+  it.each(['0.0.0.0', '::', '0'])('fails closed instead of sending loopback CDN URLs to cloud browsers: %s', (labHost) => {
+    expect(() => resolveDevConfig({ SPFX_LAB_HOST: labHost })).toThrow('requires an HTTPS SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN');
   });
 
   it('requires both forwarded browser origins and a non-loopback CDN listener for cloud previews', () => {
