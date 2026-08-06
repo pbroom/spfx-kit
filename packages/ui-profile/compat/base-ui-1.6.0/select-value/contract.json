@@ -1,0 +1,25 @@
+{
+  "contractVersion": "base-ui-1.6.0-select-value-react17-v1",
+  "package": "@base-ui/react",
+  "version": "1.6.0",
+  "replacement": {
+    "from": "Omit<BaseUIComponentProps<'span', SelectValueState>, 'children'>",
+    "to": "Omit<BaseUIComponentProps<'span', SelectValueState>, 'children' | 'placeholder'>"
+  },
+  "files": [
+    {
+      "installedPath": "select/value/SelectValue.d.ts",
+      "upstreamPath": "compat/base-ui-1.6.0/select-value/upstream/SelectValue.d.ts",
+      "transformedPath": "compat/base-ui-1.6.0/select-value/transformed/SelectValue.d.ts",
+      "upstreamSha256": "acd4a1daff6df3526b17094f8f30ef3c9c19c9bd5bb95c3fa46a1b8037290778",
+      "transformedSha256": "ffe2f23d80ea5c9859829d45e2540f7415f65979f5c11122d8815fd0a5c937db"
+    },
+    {
+      "installedPath": "select/value/SelectValue.d.mts",
+      "upstreamPath": "compat/base-ui-1.6.0/select-value/upstream/SelectValue.d.mts",
+      "transformedPath": "compat/base-ui-1.6.0/select-value/transformed/SelectValue.d.mts",
+      "upstreamSha256": "22469dbd699381a169d6e02d5c080ba9d94b9d6567b7a5c41cb17f505e6a4ad7",
+      "transformedSha256": "e6161cda8d353f98ae95af311fabc5ba6de9a0c6a69ba6446222961901177aeb"
+    }
+  ]
+}
