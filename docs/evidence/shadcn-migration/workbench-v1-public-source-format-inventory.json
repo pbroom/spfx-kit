@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "kind": "code-workbench-v1-public-source-format-inventory",
+  "evidenceBoundary": "Public source-format and prefixed-envelope search only. No persisted population is inferred. No tenant, site, App Catalog, managed-app, user-authored, private, licensed, browser-runtime, migration, deployment, or rollback data was inspected.",
+  "sourceRevision": {
+    "repository": "pbroom/spfx-kit",
+    "commitSha": "90bde2f30fd9db4f524583c5cad84de1063c5f21"
+  },
+  "reproduction": {
+    "node": "22.22.3",
+    "command": "node scripts/generate-workbench-v1-inventory.mjs",
+    "method": "Read the four source files from the pinned Git revision, parse and assert the public type, mode, module, and consumer bindings, derive the normalized default, and search tracked non-document files for prefixed V1 envelopes and concrete control registrations."
+  },
+  "sourceFiles": [
+    {
+      "path": "packages/code-workbench-runtime/src/index.ts",
+      "sha256": "2c524caf2e9df4f518516d289c9d3e1dc3098837d06fdc5f08bc731341cfbfd3",
+      "lines": {
+        "format": [
+          4,
+          17
+        ],
+        "prefixAndLimits": [
+          69,
+          71
+        ],
+        "defaultAndNormalization": [
+          73,
+          124
+        ],
+        "serialization": [
+          126,
+          144
+        ],
+        "deserialization": [
+          146,
+          172
+        ]
+      }
+    },
+    {
+      "path": "apps/lab/src/components/PropertyPane.tsx",
+      "sha256": "4fa555efd4dc92d86ec707ae65331e6ed120d8112fe7c231a2ae888739df6f14",
+      "lines": {
+        "propertyBagBridge": [
+          146,
+          168
+        ]
+      }
+    },
+    {
+      "path": "apps/lab/src/components/CodeWorkspaceEditor.tsx",
+      "sha256": "7f84b59b59aa9bed2414678e8396ce3b1962cdaaf13e5b883388a35fb23bf0ec",
+      "lines": {
+        "approvedModules": [
+          66,
+          85
+        ]
+      }
+    },
+    {
+      "path": "packages/spfx-lab-runtime/src/index.ts",
+      "sha256": "4537da9586903537082ea9e16fe0955f432aa2dc2f13eb3d2bea983c7732801f",
+      "lines": {
+        "controlDiscriminant": [
+          134,
+          140
+        ]
+      }
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "5837079c36ee36f8459adad18cd4062242af6e63bd4e4e742a5eca4d3ad803f0",
+      "dependency": "lz-string@1.5.0"
+    }
+  ],
+  "persistenceFormat": {
+    "version": 1,
+    "prefix": "spfx-code-workbench:v1:",
+    "modes": [
+      "auto",
+      "react",
+      "html"
+    ],
+    "declaredTypeRequiredFields": [
+      "version",
+      "mode",
+      "tsx",
+      "html",
+      "css",
+      "scss",
+      "ts",
+      "js"
+    ],
+    "optionalFields": [
+      "updatedAt",
+      "updatedBy"
+    ],
+    "serializationLibrary": "lz-string@1.5.0",
+    "encoding": "LZString.compressToEncodedURIComponent(JSON.stringify(normalizedSource))",
+    "acceptedInputs": [
+      "prefixed-compressed-v1-envelope",
+      "unprefixed-raw-json"
+    ],
+    "runtimeObjectValidation": "Parseable objects are not structurally validated. Missing known fields are defaulted, unknown fields are dropped, invalid modes become react, and every normalized result has version 1.",
+    "parseOrDecompressionFailureBehavior": "Return a newly constructed normalized V1 HTML error fallback.",
+    "inputVersionValidation": "No input version discriminator is rejected; normalization always emits version 1. This is an inventory fact, not V2 compatibility.",
+    "rawWarningBytes": 153600,
+    "rawBlockBytes": 358400,
+    "rawByteEncoding": "UTF-8",
+    "thresholdComparison": "strictly-greater-than",
+    "blockedWriteBehavior": "PropertyPane retains the prior property-bag value when serialization is blocked."
+  },
+  "persistenceBoundary": {
+    "carrier": "The generic LabPropertyBag value selected by a codeWorkspace control name.",
+    "trackedConcreteControlRegistrationCount": 0,
+    "genericControlTypeDefinitionSearchMatches": [
+      "packages/spfx-lab-runtime/src/index.ts"
+    ],
+    "publicTrackedPrefixedSerializedEnvelopeCount": 0,
+    "publicTrackedPrefixSearchMatches": [
+      "packages/code-workbench-runtime/src/index.ts"
+    ],
+    "unprefixedRawJsonFixtureInventory": "not-established-by-prefix-search",
+    "populationInference": "none",
+    "privatePopulationInspection": "not-performed",
+    "privatePopulationCount": null
+  },
+  "normalizedDefault": {
+    "rawUtf8Bytes": 647,
+    "rawSha256": "ee536bd67e792940d8924b5f522d6bac075d4be2b2b78dd5e1eb8c76f4bea235",
+    "source": {
+      "version": 1,
+      "mode": "react",
+      "tsx": "export default function WorkbenchApp({ spfx }) {\n  const React = require('react');\n  return (\n    <section className=\"workbench-card\">\n      <h2>SPFx Code Workbench</h2>\n      <p>Hello {spfx.currentUser.displayName}. Edit the TSX, HTML, CSS, Sass, TS, or JS tabs to build this web part.</p>\n    </section>\n  );\n}",
+      "html": "",
+      "css": ".workbench-card {\n  border: 1px solid #d1d1d1;\n  border-radius: 8px;\n  padding: 20px;\n  background: #ffffff;\n  color: #242424;\n  font-family: \"Segoe UI\", sans-serif;\n}\n\n.workbench-card h2 {\n  margin: 0 0 8px;\n  font-size: 24px;\n}",
+      "scss": "",
+      "ts": "",
+      "js": ""
+    }
+  },
+  "approvedRuntimeModules": [
+    "react",
+    "react-dom",
+    "@fluentui/react-components",
+    "@tanstack/react-query",
+    "@tanstack/react-table",
+    "zod",
+    "zustand"
+  ],
+  "accountability": {
+    "owner": "A6",
+    "decision": "docs/adr/0004-workbench-v1-v2-migration.md",
+    "removalIssue": "https://github.com/pbroom/spfx-kit/issues/84",
+    "removalDeadline": "Phase 6 exit before Phase 7 rollout"
+  },
+  "proofStatus": {
+    "publicFormatInventory": "recorded",
+    "publicPrefixedEnvelopeSearch": "recorded-empty",
+    "persistedPopulationInventory": "not-run",
+    "privatePopulationInventory": "not-run",
+    "v2Compatibility": "not-run",
+    "runtime": "not-run",
+    "migration": "not-run",
+    "rollback": "not-run"
+  }
+}

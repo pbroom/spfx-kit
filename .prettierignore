@@ -6,3 +6,5 @@ release
 apps/lab/src/generated
 .spfx-kit
 package-lock.json
+docs/evidence/shadcn-migration/monaco-0.53.0-min-vs-inventory.json
+docs/evidence/shadcn-migration/workbench-v1-public-source-format-inventory.json

@@ -1,0 +1,792 @@
+{
+  "schemaVersion": 1,
+  "kind": "monaco-npm-min-vs-tree-inventory",
+  "evidenceBoundary": "Exact npm min/vs regular-file tree inventory only. It does not prove a runtime request closure, jsDelivr bytes or headers, browser requests, CSP, CORS, cache behavior, publication, deployment, fallback, retention, rollback, or shared-resource acceptance.",
+  "sourceRevision": {
+    "repository": "pbroom/spfx-kit",
+    "commitSha": "90bde2f30fd9db4f524583c5cad84de1063c5f21"
+  },
+  "package": {
+    "name": "monaco-editor",
+    "version": "0.53.0",
+    "registryTarball": "https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.53.0.tgz",
+    "npmShasum": "2f485492e0ee822be13b1b45e3092922963737ae",
+    "npmIntegrity": "sha512-0WNThgC6CMWNXXBxTbaYYcunj08iB5rnx4/G56UOPeL9UVIUGGHA1GR0EWIh9Ebabj7NpCRawQ5b0hfN1jQmYQ==",
+    "packageRoot": "min/vs"
+  },
+  "reproduction": {
+    "node": "22.22.3",
+    "commands": [
+      "npm pack monaco-editor@0.53.0 --ignore-scripts --json",
+      "node scripts/generate-monaco-runtime-inventory.mjs monaco-editor-0.53.0.tgz"
+    ],
+    "provenanceVerification": "The generator verifies the tarball SHA-1, SHA-512 npm integrity, extracted package name, and extracted package version before inventorying min/vs.",
+    "canonicalTreeRecord": "<relative-path>\\0<byte-count>\\0<sha256>\\n, sorted by relative path"
+  },
+  "runtimeBindings": [
+    {
+      "consumer": "code-workbench",
+      "sourcePath": "apps/lab/src/components/PropertyPane.tsx",
+      "sourceLines": [
+        53,
+        147,
+        160
+      ],
+      "loaderMode": "amd-remote",
+      "baseUrlConsumed": true,
+      "behavior": "Passes https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs to CodeWorkspaceEditor."
+    },
+    {
+      "consumer": "code-workbench",
+      "sourcePath": "apps/lab/src/components/CodeWorkspaceEditor.tsx",
+      "sourceLines": [
+        49,
+        58,
+        91,
+        95,
+        306,
+        315
+      ],
+      "loaderMode": "amd-remote",
+      "baseUrlConsumed": true,
+      "configuredLanguages": [
+        "typescript",
+        "html",
+        "css",
+        "scss",
+        "javascript"
+      ],
+      "behavior": "Configures @monaco-editor/react loader paths.vs. This is the only source binding that can request the jsDelivr AMD tree."
+    },
+    {
+      "consumer": "source-editor",
+      "sourcePath": "apps/lab/src/components/SourceEditor.tsx",
+      "sourceLines": [
+        40,
+        68,
+        855,
+        864
+      ],
+      "loaderMode": "esm-bundled",
+      "baseUrlConsumed": false,
+      "behavior": "Carries the same default URL, but the default adapter ignores the baseUrl parameter, imports Monaco ESM locally, and configures the loader with the bundled monaco object."
+    }
+  ],
+  "embeddedSupportAssets": {
+    "container": "style.css",
+    "codicon": {
+      "mediaType": "font/ttf",
+      "decodedBytes": 90184,
+      "decodedSha256": "740eae162df00927a8885fcc86b81fcb37f1de922cbb9402d527584c14a458c7"
+    },
+    "codiconFontDataUris": 1,
+    "pngDataUris": 2,
+    "svgDataUris": 2,
+    "cssUrls": {
+      "total": 5,
+      "dataUris": 5,
+      "relativeOrExternal": []
+    },
+    "fontFaceFamily": "codicon",
+    "fontFilesInTree": []
+  },
+  "requiredDisposition": {
+    "owners": [
+      "A2",
+      "A7"
+    ],
+    "removalIssues": [
+      "https://github.com/pbroom/spfx-kit/issues/83",
+      "https://github.com/pbroom/spfx-kit/issues/85"
+    ],
+    "default": "bundled/local",
+    "publicCdnFallback": "forbidden",
+    "sharedResourceGate": "A future shared runtime requires immutable complete bytes, headers, browser CSP/CORS/cache behavior, fallback, retention, and rollback evidence before use."
+  },
+  "proofStatus": {
+    "npmMinVsRegularFileTreeInventory": "recorded",
+    "publicDelivery": "not-run",
+    "runtime": "not-run",
+    "fallback": "not-run",
+    "rollback": "not-run"
+  },
+  "tree": {
+    "entryCount": 112,
+    "totalBytes": 15114099,
+    "canonicalSha256": "ff3e0b3a33ff9f290a09fb31528809ebd6b6f7b09820867615d53f2d80e7243f",
+    "files": [
+      {
+        "path": "abap.57cfd48a.js",
+        "bytes": 14141,
+        "sha256": "e1b1f93b91e227447ac1f5d2e5e88c859d3c269f07dbc4eafe02c7255aac95e3",
+        "role": "runtime-module"
+      },
+      {
+        "path": "apex.6678db96.js",
+        "bytes": 3936,
+        "sha256": "ed79b72046e6453e48883c0195a342d4edc693f0ab0f729227f74caa799e29c0",
+        "role": "runtime-module"
+      },
+      {
+        "path": "assets/css.worker.4040859e.js",
+        "bytes": 1066910,
+        "sha256": "e52aeb1507586b72fdeb7c0be74f10e1ff56ae48ccf4571a7e716c2750123674",
+        "role": "worker"
+      },
+      {
+        "path": "assets/editor.worker.50c051c0.js",
+        "bytes": 286188,
+        "sha256": "6ccf4d1c7a8830c02a8d7376ace6a8dae768eb633cf8a72601c9f3330be13020",
+        "role": "worker"
+      },
+      {
+        "path": "assets/html.worker.1a3caaf3.js",
+        "bytes": 736109,
+        "sha256": "0a78f937fc4d0c7eb277fcf1f4d3d329fdd60fe915f47308d85d396d0ded3b71",
+        "role": "worker"
+      },
+      {
+        "path": "assets/json.worker.32db31cb.js",
+        "bytes": 418584,
+        "sha256": "b5daade1436c1674b08fcb61de06cda56a8e2310a735a721e15676a477dde2f9",
+        "role": "worker"
+      },
+      {
+        "path": "assets/ts.worker.77b7bdc2.js",
+        "bytes": 6083881,
+        "sha256": "5cd9cc6b1e2f73a26baeec2859ebaf6a63ab594e0253b9e11c99d41d28f6e039",
+        "role": "worker"
+      },
+      {
+        "path": "azcli.fc692699.js",
+        "bytes": 827,
+        "sha256": "03ec59fdc4780547604bfb8658b9e1ef243a72135a8ed6e1b7d185e7130fdbf8",
+        "role": "runtime-module"
+      },
+      {
+        "path": "basic-languages/monaco.contribution.js",
+        "bytes": 137,
+        "sha256": "99060d73657b3deb5f9cfd997bd8c12ba4f90fd8af32bab6d464114ae97337b6",
+        "role": "language-contribution"
+      },
+      {
+        "path": "bat.90dc8220.js",
+        "bytes": 1822,
+        "sha256": "1cac9be6289c3b988f1a0ef35d2ee1d6656ad078cf7b63ab5094caaa9a5bd6a3",
+        "role": "runtime-module"
+      },
+      {
+        "path": "bicep.8971e114.js",
+        "bytes": 2495,
+        "sha256": "0014f4efc9b5f28a2745794010f54abacf267714701d9fd2f60daf5007fa0d28",
+        "role": "runtime-module"
+      },
+      {
+        "path": "cameligo.2fafdc9f.js",
+        "bytes": 2167,
+        "sha256": "e98cf055bc5d8b4a7b4305b8f5a5923bc8631df4bea97866d75b14c4a2edbe25",
+        "role": "runtime-module"
+      },
+      {
+        "path": "clojure.b61e1803.js",
+        "bytes": 9624,
+        "sha256": "c7175933b2d93359a9a22e192526c1d8f993cb14822a163cc25fa04eb2ff7db4",
+        "role": "runtime-module"
+      },
+      {
+        "path": "coffee.e77cde95.js",
+        "bytes": 3570,
+        "sha256": "3c606fe549589d4b6260938dcf11e73370561d332ebd08488817de679dcb17c3",
+        "role": "runtime-module"
+      },
+      {
+        "path": "cpp.7e583a05.js",
+        "bytes": 5277,
+        "sha256": "5636e4ceab18e3ebc140da1ef228d4794a4e6eced38f19b545ad750588e1f4c6",
+        "role": "runtime-module"
+      },
+      {
+        "path": "csharp.3abdfafa.js",
+        "bytes": 4504,
+        "sha256": "db3bfb234fdd5663f5eef4a2727fb5e383719f490d70889589a00cd7554db339",
+        "role": "runtime-module"
+      },
+      {
+        "path": "csp.e0fcfb69.js",
+        "bytes": 1396,
+        "sha256": "0322bcf1ad2fee115b3267d895303622a4784fc245eba0d8b3d52e0014041141",
+        "role": "runtime-module"
+      },
+      {
+        "path": "css.2db598c5.js",
+        "bytes": 4487,
+        "sha256": "8ec53c0aa0cf72f42f2b1d14152022cd8507d1dbd6a19700bca23c4c5c257f92",
+        "role": "runtime-module"
+      },
+      {
+        "path": "cssMode.71dc3162.js",
+        "bytes": 3870,
+        "sha256": "bcaa89f32e22dd845829e24c3ddc66482bd89046e38880dbf766299596bee59c",
+        "role": "runtime-module"
+      },
+      {
+        "path": "cypher.a7170d54.js",
+        "bytes": 3365,
+        "sha256": "6898a6df111600348948284f7f95b3fdd051a9c22006941b61d66aaf7e3f7c8c",
+        "role": "runtime-module"
+      },
+      {
+        "path": "dart.dbac000d.js",
+        "bytes": 4228,
+        "sha256": "ea86e906faddc9fc24defbbf97331d1a355b26919ddac330b23ebf749cbbb649",
+        "role": "runtime-module"
+      },
+      {
+        "path": "dockerfile.fd07f053.js",
+        "bytes": 1853,
+        "sha256": "033ae37820437db9237102a7267afd67215d866344edb01530bb797039bf0dda",
+        "role": "runtime-module"
+      },
+      {
+        "path": "ecl.53e50254.js",
+        "bytes": 5319,
+        "sha256": "efd510b8ac1bad46a8d3905a30a4f1d6de4ef1555452db52907f2b91fcb67aef",
+        "role": "runtime-module"
+      },
+      {
+        "path": "editor.api.001a2486.js",
+        "bytes": 3697425,
+        "sha256": "d39aabb2081b4d2064f62a08b7f5687cb5e41edd18d7cec7d566d01f491da99e",
+        "role": "runtime-module"
+      },
+      {
+        "path": "editor/editor.main.js",
+        "bytes": 2358,
+        "sha256": "e932ad9f3133d064887343cc0244763d242d431cdc88ec06087e604ad85ee8f0",
+        "role": "editor-main"
+      },
+      {
+        "path": "elixir.85637170.js",
+        "bytes": 10237,
+        "sha256": "8a40f94616e631c24ccd9769658b213a093f1f274e12e143eb3e3876529b6db0",
+        "role": "runtime-module"
+      },
+      {
+        "path": "flow9.4d815440.js",
+        "bytes": 1789,
+        "sha256": "7ed1ea182268e962e6e52f018610efa865c0c7819198d74b6b036b53cc9e8216",
+        "role": "runtime-module"
+      },
+      {
+        "path": "freemarker2.1d1f763d.js",
+        "bytes": 15739,
+        "sha256": "2b7ae5858168c52eea743ff31231c271f1d98b2132d0de4173be665d3cbf3dd3",
+        "role": "runtime-module"
+      },
+      {
+        "path": "fsharp.39bb3213.js",
+        "bytes": 2963,
+        "sha256": "10fae28a8633a87b832babd5d4e1bf68b88cffd2af2517f79b6f8a6c3ba69955",
+        "role": "runtime-module"
+      },
+      {
+        "path": "go.fb229974.js",
+        "bytes": 2633,
+        "sha256": "6f04f870819ab784ff77658d4df24aea8308964eac422982818d8ae75d032214",
+        "role": "runtime-module"
+      },
+      {
+        "path": "graphql.0d18b9fd.js",
+        "bytes": 2241,
+        "sha256": "780bf10947f2c71ee04c93722eadbdf2aa19b7d37ebee00385bb1dfadba4d572",
+        "role": "runtime-module"
+      },
+      {
+        "path": "handlebars.1c43a000.js",
+        "bytes": 6418,
+        "sha256": "8480aed63fe6a24801703b0e96704b6e53383d18c173bafe34993e7c04c91221",
+        "role": "runtime-module"
+      },
+      {
+        "path": "hcl.3b7f49f4.js",
+        "bytes": 3567,
+        "sha256": "d40f398a02d207c3f0a9449d0c0f2b2b11d7e08275dd1a6c3e2ea3171ce54733",
+        "role": "runtime-module"
+      },
+      {
+        "path": "html.50e520b0.js",
+        "bytes": 4652,
+        "sha256": "3a6452b22feb896edc24db5bb7766258fe0f8701baf261c3eddd957341f5ccb2",
+        "role": "runtime-module"
+      },
+      {
+        "path": "htmlMode.57de31b3.js",
+        "bytes": 4556,
+        "sha256": "01889c3e04603ce8d79c0425d9b2da4937b9856cd7a8008ba0160c89f91b396c",
+        "role": "runtime-module"
+      },
+      {
+        "path": "ini.ececa959.js",
+        "bytes": 1078,
+        "sha256": "237616d101fe11059720b05f2797d6d86f8fa3caa0b27c8e2a2f1b1ce3e91512",
+        "role": "runtime-module"
+      },
+      {
+        "path": "java.749dd323.js",
+        "bytes": 3199,
+        "sha256": "0f4c676077d836fee4b02cf0794ac471d051d1b854f31181f5ddc8f1babadd50",
+        "role": "runtime-module"
+      },
+      {
+        "path": "javascript.00c827f5.js",
+        "bytes": 981,
+        "sha256": "4099d3474129d6caf2805d286a01347420e3bc5caa533c3b50cf9ea6ea74e6f4",
+        "role": "runtime-module"
+      },
+      {
+        "path": "jsonMode.3112352c.js",
+        "bytes": 13220,
+        "sha256": "408e872c180461c74e7240350960701daa3e7c5d63abc6b95b30adedcb50a422",
+        "role": "runtime-module"
+      },
+      {
+        "path": "julia.f3a3a737.js",
+        "bytes": 7206,
+        "sha256": "5a6b5f1c9dfd9961352f3e9a2d8e4606b4a6608765a4349bbb23ffa0ddda9374",
+        "role": "runtime-module"
+      },
+      {
+        "path": "kotlin.714c9a98.js",
+        "bytes": 3419,
+        "sha256": "5292415cdf4b4e01ef3fe7c83758490326a990f2c4c65ae9e603d093d77b27ff",
+        "role": "runtime-module"
+      },
+      {
+        "path": "language/css/monaco.contribution.js",
+        "bytes": 2388,
+        "sha256": "3f8eab4b158d0455c4cd0a67b16cf8b1cf3f83dbe80e94c4c50e40bc8f6ca98f",
+        "role": "language-contribution"
+      },
+      {
+        "path": "language/html/monaco.contribution.js",
+        "bytes": 2404,
+        "sha256": "74a0dc6ee7bc760b6e28d195a798b26a930b7d902453e5bd7756cd5726bd8c62",
+        "role": "language-contribution"
+      },
+      {
+        "path": "language/json/monaco.contribution.js",
+        "bytes": 1802,
+        "sha256": "35289285d59ac4943910859c85abab685a32a87adbc4b1f952e0a528e5371954",
+        "role": "language-contribution"
+      },
+      {
+        "path": "language/typescript/monaco.contribution.js",
+        "bytes": 5230,
+        "sha256": "159f4cbd3e02f35ed69676032e1404d9830919ba8ec36ac48cb8bc9b85f5dd96",
+        "role": "language-contribution"
+      },
+      {
+        "path": "less.cca4cf46.js",
+        "bytes": 3876,
+        "sha256": "298d41c18a87f4bd0eec32e54913d5d6d88b269ea3b6d3e25402ec1965fe25e4",
+        "role": "runtime-module"
+      },
+      {
+        "path": "lexon.7430c8cd.js",
+        "bytes": 2416,
+        "sha256": "8e15bece310f5218f0f69bbb50cdf52bed3cd568c008522e2c1c8347805279bd",
+        "role": "runtime-module"
+      },
+      {
+        "path": "liquid.a6046bb2.js",
+        "bytes": 3600,
+        "sha256": "7e9847b9413e356abc781510c24254e99336f491481f4f30ce902ebdc295a62c",
+        "role": "runtime-module"
+      },
+      {
+        "path": "loader.js",
+        "bytes": 39848,
+        "sha256": "35b59df80b41a8b73bf1ceb159b44f040567c2ab53f4e77a3d002d9dc39d55d1",
+        "role": "amd-loader"
+      },
+      {
+        "path": "lspLanguageFeatures.b4763a7b.js",
+        "bytes": 29508,
+        "sha256": "928121a5c9709a431db334b42896c0760fe2903aee03048b092e2aaabfba86ed",
+        "role": "runtime-module"
+      },
+      {
+        "path": "lua.b9f48055.js",
+        "bytes": 2100,
+        "sha256": "67e0fa6f1c9f58a6ff5ce07161b524ba13923b0010d1aa452aeeda414df9f8ec",
+        "role": "runtime-module"
+      },
+      {
+        "path": "m3.54394d23.js",
+        "bytes": 2793,
+        "sha256": "57926f74771f4cd0db51b512ce17e1c9d541126a8843cc3948088a051c8b41c8",
+        "role": "runtime-module"
+      },
+      {
+        "path": "markdown.d9a6aaa6.js",
+        "bytes": 3770,
+        "sha256": "64f8aa358b2aaf1bb1648f96a5fce355edbda9eac9a97ff473e109296a5eb8d5",
+        "role": "runtime-module"
+      },
+      {
+        "path": "mdx.4d70389f.js",
+        "bytes": 4514,
+        "sha256": "dab257c4d284b3d75899e1571cc549afaf249367780084337d52ba813b04811a",
+        "role": "runtime-module"
+      },
+      {
+        "path": "mips.2ca1cc0e.js",
+        "bytes": 2557,
+        "sha256": "74fb2f98b15ab0b73f137dfa4b841ff4911c32c52f780227dd4257a7b49cf2ab",
+        "role": "runtime-module"
+      },
+      {
+        "path": "msdax.6b83e523.js",
+        "bytes": 4891,
+        "sha256": "fe19ca1d2960e50a97ba2be5fe11c365102c3f357a5cf30362982c031989e8a2",
+        "role": "runtime-module"
+      },
+      {
+        "path": "mysql.0c968318.js",
+        "bytes": 11253,
+        "sha256": "3658a541371beec15c018fc042a71cc19438c50709a886da33f9a6483b08a252",
+        "role": "runtime-module"
+      },
+      {
+        "path": "nls.messages-loader.js",
+        "bytes": 339,
+        "sha256": "65cbc57720a3ae60c175def8a7303e5f2e4870062666351c56c8e868ada53d0c",
+        "role": "localization"
+      },
+      {
+        "path": "nls.messages.de.js",
+        "bytes": 131956,
+        "sha256": "e8582721d82c360dea9de3c264c975b6e039a7f127599b7c62989acb43d7307c",
+        "role": "localization"
+      },
+      {
+        "path": "nls.messages.es.js",
+        "bytes": 132464,
+        "sha256": "d0c3f5fdc871cbd506b0d08626789156dcdc94c08e64036f8a1063475374f289",
+        "role": "localization"
+      },
+      {
+        "path": "nls.messages.fr.js",
+        "bytes": 146538,
+        "sha256": "fa4ca512156a30f454767a3dcfa16d45906bccf134ab62715f09f0308e692e4b",
+        "role": "localization"
+      },
+      {
+        "path": "nls.messages.it.js",
+        "bytes": 133689,
+        "sha256": "6ec2faa166d9b7418bd6fc526b242b21bc6cc9223d8cbce211a901f4132cf3bd",
+        "role": "localization"
+      },
+      {
+        "path": "nls.messages.ja.js",
+        "bytes": 282322,
+        "sha256": "f1df5559ab961789af044c29e6ba1b4f6f021224d48e1ad3bc3af398980eee7d",
+        "role": "localization"
+      },
+      {
+        "path": "nls.messages.ko.js",
+        "bytes": 230373,
+        "sha256": "f51a074fe96a349913e0f048a9dca9f73ec3ecbe514bc9ab656734a9b9dccfc4",
+        "role": "localization"
+      },
+      {
+        "path": "nls.messages.ru.js",
+        "bytes": 592633,
+        "sha256": "06d1c19a95c78526e12f9ed92082ef94f1813a1c27ca04bbd2bf39a33245fa6e",
+        "role": "localization"
+      },
+      {
+        "path": "nls.messages.zh-cn.js",
+        "bytes": 172824,
+        "sha256": "2ccd58ecdab74ad781539830c6a453173b926f501807e0509c73d7c73636f88a",
+        "role": "localization"
+      },
+      {
+        "path": "nls.messages.zh-tw.js",
+        "bytes": 176946,
+        "sha256": "6d88a43de855a9a7c13a70d0fc6368dd7857f5f44857a8bc54e63801614ec732",
+        "role": "localization"
+      },
+      {
+        "path": "objective-c.c23cbcfe.js",
+        "bytes": 2387,
+        "sha256": "aeb68615d0d0ee26019c7bf4e2ddf5afadc9926eb943609b2f92dc231042d7e1",
+        "role": "runtime-module"
+      },
+      {
+        "path": "pascal.d682edd0.js",
+        "bytes": 2975,
+        "sha256": "20d081c92b9af58157d30cd3fa83bdab7e38011a23ad8f11aeff5aa4a281e1c5",
+        "role": "runtime-module"
+      },
+      {
+        "path": "pascaligo.4cda72e2.js",
+        "bytes": 1983,
+        "sha256": "21c645c83339dc2eb7864c80ef6222a15bfcb4fb2a33fa704a8fb451a591dd30",
+        "role": "runtime-module"
+      },
+      {
+        "path": "perl.6c0a5fd2.js",
+        "bytes": 8233,
+        "sha256": "0fe443c54e4b5cbb254ee4490453d1003b478509d6c418ffb076bd21e4a199ba",
+        "role": "runtime-module"
+      },
+      {
+        "path": "pgsql.6d0b0345.js",
+        "bytes": 13443,
+        "sha256": "c2677305e0cfed6fbee18d6c7a8e81325eec2c2c87a2ea14b6f7bd9299ef88c0",
+        "role": "runtime-module"
+      },
+      {
+        "path": "php.fa1fc595.js",
+        "bytes": 8004,
+        "sha256": "70c1e56077b80c22554b54e23ae919ae29660a89865da4c868c2ed1804a8d737",
+        "role": "runtime-module"
+      },
+      {
+        "path": "pla.ecedb2fa.js",
+        "bytes": 1660,
+        "sha256": "c6d3454a58d16266f51990cc6fa158564f5b825aeba92acf9e1d65e2f84520a1",
+        "role": "runtime-module"
+      },
+      {
+        "path": "postiats.4f91d904.js",
+        "bytes": 7838,
+        "sha256": "b2929024ed471410581a4e8f336375164d9a270546bc7d42da4f3ecf103e32e3",
+        "role": "runtime-module"
+      },
+      {
+        "path": "powerquery.79d430a4.js",
+        "bytes": 16923,
+        "sha256": "5306b2b64c7b0c8160a35e97786fce4fa3a8aa057057172a4014fbcd1a933908",
+        "role": "runtime-module"
+      },
+      {
+        "path": "powershell.87bc4ad0.js",
+        "bytes": 3253,
+        "sha256": "2f66af79a296bbe5670a43de04388d5953c7510af11e7ebf775f4b9eceaaed18",
+        "role": "runtime-module"
+      },
+      {
+        "path": "protobuf.13ce105a.js",
+        "bytes": 9028,
+        "sha256": "812da57852d2813ecbb720b4969893ff668d4e07f58b24fe279252b58e3944e5",
+        "role": "runtime-module"
+      },
+      {
+        "path": "pug.a06f9ff4.js",
+        "bytes": 4805,
+        "sha256": "2a736f5e3c16932aaf270f7800819f39039a6f82558844aa6b19e9291e13cb56",
+        "role": "runtime-module"
+      },
+      {
+        "path": "python.5153d5cc.js",
+        "bytes": 3834,
+        "sha256": "0f0dd9f12b9698ecbf88a1a818e4c3be51761be6abd1525cc60495f71b0790e1",
+        "role": "runtime-module"
+      },
+      {
+        "path": "qsharp.5334b526.js",
+        "bytes": 3169,
+        "sha256": "819563f69059352057e0c45c804fd2fbc40ea02c2d74af9f068779f406b68551",
+        "role": "runtime-module"
+      },
+      {
+        "path": "r.71f62956.js",
+        "bytes": 3106,
+        "sha256": "822cc1b6bd6bf76d380c7cb434588a67725202b56a0decfdfa406948d23c2bf6",
+        "role": "runtime-module"
+      },
+      {
+        "path": "razor.e138c602.js",
+        "bytes": 8417,
+        "sha256": "907a311ff61deee93b97fa5a68020ded5c3a04a1a4f84b3b49d777f13274c966",
+        "role": "runtime-module"
+      },
+      {
+        "path": "redis.53af986e.js",
+        "bytes": 3535,
+        "sha256": "4bb3ddd7c6744751e8235a9ad70bb8872ec45bbca297d66199d0871e8a5358f8",
+        "role": "runtime-module"
+      },
+      {
+        "path": "redshift.d166bd80.js",
+        "bytes": 11782,
+        "sha256": "abcda39c84505e6ae33311f9246cd972aeca76bd25839f540a0578f9462a0844",
+        "role": "runtime-module"
+      },
+      {
+        "path": "restructuredtext.da8d5482.js",
+        "bytes": 3883,
+        "sha256": "67497f5a8024bdff4f710509ab5d06497ed154d452af40410c962deedcea3cc6",
+        "role": "runtime-module"
+      },
+      {
+        "path": "ruby.ea1f567c.js",
+        "bytes": 8482,
+        "sha256": "dbc42665f24226eb73dfe2d1d34b5a82596490ca64777038c25c92acd130c4f6",
+        "role": "runtime-module"
+      },
+      {
+        "path": "rust.fb821eb7.js",
+        "bytes": 4138,
+        "sha256": "cafc0a18f5529b5afc377d46c4a721474c3548cfd59724924b14b2ef842b4886",
+        "role": "runtime-module"
+      },
+      {
+        "path": "sb.de090154.js",
+        "bytes": 1805,
+        "sha256": "8d6f5af07bff2dcf6488330452bc6b17d6038bbaee8e6e557dca147846ff0bda",
+        "role": "runtime-module"
+      },
+      {
+        "path": "scala.872b817c.js",
+        "bytes": 7297,
+        "sha256": "4cf4f9636dcce1db955fba4adb0bcc4020b21554cbaeb53393f1e6da3d4d9521",
+        "role": "runtime-module"
+      },
+      {
+        "path": "scheme.5d100872.js",
+        "bytes": 1747,
+        "sha256": "f26ee75f83bd93ebf25f0c6f41b8eb89e7c326eb4c5bf425ffaaae5c5fdbce26",
+        "role": "runtime-module"
+      },
+      {
+        "path": "scss.005cca6c.js",
+        "bytes": 6387,
+        "sha256": "29b49bd71edb4d7e8e757613966385345483108f3154664f503a5605c972043e",
+        "role": "runtime-module"
+      },
+      {
+        "path": "shell.9fdf397b.js",
+        "bytes": 3052,
+        "sha256": "bf6d13ecf46ed74b78555f753b63ec823a680ba6b0affa4bf7bb93a8af9e4f13",
+        "role": "runtime-module"
+      },
+      {
+        "path": "solidity.a0c1d17d.js",
+        "bytes": 18579,
+        "sha256": "b644455e1f99127161fe4dfaac056087b4c304a00bd57479f996c32dfdf86eb2",
+        "role": "runtime-module"
+      },
+      {
+        "path": "sophia.19fb93b0.js",
+        "bytes": 2744,
+        "sha256": "44de7ab301da073a7271eda2c2fa652cb6008b101fa839c349d09eb78815b18a",
+        "role": "runtime-module"
+      },
+      {
+        "path": "sparql.650fdcd2.js",
+        "bytes": 2532,
+        "sha256": "75d481b2046a4a8509271c5740381b0e54ef8f31599c79bab3c07f5089fd8b61",
+        "role": "runtime-module"
+      },
+      {
+        "path": "sql.0a440540.js",
+        "bytes": 10274,
+        "sha256": "eccc9c29b91e3eff0326fe3c96275acaca02953d6deca204ac83a04038beb482",
+        "role": "runtime-module"
+      },
+      {
+        "path": "st.589fd1fd.js",
+        "bytes": 7379,
+        "sha256": "ac501f706cec203983fd1afea291785b02bfdd38eece70239ec3e0b62a050750",
+        "role": "runtime-module"
+      },
+      {
+        "path": "style.css",
+        "bytes": 261862,
+        "sha256": "65ce423c0efe6286370d36e99672bf8c350db2ec190879191587c437bf2ecd60",
+        "role": "stylesheet-with-embedded-support-assets"
+      },
+      {
+        "path": "swift.52175693.js",
+        "bytes": 5150,
+        "sha256": "309d9da7d1972663247580753b255a6ddff443f4eda439f0d0c088e3f596b721",
+        "role": "runtime-module"
+      },
+      {
+        "path": "systemverilog.54750c8c.js",
+        "bytes": 7590,
+        "sha256": "630b5c38d95d73b1126e2c63816b7d692bdc7737d069dc803e90d7fbaf8543dc",
+        "role": "runtime-module"
+      },
+      {
+        "path": "tcl.ffa31061.js",
+        "bytes": 3548,
+        "sha256": "1e65c009f0051c016da452fbec67f3975b18cd0fbfd808cef867fc8128a5f4de",
+        "role": "runtime-module"
+      },
+      {
+        "path": "tsMode.0cda7d07.js",
+        "bytes": 22805,
+        "sha256": "681ec90b9a635fe9cb4f220f73f59ead68ebf72de81f5a8453d9f6ed271ed3aa",
+        "role": "runtime-module"
+      },
+      {
+        "path": "twig.23fe457e.js",
+        "bytes": 5951,
+        "sha256": "ba3f932c53617d20995255719d25aae66411f865b291c63d7d6791214c707f8b",
+        "role": "runtime-module"
+      },
+      {
+        "path": "typescript.21e6b24c.js",
+        "bytes": 5051,
+        "sha256": "9c25cd96747f2cdc5d909f6302653206bcf1af46c90b58698d095cc05f121d47",
+        "role": "runtime-module"
+      },
+      {
+        "path": "typespec.6ed77a41.js",
+        "bytes": 2760,
+        "sha256": "997fda06530bddf19e37b6fba32f19b16ab9b2c46da13a4474ed9f04bb2db42b",
+        "role": "runtime-module"
+      },
+      {
+        "path": "vb.1cd5c18f.js",
+        "bytes": 5767,
+        "sha256": "2352896a9d0ebc43cc629ce0cc05a43117059470344ddf11a78613b998a83882",
+        "role": "runtime-module"
+      },
+      {
+        "path": "wgsl.1d597471.js",
+        "bytes": 7309,
+        "sha256": "70e481b06de3bb1eaa2d575243e80a7973ccf65a60abaf4421f984ece4c0f713",
+        "role": "runtime-module"
+      },
+      {
+        "path": "workers.8ff654dc.js",
+        "bytes": 1276,
+        "sha256": "c0ec89790ba6e9e4dabee55aba8a1826b74ca8339827efe1feb258bcdae140ce",
+        "role": "runtime-module"
+      },
+      {
+        "path": "xml.97580f17.js",
+        "bytes": 2050,
+        "sha256": "c69880b799d200857e65d7cd0c5d4a064c032d42eb5bb99ca58a3807736c6cc8",
+        "role": "runtime-module"
+      },
+      {
+        "path": "yaml.4437b505.js",
+        "bytes": 3653,
+        "sha256": "2acd9290a6f62e983784c3e89af951ebf16f36274499c301df437e0a205dbe87",
+        "role": "runtime-module"
+      },
+      {
+        "path": "yaml.contribution.6f43d486.js",
+        "bytes": 15248,
+        "sha256": "865dd59c47c350d722c77041a64f0a31cbe0e99eb3f4fe37af6eb4a3ea42e1ed",
+        "role": "language-contribution"
+      }
+    ]
+  }
+}
