@@ -360,6 +360,13 @@ issues/PRs. No UI migration starts before this gate is complete.
 Outcome: produce a small, reviewed foundation that builds and behaves the same
 way in the lab and SPFx production paths.
 
+The first source-profile PR uses the repository's pinned `@types/react@17.0.45`
+declaration contract in both TypeScript compiler lanes. Its profile-only Base UI
+JSX namespace bridge is compatibility evidence, not a host upgrade or production
+integration. Representative Lab, Workbench, generated app, canary, and real
+SPFx exit paths must still compile against `@types/react@17.0.45`, React 17.0.1,
+and classic JSX.
+
 Included work:
 
 - Curate Button, Input, Field, Textarea, Checkbox, Switch, Select, Combobox,
