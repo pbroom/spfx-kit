@@ -353,11 +353,11 @@ export function normalizeRegistrySource({ source, registrySourcePath }) {
   }
 
   const aliases = [
-    [/(["'])@\/registry\/base-nova\/lib\/utils\1/g, `$1${relativeImport(outputPath, 'normalized/src/lib/utils.ts')}$1`],
+    [/(\bfrom\s*|\bimport\s*\(\s*)(["'])@\/registry\/base-nova\/lib\/utils\2/g, `$1$2${relativeImport(outputPath, 'normalized/src/lib/utils.ts')}$2`],
     [
-      /(["'])@\/registry\/base-nova\/ui\/([a-z0-9-]+)\1/g,
-      (_match, quote, component) =>
-        `${quote}${relativeImport(outputPath, `normalized/src/components/ui/${component}.tsx`)}${quote}`
+      /(\bfrom\s*|\bimport\s*\(\s*)(["'])@\/registry\/base-nova\/ui\/([a-z0-9-]+)\2/g,
+      (_match, prefix, quote, component) =>
+        `${prefix}${quote}${relativeImport(outputPath, `normalized/src/components/ui/${component}.tsx`)}${quote}`
     ]
   ];
 
@@ -457,7 +457,7 @@ function declarationEntrypoints(typesPackageName, runtimePackageName) {
       addEntrypoint(entrypoint, target);
     }
   } else {
-    for (const declarationPath of declarationFiles(packageRoot)) {
+    for (const declarationPath of declarationFiles(packageRoot).filter((file) => path.basename(file) !== 'global.d.ts')) {
       const relative = path.relative(packageRoot, declarationPath).replaceAll(path.sep, '/');
       const subpath = relative.replace(/(?:^|\/)index\.d\.ts$/u, '').replace(/\.d\.ts$/u, '');
       addEntrypoint(subpath ? `${runtimePackageName}/${subpath}` : runtimePackageName, relative);
