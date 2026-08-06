@@ -784,6 +784,28 @@ function createLease({ scope, ownerToken, claimToken, instanceId, now, leaseMs }
 }
 
 async function readLease(root, binding) {
+  const candidates = (await readdir(root, { withFileTypes: true })).filter(
+    (entry) => /^\.lease-[0-9a-f-]{36}\.json$/u.test(entry.name) && entry.isFile() && !entry.isSymbolicLink()
+  );
+  if (candidates.length > 0) {
+    if (candidates.length !== 1) throw new Error(`Generated profile ${binding.scope} lease publication candidates are ambiguous`);
+    const candidate = path.join(root, candidates[0].name);
+    const before = await lstat(candidate);
+    const pending = assertLease(JSON.parse(await readFile(candidate, 'utf8')), binding);
+    let current;
+    try {
+      current = assertLease(JSON.parse(await readFile(path.join(root, LEASE_FILE), 'utf8')), binding);
+    } catch {
+      current = undefined;
+    }
+    const after = await lstat(candidate);
+    if (!sameIdentity(before, after)) throw new Error(`Generated profile ${binding.scope} lease publication candidate changed`);
+    if (!current || pending.renewedAt >= current.renewedAt) {
+      await rename(candidate, path.join(root, LEASE_FILE));
+    } else {
+      await rm(candidate, { force: true });
+    }
+  }
   try {
     return assertLease(JSON.parse(await readFile(path.join(root, LEASE_FILE), 'utf8')), binding);
   } catch (error) {
@@ -1043,10 +1065,10 @@ async function gateHolderIsGone(gate, context) {
   ) {
     return true;
   }
-  // Unknown process observations cannot distinguish a recycled PID.  A
-  // holder without a stable identity therefore has to keep a renewable gate
-  // lease current, just like owner and recovery-claim records do.
-  return gate.processIdentity === null && context.now() >= gate.expiresAt;
+  // An unavailable observation cannot establish that the original process is
+  // still live, even when it previously had a stable identity.  The renewable
+  // lease is the fail-closed liveness proof in that state.
+  return isObject(observed) && observed.status === 'unknown' && context.now() >= gate.expiresAt;
 }
 
 function createMutationGateRecord(context, actionToken = randomUUID()) {
@@ -1469,25 +1491,34 @@ async function reconcileInterruptedRecoveryClaimCandidates(lockRoot) {
 const OWNER_PUBLICATION_CANDIDATE_NAME = /^\.owner-[0-9a-f-]{36}\.json$/u;
 
 async function readOrReconcileOwner(lockRoot, packageRoot) {
+  let canonical;
+  let ownerError;
   try {
-    return await readOwner(lockRoot, packageRoot);
-  } catch (ownerError) {
-    if (await pathExists(path.join(lockRoot, OWNER_FILE))) throw ownerError;
-    const candidates = (await readdir(lockRoot, { withFileTypes: true })).filter(
-      (entry) => OWNER_PUBLICATION_CANDIDATE_NAME.test(entry.name) && entry.isFile() && !entry.isSymbolicLink()
-    );
-    if (candidates.length !== 1) throw ownerError;
-    const candidate = path.join(lockRoot, candidates[0].name);
-    const before = await lstat(candidate);
-    const owner = assertOwner(JSON.parse(await readFile(candidate, 'utf8')), packageRoot, lockRoot);
-    await readLease(lockRoot, ownerLeaseBinding(owner));
-    const bindingRoot = await realDirectoryIdentity(path.join(lockRoot, RETAINED_BINDING_ROOT), 'retained binding root');
-    if (!sameIdentityRecord(bindingRoot, owner.retainedBindingRootIdentity)) throw ownerError;
-    const after = await lstat(candidate);
-    if (!sameIdentity(before, after) || (await pathExists(path.join(lockRoot, OWNER_FILE)))) throw ownerError;
-    await rename(candidate, path.join(lockRoot, OWNER_FILE));
-    return readOwner(lockRoot, packageRoot);
+    canonical = await readOwner(lockRoot, packageRoot);
+  } catch (error) {
+    ownerError = error;
   }
+  const candidates = (await readdir(lockRoot, { withFileTypes: true })).filter(
+    (entry) => OWNER_PUBLICATION_CANDIDATE_NAME.test(entry.name) && entry.isFile() && !entry.isSymbolicLink()
+  );
+  if (candidates.length === 0) {
+    if (canonical) return canonical;
+    throw ownerError;
+  }
+  if (candidates.length !== 1) throw ownerError ?? new Error('Generated profile owner publication candidates are ambiguous');
+  const candidate = path.join(lockRoot, candidates[0].name);
+  const before = await lstat(candidate);
+  const owner = assertOwner(JSON.parse(await readFile(candidate, 'utf8')), packageRoot, lockRoot);
+  await readLease(lockRoot, ownerLeaseBinding(owner));
+  const bindingRoot = await realDirectoryIdentity(path.join(lockRoot, RETAINED_BINDING_ROOT), 'retained binding root');
+  if (!sameIdentityRecord(bindingRoot, owner.retainedBindingRootIdentity)) throw ownerError;
+  if (canonical && (canonical.token !== owner.token || canonical.instanceId !== owner.instanceId)) {
+    throw new Error('Generated profile owner publication candidate does not match the canonical owner');
+  }
+  const after = await lstat(candidate);
+  if (!sameIdentity(before, after)) throw new Error('Generated profile owner publication candidate changed');
+  await rename(candidate, path.join(lockRoot, OWNER_FILE));
+  return readOwner(lockRoot, packageRoot);
 }
 
 async function acquireRecoveryClaim(
@@ -2091,6 +2122,8 @@ async function releaseOwnedLock(context, onReleaseBoundary = async () => {}, bef
       );
     }
     context.detachedRoot = removalRoot;
+    context.lockRoot = removalRoot;
+    if (context.gate) context.gate.gateRoot = path.join(removalRoot, MUTATION_GATE_NAME);
     context.releaseState = { phase: 'detached-owned', ownedPath: removalRoot, foreignPath: releaseRoot };
   }
   const removalIdentity = await realDirectoryIdentity(removalRoot, 'released lock');
@@ -3040,16 +3073,13 @@ export async function withGeneratedProfileSession(
     unsafe = true;
   }
 
-  try {
-    await session.heartbeat.stopAndDrain();
-  } catch (error) {
-    failures.push(error);
-    unsafe = true;
-  }
-
+  let heartbeatStopped = false;
   if (!unsafe) {
     try {
-      await releaseOwnedLock(session, onReleaseBoundary);
+      await releaseOwnedLock(session, onReleaseBoundary, async () => {
+        await session.heartbeat.stopAndDrain();
+        heartbeatStopped = true;
+      });
     } catch (error) {
       failures.push(error);
       if (session.releaseState?.phase === 'detached-owned') {
@@ -3072,7 +3102,17 @@ export async function withGeneratedProfileSession(
         }
       }
     }
-  } else {
+  }
+  if (!heartbeatStopped) {
+    try {
+      await session.heartbeat.stopAndDrain();
+      heartbeatStopped = true;
+    } catch (error) {
+      failures.push(error);
+      unsafe = true;
+    }
+  }
+  if (unsafe) {
     try {
       await relinquishOwnerForRecovery(session);
     } catch (error) {
