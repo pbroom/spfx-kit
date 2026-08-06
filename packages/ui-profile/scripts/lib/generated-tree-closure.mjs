@@ -48,6 +48,7 @@ async function filesUnder(root, relativeDirectory) {
       const absolute = path.join(directory, entry.name);
       if (entry.isDirectory()) await visit(absolute);
       else if (entry.isFile()) files.push(path.relative(root, absolute).replaceAll(path.sep, '/'));
+      else throw new Error(`${relativeDirectory}: generated inventory contains a non-file entry ${path.relative(root, absolute)}`);
     }
   }
   await visit(directoryRoot);

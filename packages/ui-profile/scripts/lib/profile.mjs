@@ -533,6 +533,32 @@ function exportedFunctionContract(source, name) {
   };
 }
 
+function exportedArrowFunctionContract(source, name) {
+  const sourceFile = parsedSource(source, 'normalized-arrow-wrapper.tsx');
+  let contract = null;
+  function visit(node) {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === name &&
+      node.initializer &&
+      ts.isArrowFunction(node.initializer)
+    ) {
+      const parameter = node.initializer.parameters[0];
+      if (!parameter) return;
+      contract = {
+        propsType: parameter.type?.getText(sourceFile) ?? '',
+        body: ts.isBlock(node.initializer.body)
+          ? node.initializer.body.getText(sourceFile).slice(1, -1)
+          : `return ${node.initializer.body.getText(sourceFile)}`
+      };
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return contract;
+}
+
 export function normalizeRegistrySource({ source, registrySourcePath }) {
   const outputPath = outputPathForRegistrySource(registrySourcePath);
   const transformations = ['normalize-line-endings'];
@@ -1173,6 +1199,17 @@ export function assertReact17Source(source, label) {
       !forwardRef.test(source)
     ) {
       throw new Error(`${label}: public ref-bearing wrapper ${name} is not normalized with React.forwardRef`);
+    }
+    const arrow = exportedArrowFunctionContract(source, name);
+    const arrowRefProps = arrow && /\.Props\b|(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?\b/.test(arrow.propsType);
+    const arrowUseRenderWrapper = arrow && /return\s+useRender\(\{/.test(arrow.body);
+    if (
+      arrow &&
+      arrowRefProps &&
+      (targetAcceptsPublicRef(propsSpreadTarget(arrow.body)) || arrowUseRenderWrapper) &&
+      !forwardRef.test(source)
+    ) {
+      throw new Error(`${label}: public ref-bearing arrow wrapper ${name} is not normalized with React.forwardRef`);
     }
   }
 }

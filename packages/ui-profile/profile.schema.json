@@ -26,13 +26,15 @@
     "normalizationImplementationSha256": { "$ref": "#/$defs/sha256" },
     "compilerInputs": {
       "type": "array",
-      "minItems": 11,
-      "maxItems": 11,
+      "minItems": 13,
+      "maxItems": 13,
       "prefixItems": [
         { "$ref": "#/$defs/compilerBridge" },
         { "$ref": "#/$defs/typecheckImplementation" },
+        { "$ref": "#/$defs/profileGenerationImplementation" },
         { "$ref": "#/$defs/generatedProfileTypecheckImplementation" },
         { "$ref": "#/$defs/validatedProfileGenerationImplementation" },
+        { "$ref": "#/$defs/generatedTreeClosureImplementation" },
         { "$ref": "#/$defs/baseUiPreparationImplementation" },
         { "$ref": "#/$defs/selectValueTransformImplementation" },
         { "$ref": "#/$defs/popupLifecycleTransformImplementation" },
@@ -77,6 +79,12 @@
         { "type": "object", "properties": { "path": { "const": "scripts/typecheck.mjs" } } }
       ]
     },
+    "profileGenerationImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/lib/generate-profile.mjs" } } }
+      ]
+    },
     "generatedProfileTypecheckImplementation": {
       "allOf": [
         { "$ref": "#/$defs/snapshot" },
@@ -93,6 +101,12 @@
           "type": "object",
           "properties": { "path": { "const": "scripts/lib/generate-validated-profile.mjs" } }
         }
+      ]
+    },
+    "generatedTreeClosureImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/lib/generated-tree-closure.mjs" } } }
       ]
     },
     "baseUiPreparationImplementation": {

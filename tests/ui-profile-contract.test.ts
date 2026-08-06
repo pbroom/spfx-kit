@@ -46,8 +46,10 @@ const expectedNormalizedPaths = expectedRegistryIds
 const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'scripts/typecheck.mjs',
+  'scripts/lib/generate-profile.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
+  'scripts/lib/generated-tree-closure.mjs',
   'scripts/prepare-base-ui.mjs',
   'scripts/transform-base-ui-select-value.mjs',
   'scripts/transform-base-ui-popup-lifecycle.mjs',
@@ -313,7 +315,7 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(profileSchema.required).toContain('$schema');
     expect(profileSchema.properties.profileId.const).toBe('spfx-react17-base-nova-v1');
     expect(profileSchema.properties.items).toMatchObject({ minItems: 24, maxItems: 24 });
-    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 11, maxItems: 11, items: false });
+    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 13, maxItems: 13, items: false });
     expect(profileSchema.properties.items.uniqueItems).toBe(true);
     expect(profileSchema.$defs.sha256.pattern).toBe('^[a-f0-9]{64}$');
     expect(profileSchema.$defs.item.additionalProperties).toBe(false);

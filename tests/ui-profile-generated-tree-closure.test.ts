@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -35,7 +35,8 @@ async function closureFixture(outputs: Array<{ path: string; source: string }>):
 async function expectInvalidUpdateStagingBeforeReplacement(
   sourcePrefix: string,
   expectedMessage: string,
-  registryId = 'button'
+  registryId = 'button',
+  mutateSnapshot?: (snapshot: { dependencies?: unknown; devDependencies?: unknown }) => void
 ): Promise<void> {
   const root = await mkdtemp(path.join(tmpdir(), 'ui-profile-update-staging-'));
   temporaryRoots.push(root);
@@ -45,6 +46,7 @@ async function expectInvalidUpdateStagingBeforeReplacement(
   const snapshotPath = path.join(rawRoot, `${registryId}.json`);
   const snapshot = JSON.parse(await readFile(snapshotPath, 'utf8'));
   snapshot.files[0].content = `${sourcePrefix}\n${snapshot.files[0].content}`;
+  mutateSnapshot?.(snapshot);
   await writeFile(snapshotPath, JSON.stringify(snapshot));
   const provenanceBytes = await readFile(path.join(packageRoot, 'provenance.json'));
   const provenance = JSON.parse(provenanceBytes.toString('utf8'));
@@ -65,6 +67,17 @@ async function expectInvalidUpdateStagingBeforeReplacement(
 }
 
 describe('generated profile module closure', () => {
+  it('rejects excluded snapshot metadata dependencies before replacement', async () => {
+    await expectInvalidUpdateStagingBeforeReplacement(
+      '',
+      'button: excluded metadata dependency cmdk is present',
+      'button',
+      (snapshot) => {
+        snapshot.dependencies = ['cmdk@1.1.1'];
+      }
+    );
+  });
+
   it.each([
     ['static import', 'import "./missing"'],
     ['static export', 'export * from "./missing"'],
@@ -146,6 +159,13 @@ describe('generated profile module closure', () => {
       { path: 'normalized/src/later.ts', source: 'export {}\n' }
     ]);
     await expect(assertGeneratedTreeClosure(fixture)).resolves.toBeDefined();
+  });
+
+  it('rejects symlinks and other non-file entries in generated inventory', async () => {
+    const fixture = await closureFixture([{ path: 'normalized/src/entry.ts', source: 'export {}\n' }]);
+    await symlink('entry.ts', path.join(fixture.outputRoot, 'normalized', 'src', 'linked.ts'));
+
+    await expect(assertGeneratedTreeClosure(fixture)).rejects.toThrow('generated inventory contains a non-file entry');
   });
 
   it.each([

@@ -206,6 +206,17 @@ describe('React 17 UI profile normalization', () => {
     expect(rerun.source).toBe(first.source);
   });
 
+  it('fails closed for exported arrow ref wrappers that the normalizer cannot safely rewrite', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export const Probe = ({ ...props }: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />\n'
+      })
+    ).toThrow('public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef');
+  });
+
   it('uses the Base UI 1.6 root DOM contract for Checkbox and Switch refs', () => {
     for (const [name, primitive] of [
       ['Checkbox', 'CheckboxPrimitive'],
