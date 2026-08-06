@@ -134,7 +134,7 @@ describe('Base UI 1.6.0 React 17 popup lifecycle transform', () => {
       package: '@base-ui/react',
       version: '1.6.0',
       upstream: {
-        pullRequest: 'https://github.com/mui/base-ui/pull/5387',
+        pullRequest: 'https://github.com/mui/base-ui/issues/5387',
         mergeCommit: '3b5715cc70f6b1988051c989ae32f8082c71d5ae',
         sourcePath: 'packages/react/src/utils/popups/popupStoreUtils.ts'
       }

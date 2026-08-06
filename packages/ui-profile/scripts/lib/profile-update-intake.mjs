@@ -15,7 +15,13 @@ import {
 const SHADCN_NAME = 'shadcn';
 const SHADCN_VERSION = '4.16.1';
 const SHADCN_INTEGRITY = 'sha512-XLFzfNNIUPlUlyheFEzj0H4Vnhi9nI0nl3Nfgg8HYXW1FkUVhVT1X+mgmOUW8aWL5SeG0A+yJIV5fm3Hr9MVkQ==';
-const PROVENANCE_SCHEMA_SHA256 = '50dc4e94abc96cecb6ce8dd729a9b486708d25c5ec35793a02049d51139c2a49';
+const PROVENANCE_SCHEMA_SHA256 = 'b7c8e3646462a3b551f31adb5fd1fd25362101bd6e0abae815522b31debd2529';
+const COMPILER_CONTRACT_PATHS = Object.freeze([
+  'compat-consumers/react17-base-ui-jsx.d.ts',
+  'tsconfig.base.json',
+  'tsconfig.ts53.json',
+  'tsconfig.ts58.json'
+]);
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -23,6 +29,27 @@ function assert(condition, message) {
 
 async function readJson(target) {
   return JSON.parse(await readFile(target, 'utf8'));
+}
+
+export async function assertProfileCompilerContract({ packageRoot, compilerContract }) {
+  assert(
+    compilerContract &&
+      typeof compilerContract === 'object' &&
+      Array.isArray(compilerContract.files) &&
+      compilerContract.files.length === COMPILER_CONTRACT_PATHS.length,
+    'Profile compiler contract differs from the pinned profile'
+  );
+  for (const [index, expectedPath] of COMPILER_CONTRACT_PATHS.entries()) {
+    const reference = compilerContract.files[index];
+    assert(
+      reference && reference.path === expectedPath && typeof reference.sha256 === 'string',
+      'Profile compiler contract inventory differs from the pinned profile'
+    );
+    assert(
+      sha256(await readFile(path.join(packageRoot, reference.path))) === reference.sha256,
+      `Profile compiler contract digest differs for ${reference.path}`
+    );
+  }
 }
 
 export async function assertProfileGenerationProvenance({ packageRoot, provenance }) {
@@ -41,6 +68,7 @@ export async function assertProfileGenerationProvenance({ packageRoot, provenanc
     'Provenance identity does not match the profile generator'
   );
   assertRegistryIds(provenance.registryIds);
+  await assertProfileCompilerContract({ packageRoot, compilerContract: provenance.compilerContract });
 }
 
 export async function assertPinnedShadcnToolchain({

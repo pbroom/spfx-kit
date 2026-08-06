@@ -15,6 +15,7 @@
     "utilities",
     "dependencyResolutionPins",
     "typescriptMatrix",
+    "compilerContract",
     "normalization",
     "registryIds",
     "excludedDependencies",
@@ -94,6 +95,27 @@
       }
     },
     "typescriptMatrix": { "const": ["5.3.3", "5.8.3"] },
+    "compilerContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["files"],
+      "properties": {
+        "files": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": { "type": "string", "pattern": "^[^/].*" },
+              "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            }
+          }
+        }
+      }
+    },
     "normalization": {
       "type": "object",
       "additionalProperties": false,

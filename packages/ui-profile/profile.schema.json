@@ -11,6 +11,7 @@
     "profileId",
     "provenanceSha256",
     "normalizationImplementationSha256",
+    "compilerContract",
     "dependencyClosure",
     "baseUiDeclarationTransform",
     "baseUiPopupLifecycleTransform",
@@ -23,6 +24,7 @@
     "profileId": { "const": "spfx-react17-base-nova-v1" },
     "provenanceSha256": { "$ref": "#/$defs/sha256" },
     "normalizationImplementationSha256": { "$ref": "#/$defs/sha256" },
+    "compilerContract": { "$ref": "#/$defs/compilerContract" },
     "dependencyClosure": { "$ref": "#/$defs/snapshot" },
     "baseUiDeclarationTransform": { "$ref": "#/$defs/snapshot" },
     "baseUiPopupLifecycleTransform": { "$ref": "#/$defs/snapshot" },
@@ -43,6 +45,19 @@
       "properties": {
         "path": { "type": "string", "pattern": "^[^/].*" },
         "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "compilerContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["files"],
+      "properties": {
+        "files": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/snapshot" }
+        }
       }
     },
     "output": {

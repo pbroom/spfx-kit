@@ -65,7 +65,7 @@ npm --workspace @spfx-kit/ui-profile run typecheck
 The Base UI 1.6.0 `SelectValue` declaration compatibility transform and the
 upstream-derived popup lifecycle correction are kept as exact, digest-bound
 contracts. The lifecycle correction backports the merged implementation from
-[`mui/base-ui#5387`](https://github.com/mui/base-ui/pull/5387) without changing
+[`mui/base-ui#5387`](https://github.com/mui/base-ui/issues/5387) without changing
 the pinned dependency version. `profile:prepare:base-ui` applies both only to
 a generated, ignored copy of an already-installed, byte-for-byte recognized
 Base UI 1.6.0 package. It never mutates `node_modules`, downloads dependencies,

@@ -38,6 +38,26 @@
     "@floating-ui/utils": "0.2.11"
   },
   "typescriptMatrix": ["5.3.3", "5.8.3"],
+  "compilerContract": {
+    "files": [
+      {
+        "path": "compat-consumers/react17-base-ui-jsx.d.ts",
+        "sha256": "76f6e8a5b9ebc66c2289ba7aa9d16e200cbb116e27b3117d7de18c18cc23398e"
+      },
+      {
+        "path": "tsconfig.base.json",
+        "sha256": "022dba9840da44315cd587429a097916aae95678379f79d9296d3d63b974cece"
+      },
+      {
+        "path": "tsconfig.ts53.json",
+        "sha256": "b72ba1a07871816fbb0e5fe3130d9f7319637e99a238222c08640badbf9d8e3c"
+      },
+      {
+        "path": "tsconfig.ts58.json",
+        "sha256": "b72ba1a07871816fbb0e5fe3130d9f7319637e99a238222c08640badbf9d8e3c"
+      }
+    ]
+  },
   "normalization": {
     "contractVersion": "react17-classic-jsx-v1",
     "implementation": "scripts/lib/profile.mjs"

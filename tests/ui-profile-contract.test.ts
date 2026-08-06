@@ -195,6 +195,7 @@ interface ProfileManifest {
   profileId: string;
   provenanceSha256: string;
   normalizationImplementationSha256: string;
+  compilerContract: { files: SnapshotReference[] };
   dependencyClosure: SnapshotReference;
   baseUiDeclarationTransform: SnapshotReference;
   baseUiPopupLifecycleTransform: SnapshotReference;
@@ -323,6 +324,11 @@ describe('private offline React 17 UI profile artifacts', () => {
     const profile = JSON.parse(profileBytes.toString('utf8')) as ProfileManifest;
     const provenanceBytes = await readFile(path.join(profileRoot, 'provenance.json'));
     const implementationBytes = await readFile(path.join(profileRoot, 'scripts/lib/profile.mjs'));
+    const compilerContractBytes = await Promise.all(
+      profile.compilerContract.files.map(
+        async (reference) => [reference.path, await readFile(path.join(profileRoot, reference.path))] as const
+      )
+    );
     const dependencyClosureBytes = await readFile(path.join(profileRoot, profile.dependencyClosure.path));
     const baseUiDeclarationTransformBytes = await readFile(path.join(profileRoot, profile.baseUiDeclarationTransform.path));
     const baseUiPopupLifecycleTransformBytes = await readFile(path.join(profileRoot, profile.baseUiPopupLifecycleTransform.path));
@@ -331,6 +337,9 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(profile.profileId).toBe('spfx-react17-base-nova-v1');
     expect(profile.provenanceSha256).toBe(sha256(provenanceBytes));
     expect(profile.normalizationImplementationSha256).toBe(sha256(implementationBytes));
+    expect(profile.compilerContract).toEqual({
+      files: compilerContractBytes.map(([path, bytes]) => ({ path, sha256: sha256(bytes) }))
+    });
     expect(profile.dependencyClosure).toEqual({
       path: 'dependency-closure.json',
       sha256: sha256(dependencyClosureBytes)

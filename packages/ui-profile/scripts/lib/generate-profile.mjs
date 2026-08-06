@@ -64,6 +64,7 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
     profileId: PROFILE_ID,
     provenanceSha256: sha256(provenanceBytes),
     normalizationImplementationSha256: sha256(await readFile(implementationPath)),
+    compilerContract: provenance.compilerContract,
     dependencyClosure: {
       path: 'dependency-closure.json',
       sha256: sha256(await readFile(path.join(packageRoot, 'dependency-closure.json')))

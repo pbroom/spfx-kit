@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 
 import { assertGeneratedTreeClosure, pinnedTypeDirectiveNames } from './lib/generated-tree-closure.mjs';
+import { assertProfileCompilerContract } from './lib/profile-update-intake.mjs';
 import {
   GENERATOR_VERSION,
   NORMALIZATION_CONTRACT_VERSION,
@@ -68,11 +69,11 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === '3b7c17421d2d15d8ac948278586508acf7b06c9d29abc20dea4df3602b6f0288',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === 'cf5253019a8711ceb715d30a20ddba1bb1632f7096c4ae0189fc2197d989c8b1',
   'profile.schema.json identity differs'
 );
 assert(
-  sha256(Buffer.from(canonicalJson(provenanceSchema))) === '50dc4e94abc96cecb6ce8dd729a9b486708d25c5ec35793a02049d51139c2a49',
+  sha256(Buffer.from(canonicalJson(provenanceSchema))) === 'b7c8e3646462a3b551f31adb5fd1fd25362101bd6e0abae815522b31debd2529',
   'provenance.schema.json identity differs'
 );
 assert(validateProfile(profile), `profile.json schema errors: ${ajv.errorsText(validateProfile.errors)}`);
@@ -97,6 +98,8 @@ assert(profile.generatorVersion === GENERATOR_VERSION, 'Unexpected profile gener
 assert(profile.profileId === PROFILE_ID, 'Unexpected profile ID');
 assert(profile.provenanceSha256 === sha256(provenanceBytes), 'Provenance digest differs');
 assert(profile.normalizationImplementationSha256 === sha256(implementationBytes), 'Normalization implementation digest differs');
+await assertProfileCompilerContract({ packageRoot, compilerContract: profile.compilerContract });
+assertExact(profile.compilerContract, provenance.compilerContract, 'Compiler contract');
 assert(profile.dependencyClosure.path === 'dependency-closure.json', 'Dependency closure path differs');
 assert(
   profile.dependencyClosure.sha256 === sha256(await readFile(path.join(packageRoot, profile.dependencyClosure.path))),

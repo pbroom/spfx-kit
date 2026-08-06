@@ -35,12 +35,18 @@ describe('UI profile generation provenance', () => {
       (provenance: Record<string, unknown>) => {
         provenance.registryIds = [];
       }
+    ],
+    [
+      'compiler contract digest',
+      (provenance: Record<string, any>) => {
+        provenance.compilerContract.files[0].sha256 = '0'.repeat(64);
+      }
     ]
   ])('rejects drifted %s before generation', async (_label, mutate) => {
     const provenance = await canonicalProvenance();
     mutate(provenance);
     await expect(assertProfileGenerationProvenance({ packageRoot, provenance })).rejects.toThrow(
-      /Profile update provenance is invalid|Provenance identity|Registry allowlist/
+      /Profile update provenance is invalid|Provenance identity|Registry allowlist|Profile compiler contract/
     );
   });
 });

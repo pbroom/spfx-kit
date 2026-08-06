@@ -6,7 +6,27 @@
   },
   "baseUiPopupLifecycleTransform": {
     "path": "compat/base-ui-1.6.0/popup-lifecycle/contract.json",
-    "sha256": "772b9777c7fed2b1a2672c99616aac31f7df3a4a30526d6d94115c9f6fb06deb"
+    "sha256": "6500f7475790853273cfbbb10c1c570c054acd883db4031988b0001978aacfef"
+  },
+  "compilerContract": {
+    "files": [
+      {
+        "path": "compat-consumers/react17-base-ui-jsx.d.ts",
+        "sha256": "76f6e8a5b9ebc66c2289ba7aa9d16e200cbb116e27b3117d7de18c18cc23398e"
+      },
+      {
+        "path": "tsconfig.base.json",
+        "sha256": "022dba9840da44315cd587429a097916aae95678379f79d9296d3d63b974cece"
+      },
+      {
+        "path": "tsconfig.ts53.json",
+        "sha256": "b72ba1a07871816fbb0e5fe3130d9f7319637e99a238222c08640badbf9d8e3c"
+      },
+      {
+        "path": "tsconfig.ts58.json",
+        "sha256": "b72ba1a07871816fbb0e5fe3130d9f7319637e99a238222c08640badbf9d8e3c"
+      }
+    ]
   },
   "dependencyClosure": {
     "path": "dependency-closure.json",
@@ -611,6 +631,6 @@
   ],
   "normalizationImplementationSha256": "8428ddb5d030d8de50f1de44d532c81b5f4cdb354ff5e2b21d8f73c91e24852b",
   "profileId": "spfx-react17-base-nova-v1",
-  "provenanceSha256": "be70e776085b5e8f809de8d3d5bf0bfa2d4a6cbe07221a1031759969c83c7b23",
+  "provenanceSha256": "ca0bab8376a7cb5431573137a3414898338b059603a3ac161c5122946f964409",
   "schemaVersion": 1
 }
