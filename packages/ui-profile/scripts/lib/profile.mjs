@@ -426,6 +426,17 @@ function declarationFiles(root) {
   return files.sort((left, right) => left.localeCompare(right, 'en'));
 }
 
+function hasDeclarationModuleSurface(declarationPath) {
+  const program = ts.createProgram([declarationPath], {
+    noEmit: true,
+    skipLibCheck: true,
+    types: []
+  });
+  const sourceFile = program.getSourceFile(declarationPath);
+  const moduleSymbol = sourceFile && program.getTypeChecker().getSymbolAtLocation(sourceFile);
+  return Boolean(sourceFile && sourceFile.parseDiagnostics.length === 0 && moduleSymbol && program.getTypeChecker().getExportsOfModule(moduleSymbol).length);
+}
+
 function declarationEntrypoints(typesPackageName, runtimePackageName) {
   const packageJsonPath = require.resolve(`${typesPackageName}/package.json`);
   const packageRoot = path.dirname(packageJsonPath);
@@ -457,7 +468,7 @@ function declarationEntrypoints(typesPackageName, runtimePackageName) {
       addEntrypoint(entrypoint, target);
     }
   } else {
-    for (const declarationPath of declarationFiles(packageRoot).filter((file) => path.basename(file) !== 'global.d.ts')) {
+    for (const declarationPath of declarationFiles(packageRoot).filter(hasDeclarationModuleSurface)) {
       const relative = path.relative(packageRoot, declarationPath).replaceAll(path.sep, '/');
       const subpath = relative.replace(/(?:^|\/)index\.d\.ts$/u, '').replace(/\.d\.ts$/u, '');
       addEntrypoint(subpath ? `${runtimePackageName}/${subpath}` : runtimePackageName, relative);
@@ -524,12 +535,12 @@ function reactCompilerSurface(moduleName, label) {
       );
     }
   }
+  if (/^react\/jsx-(?:dev-)?runtime$/u.test(moduleName)) {
+    throw new Error(`${label}: automatic JSX runtime output is not accepted`);
+  }
   const surface = REACT_COMPILER_SURFACES.get(moduleName);
   if (!surface) {
     throw new Error(`${label}: ${moduleName} is outside the pinned React 17 declaration entrypoint inventory`);
-  }
-  if (/^react\/jsx-(?:dev-)?runtime$/u.test(moduleName)) {
-    throw new Error(`${label}: automatic JSX runtime output is not accepted`);
   }
   return surface;
 }
