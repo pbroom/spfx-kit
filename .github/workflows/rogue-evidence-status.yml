@@ -1,0 +1,10 @@
+name: Rogue evidence status probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "This protected-tree addition must be rejected before execution."
