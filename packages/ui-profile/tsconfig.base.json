@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "baseUrl": ".",
+    "paths": {
+      "@base-ui/react": [".prepared/base-ui/index.d.ts"],
+      "@base-ui/react/*": [".prepared/base-ui/*"],
+      "react": ["../../node_modules/@types/react/index.d.ts"],
+      "react/jsx-runtime": ["../../node_modules/@types/react/jsx-runtime.d.ts"],
+      "react/jsx-dev-runtime": ["../../node_modules/@types/react/jsx-dev-runtime.d.ts"],
+      "scheduler/*": ["../../node_modules/@types/scheduler/*"]
+    },
+    "typeRoots": ["../../node_modules/@types", "./node_modules/@types"],
+    "types": ["react"],
+    "jsx": "react",
+    "lib": ["DOM", "DOM.Iterable", "ES2020", "ES2020.Intl"],
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": false,
+    "noEmit": true
+  },
+  "include": ["normalized/src/**/*.ts", "normalized/src/**/*.tsx", "compat-consumers/**/*.d.ts", "compat-consumers/**/*.tsx"]
+}

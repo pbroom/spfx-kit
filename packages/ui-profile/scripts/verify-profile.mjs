@@ -30,6 +30,19 @@ const provenanceSchema = JSON.parse(provenanceSchemaBytes);
 const manifest = await readJson('package.json');
 
 const expectedIds = [...REGISTRY_IDS];
+const expectedCompilerInputPaths = [
+  'compat-consumers/react17-base-ui-jsx.d.ts',
+  'scripts/typecheck.mjs',
+  'scripts/lib/typecheck-generated-profile.mjs',
+  'scripts/lib/generate-validated-profile.mjs',
+  'scripts/prepare-base-ui.mjs',
+  'scripts/transform-base-ui-select-value.mjs',
+  'scripts/transform-base-ui-popup-lifecycle.mjs',
+  'scripts/lib/preparation-lock.mjs',
+  'tsconfig.base.json',
+  'tsconfig.ts53.json',
+  'tsconfig.ts58.json'
+];
 
 const expectedDirectDependencies = {
   '@base-ui/react': '1.6.0',
@@ -68,7 +81,7 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === '3b7c17421d2d15d8ac948278586508acf7b06c9d29abc20dea4df3602b6f0288',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === 'ea46f01b0a8686012ebce90bed085e4eeeb35a9032aff515b5077ced51d37946',
   'profile.schema.json identity differs'
 );
 assert(
@@ -97,6 +110,17 @@ assert(profile.generatorVersion === GENERATOR_VERSION, 'Unexpected profile gener
 assert(profile.profileId === PROFILE_ID, 'Unexpected profile ID');
 assert(profile.provenanceSha256 === sha256(provenanceBytes), 'Provenance digest differs');
 assert(profile.normalizationImplementationSha256 === sha256(implementationBytes), 'Normalization implementation digest differs');
+assertExact(
+  profile.compilerInputs.map((input) => input.path),
+  expectedCompilerInputPaths,
+  'Compiler input inventory'
+);
+for (const input of profile.compilerInputs) {
+  assert(
+    input.sha256 === sha256(await readFile(path.join(packageRoot, input.path))),
+    `Compiler input digest differs for ${input.path}`
+  );
+}
 assert(profile.dependencyClosure.path === 'dependency-closure.json', 'Dependency closure path differs');
 assert(
   profile.dependencyClosure.sha256 === sha256(await readFile(path.join(packageRoot, profile.dependencyClosure.path))),

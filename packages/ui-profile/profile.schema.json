@@ -11,6 +11,7 @@
     "profileId",
     "provenanceSha256",
     "normalizationImplementationSha256",
+    "compilerInputs",
     "dependencyClosure",
     "baseUiDeclarationTransform",
     "baseUiPopupLifecycleTransform",
@@ -23,6 +24,25 @@
     "profileId": { "const": "spfx-react17-base-nova-v1" },
     "provenanceSha256": { "$ref": "#/$defs/sha256" },
     "normalizationImplementationSha256": { "$ref": "#/$defs/sha256" },
+    "compilerInputs": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "prefixItems": [
+        { "$ref": "#/$defs/compilerBridge" },
+        { "$ref": "#/$defs/typecheckImplementation" },
+        { "$ref": "#/$defs/generatedProfileTypecheckImplementation" },
+        { "$ref": "#/$defs/validatedProfileGenerationImplementation" },
+        { "$ref": "#/$defs/baseUiPreparationImplementation" },
+        { "$ref": "#/$defs/selectValueTransformImplementation" },
+        { "$ref": "#/$defs/popupLifecycleTransformImplementation" },
+        { "$ref": "#/$defs/preparationLockImplementation" },
+        { "$ref": "#/$defs/tsconfigBase" },
+        { "$ref": "#/$defs/tsconfigTs53" },
+        { "$ref": "#/$defs/tsconfigTs58" }
+      ],
+      "items": false
+    },
     "dependencyClosure": { "$ref": "#/$defs/snapshot" },
     "baseUiDeclarationTransform": { "$ref": "#/$defs/snapshot" },
     "baseUiPopupLifecycleTransform": { "$ref": "#/$defs/snapshot" },
@@ -44,6 +64,75 @@
         "path": { "type": "string", "pattern": "^[^/].*" },
         "sha256": { "$ref": "#/$defs/sha256" }
       }
+    },
+    "compilerBridge": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "compat-consumers/react17-base-ui-jsx.d.ts" } } }
+      ]
+    },
+    "typecheckImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/typecheck.mjs" } } }
+      ]
+    },
+    "generatedProfileTypecheckImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        {
+          "type": "object",
+          "properties": { "path": { "const": "scripts/lib/typecheck-generated-profile.mjs" } }
+        }
+      ]
+    },
+    "validatedProfileGenerationImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        {
+          "type": "object",
+          "properties": { "path": { "const": "scripts/lib/generate-validated-profile.mjs" } }
+        }
+      ]
+    },
+    "baseUiPreparationImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/prepare-base-ui.mjs" } } }
+      ]
+    },
+    "selectValueTransformImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        {
+          "type": "object",
+          "properties": { "path": { "const": "scripts/transform-base-ui-select-value.mjs" } }
+        }
+      ]
+    },
+    "popupLifecycleTransformImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        {
+          "type": "object",
+          "properties": { "path": { "const": "scripts/transform-base-ui-popup-lifecycle.mjs" } }
+        }
+      ]
+    },
+    "preparationLockImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/lib/preparation-lock.mjs" } } }
+      ]
+    },
+    "tsconfigBase": {
+      "allOf": [{ "$ref": "#/$defs/snapshot" }, { "type": "object", "properties": { "path": { "const": "tsconfig.base.json" } } }]
+    },
+    "tsconfigTs53": {
+      "allOf": [{ "$ref": "#/$defs/snapshot" }, { "type": "object", "properties": { "path": { "const": "tsconfig.ts53.json" } } }]
+    },
+    "tsconfigTs58": {
+      "allOf": [{ "$ref": "#/$defs/snapshot" }, { "type": "object", "properties": { "path": { "const": "tsconfig.ts58.json" } } }]
     },
     "output": {
       "type": "object",
