@@ -73,6 +73,104 @@
     "toggle",
     "utils"
   ],
+  "registrySnapshots": {
+    "button": {
+      "rawSha256": "434eb70c9158f687770752468a88fd9e164417620ab7047da10d06fe923a04bc",
+      "canonicalSha256": "e7f2a3eb916b7fd0ed1506ea7ce7205bb50ab18bef3ee7d29b3a112f1b95e407"
+    },
+    "input": {
+      "rawSha256": "00e3d8e2bbf597b632bafde6cc1b6006d2f759b9083b32bfd024f0b2edeb2fc1",
+      "canonicalSha256": "981b9be554c9a0a8ff4d463356578086e2e971ef7647bdb57e579490b1c1e0a9"
+    },
+    "field": {
+      "rawSha256": "ebeeb6e0def63bce60ff4270c9c028ac8635e68d1d654f4f09a65c80505cdc38",
+      "canonicalSha256": "808fe30010b506e02664f06387068453659c09fb2634736fef818e19e00da058"
+    },
+    "textarea": {
+      "rawSha256": "8bd80124e0c845fef615f7d1da05f77521ee50bb4be15676860aa48a74a9f8d8",
+      "canonicalSha256": "f72ac933b59e736da0f2d56d1c1568c88753fe5cbce2ee0641deb5ebeb9ff856"
+    },
+    "checkbox": {
+      "rawSha256": "88da4986fb88c20601369ce3bbf138c8baf7834bc760893bd4ed553e0c50187b",
+      "canonicalSha256": "f7eb599c3c47a977212878c4c29f11a554a20f41f2a067d1611d143a395aea02"
+    },
+    "switch": {
+      "rawSha256": "954741233ca5c0eac9eb42e3928c4e8087846e71d2b0b781e65ca072767456fb",
+      "canonicalSha256": "e4cb767b84022b988c016eff16adf33aecb7c17bef9379c0dfab570efefe2a43"
+    },
+    "select": {
+      "rawSha256": "bac6f97b9dd3ad2c2f1fb587099fc4dbfc06d66b8d5b3f535486225550843997",
+      "canonicalSha256": "aca3d460c8f1eac00d1c18c48524db601353b84e0df9a2afbf1cd4a1e1606ff4"
+    },
+    "combobox": {
+      "rawSha256": "aa9233050ea97499948cfbd50fddcc3215710607f0f36924c651931440e6e209",
+      "canonicalSha256": "33c97dc4e5835e5d53435f6cb0a0785b59a78ad983fc4e7cf83b6ff71d60fbc2"
+    },
+    "toggle-group": {
+      "rawSha256": "de923fb386aefd1829ae22586413fa35436181acc65af9a06c1608935c69b5a4",
+      "canonicalSha256": "65e8470516f9d508a0db7cb9200d1b093d5a04c7be90a647dc09548a9e2b2c1f"
+    },
+    "tabs": {
+      "rawSha256": "2d55e20ae416ce9ca89253b5b4e5288a23b5a36013293685c8d5ebd3e9331ecb",
+      "canonicalSha256": "4179b303aa457dac2cfb9c85b703b1b25a455a28dc53906a177979a6bf13b8fd"
+    },
+    "accordion": {
+      "rawSha256": "ecb8e864a54894642c7f008ff95efae1885a7c0338c5eb64c9474e213cb9d36d",
+      "canonicalSha256": "5695e7ddfd8b8e050d5f2e391e2a11067b659534079b2e875da376ca0994ba46"
+    },
+    "dropdown-menu": {
+      "rawSha256": "0a7909c9c8ce8dcbcfb4b355071daad0aae56cf31dfde808253309346e5fdd64",
+      "canonicalSha256": "abafbe52c9b25b92ed6f88d0c7d0a80d0d8b655758ac7def2f777e6d0752c043"
+    },
+    "dialog": {
+      "rawSha256": "99e9d7851f7d00fa85cd66157dd6ee3d6759f149a0a2b850d837407fba61648f",
+      "canonicalSha256": "523ae921e2ffaa94bc13d67cc23735ce2193114ee6db215647fd1cc4e041f80c"
+    },
+    "sheet": {
+      "rawSha256": "d3eae408d743da78ac8fad76480bece794679b6f7b8e61317eac8d97e6f8db0a",
+      "canonicalSha256": "54f6430d36b63266f27c1e7ccb80c85c84c0107e5b8ef52b45816c340a8e76a2"
+    },
+    "popover": {
+      "rawSha256": "8c6cec209d1004a1ca4ea06d41c50f54eca991535f75bc72c3c9b3672d4a6f43",
+      "canonicalSha256": "5d634ad32fe4da572110a4b495e0baa46b686a505dedac4ca9ab6f72087ac859"
+    },
+    "tooltip": {
+      "rawSha256": "8a3be42a6400f31a8631a03b76c5221b1f4ce3d667b1e7a6ad51cdf6a89e00b6",
+      "canonicalSha256": "4cc26bc8653d76197dafd1ae67ef8a7db8199b4bf9f37ca45528aad30d9b775b"
+    },
+    "alert": {
+      "rawSha256": "f48151ef5f0a8a77d503d382bcf833c25b4d3b1a8e956dd7a0e30af8048b60de",
+      "canonicalSha256": "060db530bfaad8467bb495fc432dbbadfa322ef1d28c590e0d3270f456e6e33f"
+    },
+    "badge": {
+      "rawSha256": "a8ceb87a9ea72b744909215319a48d9a69983a76dca94831bf66bab21d8d85fb",
+      "canonicalSha256": "bab55dbf38a65f508ccfdc07a1cd5b33c91432a6856931cdb27ee02085aad2ee"
+    },
+    "spinner": {
+      "rawSha256": "f969d7c19667752d1696767ea2e823766825e705351b93d8ad018cd556b1d17f",
+      "canonicalSha256": "086e87fdd5cc0cf4bf70832756f6fa07fff3e9c7ad5f185954b9651c1dc7c3e6"
+    },
+    "label": {
+      "rawSha256": "5fb122b9665fa5c68e900b07d88d167a43eb1af5d751654dc8d8ba2313073af9",
+      "canonicalSha256": "37e20674d12c0ed3d9a17fd7f74dff963389e37fc6b7770131804a5295a87104"
+    },
+    "separator": {
+      "rawSha256": "11022cc2607efcaf8394b5b927c1926475624dc0db920557d51ab06e96343032",
+      "canonicalSha256": "2b86438d2d4d96d32d2f5bd821c93670573e0406effb08f196e5b67fc26406ef"
+    },
+    "input-group": {
+      "rawSha256": "2dd738138ad08fd8ac7e44d10a1db0078142c6354ef41ebe0880fb40936559c1",
+      "canonicalSha256": "fd2a3d04580ff2aac6379bfb5a8befcb1896fc194eded4e3591653ab39973f99"
+    },
+    "toggle": {
+      "rawSha256": "b763397b40e49430614d2ea525e19f64c9e0ebad75b41080aa49292b861a953c",
+      "canonicalSha256": "51566899e5f2d6a2380af1076fc88ca79d1a24eef8b6f34c110a6d2bc5127945"
+    },
+    "utils": {
+      "rawSha256": "af372df97b7b1017008b14be3f723ff73524759022123bf9717689f4f778025e",
+      "canonicalSha256": "8c1ac292b1798286eeff6ec6cb4ece7803b2550344d5c8363c5c0091e424426f"
+    }
+  },
   "excludedDependencies": ["cmdk@1.1.1", "sonner@2.0.7", "@radix-ui/*", "react-aria-components", "vaul"],
   "directProductionDependencies": {
     "@base-ui/react": "1.6.0",

@@ -140,6 +140,10 @@ function moduleSpecifierNodes(sourceFile) {
   return specifiers;
 }
 
+export function moduleSpecifiers(source, label) {
+  return moduleSpecifierNodes(parsedSource(source, label)).map((specifier) => specifier.text);
+}
+
 function rewriteModuleSpecifiers(source, label, rewrite) {
   const sourceFile = parsedSource(source, label);
   const replacements = [];

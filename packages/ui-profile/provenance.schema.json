@@ -18,9 +18,21 @@
     "typescriptMatrix",
     "normalization",
     "registryIds",
+    "registrySnapshots",
     "excludedDependencies",
     "directProductionDependencies"
   ],
+  "$defs": {
+    "snapshotDigests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rawSha256", "canonicalSha256"],
+      "properties": {
+        "rawSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "canonicalSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  },
   "properties": {
     "$schema": { "const": "./provenance.schema.json" },
     "schemaVersion": { "const": 1 },
@@ -138,6 +150,62 @@
         "toggle",
         "utils"
       ]
+    },
+    "registrySnapshots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "button",
+        "input",
+        "field",
+        "textarea",
+        "checkbox",
+        "switch",
+        "select",
+        "combobox",
+        "toggle-group",
+        "tabs",
+        "accordion",
+        "dropdown-menu",
+        "dialog",
+        "sheet",
+        "popover",
+        "tooltip",
+        "alert",
+        "badge",
+        "spinner",
+        "label",
+        "separator",
+        "input-group",
+        "toggle",
+        "utils"
+      ],
+      "properties": {
+        "button": { "$ref": "#/$defs/snapshotDigests" },
+        "input": { "$ref": "#/$defs/snapshotDigests" },
+        "field": { "$ref": "#/$defs/snapshotDigests" },
+        "textarea": { "$ref": "#/$defs/snapshotDigests" },
+        "checkbox": { "$ref": "#/$defs/snapshotDigests" },
+        "switch": { "$ref": "#/$defs/snapshotDigests" },
+        "select": { "$ref": "#/$defs/snapshotDigests" },
+        "combobox": { "$ref": "#/$defs/snapshotDigests" },
+        "toggle-group": { "$ref": "#/$defs/snapshotDigests" },
+        "tabs": { "$ref": "#/$defs/snapshotDigests" },
+        "accordion": { "$ref": "#/$defs/snapshotDigests" },
+        "dropdown-menu": { "$ref": "#/$defs/snapshotDigests" },
+        "dialog": { "$ref": "#/$defs/snapshotDigests" },
+        "sheet": { "$ref": "#/$defs/snapshotDigests" },
+        "popover": { "$ref": "#/$defs/snapshotDigests" },
+        "tooltip": { "$ref": "#/$defs/snapshotDigests" },
+        "alert": { "$ref": "#/$defs/snapshotDigests" },
+        "badge": { "$ref": "#/$defs/snapshotDigests" },
+        "spinner": { "$ref": "#/$defs/snapshotDigests" },
+        "label": { "$ref": "#/$defs/snapshotDigests" },
+        "separator": { "$ref": "#/$defs/snapshotDigests" },
+        "input-group": { "$ref": "#/$defs/snapshotDigests" },
+        "toggle": { "$ref": "#/$defs/snapshotDigests" },
+        "utils": { "$ref": "#/$defs/snapshotDigests" }
+      }
     },
     "excludedDependencies": {
       "const": ["cmdk@1.1.1", "sonner@2.0.7", "@radix-ui/*", "react-aria-components", "vaul"]
