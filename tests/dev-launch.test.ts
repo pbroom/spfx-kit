@@ -232,7 +232,18 @@ describe('SPFx Kit development launcher', () => {
     if (process.platform === 'win32') {
       return;
     }
-    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    let stopped = false;
+    const kill = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+      if (signal === 'SIGKILL') {
+        stopped = true;
+      }
+      if (signal === 0 && stopped) {
+        const error = new Error('no such process');
+        Object.assign(error, { code: 'ESRCH' });
+        throw error;
+      }
+      return true;
+    });
     const exitedWrapper = {
       pid: 1_234,
       processGroupId: 5_678,
@@ -244,6 +255,7 @@ describe('SPFx Kit development launcher', () => {
     try {
       await expect(stopServices([exitedWrapper], 'SIGTERM')).resolves.toBeUndefined();
       expect(kill).toHaveBeenCalledWith(-5_678, 'SIGTERM');
+      expect(kill).toHaveBeenCalledWith(-5_678, 'SIGKILL');
     } finally {
       kill.mockRestore();
     }

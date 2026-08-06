@@ -321,8 +321,15 @@ async function terminateWindowsProcessTree(pid, force) {
 }
 
 function waitForStoppedService(child, timeoutMs) {
-  if (child.exitCode !== null || child.signalCode !== null || !Number.isInteger(child.pid)) {
+  if (!Number.isInteger(child.pid)) {
     return Promise.resolve(true);
+  }
+  const processGroupId = process.platform === 'win32' ? undefined : child.processGroupId ?? child.pid;
+  if (child.exitCode !== null || child.signalCode !== null) {
+    if (!Number.isInteger(processGroupId) || !isProcessGroupAlive(processGroupId)) {
+      return Promise.resolve(true);
+    }
+    return waitForProcessGroupToStop(processGroupId, timeoutMs);
   }
   return new Promise((resolve) => {
     const onExit = () => {
@@ -334,6 +341,31 @@ function waitForStoppedService(child, timeoutMs) {
       resolve(false);
     }, timeoutMs);
     child.once('exit', onExit);
+  });
+}
+
+function isProcessGroupAlive(processGroupId) {
+  try {
+    process.kill(-processGroupId, 0);
+    return true;
+  } catch (error) {
+    return !error || typeof error !== 'object' || error.code !== 'ESRCH';
+  }
+}
+
+function waitForProcessGroupToStop(processGroupId, timeoutMs) {
+  return new Promise((resolve) => {
+    const deadline = Date.now() + timeoutMs;
+    const check = () => {
+      if (!isProcessGroupAlive(processGroupId)) {
+        resolve(true);
+      } else if (Date.now() >= deadline) {
+        resolve(false);
+      } else {
+        setTimeout(check, Math.min(100, Math.max(1, deadline - Date.now())));
+      }
+    };
+    check();
   });
 }
 
