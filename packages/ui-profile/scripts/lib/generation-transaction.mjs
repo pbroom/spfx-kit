@@ -60,6 +60,8 @@ export async function observeGeneratedProfileProcess(
     }
     const commandEnd = stat.lastIndexOf(')');
     const fields = commandEnd === -1 ? [] : stat.slice(commandEnd + 1).trim().split(/\s+/u);
+    // A zombie retains a PID/start tick but cannot own a live session.
+    if (fields[0] === 'Z') return { status: 'missing' };
     const startTicks = fields[19];
     const normalizedBootId = bootId.trim();
     if (!/^\d+$/u.test(startTicks ?? '') || !/^[a-f0-9-]{36}$/u.test(normalizedBootId)) {
@@ -542,6 +544,14 @@ async function assertPathDigest(target, expected, label) {
   if (actual !== expected) throw new Error(`Generated profile ${label} digest differs at ${target}`);
 }
 
+async function assertJournaledTarget(target, existed, priorDigest) {
+  const present = await pathExists(target);
+  if (present !== existed) {
+    throw new Error(`Generated profile journaled target existence changed at ${target}`);
+  }
+  if (present) await assertPathDigest(target, priorDigest, 'journaled target');
+}
+
 async function writeDirectoryMarker(target, kind, session, directoryIdentity) {
   const marker = {
     kind,
@@ -718,6 +728,12 @@ function assertOwner(owner, packageRoot, lockRoot) {
   assertProcessIdentity(owner, 'lock owner');
   assertIdentityRecord(owner.retainedBindingRootIdentity, 'retained binding root');
   if (owner.stagingIdentity !== undefined) assertIdentityRecord(owner.stagingIdentity, 'pre-journal staging');
+  if (owner.preJournalBackupIdentity !== undefined) {
+    assertIdentityRecord(owner.preJournalBackupIdentity, 'pre-journal backup');
+    if (owner.transaction !== undefined) {
+      throw new Error('Generated profile lock owner cannot retain a pre-journal backup with a transaction');
+    }
+  }
   if (owner.recoveryRequired !== undefined && owner.recoveryRequired !== true) {
     throw new Error('Generated profile lock owner recovery state is invalid');
   }
@@ -785,6 +801,9 @@ function assertMutationGate(gate, lockIdentity) {
     !['owner', 'claim', 'contender'].includes(gate.actorScope) ||
     !Number.isSafeInteger(gate.pid) ||
     gate.pid <= 0 ||
+    !Number.isFinite(gate.renewedAt) ||
+    !Number.isFinite(gate.expiresAt) ||
+    gate.expiresAt < gate.renewedAt ||
     gate.ownerToken === undefined ||
     (gate.actorScope !== 'owner' && gate.claimToken === undefined) ||
     !isObject(gate.lockIdentity) ||
@@ -808,6 +827,34 @@ async function readMutationGate(gateRoot, lockIdentity) {
   } catch (error) {
     throw new Error(`Generated profile mutation gate is unreadable at ${gateRoot}`, { cause: error });
   }
+}
+
+async function writeMutationGate(gateRoot, gate) {
+  const pending = path.join(gateRoot, `.gate-${randomUUID()}.json`);
+  let pendingOwned = true;
+  try {
+    await writeFile(pending, `${JSON.stringify(gate, null, 2)}\n`, { flag: 'wx' });
+    await rename(pending, path.join(gateRoot, MUTATION_GATE_FILE));
+    pendingOwned = false;
+  } finally {
+    if (pendingOwned) await rm(pending, { force: true });
+  }
+}
+
+async function renewMutationGateLease(context) {
+  if (!context.gate) throw new Error('Generated profile mutation gate is not held');
+  const current = await realDirectoryIdentity(context.gate.gateRoot, 'mutation gate');
+  const gate = await readMutationGate(context.gate.gateRoot, context.identity);
+  if (!sameIdentity(current, context.gate.gateIdentity) || gate.actionToken !== context.gate.gate.actionToken) {
+    throw new Error('Generated profile mutation gate ownership was lost');
+  }
+  const renewedAt = context.now();
+  const renewed = assertMutationGate(
+    { ...gate, renewedAt, expiresAt: renewedAt + context.leaseMs },
+    context.identity
+  );
+  await writeMutationGate(context.gate.gateRoot, renewed);
+  context.gate.gate = renewed;
 }
 
 async function assertActorAuthority(context) {
@@ -845,16 +892,23 @@ async function gateHolderIsGone(gate, context) {
     }
   }
   if (isObject(observed) && observed.status === 'missing') return true;
-  return Boolean(
+  if (
     isObject(observed) &&
       observed.status === 'alive' &&
       gate.processIdentity !== null &&
       observed.identity !== gate.processIdentity
-  );
+  ) {
+    return true;
+  }
+  // Unknown process observations cannot distinguish a recycled PID.  A
+  // holder without a stable identity therefore has to keep a renewable gate
+  // lease current, just like owner and recovery-claim records do.
+  return gate.processIdentity === null && context.now() >= gate.expiresAt;
 }
 
 function createMutationGateRecord(context, actionToken = randomUUID()) {
   const actor = context.actorRecord;
+  const renewedAt = context.now();
   return assertMutationGate(
     {
       kind: MUTATION_GATE_KIND,
@@ -865,6 +919,8 @@ function createMutationGateRecord(context, actionToken = randomUUID()) {
       pid: actor.pid,
       processIdentity: actor.processIdentity,
       instanceId: actor.instanceId,
+      renewedAt,
+      expiresAt: renewedAt + context.leaseMs,
       lockIdentity: identityRecord(context.identity)
     },
     context.identity
@@ -1031,6 +1087,7 @@ async function refreshOwnerLease(session) {
       leaseMs: session.leaseMs
     });
     await writeLease(session.lockRoot, lease);
+    await renewMutationGateLease(session);
   });
 }
 
@@ -1146,7 +1203,9 @@ async function acquireLock(
       actorRecord: owner,
       ownerToken: owner.token,
       operation: owner.operation,
-      identity: temporaryIdentity
+      identity: temporaryIdentity,
+      now,
+      leaseMs
     });
     try {
       await rename(temporary, lockRoot);
@@ -1254,7 +1313,9 @@ async function acquireRecoveryClaim(
     actorScope: 'claim',
     actorRecord: claim,
     observeProcess,
-    isProcessAlive
+    isProcessAlive,
+    now,
+    leaseMs
   };
   let gate;
   let publishedOwned = false;
@@ -1418,6 +1479,7 @@ async function refreshClaimLease(context) {
       leaseMs: context.leaseMs
     });
     await writeLease(path.join(context.lockRoot, CLAIM_NAME), lease);
+    await renewMutationGateLease(context);
   });
 }
 
@@ -1626,6 +1688,20 @@ async function assertDetachedLockInventory(lockRoot, context) {
     }
   }
   await assertCleanupInventory(lockRoot, context.identity, owner, allowedNames);
+  const backupRoot = path.join(lockRoot, 'backup');
+  if (await pathExists(backupRoot)) {
+    const backupIdentity = await realDirectoryIdentity(backupRoot, 'pre-journal backup');
+    if (!owner.preJournalBackupIdentity || !sameIdentityRecord(backupIdentity, owner.preJournalBackupIdentity)) {
+      throw new Error('Generated profile pre-journal backup identity changed');
+    }
+    await assertDirectoryMarker(
+      backupRoot,
+      'backup',
+      { token: owner.token, operation: owner.operation, lockIdentity: identityRecord(context.identity) },
+      backupIdentity
+    );
+    allowedNames.add('backup');
+  }
   const stagingRoot = path.join(lockRoot, 'staging');
   if (await pathExists(stagingRoot)) {
     const stagingIdentity = await realDirectoryIdentity(stagingRoot, 'pre-journal staging');
@@ -2336,7 +2412,7 @@ export async function recoverGeneratedReplacement({
   }
 }
 
-async function beginTransaction(session, { stagingRoot, generatedPaths }) {
+async function beginTransaction(session, { stagingRoot, generatedPaths, onBoundary = async () => {} }) {
   if (!session || session[SESSION] !== true) throw new Error('Generated replacement requires an owned generation session');
   stagingRoot = path.resolve(stagingRoot);
   assertStagingRoot(session.lockRoot, stagingRoot);
@@ -2360,9 +2436,6 @@ async function beginTransaction(session, { stagingRoot, generatedPaths }) {
   if (await pathExists(backupRoot)) throw new Error('Generated profile session contains an unjournaled backup directory');
   const stagingIdentity = await realDirectoryIdentity(stagingRoot, 'staging root');
   await writeDirectoryMarker(stagingRoot, 'staging', session, stagingIdentity);
-  await mkdir(backupRoot);
-  const backupIdentity = await realDirectoryIdentity(backupRoot, 'transaction backup');
-  await writeDirectoryMarker(backupRoot, 'backup', session, backupIdentity);
   const existed = {};
   const priorDigests = {};
   const nextDigests = {};
@@ -2373,6 +2446,13 @@ async function beginTransaction(session, { stagingRoot, generatedPaths }) {
     priorDigests[relativePath] = existed[relativePath] ? await digestPath(target) : null;
     nextDigests[relativePath] = await digestPath(staged);
   }
+  await mkdir(backupRoot);
+  const backupIdentity = await realDirectoryIdentity(backupRoot, 'transaction backup');
+  await writeDirectoryMarker(backupRoot, 'backup', session, backupIdentity);
+  // If the process dies before the journal is published, this binding keeps
+  // the backup part of the owned lock rather than an unexpected lock entry.
+  await writeOwnerAtomically(session, { ...owner, preJournalBackupIdentity: identityRecord(backupIdentity) });
+  await onBoundary('backup-bound', { backupRoot, backupIdentity: identityRecord(backupIdentity) });
   const transaction = {
     kind: TRANSACTION_KIND,
     token: session.token,
@@ -2422,7 +2502,7 @@ export async function createGeneratedProfileStaging(session) {
 }
 
 export async function runGeneratedReplacementTransaction({ session, stagingRoot, generatedPaths, onBoundary = async () => {} }) {
-  const transaction = await beginTransaction(session, { stagingRoot, generatedPaths });
+  const transaction = await beginTransaction(session, { stagingRoot, generatedPaths, onBoundary });
   await onBoundary('journaled', transaction);
   await onBoundary('backup-created', transaction);
   for (const relativePath of transaction.generatedPaths) {
@@ -2430,6 +2510,7 @@ export async function runGeneratedReplacementTransaction({ session, stagingRoot,
     const target = resolveGeneratedPath(transaction.packageRoot, relativePath);
     const backup = resolveGeneratedPath(transaction.backupRoot, relativePath);
     await assertSessionMutation(session);
+    await assertJournaledTarget(target, transaction.existed[relativePath], transaction.priorDigests[relativePath]);
     await mkdir(path.dirname(backup), { recursive: true });
     await rename(target, backup);
     await onBoundary(`backed-up:${relativePath}`, transaction);
