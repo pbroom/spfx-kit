@@ -80,11 +80,8 @@ export function normalizeMockCdnPublicOrigin(value = DEFAULT_MOCK_CDN_ORIGIN) {
     if (
       url.protocol !== 'https:' ||
       !url.hostname ||
-      url.hostname === 'localhost' ||
       url.hostname === '0.0.0.0' ||
-      url.hostname === '127.0.0.1' ||
-      url.hostname === '::1' ||
-      url.hostname === '[::1]' ||
+      isLoopbackHostname(url.hostname) ||
       url.username ||
       url.password ||
       url.pathname !== '/' ||
@@ -95,6 +92,17 @@ export function normalizeMockCdnPublicOrigin(value = DEFAULT_MOCK_CDN_ORIGIN) {
     }
     return url.origin;
   }
+}
+
+function isLoopbackHostname(value) {
+  const hostname = String(value).trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/, '');
+  return (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    /^127(?:\.\d{1,3}){3}$/.test(hostname) ||
+    hostname === '::1' ||
+    /^::(?:ffff:)?7f[\da-f]{2}:[\da-f]{1,4}$/.test(hostname)
+  );
 }
 
 export function mockCdnAppReleaseBaseUrl(origin, appId, releaseId) {

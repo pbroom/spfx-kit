@@ -139,15 +139,9 @@
       throw new Error('The staged CDN smoke-check delivery origin is invalid.');
     }
     const url = tryParseUrl(value);
-    const loopback = url?.protocol === 'http:' && url.hostname === '127.0.0.1' && Boolean(url.port);
+    const loopback = url?.protocol === 'http:' && isCanonicalLoopbackHostname(url.hostname) && Boolean(url.port);
     const forwarded =
-      url?.protocol === 'https:' &&
-      Boolean(url.hostname) &&
-      url.hostname !== 'localhost' &&
-      url.hostname !== '0.0.0.0' &&
-      url.hostname !== '127.0.0.1' &&
-      url.hostname !== '::1' &&
-      url.hostname !== '[::1]';
+      url?.protocol === 'https:' && Boolean(url.hostname) && url.hostname !== '0.0.0.0' && !isLoopbackHostname(url.hostname);
     if (
       !url ||
       (!loopback && !forwarded) ||
@@ -161,6 +155,25 @@
       throw new Error('The staged CDN smoke-check requires a separate loopback HTTP or forwarded HTTPS mock-CDN origin.');
     }
     return url.origin;
+  }
+
+  function isCanonicalLoopbackHostname(value) {
+    return String(value).trim().toLowerCase() === '127.0.0.1';
+  }
+
+  function isLoopbackHostname(value) {
+    const hostname = String(value)
+      .trim()
+      .toLowerCase()
+      .replace(/^\[|\]$/g, '')
+      .replace(/\.+$/, '');
+    return (
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      /^127(?:\.\d{1,3}){3}$/.test(hostname) ||
+      hostname === '::1' ||
+      /^::(?:ffff:)?7f[\da-f]{2}:[\da-f]{1,4}$/.test(hostname)
+    );
   }
 
   function validateReleaseBaseUrl(value, deliveryOrigin) {

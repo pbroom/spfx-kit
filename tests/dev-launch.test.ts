@@ -122,6 +122,23 @@ describe('SPFx Kit development launcher', () => {
     ).toThrow('requires different SPFX_KIT_MOCK_CDN_LAB_ORIGIN and SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN');
   });
 
+  it.each([
+    'https://localhost.',
+    'https://preview.localhost',
+    'https://127.0.0.2',
+    'https://[::1]',
+    'https://[::ffff:127.0.0.1]'
+  ])('rejects loopback-form forwarded origins for cloud previews: %s', (loopbackOrigin) => {
+    expect(() =>
+      resolveDevConfig({
+        SPFX_LAB_HOST: '0.0.0.0',
+        SPFX_KIT_MOCK_CDN_LAB_ORIGIN: loopbackOrigin,
+        SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN: 'https://cdn-preview.example.test',
+        SPFX_KIT_MOCK_CDN_LISTEN_HOST: '0.0.0.0'
+      })
+    ).toThrow('requires an HTTPS SPFX_KIT_MOCK_CDN_LAB_ORIGIN');
+  });
+
   it('uses taskkill tree termination arguments on Windows', () => {
     expect(getWindowsTaskkillArgs(1234, false)).toEqual(['/pid', '1234', '/t']);
     expect(getWindowsTaskkillArgs(1234, true)).toEqual(['/pid', '1234', '/t', '/f']);

@@ -50,9 +50,17 @@ describe('local mock CDN bucket contract', () => {
     );
   });
 
-  it('rejects loopback IPv6 values from browser-facing forwarded CDN origins', () => {
+  it('rejects every loopback form from browser-facing forwarded CDN origins', () => {
     expect(normalizeMockCdnPublicOrigin('https://cdn-preview.example.test')).toBe('https://cdn-preview.example.test');
-    expect(() => normalizeMockCdnPublicOrigin('https://[::1]')).toThrow('credential-free HTTPS origin');
+    for (const loopback of [
+      'https://localhost.',
+      'https://preview.localhost',
+      'https://127.0.0.2',
+      'https://[::1]',
+      'https://[::ffff:127.0.0.1]'
+    ]) {
+      expect(() => normalizeMockCdnPublicOrigin(loopback)).toThrow('credential-free HTTPS origin');
+    }
   });
 
   it('requires workspace-contained bucket roots', async () => {

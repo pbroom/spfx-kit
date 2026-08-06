@@ -85,24 +85,29 @@ describe('actual staged CDN smoke-check worker', () => {
     expect(harness.messages.at(-1)).toEqual(expect.objectContaining({ requestId: 'request-forwarded', status: 'ready' }));
   });
 
-  it('rejects a bracketed IPv6 loopback CDN origin before importScripts runs', () => {
-    const harness = createWorkerHarness();
-    const ipv6Origin = 'https://[::1]';
+  it.each(['https://[::1]', 'https://127.0.0.2', 'https://[::ffff:127.0.0.1]'])(
+    'rejects loopback CDN origin %s before importScripts runs',
+    (loopbackOrigin) => {
+      const harness = createWorkerHarness();
 
-    harness.dispatch({
-      requestId: 'request-ipv6-loopback',
-      deliveryOrigin: ipv6Origin,
-      releaseBaseUrl: `${ipv6Origin}/apps/hello-card-spfx/versions/1.0.0-20260804T120000000Z-browser01/`,
-      assets: [
-        { path: 'entry.js', url: `${ipv6Origin}/apps/hello-card-spfx/versions/1.0.0-20260804T120000000Z-browser01/entry.js` }
-      ]
-    });
+      harness.dispatch({
+        requestId: 'request-ipv6-loopback',
+        deliveryOrigin: loopbackOrigin,
+        releaseBaseUrl: `${loopbackOrigin}/apps/hello-card-spfx/versions/1.0.0-20260804T120000000Z-browser01/`,
+        assets: [
+          {
+            path: 'entry.js',
+            url: `${loopbackOrigin}/apps/hello-card-spfx/versions/1.0.0-20260804T120000000Z-browser01/entry.js`
+          }
+        ]
+      });
 
-    expect(harness.loadedUrls).toEqual([]);
-    expect(harness.messages.at(-1)).toEqual(
-      expect.objectContaining({ status: 'error', message: expect.stringContaining('loopback HTTP or forwarded HTTPS') })
-    );
-  });
+      expect(harness.loadedUrls).toEqual([]);
+      expect(harness.messages.at(-1)).toEqual(
+        expect.objectContaining({ status: 'error', message: expect.stringContaining('loopback HTTP or forwarded HTTPS') })
+      );
+    }
+  );
 
   it.each([
     ['wrong origin URL', 'http://127.0.0.1:4199/apps/hello-card-spfx/versions/1.0.0/entry.js'],

@@ -73,19 +73,27 @@ export function resolveDevConfig(environment = process.env) {
 
 function isForwardedHttpsOrigin(value) {
   const url = new URL(value);
+  return url.protocol === 'https:' && url.hostname !== '0.0.0.0' && !isLoopbackHostname(url.hostname);
+}
+
+function isLoopbackHostname(value) {
+  const hostname = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.+$/, '');
   return (
-    url.protocol === 'https:' &&
-    url.hostname !== 'localhost' &&
-    url.hostname !== '0.0.0.0' &&
-    url.hostname !== '127.0.0.1' &&
-    url.hostname !== '::1' &&
-    url.hostname !== '[::1]'
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    /^127(?:\.\d{1,3}){3}$/.test(hostname) ||
+    hostname === '::1' ||
+    /^::(?:ffff:)?7f[\da-f]{2}:[\da-f]{1,4}$/.test(hostname)
   );
 }
 
 function isLoopbackListenHost(value) {
   const host = String(value).toLowerCase();
-  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+  return isLoopbackHostname(host);
 }
 
 export async function assertPortAvailable(host, port, serviceName) {
