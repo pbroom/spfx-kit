@@ -519,6 +519,16 @@ describe('offline profile verifier', () => {
     expect(verifierMessage(drift)).toMatch(/not reproducible|digest differs/i);
   });
 
+  it.each(['snapshots/raw', 'snapshots/canonical'])('rejects non-file entries in the %s inventory', async (inventory) => {
+    const root = await copyProfile();
+    await symlink('button.json', path.join(root, inventory, 'linked.json'));
+
+    const result = runOfflineVerifier(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toContain('snapshot inventory contains a non-file entry');
+  });
+
   it.each(expectedCompilerInputPaths)('fails closed when compiler input %s drifts', async (inputPath) => {
     const root = await copyProfile();
     await writeFile(path.join(root, inputPath), '\n// unreviewed compiler drift\n', { flag: 'a' });
