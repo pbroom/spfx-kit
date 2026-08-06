@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { generateInventory as generateMonacoInventory } from './generate-monaco-runtime-inventory.mjs';
 
 const evidenceRoot = path.join('docs', 'evidence', 'shadcn-migration');
 const monacoInventoryPath = path.join(evidenceRoot, 'monaco-0.53.0-min-vs-inventory.json');
@@ -54,12 +54,34 @@ assert.equal(lockedMonaco.resolved, monaco.package.registryTarball);
 assert.equal(lockedMonaco.integrity, monaco.package.npmIntegrity);
 
 const installedRoot = path.join('node_modules', 'monaco-editor', 'min', 'vs');
-const generatedMonaco = await generateMonacoInventory(installedRoot);
-assert.equal(
-  generatedMonaco,
-  trackedMonaco,
-  'The tracked Monaco inventory, including provenance and disposition metadata, is not reproducible.'
-);
+const packRoot = await mkdtemp(path.join(tmpdir(), 'spfx-kit-monaco-pack-'));
+try {
+  const npmArgs = [
+    'pack',
+    monaco.package.registryTarball,
+    '--offline',
+    '--ignore-scripts',
+    '--json',
+    '--pack-destination',
+    packRoot
+  ];
+  const npmExecPath = process.env.npm_execpath;
+  const packOutput = npmExecPath
+    ? execFileSync(process.execPath, [npmExecPath, ...npmArgs], { encoding: 'utf8' })
+    : execFileSync('npm', npmArgs, { encoding: 'utf8' });
+  const [{ filename }] = JSON.parse(packOutput);
+  const packedTarball = path.join(packRoot, filename);
+  const generatedMonaco = execFileSync(process.execPath, ['scripts/generate-monaco-runtime-inventory.mjs', packedTarball], {
+    encoding: 'utf8'
+  });
+  assert.equal(
+    generatedMonaco,
+    trackedMonaco,
+    'The tracked Monaco inventory, including tarball provenance and disposition metadata, is not reproducible.'
+  );
+} finally {
+  await rm(packRoot, { recursive: true, force: true });
+}
 
 const installedFiles = [];
 for (const absolute of (await walk(installedRoot)).sort()) {

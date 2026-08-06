@@ -56,20 +56,38 @@
         "scss",
         "javascript"
       ],
-      "behavior": "Configures @monaco-editor/react loader paths.vs. This is the only source binding that can request the jsDelivr AMD tree."
+      "behavior": "Configures @monaco-editor/react loader paths.vs for the Lab Workbench AMD path."
     },
     {
       "consumer": "source-editor",
       "sourcePath": "apps/lab/src/components/SourceEditor.tsx",
       "sourceLines": [
+        15,
+        16,
+        30,
+        32,
         40,
+        51,
+        52,
         68,
+        84,
+        87,
+        347,
+        352,
+        455,
+        460,
+        824,
+        850,
         855,
         864
       ],
-      "loaderMode": "esm-bundled",
-      "baseUrlConsumed": false,
-      "behavior": "Carries the same default URL, but the default adapter ignores the baseUrl parameter, imports Monaco ESM locally, and configures the loader with the bundled monaco object."
+      "loaderMode": "esm-bundled-default-with-configurable-adapter",
+      "baseUrlConsumption": {
+        "defaultAdapter": false,
+        "customAdapter": "caller-defined; may consume the configured URL"
+      },
+      "defaultBaseUrl": "https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs",
+      "behavior": "MonacoSurface passes the configured baseUrl to adapter.load(baseUrl). The built-in adapter ignores it and imports bundled Monaco ESM, but a supported caller-supplied adapter can consume the default jsDelivr URL and request that remote tree."
     }
   ],
   "embeddedSupportAssets": {

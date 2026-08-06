@@ -3,10 +3,14 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
+const tarballPath = process.argv[2];
 const expectedSha1 = '2f485492e0ee822be13b1b45e3092922963737ae';
 const expectedIntegrity = 'sha512-0WNThgC6CMWNXXBxTbaYYcunj08iB5rnx4/G56UOPeL9UVIUGGHA1GR0EWIh9Ebabj7NpCRawQ5b0hfN1jQmYQ==';
+
+if (!tarballPath) {
+  throw new Error('Usage: node scripts/generate-monaco-runtime-inventory.mjs <monaco-editor-0.53.0.tgz>');
+}
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -62,7 +66,7 @@ function cssUrlInventory(css) {
   };
 }
 
-export async function generateInventory(packageRoot) {
+async function generateInventory(packageRoot) {
   const files = [];
   for (const absolute of (await walk(packageRoot)).sort()) {
     const bytes = await readFile(absolute);
@@ -136,17 +140,20 @@ export async function generateInventory(packageRoot) {
         loaderMode: 'amd-remote',
         baseUrlConsumed: true,
         configuredLanguages: ['typescript', 'html', 'css', 'scss', 'javascript'],
-        behavior:
-          'Configures @monaco-editor/react loader paths.vs. This is the only source binding that can request the jsDelivr AMD tree.'
+        behavior: 'Configures @monaco-editor/react loader paths.vs for the Lab Workbench AMD path.'
       },
       {
         consumer: 'source-editor',
         sourcePath: 'apps/lab/src/components/SourceEditor.tsx',
-        sourceLines: [40, 68, 855, 864],
-        loaderMode: 'esm-bundled',
-        baseUrlConsumed: false,
+        sourceLines: [15, 16, 30, 32, 40, 51, 52, 68, 84, 87, 347, 352, 455, 460, 824, 850, 855, 864],
+        loaderMode: 'esm-bundled-default-with-configurable-adapter',
+        baseUrlConsumption: {
+          defaultAdapter: false,
+          customAdapter: 'caller-defined; may consume the configured URL'
+        },
+        defaultBaseUrl: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs',
         behavior:
-          'Carries the same default URL, but the default adapter ignores the baseUrl parameter, imports Monaco ESM locally, and configures the loader with the bundled monaco object.'
+          'MonacoSurface passes the configured baseUrl to adapter.load(baseUrl). The built-in adapter ignores it and imports bundled Monaco ESM, but a supported caller-supplied adapter can consume the default jsDelivr URL and request that remote tree.'
       }
     ],
     embeddedSupportAssets: {
@@ -185,34 +192,24 @@ export async function generateInventory(packageRoot) {
   return `${JSON.stringify(inventory, null, 2)}\n`;
 }
 
-async function main() {
-  const tarballPath = process.argv[2];
-  if (!tarballPath) {
-    throw new Error('Usage: node scripts/generate-monaco-runtime-inventory.mjs <monaco-editor-0.53.0.tgz>');
+const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'spfx-kit-monaco-inventory-'));
+
+try {
+  const tarball = await readFile(tarballPath);
+  const actualSha1 = createHash('sha1').update(tarball).digest('hex');
+  const actualIntegrity = `sha512-${createHash('sha512').update(tarball).digest('base64')}`;
+  if (actualSha1 !== expectedSha1 || actualIntegrity !== expectedIntegrity) {
+    throw new Error('The Monaco tarball does not match the pinned npm shasum and integrity.');
   }
 
-  const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'spfx-kit-monaco-inventory-'));
-  try {
-    const tarball = await readFile(tarballPath);
-    const actualSha1 = createHash('sha1').update(tarball).digest('hex');
-    const actualIntegrity = `sha512-${createHash('sha512').update(tarball).digest('base64')}`;
-    if (actualSha1 !== expectedSha1 || actualIntegrity !== expectedIntegrity) {
-      throw new Error('The Monaco tarball does not match the pinned npm shasum and integrity.');
-    }
-
-    execFileSync('tar', ['-xzf', tarballPath, '-C', temporaryRoot]);
-    const extractedPackageRoot = path.join(temporaryRoot, 'package');
-    const metadata = JSON.parse(await readFile(path.join(extractedPackageRoot, 'package.json'), 'utf8'));
-    if (metadata.name !== 'monaco-editor' || metadata.version !== '0.53.0') {
-      throw new Error(`Unexpected extracted package identity: ${metadata.name}@${metadata.version}`);
-    }
-
-    process.stdout.write(await generateInventory(path.join(extractedPackageRoot, 'min', 'vs')));
-  } finally {
-    await rm(temporaryRoot, { recursive: true, force: true });
+  execFileSync('tar', ['-xzf', tarballPath, '-C', temporaryRoot]);
+  const extractedPackageRoot = path.join(temporaryRoot, 'package');
+  const metadata = JSON.parse(await readFile(path.join(extractedPackageRoot, 'package.json'), 'utf8'));
+  if (metadata.name !== 'monaco-editor' || metadata.version !== '0.53.0') {
+    throw new Error(`Unexpected extracted package identity: ${metadata.name}@${metadata.version}`);
   }
-}
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  await main();
+  process.stdout.write(await generateInventory(path.join(extractedPackageRoot, 'min', 'vs')));
+} finally {
+  await rm(temporaryRoot, { recursive: true, force: true });
 }
