@@ -34,7 +34,7 @@ export function resolveDevConfig(environment = process.env) {
   const cdnOrigin = normalizeMockCdnOrigin(environment.SPFX_KIT_MOCK_CDN_ORIGIN || DEFAULT_MOCK_CDN_ORIGIN);
   const cdnUrl = new URL(cdnOrigin);
   const publicCdnOrigin = normalizeMockCdnPublicOrigin(environment.SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN || cdnOrigin);
-  const cdnListenHost = String(environment.SPFX_KIT_MOCK_CDN_LISTEN_HOST || cdnUrl.hostname).trim();
+  const cdnListenHost = normalizeListenHost(environment.SPFX_KIT_MOCK_CDN_LISTEN_HOST || cdnUrl.hostname);
   const cdnListenPort = normalizePort(environment.SPFX_KIT_MOCK_CDN_LISTEN_PORT || cdnUrl.port, 'SPFX_KIT_MOCK_CDN_LISTEN_PORT');
   if (!cdnListenHost) {
     throw new Error('SPFX_KIT_MOCK_CDN_LISTEN_HOST must not be empty.');
@@ -73,7 +73,31 @@ export function resolveDevConfig(environment = process.env) {
 
 function isForwardedHttpsOrigin(value) {
   const url = new URL(value);
-  return url.protocol === 'https:' && url.hostname !== '0.0.0.0' && !isLoopbackHostname(url.hostname);
+  return url.protocol === 'https:' && !isUnspecifiedHostname(url.hostname) && !isLoopbackHostname(url.hostname);
+}
+
+function normalizeListenHost(value) {
+  const host = String(value).trim();
+  if (!host) {
+    return host;
+  }
+  const authority = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+  try {
+    // URL normalizes numeric hosts (including bracketed IPv6), while leaving
+    // ordinary DNS names unchanged. Node's listener API expects IPv6 without
+    // URL brackets.
+    return new URL(`http://${authority}`).hostname.replace(/^\[|\]$/g, '');
+  } catch {
+    return host;
+  }
+}
+
+function isUnspecifiedHostname(value) {
+  const hostname = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '');
+  return hostname === '0.0.0.0' || hostname === '::';
 }
 
 function isLoopbackHostname(value) {

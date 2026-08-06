@@ -315,7 +315,10 @@ function validateMockCdnOrigin(value: string, labOrigin: string): URL {
   }
   const loopback = url.protocol === 'http:' && isCanonicalLoopbackHostname(url.hostname) && Boolean(url.port);
   const forwarded =
-    url.protocol === 'https:' && Boolean(url.hostname) && url.hostname !== '0.0.0.0' && !isLoopbackHostname(url.hostname);
+    url.protocol === 'https:' &&
+    Boolean(url.hostname) &&
+    !isUnspecifiedHostname(url.hostname) &&
+    !isLoopbackHostname(url.hostname);
   if ((!loopback && !forwarded) || url.origin === labOrigin || url.username || url.password || url.search || url.hash) {
     throw new Error(
       'Staged CDN descriptor delivery.origin must be a separate credential-free loopback HTTP or forwarded HTTPS origin.'
@@ -341,6 +344,14 @@ function isLoopbackHostname(value: string): boolean {
     hostname === '::1' ||
     /^::(?:ffff:)?7f[\da-f]{2}:[\da-f]{1,4}$/.test(hostname)
   );
+}
+
+function isUnspecifiedHostname(value: string): boolean {
+  const hostname = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '');
+  return hostname === '0.0.0.0' || hostname === '::';
 }
 
 function validateMockCdnUrl(value: string, expectedOrigin: string, label: string): URL {

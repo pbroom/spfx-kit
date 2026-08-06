@@ -85,7 +85,7 @@ describe('actual staged CDN smoke-check worker', () => {
     expect(harness.messages.at(-1)).toEqual(expect.objectContaining({ requestId: 'request-forwarded', status: 'ready' }));
   });
 
-  it.each(['https://[::1]', 'https://127.0.0.2', 'https://[::ffff:127.0.0.1]'])(
+  it.each(['https://[::]', 'https://[::1]', 'https://127.0.0.2', 'https://[::ffff:127.0.0.1]'])(
     'rejects loopback CDN origin %s before importScripts runs',
     (loopbackOrigin) => {
       const harness = createWorkerHarness();

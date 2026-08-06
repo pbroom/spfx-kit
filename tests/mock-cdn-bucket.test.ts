@@ -56,6 +56,7 @@ describe('local mock CDN bucket contract', () => {
       'https://localhost.',
       'https://preview.localhost',
       'https://127.0.0.2',
+      'https://[::]',
       'https://[::1]',
       'https://[::ffff:127.0.0.1]'
     ]) {

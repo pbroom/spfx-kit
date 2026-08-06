@@ -126,6 +126,7 @@ describe('SPFx Kit development launcher', () => {
     'https://localhost.',
     'https://preview.localhost',
     'https://127.0.0.2',
+    'https://[::]',
     'https://[::1]',
     'https://[::ffff:127.0.0.1]'
   ])('rejects loopback-form forwarded origins for cloud previews: %s', (loopbackOrigin) => {
@@ -137,6 +138,28 @@ describe('SPFx Kit development launcher', () => {
         SPFX_KIT_MOCK_CDN_LISTEN_HOST: '0.0.0.0'
       })
     ).toThrow('requires an HTTPS SPFX_KIT_MOCK_CDN_LAB_ORIGIN');
+  });
+
+  it('canonicalizes a bracketed numeric IPv6 CDN listener host for Node', () => {
+    expect(
+      resolveDevConfig({
+        SPFX_LAB_HOST: '0.0.0.0',
+        SPFX_KIT_MOCK_CDN_LAB_ORIGIN: 'https://preview.example.test',
+        SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN: 'https://cdn-preview.example.test',
+        SPFX_KIT_MOCK_CDN_LISTEN_HOST: '[::]'
+      }).cdnListenHost
+    ).toBe('::');
+  });
+
+  it.each(['127.1', '0x7f000001', '::ffff:127.0.0.1'])('rejects numeric loopback CDN listener aliases: %s', (listenHost) => {
+    expect(() =>
+      resolveDevConfig({
+        SPFX_LAB_HOST: '0.0.0.0',
+        SPFX_KIT_MOCK_CDN_LAB_ORIGIN: 'https://preview.example.test',
+        SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN: 'https://cdn-preview.example.test',
+        SPFX_KIT_MOCK_CDN_LISTEN_HOST: listenHost
+      })
+    ).toThrow('requires a non-loopback SPFX_KIT_MOCK_CDN_LISTEN_HOST');
   });
 
   it('uses taskkill tree termination arguments on Windows', () => {
