@@ -11,6 +11,10 @@ const DEFAULT_LAB_PORT = 5173;
 const STOP_GRACE_MS = 5_000;
 const STOP_FORCE_MS = 1_000;
 
+export function getShutdownSignals(platform = process.platform) {
+  return platform === 'win32' ? ['SIGINT', 'SIGTERM'] : ['SIGINT', 'SIGTERM', 'SIGHUP'];
+}
+
 export function resolveDevConfig(environment = process.env) {
   const labHost = String(environment.SPFX_LAB_HOST || DEFAULT_LAB_HOST).trim();
   if (!labHost) {
@@ -85,7 +89,7 @@ async function main() {
 
   let requestedSignal;
   const signalPromise = new Promise((resolve) => {
-    for (const signal of ['SIGINT', 'SIGTERM']) {
+    for (const signal of getShutdownSignals()) {
       process.once(signal, () => {
         requestedSignal = signal;
         resolve({ serviceName: 'development launcher', code: 0, signal });

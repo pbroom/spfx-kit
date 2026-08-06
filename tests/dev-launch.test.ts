@@ -1,10 +1,14 @@
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
-import { assertPortAvailable, resolveDevConfig, stopServices, waitForService } from '../scripts/dev.mjs';
+import { assertPortAvailable, getShutdownSignals, resolveDevConfig, stopServices, waitForService } from '../scripts/dev.mjs';
 
 const servers: ReturnType<typeof createServer>[] = [];
+const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 afterEach(async () => {
   await Promise.all(
@@ -15,6 +19,20 @@ afterEach(async () => {
 });
 
 describe('SPFx Kit development launcher', () => {
+  it('coordinates SIGHUP shutdown on Unix without registering it on Windows', () => {
+    expect(getShutdownSignals('linux')).toEqual(['SIGINT', 'SIGTERM', 'SIGHUP']);
+    expect(getShutdownSignals('darwin')).toEqual(['SIGINT', 'SIGTERM', 'SIGHUP']);
+    expect(getShutdownSignals('win32')).toEqual(['SIGINT', 'SIGTERM']);
+  });
+
+  it('allows the launcher configuration through Turborepo strict task mode', () => {
+    const turboConfig = JSON.parse(readFileSync(path.join(workspaceRoot, 'turbo.json'), 'utf8'));
+
+    expect(turboConfig.tasks.dev.env).toEqual(
+      expect.arrayContaining(['SPFX_LAB_HOST', 'SPFX_LAB_PORT', 'SPFX_KIT_MOCK_CDN_LAB_ORIGIN', 'SPFX_KIT_MOCK_CDN_ORIGIN'])
+    );
+  });
+
   it('uses distinct default Lab and local CDN origins', () => {
     expect(resolveDevConfig({})).toMatchObject({
       labHost: '127.0.0.1',

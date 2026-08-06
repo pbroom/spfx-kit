@@ -22,7 +22,8 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "env": ["SPFX_LAB_HOST", "SPFX_LAB_PORT", "SPFX_KIT_MOCK_CDN_LAB_ORIGIN", "SPFX_KIT_MOCK_CDN_ORIGIN"]
     },
     "clean": {
       "cache": false
