@@ -3,7 +3,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 
-import { canonicalJson, moduleSpecifiers, sha256 } from './profile.mjs';
+import {
+  GENERATOR_VERSION,
+  PROFILE_ID,
+  PROFILE_SCHEMA_VERSION,
+  assertRegistryIds,
+  canonicalJson,
+  moduleSpecifiers,
+  sha256
+} from './profile.mjs';
 
 const SHADCN_NAME = 'shadcn';
 const SHADCN_VERSION = '4.16.1';
@@ -212,7 +220,7 @@ async function assertCommittedRegistrySnapshots(packageRoot, provenance) {
   return expectedSourcePathsById;
 }
 
-export async function assertProfileUpdateProvenance({ packageRoot, provenance }) {
+export async function assertProfileGenerationProvenance({ packageRoot, provenance }) {
   const schema = await readJson(path.join(packageRoot, 'provenance.schema.json'));
   assert(
     sha256(Buffer.from(canonicalJson(schema))) === PROVENANCE_SCHEMA_SHA256,
@@ -221,7 +229,18 @@ export async function assertProfileUpdateProvenance({ packageRoot, provenance })
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   const validate = ajv.compile(schema);
   assert(validate(provenance), `Profile update provenance is invalid: ${ajv.errorsText(validate.errors)}`);
+  assert(
+    provenance.profileId === PROFILE_ID &&
+      provenance.schemaVersion === PROFILE_SCHEMA_VERSION &&
+      provenance.generatorVersion === GENERATOR_VERSION,
+    'Provenance identity does not match the profile generator'
+  );
+  assertRegistryIds(provenance.registryIds);
   return assertCommittedRegistrySnapshots(packageRoot, provenance);
+}
+
+export async function assertProfileUpdateProvenance(options) {
+  return assertProfileGenerationProvenance(options);
 }
 
 export async function assertPinnedShadcnToolchain({
@@ -328,7 +347,7 @@ export async function fetchValidatedProfileUpdateSnapshots({
   getRegistryItemsImpl,
   resolvedRegistryUrl
 }) {
-  const expectedSourcePathsById = await assertProfileUpdateProvenance({ packageRoot, provenance });
+  const expectedSourcePathsById = await assertProfileGenerationProvenance({ packageRoot, provenance });
   return fetchPinnedRegistrySnapshots({
     packageRoot,
     registry: provenance.registry,

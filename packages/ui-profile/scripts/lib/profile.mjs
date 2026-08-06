@@ -38,6 +38,12 @@ export const REGISTRY_IDS = Object.freeze([
   'utils'
 ]);
 
+// These wrappers are intentionally not exported by their registry modules, but they
+// are still passed through as React components. React 17 therefore needs the same
+// ref normalization as the exported primitive wrappers when their props are
+// forwarded to Base UI.
+const INTERNAL_REF_WRAPPER_NAMES = new Set(['ComboboxClear', 'SheetOverlay']);
+
 export function assertRegistryIds(registryIds) {
   if (
     !Array.isArray(registryIds) ||
@@ -389,7 +395,9 @@ function normalizePublicForwardRefs(source) {
   const exports = exportedNames(source);
   const candidates = [];
   for (const match of source.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)) {
-    if (exports.has(match[1])) candidates.push({ name: match[1], start: match.index });
+    if (exports.has(match[1]) || INTERNAL_REF_WRAPPER_NAMES.has(match[1])) {
+      candidates.push({ name: match[1], start: match.index });
+    }
   }
 
   let normalized = source;

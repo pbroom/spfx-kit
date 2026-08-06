@@ -198,7 +198,7 @@
         {
           "path": "normalized/src/components/ui/combobox.tsx",
           "registrySourcePath": "registry/base-nova/ui/combobox.tsx",
-          "sha256": "b5198246c6592a21d24dfa0422e6a214290ffd5bf90703bd9112cb7296a2fb3f",
+          "sha256": "cd0fd77cac5bb08a53e152ae606a54477b1678cbdde0a655d6742cbf9516a5a1",
           "transformations": [
             "normalize-line-endings",
             "pin-base-ui-combobox-subpath",
@@ -349,7 +349,7 @@
         {
           "path": "normalized/src/components/ui/sheet.tsx",
           "registrySourcePath": "registry/base-nova/ui/sheet.tsx",
-          "sha256": "33a815283f9c0f2aa1a19b2cf88a154b71b93d39d544c18342dc9b938f478b85",
+          "sha256": "e37157497a9a72f810ac94bbec07883f22c3861f8e3f3d55151807447385386e",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
@@ -609,7 +609,7 @@
       }
     }
   ],
-  "normalizationImplementationSha256": "41279e07d287d14701d42bb78e3d7c70bb800ac6b0408cc0ae31ccf45d603e93",
+  "normalizationImplementationSha256": "4b8ed1f7b81cda685d3b03f688bff8d8d8b61408070dc7c44de353de29bfa225",
   "profileId": "spfx-react17-base-nova-v1",
   "provenanceSha256": "0531c9bfacf9cf591d9ab6da2a72d78d78327df0be70c42225b7e9a4af57488c",
   "schemaVersion": 1

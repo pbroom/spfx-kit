@@ -43,9 +43,13 @@ const ComboboxTrigger = React.forwardRef<
 
 })
 
-function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
+const ComboboxClear = React.forwardRef<
+  HTMLButtonElement,
+  React.PropsWithoutRef<ComboboxPrimitive.Clear.Props>
+>(function ComboboxClear({ className, ...props }, ref) {
   return (
     <ComboboxPrimitive.Clear
+      ref={ref}
       data-slot="combobox-clear"
       render={<InputGroupButton variant="ghost" size="icon-xs" />}
       className={cn(className)}
@@ -56,7 +60,8 @@ function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
       />
     </ComboboxPrimitive.Clear>
   )
-}
+
+})
 
 const ComboboxInput = React.forwardRef<
   HTMLInputElement,
