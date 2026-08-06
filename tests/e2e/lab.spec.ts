@@ -288,6 +288,18 @@ test('keeps controls fixed while a populated bucket inventory scrolls independen
   const releases = Array.from({ length: 12 }, (_value, index) => `1.2.3-workspace-${index + 1}`);
   await page.addInitScript((key) => window.localStorage.setItem(key, 'hello-card-spfx'), pinnedAppStorageKey);
   await page.route('**/api/spfx-apps/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/source')) {
+      expect(url.searchParams.get('appId')).toBe('hello-card-spfx');
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          appId: 'hello-card-spfx',
+          repositoryUrl: 'https://github.com/acme/hello-card-spfx'
+        })
+      });
+      return;
+    }
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ apps: managedAppFixtures('latest') }) });
   });
   await page.route('**/api/local-cdn', async (route) => {

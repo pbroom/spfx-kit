@@ -12,6 +12,7 @@ import {
 } from './sanitize';
 import {
   listManagedLabApps,
+  readManagedLabAppSourceRepositoryUrl,
   reconnectLabApp,
   runWorkspaceNodeCommand,
   syncLabRegistry,
@@ -44,6 +45,13 @@ export function spfxAppApi(): Plugin {
           const url = new URL(req.url || '/', 'http://127.0.0.1');
           if (req.method === 'GET' && url.pathname === '/') {
             sendJson(res, { apps: await listManagedLabApps() });
+            return;
+          }
+
+          if (req.method === 'GET' && url.pathname === '/source') {
+            const appId = sanitizeSlug(url.searchParams.get('appId') || '');
+            const repositoryUrl = await readManagedLabAppSourceRepositoryUrl(appId);
+            sendJson(res, { appId, ...(repositoryUrl ? { repositoryUrl } : {}) });
             return;
           }
 

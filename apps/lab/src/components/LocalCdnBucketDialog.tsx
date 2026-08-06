@@ -20,7 +20,7 @@ import {
   type LocalCdnBucketInventory,
   type LocalCdnPublishSource
 } from '../api/localCdnBucket';
-import { loadManagedLabApps } from '../api/labApi';
+import { loadManagedLabAppSource } from '../api/labApi';
 
 interface LocalCdnBucketDialogProps {
   open: boolean;
@@ -99,9 +99,9 @@ export function LocalCdnBucketDialog({
       return undefined;
     }
     const controller = new AbortController();
-    void loadManagedLabApps(controller.signal)
+    void loadManagedLabAppSource(selectedAppId, controller.signal)
       .then((result) => {
-        setSourceRepositoryUrl(result.apps.find((app) => app.id === selectedAppId)?.version.repositoryUrl || '');
+        setSourceRepositoryUrl(result.repositoryUrl || '');
       })
       .catch(() => {
         if (!controller.signal.aborted) {

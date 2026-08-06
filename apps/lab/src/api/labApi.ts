@@ -53,6 +53,11 @@ export interface ManagedLabAppsApiResult {
   apps: ManagedLabApp[];
 }
 
+export interface ManagedLabAppSourceApiResult {
+  appId: string;
+  repositoryUrl?: string;
+}
+
 export interface ManageAppsApiResult extends ManagedLabAppsApiResult {
   appId?: string;
   message: string;
@@ -105,6 +110,11 @@ export async function readApiJson<T>(response: Response): Promise<T> {
 
 export async function loadManagedLabApps(signal?: AbortSignal): Promise<ManagedLabAppsApiResult> {
   return readApiJson<ManagedLabAppsApiResult>(await fetch('/api/spfx-apps/', { signal }));
+}
+
+export async function loadManagedLabAppSource(appId: string, signal?: AbortSignal): Promise<ManagedLabAppSourceApiResult> {
+  const query = new URLSearchParams({ appId });
+  return readApiJson<ManagedLabAppSourceApiResult>(await fetch(`/api/spfx-apps/source?${query}`, { signal }));
 }
 
 export async function readExportStream(response: Response, onEvent: (event: ExportStreamEvent) => void): Promise<void> {

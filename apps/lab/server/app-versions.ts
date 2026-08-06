@@ -204,6 +204,11 @@ export function configuredGitHubRepositoryUrl(value: unknown): string | undefine
   return pathMatch ? `https://github.com/${pathMatch[1]}/${pathMatch[2]}` : undefined;
 }
 
+export async function readConfiguredGitHubRepositoryUrl(appDir: string): Promise<string | undefined> {
+  const cloneMetadata = await readJsonIfPresent<CloneMetadata>(path.join(appDir, '.spfx-kit', 'clone.json'));
+  return configuredGitHubRepositoryUrl(cloneMetadata?.source);
+}
+
 export async function selectManagedAppVersion(
   appDir: string,
   versionId: string

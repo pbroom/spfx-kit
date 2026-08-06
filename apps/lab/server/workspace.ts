@@ -3,7 +3,12 @@ import { mkdir, readFile, readdir, realpath, rename, stat } from 'node:fs/promis
 import path from 'node:path';
 import { describeManagedAppExportConfig, ManagedAppExportConfig, updateManagedAppExportConfig } from './app-export-config';
 import { appPathForMessage, legacyAppsDir, managedAppsDir, rootDir } from './paths';
-import { describeManagedAppVersion, ManagedAppVersionInfo, selectManagedAppVersion } from './app-versions';
+import {
+  describeManagedAppVersion,
+  ManagedAppVersionInfo,
+  readConfiguredGitHubRepositoryUrl,
+  selectManagedAppVersion
+} from './app-versions';
 
 const managedAppVersionUpdates = new Set<string>();
 
@@ -208,6 +213,11 @@ export async function requireWorkspaceApp(appId: string): Promise<WorkspaceApp> 
     throw new Error(`No managed SPFx app found at ${appPathForMessage(appId)}.`);
   }
   return app;
+}
+
+export async function readManagedLabAppSourceRepositoryUrl(appId: string): Promise<string | undefined> {
+  const app = await requireWorkspaceApp(appId);
+  return readConfiguredGitHubRepositoryUrl(app.dir);
 }
 
 export async function describeLabAdapter(appDir: string): Promise<LabAdapterInfo> {
