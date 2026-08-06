@@ -554,31 +554,22 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                     >
                       <span className="webpart-option__label">{app.title}</span>
                     </Option>
-                    {appLoaded ? (
-                      <button
-                        aria-label={`${appPinned ? 'Unpin' : 'Pin'} ${app.title} as startup app`}
-                        aria-pressed={appPinned}
-                        className="webpart-option__pin"
-                        title={`${appPinned ? 'Unpin' : 'Pin'} ${app.title} as startup app`}
-                        type="button"
-                        onPointerDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          togglePinnedAppWithAnnouncement(app.id);
-                        }}
-                      >
-                        {appPinned ? <Pin16Filled aria-hidden="true" /> : <Pin16Regular aria-hidden="true" />}
-                      </button>
-                    ) : null}
                   </div>
                 );
               })}
             </Dropdown>
           </Field>
+          {selectedApp ? (
+            <Button
+              aria-label={`${pinnedAppId === selectedApp.id ? 'Unpin' : 'Pin'} ${selectedApp.title} as startup app`}
+              aria-pressed={pinnedAppId === selectedApp.id}
+              disabled={!webPartsByAppId.has(selectedApp.id)}
+              icon={pinnedAppId === selectedApp.id ? <Pin16Filled /> : <Pin16Regular />}
+              onClick={() => togglePinnedAppWithAnnouncement(selectedApp.id)}
+            >
+              {pinnedAppId === selectedApp.id ? 'Unpin startup app' : 'Pin as startup app'}
+            </Button>
+          ) : null}
           <span aria-live="polite" className="visually-hidden" role="status">
             {pinAnnouncement}
           </span>

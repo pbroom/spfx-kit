@@ -1224,9 +1224,16 @@ test('pins one startup app and restores it after refresh', async ({ page }) => {
   await selectedAppSelector.click();
   const pinnedAppOption = page.getByRole('option', { name: /Hello Card\. Pinned\./ });
   await pinnedAppOption.hover();
-  const leftUnpinButton = page.getByRole('button', { name: 'Unpin Hello Card as startup app' });
+  const leftUnpinButton = sidebar.getByRole('button', { name: 'Unpin Hello Card as startup app' });
   await expect(leftUnpinButton).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('listbox')).toBeVisible();
+  const sidebarListbox = page.getByRole('listbox');
+  await expect(sidebarListbox).toBeVisible();
+  await expect(sidebarListbox.getByRole('button')).toHaveCount(0);
+  await leftUnpinButton.click();
+  await expect(sidebar.getByRole('button', { name: 'Pin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
+  await sidebar.getByRole('button', { name: 'Pin Hello Card as startup app' }).click();
+  await expect(sidebar.getByRole('button', { name: 'Unpin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Control+o');
   await expect(sidebar).toBeHidden();
   await page.getByRole('button', { name: 'Close add SPFx app drawer' }).click();
