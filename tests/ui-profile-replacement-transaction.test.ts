@@ -299,6 +299,17 @@ describe('generated profile process observation', () => {
     });
   });
 
+  it('treats a Linux zombie as an exited process even while its pid is present', async () => {
+    const fields = ['Z', ...Array.from({ length: 18 }, (_, index) => String(index + 1)), '424242'];
+    await expect(
+      observeGeneratedProfileProcess(123, {
+        platform: 'linux',
+        read: async (file: string) =>
+          file.endsWith('/stat') ? `123 (node worker) ${fields.join(' ')}` : '12345678-1234-1234-1234-123456789abc\n'
+      })
+    ).resolves.toEqual({ status: 'missing' });
+  });
+
   it('runs heartbeat ticks serially, drains an in-flight tick, and reports refresh failures', async () => {
     let tick!: () => void;
     let interval = 0;
@@ -563,34 +574,31 @@ describe('generated profile full-command transaction', () => {
     await expect(recovery).resolves.toMatchObject({ recovered: true, state: 'rolled-back' });
   }, 60_000);
 
-  it('does not steal an expired unknown owner while its long-lived mutation gate is held', async () => {
+  it('expires an identity-less mutation gate when its holder stops renewing it', async () => {
     const { packageRoot } = await fixture();
     let clock = Date.parse('2026-08-06T12:00:00.000Z');
-    let renewOwner!: () => Promise<void>;
-    await withGeneratedProfileSession(
-      {
-        packageRoot,
-        operation: 'update',
-        observeProcess: async () => ({ status: 'unknown' }),
-        now: () => clock,
-        leaseMs: 60_000,
-        startHeartbeat: (refresh: () => Promise<void>) => {
-          renewOwner = refresh;
-          return { assertHealthy: async () => {}, stopAndDrain: async () => {} };
+    await expect(
+      withGeneratedProfileSession(
+        {
+          packageRoot,
+          operation: 'update',
+          observeProcess: async () => ({ status: 'unknown' }),
+          now: () => clock,
+          leaseMs: 60_000,
+          startHeartbeat: () => ({ assertHealthy: async () => {}, stopAndDrain: async () => {} })
+        },
+        async () => {
+          clock += 60_001;
+          await expect(
+            recoverGeneratedReplacement({
+              packageRoot,
+              observeProcess: async () => ({ status: 'unknown' }),
+              now: () => clock
+            })
+          ).resolves.toMatchObject({ recovered: true, state: 'no-transaction' });
         }
-      },
-      async () => {
-        clock += 60_001;
-        await expect(
-          recoverGeneratedReplacement({
-            packageRoot,
-            observeProcess: async () => ({ status: 'unknown' }),
-            now: () => clock
-          })
-        ).rejects.toThrow('mutation gate is held');
-        await renewOwner();
-      }
-    );
+      )
+    ).rejects.toThrow('Generated profile session failed');
   });
 
   it('does not take over a paused live owner after its lease expires', async () => {
@@ -857,6 +865,7 @@ describe('generated profile full-command transaction', () => {
   it('recovers every hard-kill move boundary to an exact old or new collection', async () => {
     const boundaries = [
       'journaled',
+      'backup-bound',
       'backup-created',
       'backed-up:snapshots',
       'backed-up:normalized',
@@ -883,6 +892,17 @@ describe('generated profile full-command transaction', () => {
       ).toEqual([]);
     }
   }, 30_000);
+
+  it('refuses to back up a target changed after its prior digest was journaled', async () => {
+    const { packageRoot, token } = await fixture();
+    const changed = path.join(packageRoot, 'snapshots', 'raw', 'version.txt');
+    await killAtBoundary(packageRoot, token, 'backup-created', async () => {
+      await writeFile(changed, 'editor-change');
+    });
+
+    await expect(recoverGeneratedReplacement({ packageRoot })).rejects.toThrow('preserved prior target digest differs');
+    await expect(readFile(changed, 'utf8')).resolves.toBe('editor-change');
+  });
 
   it('allows a new session after interrupted partial cleanup of a detached settled lock', async () => {
     const { packageRoot, token } = await fixture();
