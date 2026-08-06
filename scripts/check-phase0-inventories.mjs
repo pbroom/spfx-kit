@@ -4,10 +4,12 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const evidenceRoot = path.join('docs', 'evidence', 'shadcn-migration');
 const monacoInventoryPath = path.join(evidenceRoot, 'monaco-0.53.0-min-vs-inventory.json');
 const workbenchInventoryPath = path.join(evidenceRoot, 'workbench-v1-public-source-format-inventory.json');
+const scriptRoot = path.dirname(fileURLToPath(import.meta.url));
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -37,7 +39,7 @@ async function walk(directory) {
 }
 
 const trackedWorkbench = await readFile(workbenchInventoryPath, 'utf8');
-const generatedWorkbench = execFileSync(process.execPath, ['scripts/generate-workbench-v1-inventory.mjs'], {
+const generatedWorkbench = execFileSync(process.execPath, [path.join(scriptRoot, 'generate-workbench-v1-inventory.mjs')], {
   encoding: 'utf8'
 });
 assert.equal(generatedWorkbench, trackedWorkbench, 'The tracked Workbench V1 inventory is not reproducible.');
@@ -71,9 +73,11 @@ try {
     : execFileSync('npm', npmArgs, { encoding: 'utf8' });
   const [{ filename }] = JSON.parse(packOutput);
   const packedTarball = path.join(packRoot, filename);
-  const generatedMonaco = execFileSync(process.execPath, ['scripts/generate-monaco-runtime-inventory.mjs', packedTarball], {
-    encoding: 'utf8'
-  });
+  const generatedMonaco = execFileSync(
+    process.execPath,
+    [path.join(scriptRoot, 'generate-monaco-runtime-inventory.mjs'), packedTarball],
+    { encoding: 'utf8' }
+  );
   assert.equal(
     generatedMonaco,
     trackedMonaco,
