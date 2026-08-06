@@ -940,11 +940,8 @@ export function externalImports(source) {
     if (specifier.startsWith('.') || specifier.startsWith('/')) return;
     imports.add(specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0]);
   };
-  for (const match of source.matchAll(/(?:from\s*|import\s*)["']([^"']+)["']/g)) {
-    addSpecifier(match[1]);
-  }
-  for (const match of source.matchAll(/\b(?:import|require(?:\.resolve)?)\s*\(\s*(["'])([^"']+)\1\s*\)/g)) {
-    addSpecifier(match[2]);
+  for (const specifier of moduleSpecifierNodes(parsedSource(source, 'dependency-inventory.tsx'))) {
+    addSpecifier(specifier.text);
   }
   return [...imports].sort();
 }

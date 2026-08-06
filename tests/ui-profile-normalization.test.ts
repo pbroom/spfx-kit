@@ -308,6 +308,9 @@ describe('React 17 UI profile normalization', () => {
       'import type { Props } from "@base-ui/react/select"\n' +
       'import { mergeProps } from "@base-ui/utils/merge-props"\n' +
       'import "unscoped/theme.css"\n' +
+      'import Legacy = require("legacy-package/subpath")\n' +
+      'export { helper } from "exported-package/subpath"\n' +
+      'type Deferred = typeof import("type-expression-package/subpath")\n' +
       'const lazy = import("vite/client")\n' +
       'const loaded = require("@scope/runtime/subpath")\n' +
       'const resolved = require.resolve("resolved-package/entry")\n' +
@@ -316,10 +319,26 @@ describe('React 17 UI profile normalization', () => {
       '@base-ui/react',
       '@base-ui/utils',
       '@scope/runtime',
+      'exported-package',
+      'legacy-package',
       'resolved-package',
+      'type-expression-package',
       'unscoped',
       'vite'
     ]);
+  });
+
+  it('ignores import-like comments and runtime strings when inventorying dependencies', () => {
+    const source =
+      '// import "comment-package"\n' +
+      '/* export { helper } from "@comment/package" */\n' +
+      'const fromText = \'from "runtime-package/subpath"\'\n' +
+      'const importText = \'import("runtime-dynamic-package")\'\n' +
+      'const requireText = \'require("@runtime/package")\'\n' +
+      'const resolveText = \'require.resolve("runtime-resolved-package")\'\n' +
+      'import "actual-package/subpath"\n';
+
+    expect(externalImports(source)).toEqual(['actual-package']);
   });
 
   it('fails closed for computed dynamic dependencies', () => {
