@@ -165,6 +165,15 @@ describe('React 17 UI profile normalization', () => {
     expect(wrapper.source).toContain('const DefaultButton = React.forwardRef<');
   });
 
+  it('preserves a semicolon-terminated use-client directive before inserted imports', () => {
+    const result = normalizeRegistrySource({
+      source: '"use client";\n\nexport const Empty = () => <>empty</>\n',
+      registrySourcePath: 'registry/base-nova/ui/empty.tsx'
+    });
+
+    expect(result.source).toMatch(/^"use client";\n\nimport \* as React from "react"\n/u);
+  });
+
   it('preserves an existing React namespace and accepts React 17 forwardRef plus pinned icons', () => {
     const source =
       'import * as React from "react"\n' +

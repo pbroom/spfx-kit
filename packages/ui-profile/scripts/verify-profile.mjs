@@ -101,6 +101,10 @@ async function filesUnder(relativeDirectory) {
       const absolute = path.join(directory, entry.name);
       if (entry.isDirectory()) await visit(absolute);
       else if (entry.isFile()) files.push(path.relative(packageRoot, absolute).replaceAll(path.sep, '/'));
+      else
+        throw new Error(
+          `${relativeDirectory}: snapshot inventory contains a non-file entry ${path.relative(packageRoot, absolute)}`
+        );
     }
   }
   await visit(root);

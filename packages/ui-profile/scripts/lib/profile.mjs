@@ -291,9 +291,20 @@ function insertImport(source, declaration) {
     const lineEnd = source.indexOf('\n', offset);
     offset = lineEnd === -1 ? source.length : lineEnd + 1;
   }
-  const directive = /^("use client"|'use client')\n\n/.exec(source.slice(offset));
-  if (directive) offset += directive[0].length;
-  return `${source.slice(0, offset)}${declaration}\n${source.slice(offset)}`;
+  const sourceFile = parsedSource(source, 'import-insertion.tsx');
+  const firstStatement = sourceFile.statements.find((statement) => statement.getStart(sourceFile) >= offset);
+  if (
+    firstStatement &&
+    ts.isExpressionStatement(firstStatement) &&
+    ts.isStringLiteral(firstStatement.expression) &&
+    firstStatement.expression.text === 'use client'
+  ) {
+    offset = firstStatement.getEnd();
+    const whitespace = /^(?:[\t ]*\r?\n)*/u.exec(source.slice(offset));
+    offset += whitespace?.[0].length ?? 0;
+  }
+  const separator = offset > 0 && !source.slice(0, offset).endsWith('\n') ? '\n' : '';
+  return `${source.slice(0, offset)}${separator}${declaration}\n${source.slice(offset)}`;
 }
 
 function resolveIconPlaceholders(source) {
