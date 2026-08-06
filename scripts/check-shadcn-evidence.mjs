@@ -4,16 +4,18 @@ import { fileURLToPath } from 'node:url';
 
 const scriptRoot = path.dirname(fileURLToPath(import.meta.url));
 
-function selectedRoot(args) {
-  let root = process.cwd();
+function selectedOptions(args) {
+  const options = { root: process.cwd(), candidateRef: undefined };
   for (let index = 0; index < args.length; index += 1) {
-    if (args[index] !== '--root') continue;
+    const argument = args[index];
+    if (argument !== '--root' && argument !== '--candidate-ref') continue;
     const value = args[index + 1];
-    if (!value || value.startsWith('--')) throw new Error('--root requires a value.');
-    root = path.resolve(process.cwd(), value);
+    if (!value || value.startsWith('--')) throw new Error(`${argument} requires a value.`);
+    if (argument === '--root') options.root = path.resolve(process.cwd(), value);
+    else options.candidateRef = value;
     index += 1;
   }
-  return root;
+  return options;
 }
 
 function run(script, args = [], cwd = process.cwd()) {
@@ -23,6 +25,6 @@ function run(script, args = [], cwd = process.cwd()) {
 }
 
 const args = process.argv.slice(2);
-const root = selectedRoot(args);
+const { root, candidateRef } = selectedOptions(args);
 run('validate-shadcn-evidence.mjs', args);
-run('check-phase0-inventories.mjs', [], root);
+run('check-phase0-inventories.mjs', candidateRef ? ['--candidate-ref', candidateRef] : [], root);

@@ -11,6 +11,29 @@ const monacoInventoryPath = path.join(evidenceRoot, 'monaco-0.53.0-min-vs-invent
 const workbenchInventoryPath = path.join(evidenceRoot, 'workbench-v1-public-source-format-inventory.json');
 const scriptRoot = path.dirname(fileURLToPath(import.meta.url));
 
+function parseArguments(argv) {
+  let candidateRef;
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument !== '--candidate-ref') throw new Error(`Unknown argument: ${argument}`);
+    const value = argv[index + 1];
+    if (!value || value.startsWith('--')) throw new Error('--candidate-ref requires a value.');
+    candidateRef = value;
+    index += 1;
+  }
+  return { candidateRef };
+}
+
+const { candidateRef } = parseArguments(process.argv.slice(2));
+const candidateCommit = candidateRef
+  ? execFileSync('git', ['rev-parse', '--verify', `${candidateRef}^{commit}`], { encoding: 'utf8' }).trim()
+  : undefined;
+
+async function readTrackedInventory(relativePath) {
+  if (!candidateCommit) return readFile(relativePath, 'utf8');
+  return execFileSync('git', ['show', `${candidateCommit}:${relativePath}`], { encoding: 'utf8' });
+}
+
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
@@ -38,13 +61,13 @@ async function walk(directory) {
   return files;
 }
 
-const trackedWorkbench = await readFile(workbenchInventoryPath, 'utf8');
+const trackedWorkbench = await readTrackedInventory(workbenchInventoryPath);
 const generatedWorkbench = execFileSync(process.execPath, [path.join(scriptRoot, 'generate-workbench-v1-inventory.mjs')], {
   encoding: 'utf8'
 });
 assert.equal(generatedWorkbench, trackedWorkbench, 'The tracked Workbench V1 inventory is not reproducible.');
 
-const trackedMonaco = await readFile(monacoInventoryPath, 'utf8');
+const trackedMonaco = await readTrackedInventory(monacoInventoryPath);
 const monaco = JSON.parse(trackedMonaco);
 const packageMetadata = JSON.parse(await readFile('node_modules/monaco-editor/package.json', 'utf8'));
 const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
