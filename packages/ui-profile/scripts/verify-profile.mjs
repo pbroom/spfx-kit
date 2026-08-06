@@ -33,8 +33,10 @@ const expectedIds = [...REGISTRY_IDS];
 const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'scripts/typecheck.mjs',
+  'scripts/lib/generate-profile.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
+  'scripts/lib/generated-tree-closure.mjs',
   'scripts/prepare-base-ui.mjs',
   'scripts/transform-base-ui-select-value.mjs',
   'scripts/transform-base-ui-popup-lifecycle.mjs',
@@ -81,7 +83,7 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === 'ea46f01b0a8686012ebce90bed085e4eeeb35a9032aff515b5077ced51d37946',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === '9c5871a3485a131282632793a8237809793aee80a27b4e7f479b907e60fbc633',
   'profile.schema.json identity differs'
 );
 assert(

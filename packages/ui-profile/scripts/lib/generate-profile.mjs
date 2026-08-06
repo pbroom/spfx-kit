@@ -14,8 +14,10 @@ import {
 const compilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'scripts/typecheck.mjs',
+  'scripts/lib/generate-profile.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
+  'scripts/lib/generated-tree-closure.mjs',
   'scripts/prepare-base-ui.mjs',
   'scripts/transform-base-ui-select-value.mjs',
   'scripts/transform-base-ui-popup-lifecycle.mjs',
@@ -24,6 +26,35 @@ const compilerInputPaths = [
   'tsconfig.ts53.json',
   'tsconfig.ts58.json'
 ];
+
+function dependencyName(specifier, label) {
+  if (typeof specifier !== 'string' || specifier.length === 0) throw new Error(`${label} has an invalid dependency`);
+  const match = specifier.startsWith('@')
+    ? /^(@[^/]+\/[^@/]+)(?:@.+)?$/u.exec(specifier)
+    : /^([^@/]+)(?:@.+)?$/u.exec(specifier);
+  if (!match) throw new Error(`${label} has an unsupported dependency specifier: ${specifier}`);
+  return match[1];
+}
+
+function isExcludedDependency(name, exclusions) {
+  return exclusions.some((specifier) => {
+    if (specifier.endsWith('/*')) return name.startsWith(specifier.slice(0, -1));
+    return dependencyName(specifier, 'Profile exclusion') === name;
+  });
+}
+
+function assertMetadataDependenciesAllowed(item, exclusions) {
+  for (const field of ['dependencies', 'devDependencies']) {
+    const dependencies = item[field] ?? [];
+    if (!Array.isArray(dependencies)) throw new Error(`${item.name}: ${field} metadata is invalid`);
+    for (const specifier of dependencies) {
+      const name = dependencyName(specifier, `${item.name} ${field}`);
+      if (isExcludedDependency(name, exclusions)) {
+        throw new Error(`${item.name}: excluded metadata dependency ${name} is present`);
+      }
+    }
+  }
+}
 
 export async function generateProfile({ packageRoot, rawRoot, outputRoot, provenance, provenanceBytes }) {
   assertRegistryIds(provenance.registryIds);
@@ -40,6 +71,7 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
     if (parsed.name !== id || !Array.isArray(parsed.files) || parsed.files.length === 0) {
       throw new Error(`Registry snapshot for ${id} has an unexpected identity or no files`);
     }
+    assertMetadataDependenciesAllowed(parsed, provenance.excludedDependencies ?? []);
     const canonicalBytes = Buffer.from(canonicalJson(parsed));
     await writeFile(path.join(outputRoot, canonicalRelative), canonicalBytes);
 
