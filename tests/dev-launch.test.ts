@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
@@ -11,6 +12,7 @@ import {
   getWindowsTaskkillArgs,
   resolveDevConfig,
   stopServices,
+  waitForShutdownSignal,
   waitForService
 } from '../scripts/dev.mjs';
 
@@ -30,6 +32,25 @@ describe('SPFx Kit development launcher', () => {
     expect(getShutdownSignals('linux')).toEqual(['SIGINT', 'SIGTERM', 'SIGHUP']);
     expect(getShutdownSignals('darwin')).toEqual(['SIGINT', 'SIGTERM', 'SIGHUP']);
     expect(getShutdownSignals('win32')).toEqual(['SIGINT', 'SIGTERM']);
+  });
+
+  it('latches the first shutdown signal and keeps every handler installed until launcher cleanup finishes', async () => {
+    const signals = new EventEmitter();
+    const shutdown = waitForShutdownSignal(signals, ['SIGINT', 'SIGTERM']);
+
+    signals.emit('SIGINT');
+    await expect(shutdown.promise).resolves.toMatchObject({ signal: 'SIGINT' });
+    expect(signals.listenerCount('SIGINT')).toBe(1);
+    expect(signals.listenerCount('SIGTERM')).toBe(1);
+
+    signals.emit('SIGTERM');
+    expect(shutdown.requestedSignal).toBe('SIGINT');
+    expect(signals.listenerCount('SIGINT')).toBe(1);
+    expect(signals.listenerCount('SIGTERM')).toBe(1);
+
+    shutdown.dispose();
+    expect(signals.listenerCount('SIGINT')).toBe(0);
+    expect(signals.listenerCount('SIGTERM')).toBe(0);
   });
 
   it('allows the launcher configuration through Turborepo strict task mode', () => {

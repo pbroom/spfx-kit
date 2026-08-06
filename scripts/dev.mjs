@@ -19,6 +19,39 @@ export function getShutdownSignals(platform = process.platform) {
   return platform === 'win32' ? ['SIGINT', 'SIGTERM'] : ['SIGINT', 'SIGTERM', 'SIGHUP'];
 }
 
+export function waitForShutdownSignal(signalTarget = process, signals = getShutdownSignals()) {
+  let requestedSignal;
+  let resolveShutdown;
+  const handlers = new Map();
+  const promise = new Promise((resolve) => {
+    resolveShutdown = resolve;
+  });
+
+  for (const signal of signals) {
+    const handler = () => {
+      if (requestedSignal) {
+        return;
+      }
+      requestedSignal = signal;
+      resolveShutdown({ serviceName: 'development launcher', code: 0, signal });
+    };
+    signalTarget.on(signal, handler);
+    handlers.set(signal, handler);
+  }
+
+  return {
+    promise,
+    get requestedSignal() {
+      return requestedSignal;
+    },
+    dispose() {
+      for (const [signal, handler] of handlers) {
+        signalTarget.off(signal, handler);
+      }
+    }
+  };
+}
+
 export function resolveDevConfig(environment = process.env) {
   const labHost = String(environment.SPFX_LAB_HOST || DEFAULT_LAB_HOST).trim();
   if (!labHost) {
@@ -132,10 +165,6 @@ function isUnspecifiedHostname(value) {
   return hostname === '0.0.0.0' || hostname === '::' || hostname === '::ffff:0:0' || hostname === '::ffff:0.0.0.0';
 }
 
-function isUnspecifiedListenHost(value) {
-  return isUnspecifiedHostname(normalizeListenHost(value));
-}
-
 function isLoopbackHostname(value) {
   const hostname = String(value)
     .trim()
@@ -199,42 +228,38 @@ async function main() {
   };
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const services = [];
-  let requestedSignal;
-  const signalPromise = new Promise((resolve) => {
-    for (const signal of getShutdownSignals()) {
-      process.once(signal, () => {
-        requestedSignal = signal;
-        resolve({ serviceName: 'development launcher', code: 0, signal });
-      });
-    }
-  });
+  const shutdown = waitForShutdownSignal();
   services.push(
     startService('SPFx Lab', npmCommand, ['run', 'dev:lab'], childEnvironment),
     startService('Local CDN', npmCommand, ['run', 'dev:cdn'], childEnvironment)
   );
-  const exit = await Promise.race([signalPromise, ...services.map(waitForService)]);
-  let cleanupError;
   try {
-    await stopServices(services, requestedSignal || 'SIGTERM');
-  } catch (error) {
-    cleanupError = error;
-  }
-
-  if (exit.error) {
-    if (cleanupError) {
-      throw new AggregateError([exit.error, cleanupError], 'A development service failed and cleanup was incomplete.', {
-        cause: exit.error
-      });
+    const exit = await Promise.race([shutdown.promise, ...services.map(waitForService)]);
+    let cleanupError;
+    try {
+      await stopServices(services, shutdown.requestedSignal || 'SIGTERM');
+    } catch (error) {
+      cleanupError = error;
     }
-    throw exit.error;
-  }
-  if (cleanupError) {
-    throw cleanupError;
-  }
-  if (!requestedSignal) {
-    throw new Error(
-      `${exit.serviceName} exited unexpectedly${exit.signal ? ` from ${exit.signal}` : ` with code ${exit.code}`}.`
-    );
+
+    if (exit.error) {
+      if (cleanupError) {
+        throw new AggregateError([exit.error, cleanupError], 'A development service failed and cleanup was incomplete.', {
+          cause: exit.error
+        });
+      }
+      throw exit.error;
+    }
+    if (cleanupError) {
+      throw cleanupError;
+    }
+    if (!shutdown.requestedSignal) {
+      throw new Error(
+        `${exit.serviceName} exited unexpectedly${exit.signal ? ` from ${exit.signal}` : ` with code ${exit.code}`}.`
+      );
+    }
+  } finally {
+    shutdown.dispose();
   }
 }
 
