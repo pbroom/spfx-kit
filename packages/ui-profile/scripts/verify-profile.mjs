@@ -82,7 +82,8 @@ const expectedScripts = {
   'typecheck:ts53': 'node ./scripts/typecheck.mjs typescript 5.3.3 ./tsconfig.ts53.json',
   'typecheck:ts58': 'node ./scripts/typecheck.mjs typescript-5-8 5.8.3 ./tsconfig.ts58.json',
   typecheck: 'npm run profile:prepare:base-ui && npm run typecheck:ts53 && npm run typecheck:ts58',
-  verify: 'npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure'
+  verify: 'npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure',
+  build: 'npm run verify && npm run typecheck'
 };
 
 function assert(condition, message) {
