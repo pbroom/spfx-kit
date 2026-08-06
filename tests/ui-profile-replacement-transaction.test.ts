@@ -1112,15 +1112,17 @@ describe('generated profile full-command transaction', () => {
     await expect(realpath(path.join(packageRoot, released!))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('reconciles an exact interrupted recovery-claim candidate after acquiring the recovery gate', async () => {
+  it('preserves an unverified interrupted recovery-claim candidate rather than recursively deleting it', async () => {
     const { packageRoot, token } = await fixture();
     await killAtBoundary(packageRoot, token, 'installed:snapshots');
     const lockRoot = path.join(packageRoot, '.profile-generation-lock');
     const candidate = path.join(lockRoot, '.recovery-claim-acquire-interrupted');
     await mkdir(candidate);
 
-    await expect(recoverGeneratedReplacement({ packageRoot })).resolves.toMatchObject({ recovered: true, state: 'rolled-back' });
-    await expect(realpath(candidate)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(recoverGeneratedReplacement({ packageRoot })).rejects.toThrow('detached lock cleanup retained');
+    const releasedLock = (await readdir(packageRoot)).find((name) => name.startsWith('.profile-generation-lock.release-'));
+    expect(releasedLock).toBeDefined();
+    await expect(realpath(path.join(packageRoot, releasedLock!, path.basename(candidate)))).resolves.toBeTruthy();
     expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
   });
 

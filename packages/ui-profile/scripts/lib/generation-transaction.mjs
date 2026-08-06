@@ -1459,17 +1459,34 @@ const RECOVERY_CLAIM_CANDIDATE_NAME = /^\.recovery-claim-acquire-[A-Za-z0-9]+$/u
 async function reconcileInterruptedRecoveryClaimCandidates(lockRoot) {
   for (const entry of await readdir(lockRoot, { withFileTypes: true })) {
     if (!RECOVERY_CLAIM_CANDIDATE_NAME.test(entry.name) || !entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const candidate = path.join(lockRoot, entry.name);
-    try {
-      await assertContainedRealPath(lockRoot, candidate, 'recovery claim candidate', { includeTarget: true });
-      const before = await realDirectoryIdentity(candidate, 'recovery claim candidate');
-      const after = await realDirectoryIdentity(candidate, 'recovery claim candidate');
-      if (!sameIdentity(before, after)) continue;
-      await rm(candidate, { recursive: true, force: true });
-    } catch {
-      // A changed candidate remains visible and causes the final detached-lock
-      // inventory to preserve the outer lock rather than deleting on a guess.
-    }
+    // An interrupted candidate was exposed before it acquired a complete claim
+    // binding.  Its contents are therefore not proof of ownership.  Preserve it
+    // (and consequently the outer lock) rather than recursively deleting bytes
+    // which could have been replaced between discovery and recovery.
+  }
+}
+
+const OWNER_PUBLICATION_CANDIDATE_NAME = /^\.owner-[0-9a-f-]{36}\.json$/u;
+
+async function readOrReconcileOwner(lockRoot, packageRoot) {
+  try {
+    return await readOwner(lockRoot, packageRoot);
+  } catch (ownerError) {
+    if (await pathExists(path.join(lockRoot, OWNER_FILE))) throw ownerError;
+    const candidates = (await readdir(lockRoot, { withFileTypes: true })).filter(
+      (entry) => OWNER_PUBLICATION_CANDIDATE_NAME.test(entry.name) && entry.isFile() && !entry.isSymbolicLink()
+    );
+    if (candidates.length !== 1) throw ownerError;
+    const candidate = path.join(lockRoot, candidates[0].name);
+    const before = await lstat(candidate);
+    const owner = assertOwner(JSON.parse(await readFile(candidate, 'utf8')), packageRoot, lockRoot);
+    await readLease(lockRoot, ownerLeaseBinding(owner));
+    const bindingRoot = await realDirectoryIdentity(path.join(lockRoot, RETAINED_BINDING_ROOT), 'retained binding root');
+    if (!sameIdentityRecord(bindingRoot, owner.retainedBindingRootIdentity)) throw ownerError;
+    const after = await lstat(candidate);
+    if (!sameIdentity(before, after) || (await pathExists(path.join(lockRoot, OWNER_FILE)))) throw ownerError;
+    await rename(candidate, path.join(lockRoot, OWNER_FILE));
+    return readOwner(lockRoot, packageRoot);
   }
 }
 
@@ -1956,7 +1973,7 @@ async function resumeReleasedLockCleanup(
     try {
       await assertContainedRealPath(packageRoot, lockRoot, 'released lock');
       const identity = await realDirectoryIdentity(lockRoot, 'released lock');
-      const owner = await readOwner(lockRoot, packageRoot);
+      const owner = await readOrReconcileOwner(lockRoot, packageRoot);
       // A detached lock is recoverable only after the transaction journal was
       // settled.  An active journal remains preserved for explicit recovery.
       if (owner.transaction) continue;
@@ -2019,7 +2036,7 @@ async function markOuterLockOwnershipLost(context) {
   );
 }
 
-async function releaseOwnedLock(context, onReleaseBoundary = async () => {}) {
+async function releaseOwnedLock(context, onReleaseBoundary = async () => {}, beforeFinalRemoval = async () => {}) {
   await context.gateTail;
   await assertHeldMutationGate(context);
   await assertActorAuthority(context);
@@ -2049,6 +2066,8 @@ async function releaseOwnedLock(context, onReleaseBoundary = async () => {}) {
   if (!sameIdentity(finalIdentity, context.identity)) await markOuterLockOwnershipLost(context);
   const releaseRoot = `${context.lockRoot}.release-${randomUUID()}`;
   await rename(context.lockRoot, releaseRoot);
+  context.lockRoot = releaseRoot;
+  if (context.gate) context.gate.gateRoot = path.join(releaseRoot, MUTATION_GATE_NAME);
   context.detachedRoot = releaseRoot;
   context.releaseState = { phase: 'detached-owned', ownedPath: releaseRoot };
   await assertDetachedLockCanBeRemoved(releaseRoot, context);
@@ -2089,8 +2108,11 @@ async function releaseOwnedLock(context, onReleaseBoundary = async () => {}) {
         throw new Error(`Generated profile relocated released lock identity changed; preserved at ${relocated}`);
       }
       context.detachedRoot = relocated;
+      context.lockRoot = relocated;
+      if (context.gate) context.gate.gateRoot = path.join(relocated, MUTATION_GATE_NAME);
       context.releaseState = { phase: 'detached-owned', ownedPath: relocated, foreignPath: removalRoot };
       await assertDetachedLockCanBeRemoved(relocated, context);
+      await beforeFinalRemoval();
       await rm(relocated, { recursive: true, force: true });
       context.detachedRoot = undefined;
       context.releaseState = { phase: 'owned-removed', ownedPath: relocated, foreignPath: removalRoot };
@@ -2107,6 +2129,7 @@ async function releaseOwnedLock(context, onReleaseBoundary = async () => {}) {
     );
   }
   await assertDetachedLockCanBeRemoved(removalRoot, context);
+  await beforeFinalRemoval();
   await rm(removalRoot, { recursive: true, force: true });
   context.detachedRoot = undefined;
   context.releaseState = replaced
@@ -2643,7 +2666,7 @@ export async function recoverGeneratedReplacement({
   const identity = await realDirectoryIdentity(lockRoot, 'lock');
   let owner;
   try {
-    owner = await readOwner(lockRoot, packageRoot);
+    owner = await readOrReconcileOwner(lockRoot, packageRoot);
   } catch (error) {
     throw new Error(`Generated profile lock metadata is unreadable at ${lockRoot}`, { cause: error });
   }
@@ -2686,6 +2709,7 @@ export async function recoverGeneratedReplacement({
   }, acquiredClaim.gate);
   claimContext.heartbeat = startHeartbeat(() => refreshClaimLease(claimContext), leaseMs);
   let state = 'no-transaction';
+  let heartbeatStopped = false;
   try {
     await assertClaimMutation(claimContext);
     owner = await assertOuterOwner(lockRoot, packageRoot, identity, owner.token);
@@ -2705,13 +2729,15 @@ export async function recoverGeneratedReplacement({
       const { transaction: _transaction, ...cleared } = current;
       await writeOwnerAtomically(claimContext, cleared);
     }
-    await claimContext.heartbeat.stopAndDrain();
-    await releaseOwnedLock(claimContext, onReleaseBoundary);
+    await releaseOwnedLock(claimContext, onReleaseBoundary, async () => {
+      await claimContext.heartbeat.stopAndDrain();
+      heartbeatStopped = true;
+    });
     return { recovered: true, state };
   } catch (error) {
     let heartbeatError;
     try {
-      await claimContext.heartbeat.stopAndDrain();
+      if (!heartbeatStopped) await claimContext.heartbeat.stopAndDrain();
     } catch (failure) {
       heartbeatError = failure;
     }
