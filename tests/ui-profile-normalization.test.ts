@@ -96,6 +96,48 @@ describe('React 17 UI profile normalization', () => {
     expect(first.transformations).toEqual(['normalize-line-endings', 'rewrite-app-owned-aliases', 'bind-react-namespace']);
   });
 
+  it('rewrites only parsed app-owned module specifiers and preserves matching program text', () => {
+    const source =
+      '// from "@/registry/base-nova/ui/button"\n' +
+      'const note = \'import("@/registry/base-nova/ui/button")\'\n' +
+      'export { Button } from "@/registry/base-nova/ui/button"\n' +
+      'const lazy = import("@/registry/base-nova/lib/utils")\n';
+    const result = normalizeRegistrySource({
+      source,
+      registrySourcePath: 'registry/base-nova/ui/card.tsx'
+    });
+
+    expect(result.source).toContain('// from "@/registry/base-nova/ui/button"');
+    expect(result.source).toContain('const note = \'import("@/registry/base-nova/ui/button")\'');
+    expect(result.source).toContain('export { Button } from "./button"');
+    expect(result.source).toContain('import("../../lib/utils")');
+  });
+
+  it('binds the classic React namespace for fragments and normalizes declaration exports that forward refs', () => {
+    const fragment = normalizeRegistrySource({
+      source: 'export const Empty = () => <>empty</>\n',
+      registrySourcePath: 'registry/base-nova/ui/empty.tsx'
+    });
+    expect(fragment.source).toContain('import * as React from "react"');
+    expect(() => assertReact17Source('export const Empty = () => <>empty</>\n', 'fragment.tsx')).toThrow(
+      'JSX source does not bind the React namespace'
+    );
+
+    const wrapper = normalizeRegistrySource({
+      source:
+        'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+        'export function Button({ ...props }: ButtonPrimitive.Props) {\n' +
+        '  return <ButtonPrimitive {...props} />\n' +
+        '}\n' +
+        'export default function DefaultButton({ ...props }: ButtonPrimitive.Props) {\n' +
+        '  return <ButtonPrimitive {...props} />\n' +
+        '}\n',
+      registrySourcePath: 'registry/base-nova/ui/button.tsx'
+    });
+    expect(wrapper.source).toContain('const Button = React.forwardRef<');
+    expect(wrapper.source).toContain('const DefaultButton = React.forwardRef<');
+  });
+
   it('preserves an existing React namespace and accepts React 17 forwardRef plus pinned icons', () => {
     const source =
       'import * as React from "react"\n' +
@@ -176,7 +218,7 @@ describe('React 17 UI profile normalization', () => {
 
     expect(result.transformations).toContain('resolve-lucide-icon-placeholders');
     expect(result.source).toContain('import { Check, Search } from "lucide-react"');
-    expect(result.source).toContain('<Search data-slot="search" role="img" className={className} {...props} />');
+    expect(result.source).toContain('<Search\n    ref={ref} data-slot="search" role="img" className={className} {...props} />');
     expect(result.source).toContain('<Check />');
     expect(result.source).not.toContain('IconPlaceholder');
     expect(result.source).not.toContain('tabler=');
