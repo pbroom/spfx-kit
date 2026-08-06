@@ -43,6 +43,20 @@ const expectedNormalizedPaths = expectedRegistryIds
   .map((id) => (id === 'utils' ? 'normalized/src/lib/utils.ts' : `normalized/src/components/ui/${id}.tsx`))
   .sort();
 
+const expectedCompilerInputPaths = [
+  'compat-consumers/react17-base-ui-jsx.d.ts',
+  'scripts/typecheck.mjs',
+  'scripts/lib/typecheck-generated-profile.mjs',
+  'scripts/lib/generate-validated-profile.mjs',
+  'scripts/prepare-base-ui.mjs',
+  'scripts/transform-base-ui-select-value.mjs',
+  'scripts/transform-base-ui-popup-lifecycle.mjs',
+  'scripts/lib/preparation-lock.mjs',
+  'tsconfig.base.json',
+  'tsconfig.ts53.json',
+  'tsconfig.ts58.json'
+];
+
 const expectedToolingDependencies = {
   '@base-ui/react': '1.6.0',
   'class-variance-authority': '0.7.1',
@@ -103,6 +117,7 @@ async function copyProfile(): Promise<string> {
     }
   });
   await cp(path.join(repositoryRoot, 'package.json'), path.join(temporaryRoot, 'package.json'));
+  await cp(path.join(repositoryRoot, 'package-lock.json'), path.join(temporaryRoot, 'package-lock.json'));
   await symlink(path.join(repositoryRoot, 'node_modules'), path.join(temporaryRoot, 'node_modules'), 'dir');
   return copyRoot;
 }
@@ -195,6 +210,7 @@ interface ProfileManifest {
   profileId: string;
   provenanceSha256: string;
   normalizationImplementationSha256: string;
+  compilerInputs: SnapshotReference[];
   dependencyClosure: SnapshotReference;
   baseUiDeclarationTransform: SnapshotReference;
   baseUiPopupLifecycleTransform: SnapshotReference;
@@ -297,6 +313,7 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(profileSchema.required).toContain('$schema');
     expect(profileSchema.properties.profileId.const).toBe('spfx-react17-base-nova-v1');
     expect(profileSchema.properties.items).toMatchObject({ minItems: 24, maxItems: 24 });
+    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 11, maxItems: 11, items: false });
     expect(profileSchema.properties.items.uniqueItems).toBe(true);
     expect(profileSchema.$defs.sha256.pattern).toBe('^[a-f0-9]{64}$');
     expect(profileSchema.$defs.item.additionalProperties).toBe(false);
@@ -331,6 +348,10 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(profile.profileId).toBe('spfx-react17-base-nova-v1');
     expect(profile.provenanceSha256).toBe(sha256(provenanceBytes));
     expect(profile.normalizationImplementationSha256).toBe(sha256(implementationBytes));
+    expect(profile.compilerInputs.map((input) => input.path)).toEqual(expectedCompilerInputPaths);
+    for (const input of profile.compilerInputs) {
+      expect(input.sha256).toBe(sha256(await readFile(path.join(profileRoot, input.path))));
+    }
     expect(profile.dependencyClosure).toEqual({
       path: 'dependency-closure.json',
       sha256: sha256(dependencyClosureBytes)
@@ -496,6 +517,16 @@ describe('offline profile verifier', () => {
     expect(verifierMessage(drift)).toMatch(/not reproducible|digest differs/i);
   });
 
+  it.each(expectedCompilerInputPaths)('fails closed when compiler input %s drifts', async (inputPath) => {
+    const root = await copyProfile();
+    await writeFile(path.join(root, inputPath), '\n// unreviewed compiler drift\n', { flag: 'a' });
+
+    const result = runOfflineVerifier(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toContain(`Compiler input digest differs for ${inputPath}`);
+  });
+
   it('rejects forced dependency overrides and excluded registry dependencies', async () => {
     const forcedRoot = await copyProfile();
     const forcedManifest = await readJson<any>(forcedRoot, 'package.json');
@@ -568,6 +599,72 @@ describe('offline profile verifier', () => {
 
     expect(result.status).not.toBe(0);
     expect(verifierMessage(result)).toContain('relative import "./calendar" does not resolve to an emitted normalized output');
+    expect(await treeDigests(root)).toEqual(before);
+  });
+
+  it('semantically compiles staged normalized sources with both pinned TypeScript versions offline', async () => {
+    const root = await copyProfile();
+    const before = await treeDigests(root);
+
+    const result = runOfflineRegenerator(root);
+
+    expect(result.status, verifierMessage(result)).toBe(0);
+    expect(verifierMessage(result)).not.toContain('attempted network access');
+    expect(result.stdout).toContain('Validated staged normalized sources with TypeScript 5.3.3');
+    expect(result.stdout).toContain('Validated staged normalized sources with TypeScript 5.8.3');
+    expect(await treeDigests(root)).toEqual(before);
+  });
+
+  it('rejects ordinary staged TypeScript drift before replacement and preserves the installed tree', async () => {
+    const root = await copyProfile();
+    const rawPath = path.join(root, 'snapshots/raw/utils.json');
+    const raw = await readJson<RegistrySnapshot>(root, 'snapshots/raw/utils.json');
+    raw.files[0].content += '\nexport const __profileTypeDrift: string = 42\n';
+    await writeFile(rawPath, JSON.stringify(raw));
+    const before = await treeDigests(root);
+
+    const result = runOfflineRegenerator(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).not.toContain('attempted network access');
+    expect(verifierMessage(result)).toContain('Staged profile failed semantic compilation with TypeScript 5.3.3');
+    expect(verifierMessage(result)).toMatch(/TS2322|Type 'number' is not assignable to type 'string'/u);
+    expect(await treeDigests(root)).toEqual(before);
+  });
+
+  it('rejects staged Base UI prop drift before replacement and preserves the installed tree', async () => {
+    const root = await copyProfile();
+    const rawPath = path.join(root, 'snapshots/raw/button.json');
+    const raw = await readJson<RegistrySnapshot>(root, 'snapshots/raw/button.json');
+    const button = raw.files.find((file) => file.path.endsWith('/button.tsx'))!;
+    button.content += '\nconst __BaseUiPropDrift = () => <ButtonPrimitive __profileInvalidBaseUiProp />\n';
+    await writeFile(rawPath, JSON.stringify(raw));
+    const before = await treeDigests(root);
+
+    const result = runOfflineRegenerator(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).not.toContain('attempted network access');
+    expect(verifierMessage(result)).toContain('Staged profile failed semantic compilation with TypeScript 5.3.3');
+    expect(verifierMessage(result)).toContain('__profileInvalidBaseUiProp');
+    expect(await treeDigests(root)).toEqual(before);
+  });
+
+  it('rejects a shadowed wrong-version compiler before replacement and preserves the installed tree', async () => {
+    const root = await copyProfile();
+    const shadowRoot = path.join(root, 'node_modules', 'typescript-5-8');
+    await mkdir(path.join(shadowRoot, 'lib'), { recursive: true });
+    await writeCanonicalJson(root, 'node_modules/typescript-5-8/package.json', { name: 'typescript', version: '9.9.9' });
+    await writeFile(path.join(shadowRoot, 'lib/tsc.js'), 'process.exit(0)\n');
+    const before = await treeDigests(root);
+
+    const result = runOfflineRegenerator(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).not.toContain('attempted network access');
+    expect(verifierMessage(result)).toContain('Resolved compiler package typescript@9.9.9 instead of pinned TypeScript 5.8.3');
+    expect(result.stdout).toContain('Validated staged normalized sources with TypeScript 5.3.3');
+    expect(result.stdout).not.toContain('Validated staged normalized sources with TypeScript 5.8.3');
     expect(await treeDigests(root)).toEqual(before);
   });
 });

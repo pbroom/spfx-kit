@@ -8,6 +8,52 @@
     "path": "compat/base-ui-1.6.0/popup-lifecycle/contract.json",
     "sha256": "772b9777c7fed2b1a2672c99616aac31f7df3a4a30526d6d94115c9f6fb06deb"
   },
+  "compilerInputs": [
+    {
+      "path": "compat-consumers/react17-base-ui-jsx.d.ts",
+      "sha256": "76f6e8a5b9ebc66c2289ba7aa9d16e200cbb116e27b3117d7de18c18cc23398e"
+    },
+    {
+      "path": "scripts/typecheck.mjs",
+      "sha256": "5586f82c1e80bc1363a765a7382ff08c7d5e3825b94f6c41e23cd3e1b4f90507"
+    },
+    {
+      "path": "scripts/lib/typecheck-generated-profile.mjs",
+      "sha256": "27180ab6880abad3d132eb016b84a8f3ab19ab01061108a51654db2e500b1860"
+    },
+    {
+      "path": "scripts/lib/generate-validated-profile.mjs",
+      "sha256": "cd9121c25a9c41183e2fac85c0859f97cda0bcf7b5c888ed19ccf82a52ec2f20"
+    },
+    {
+      "path": "scripts/prepare-base-ui.mjs",
+      "sha256": "2a8fed68499785a07686516435d4fd58a4d1251034e080c4ff58d789e6dfccaa"
+    },
+    {
+      "path": "scripts/transform-base-ui-select-value.mjs",
+      "sha256": "dfaf3125753bd1979c7d9ab02b875d4bc81e12d72edf340a07758499a6033e9c"
+    },
+    {
+      "path": "scripts/transform-base-ui-popup-lifecycle.mjs",
+      "sha256": "6c4e1979c96f64b69833c2420caf6af3329a90fe663d6a4860e5d835663d7604"
+    },
+    {
+      "path": "scripts/lib/preparation-lock.mjs",
+      "sha256": "008126d9561869a80b6cc04e066d51fbccaf158bcb81717884bff77453c0b88b"
+    },
+    {
+      "path": "tsconfig.base.json",
+      "sha256": "022dba9840da44315cd587429a097916aae95678379f79d9296d3d63b974cece"
+    },
+    {
+      "path": "tsconfig.ts53.json",
+      "sha256": "b72ba1a07871816fbb0e5fe3130d9f7319637e99a238222c08640badbf9d8e3c"
+    },
+    {
+      "path": "tsconfig.ts58.json",
+      "sha256": "b72ba1a07871816fbb0e5fe3130d9f7319637e99a238222c08640badbf9d8e3c"
+    }
+  ],
   "dependencyClosure": {
     "path": "dependency-closure.json",
     "sha256": "071df6ff0af2debfd0cbbdbdbd372ad6d94230242e6a3cb0f4f9e70c347ef736"

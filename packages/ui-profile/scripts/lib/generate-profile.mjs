@@ -11,6 +11,20 @@ import {
   sha256
 } from './profile.mjs';
 
+const compilerInputPaths = [
+  'compat-consumers/react17-base-ui-jsx.d.ts',
+  'scripts/typecheck.mjs',
+  'scripts/lib/typecheck-generated-profile.mjs',
+  'scripts/lib/generate-validated-profile.mjs',
+  'scripts/prepare-base-ui.mjs',
+  'scripts/transform-base-ui-select-value.mjs',
+  'scripts/transform-base-ui-popup-lifecycle.mjs',
+  'scripts/lib/preparation-lock.mjs',
+  'tsconfig.base.json',
+  'tsconfig.ts53.json',
+  'tsconfig.ts58.json'
+];
+
 export async function generateProfile({ packageRoot, rawRoot, outputRoot, provenance, provenanceBytes }) {
   assertRegistryIds(provenance.registryIds);
   await mkdir(path.join(outputRoot, 'snapshots', 'canonical'), { recursive: true });
@@ -64,6 +78,12 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
     profileId: PROFILE_ID,
     provenanceSha256: sha256(provenanceBytes),
     normalizationImplementationSha256: sha256(await readFile(implementationPath)),
+    compilerInputs: await Promise.all(
+      compilerInputPaths.map(async (inputPath) => ({
+        path: inputPath,
+        sha256: sha256(await readFile(path.join(packageRoot, inputPath)))
+      }))
+    ),
     dependencyClosure: {
       path: 'dependency-closure.json',
       sha256: sha256(await readFile(path.join(packageRoot, 'dependency-closure.json')))
