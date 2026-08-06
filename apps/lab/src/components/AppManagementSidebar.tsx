@@ -121,6 +121,12 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
   const syncSuccessTimerRef = React.useRef<number | undefined>(undefined);
   const activeAppOptionIdRef = React.useRef(selectedAppId);
 
+  React.useEffect(() => {
+    if (!open) {
+      setSelectedAppPickerOpen(false);
+    }
+  }, [open]);
+
   const refreshManagedApps = React.useCallback(async (options: { quiet?: boolean } = {}): Promise<void> => {
     if (refreshInFlightRef.current || mutationInFlightRef.current) {
       return;
@@ -440,7 +446,12 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
       className="app-management-sidebar"
       id="app-management-sidebar"
       modalType="modal"
-      onOpenChange={(_event, data) => onOpenChange(data.open)}
+      onOpenChange={(_event, data) => {
+        if (!data.open) {
+          setSelectedAppPickerOpen(false);
+        }
+        onOpenChange(data.open);
+      }}
       open={open}
       position="start"
       size="medium"
@@ -532,14 +543,11 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                         onPointerDown={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
-                          onTogglePinned(app.id);
                         }}
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
-                          if (event.detail === 0) {
-                            onTogglePinned(app.id);
-                          }
+                          onTogglePinned(app.id);
                         }}
                       >
                         {appPinned ? <Pin16Filled aria-hidden="true" /> : <Pin16Regular aria-hidden="true" />}
