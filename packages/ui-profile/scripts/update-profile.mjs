@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { generateProfile } from './lib/generate-profile.mjs';
 import { createGeneratedProfileStaging, withGeneratedProfileSession } from './lib/generation-transaction.mjs';
-import { PROFILE_ID, PROFILE_SCHEMA_VERSION, assertRegistryIds } from './lib/profile.mjs';
-import { fetchValidatedProfileUpdateSnapshots } from './lib/profile-update-intake.mjs';
+import { PROFILE_ID } from './lib/profile.mjs';
+import { assertProfileGenerationProvenance, fetchValidatedProfileUpdateSnapshots } from './lib/profile-update-intake.mjs';
 import { replaceGeneratedPaths } from './lib/replace-generated.mjs';
 
 if (process.argv.length !== 3 || process.argv[2] !== '--allow-network') {
@@ -18,10 +18,7 @@ await withGeneratedProfileSession({ packageRoot, operation: 'update' }, async (g
   const provenanceBytes = await readFile(provenancePath);
   const provenance = JSON.parse(provenanceBytes);
 
-  if (provenance.profileId !== PROFILE_ID || provenance.schemaVersion !== PROFILE_SCHEMA_VERSION) {
-    throw new Error('Provenance identity does not match the profile generator');
-  }
-  assertRegistryIds(provenance.registryIds);
+  await assertProfileGenerationProvenance({ packageRoot, provenance });
 
   const stagingRoot = await createGeneratedProfileStaging(generationSession);
   let generated;

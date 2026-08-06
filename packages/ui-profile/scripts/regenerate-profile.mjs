@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { generateProfile } from './lib/generate-profile.mjs';
 import { createGeneratedProfileStaging, withGeneratedProfileSession } from './lib/generation-transaction.mjs';
+import { assertProfileGenerationProvenance } from './lib/profile-update-intake.mjs';
 import { replaceGeneratedPaths } from './lib/replace-generated.mjs';
 
 if (process.argv.length !== 2) throw new Error('Offline profile regeneration does not accept arguments');
@@ -12,6 +13,7 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 await withGeneratedProfileSession({ packageRoot, operation: 'regenerate' }, async (generationSession) => {
   const provenanceBytes = await readFile(path.join(packageRoot, 'provenance.json'));
   const provenance = JSON.parse(provenanceBytes);
+  await assertProfileGenerationProvenance({ packageRoot, provenance });
   const stagingRoot = await createGeneratedProfileStaging(generationSession);
   let generated;
   let operationFailure;
