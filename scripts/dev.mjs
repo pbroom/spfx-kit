@@ -189,11 +189,7 @@ async function main() {
     SPFX_KIT_MOCK_CDN_LISTEN_PORT: String(config.cdnListenPort)
   };
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const services = [
-    startService('SPFx Lab', npmCommand, ['run', 'dev:lab'], childEnvironment),
-    startService('Local CDN', npmCommand, ['run', 'dev:cdn'], childEnvironment)
-  ];
-
+  const services = [];
   let requestedSignal;
   const signalPromise = new Promise((resolve) => {
     for (const signal of getShutdownSignals()) {
@@ -203,6 +199,10 @@ async function main() {
       });
     }
   });
+  services.push(
+    startService('SPFx Lab', npmCommand, ['run', 'dev:lab'], childEnvironment),
+    startService('Local CDN', npmCommand, ['run', 'dev:cdn'], childEnvironment)
+  );
   const exit = await Promise.race([signalPromise, ...services.map(waitForService)]);
   let cleanupError;
   try {
