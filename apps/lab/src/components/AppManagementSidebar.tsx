@@ -486,7 +486,7 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                 activeAppOptionIdRef.current = data.nextOption?.value || selectedApp?.id || '';
               }}
               onKeyDown={(event) => {
-                if (!selectedAppPickerOpen || !event.altKey || event.key.toLowerCase() !== 'p') {
+                if (!selectedAppPickerOpen || !event.altKey || event.code !== 'KeyP') {
                   return;
                 }
                 const activeAppId = activeAppOptionIdRef.current;

@@ -1235,7 +1235,10 @@ test('pins one startup app and restores it after refresh', async ({ page }) => {
   await expect(page.getByRole('listbox')).toBeHidden();
   await selectedAppSelector.click();
   await expect(leftUnpinButton).toBeVisible();
-  await leftUnpinButton.click();
+  await selectedAppSelector.focus();
+  await page.keyboard.down('Alt');
+  await page.keyboard.press('KeyP');
+  await page.keyboard.up('Alt');
   await expect(page.getByRole('button', { name: 'Pin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'false');
   await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
 

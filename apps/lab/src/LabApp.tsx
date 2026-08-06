@@ -444,7 +444,7 @@ export function LabApp(): JSX.Element {
                   activeWebPartOptionIdRef.current = data.nextOption?.value || selected?.id || '';
                 }}
                 onKeyDown={(event) => {
-                  if (!webPartPickerOpen || !event.altKey || event.key.toLowerCase() !== 'p') {
+                  if (!webPartPickerOpen || !event.altKey || event.code !== 'KeyP') {
                     return;
                   }
                   const activeWebPart = webParts.find((webPart) => webPart.id === activeWebPartOptionIdRef.current);
