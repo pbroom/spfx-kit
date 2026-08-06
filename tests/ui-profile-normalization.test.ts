@@ -96,21 +96,48 @@ describe('React 17 UI profile normalization', () => {
     expect(first.transformations).toEqual(['normalize-line-endings', 'rewrite-app-owned-aliases', 'bind-react-namespace']);
   });
 
-  it('rewrites only parsed app-owned module specifiers and preserves matching program text', () => {
-    const source =
-      '// from "@/registry/base-nova/ui/button"\n' +
-      'const note = \'import("@/registry/base-nova/ui/button")\'\n' +
-      'export { Button } from "@/registry/base-nova/ui/button"\n' +
-      'const lazy = import("@/registry/base-nova/lib/utils")\n';
+  it('rewrites app-owned aliases only in parsed module specifiers', () => {
     const result = normalizeRegistrySource({
-      source,
-      registrySourcePath: 'registry/base-nova/ui/card.tsx'
+      source:
+        'import { cn } from "@/registry/base-nova/lib/utils"\n' +
+        'import ButtonImport = require("@/registry/base-nova/ui/button")\n' +
+        'export { Input } from "@/registry/base-nova/ui/input"\n' +
+        'const lazy = import("@/registry/base-nova/ui/dialog")\n' +
+        'const required = require("@/registry/base-nova/ui/field")\n' +
+        'const resolved = require.resolve("@/registry/base-nova/ui/sheet")\n' +
+        'type ButtonModule = typeof import("@/registry/base-nova/ui/button")\n' +
+        'const registryLabel = "@/registry/base-nova/ui/input"\n' +
+        '// @/registry/base-nova/ui/dialog is documentation, not a dependency\n' +
+        'export { lazy, resolved, registryLabel }\n',
+      registrySourcePath: 'registry/base-nova/ui/button.tsx'
     });
 
-    expect(result.source).toContain('// from "@/registry/base-nova/ui/button"');
-    expect(result.source).toContain('const note = \'import("@/registry/base-nova/ui/button")\'');
-    expect(result.source).toContain('export { Button } from "./button"');
-    expect(result.source).toContain('import("../../lib/utils")');
+    expect(result.source).toContain('from "../../lib/utils"');
+    expect(result.source).toContain('require("./button")');
+    expect(result.source).toContain('from "./input"');
+    expect(result.source).toContain('import("./dialog")');
+    expect(result.source).toContain('require("./field")');
+    expect(result.source).toContain('require.resolve("./sheet")');
+    expect(result.source).toContain('typeof import("./button")');
+    expect(result.source).toContain('const registryLabel = "@/registry/base-nova/ui/input"');
+    expect(result.source).toContain('// @/registry/base-nova/ui/dialog is documentation, not a dependency');
+    expect(result.transformations).toContain('rewrite-app-owned-aliases');
+  });
+
+  it('pins the Combobox module subpath without rewriting comments or runtime strings', () => {
+    const result = normalizeRegistrySource({
+      source:
+        'import { Combobox as ComboboxPrimitive } from "@base-ui/react"\n' +
+        'const packageLabel = "@base-ui/react"\n' +
+        '// Example: from "@base-ui/react"\n' +
+        'export { ComboboxPrimitive, packageLabel }\n',
+      registrySourcePath: 'registry/base-nova/ui/combobox.tsx'
+    });
+
+    expect(result.source).toContain('from "@base-ui/react/combobox"');
+    expect(result.source).toContain('const packageLabel = "@base-ui/react"');
+    expect(result.source).toContain('// Example: from "@base-ui/react"');
+    expect(result.transformations).toContain('pin-base-ui-combobox-subpath');
   });
 
   it('binds the classic React namespace for fragments and normalizes declaration exports that forward refs', () => {

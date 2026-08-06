@@ -85,6 +85,81 @@ function relativeImport(fromOutputPath, targetOutputPath) {
   return relative.startsWith('.') ? relative : `./${relative}`;
 }
 
+function parsedSource(source, label) {
+  const sourceFile = ts.createSourceFile(
+    label,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    label.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+  );
+  if (sourceFile.parseDiagnostics.length > 0) {
+    throw new Error(`${label}: source could not be parsed for module-specifier normalization`);
+  }
+  return sourceFile;
+}
+
+function moduleSpecifierNodes(sourceFile) {
+  const specifiers = [];
+  function visit(node) {
+    let specifier = null;
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      specifier = node.moduleSpecifier;
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      node.moduleReference.expression &&
+      ts.isStringLiteralLike(node.moduleReference.expression)
+    ) {
+      specifier = node.moduleReference.expression;
+    } else if (
+      ts.isImportTypeNode(node) &&
+      ts.isLiteralTypeNode(node.argument) &&
+      ts.isStringLiteralLike(node.argument.literal)
+    ) {
+      specifier = node.argument.literal;
+    } else if (ts.isCallExpression(node) && node.arguments.length === 1 && ts.isStringLiteralLike(node.arguments[0])) {
+      const expression = node.expression;
+      const isDependencyCall =
+        expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(expression) && expression.text === 'require') ||
+        (ts.isPropertyAccessExpression(expression) &&
+          ts.isIdentifier(expression.expression) &&
+          expression.expression.text === 'require' &&
+          expression.name.text === 'resolve');
+      if (isDependencyCall) specifier = node.arguments[0];
+    }
+    if (specifier) specifiers.push(specifier);
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return specifiers;
+}
+
+function rewriteModuleSpecifiers(source, label, rewrite) {
+  const sourceFile = parsedSource(source, label);
+  const replacements = [];
+  for (const specifier of moduleSpecifierNodes(sourceFile)) {
+    const replacement = rewrite(specifier.text);
+    if (replacement !== specifier.text) {
+      replacements.push({ start: specifier.getStart(sourceFile) + 1, end: specifier.getEnd() - 1, replacement });
+    }
+  }
+  let normalized = source;
+  for (const replacement of replacements.reverse()) {
+    normalized = `${normalized.slice(0, replacement.start)}${replacement.replacement}${normalized.slice(replacement.end)}`;
+  }
+  return { source: normalized, transformed: replacements.length > 0 };
+}
+
+function hasAppOwnedAliasSpecifier(source, label) {
+  return moduleSpecifierNodes(parsedSource(source, label)).some((specifier) => specifier.text.startsWith('@/'));
+}
+
 function hasJsx(source) {
   const sourceFile = ts.createSourceFile('jsx-detection.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let found = false;
@@ -225,48 +300,6 @@ function exportedNames(source) {
     }
   }
   return names;
-}
-
-function rewriteAppOwnedModuleSpecifiers(source, outputPath) {
-  const sourceFile = ts.createSourceFile('registry-source.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const replacements = [];
-  const rewrittenSpecifier = (specifier) => {
-    if (specifier === '@/registry/base-nova/lib/utils') {
-      return relativeImport(outputPath, 'normalized/src/lib/utils.ts');
-    }
-    const component = /^@\/registry\/base-nova\/ui\/([a-z0-9-]+)$/u.exec(specifier);
-    return component ? relativeImport(outputPath, `normalized/src/components/ui/${component[1]}.tsx`) : null;
-  };
-  const record = (specifier) => {
-    if (!specifier || !ts.isStringLiteralLike(specifier)) return;
-    const replacement = rewrittenSpecifier(specifier.text);
-    if (replacement) replacements.push({ start: specifier.getStart(sourceFile) + 1, end: specifier.getEnd() - 1, replacement });
-  };
-  const inspect = (node) => {
-    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) record(node.moduleSpecifier);
-    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) record(node.arguments[0]);
-    ts.forEachChild(node, inspect);
-  };
-  inspect(sourceFile);
-  let normalized = source;
-  for (const replacement of replacements.sort((left, right) => right.start - left.start)) {
-    normalized = `${normalized.slice(0, replacement.start)}${replacement.replacement}${normalized.slice(replacement.end)}`;
-  }
-  return { source: normalized, transformed: replacements.length > 0 };
-}
-
-function hasUnresolvedAppOwnedModuleSpecifier(source) {
-  const sourceFile = ts.createSourceFile('registry-source.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  let unresolved = false;
-  const inspect = (node) => {
-    const moduleSpecifier =
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node) ? node.moduleSpecifier : undefined) ??
-      (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword ? node.arguments[0] : undefined);
-    if (moduleSpecifier && ts.isStringLiteralLike(moduleSpecifier) && moduleSpecifier.text.startsWith('@/')) unresolved = true;
-    ts.forEachChild(node, inspect);
-  };
-  inspect(sourceFile);
-  return unresolved;
 }
 
 const NON_REF_STRUCTURAL_TARGETS = new Set([
@@ -414,15 +447,21 @@ export function normalizeRegistrySource({ source, registrySourcePath }) {
   const transformations = ['normalize-line-endings'];
   let normalized = source.replace(/\r\n?/g, '\n');
 
-  const comboboxSubpath = registrySourcePath.endsWith('/combobox.tsx')
-    ? normalized.replace(/from\s+["']@base-ui\/react["']/g, 'from "@base-ui/react/combobox"')
-    : normalized;
-  if (comboboxSubpath !== normalized) {
-    normalized = comboboxSubpath;
-    transformations.push('pin-base-ui-combobox-subpath');
+  if (registrySourcePath.endsWith('/combobox.tsx')) {
+    const comboboxResult = rewriteModuleSpecifiers(normalized, registrySourcePath, (specifier) =>
+      specifier === '@base-ui/react' ? '@base-ui/react/combobox' : specifier
+    );
+    if (comboboxResult.transformed) transformations.push('pin-base-ui-combobox-subpath');
+    normalized = comboboxResult.source;
   }
 
-  const aliasResult = rewriteAppOwnedModuleSpecifiers(normalized, outputPath);
+  const aliasResult = rewriteModuleSpecifiers(normalized, registrySourcePath, (specifier) => {
+    if (specifier === '@/registry/base-nova/lib/utils') {
+      return relativeImport(outputPath, 'normalized/src/lib/utils.ts');
+    }
+    const component = /^@\/registry\/base-nova\/ui\/([a-z0-9-]+)$/u.exec(specifier)?.[1];
+    return component ? relativeImport(outputPath, `normalized/src/components/ui/${component}.tsx`) : specifier;
+  });
   if (aliasResult.transformed) transformations.push('rewrite-app-owned-aliases');
   normalized = aliasResult.source;
 
@@ -872,7 +911,7 @@ function assertReact17AstSource(source, label) {
 
 export function assertReact17Source(source, label) {
   assertReact17AstSource(source, label);
-  if (hasUnresolvedAppOwnedModuleSpecifier(source) || /<IconPlaceholder\b|\bIcons\./.test(source)) {
+  if (hasAppOwnedAliasSpecifier(source, label) || /<IconPlaceholder\b|\bIcons\./.test(source)) {
     throw new Error(`${label}: unresolved alias or icon placeholder remains after normalization`);
   }
   if (label.endsWith('.tsx') && hasJsx(source) && !hasReactBinding(source)) {
