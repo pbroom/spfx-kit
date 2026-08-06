@@ -26,7 +26,11 @@ npm run test:security
 ### Lab
 
 - Default URL: `http://127.0.0.1:5173/`
-- In cloud agents, bind with `SPFX_LAB_HOST=0.0.0.0` so the preview is reachable.
+- Cloud previews need two externally reachable HTTPS forwarders: one for the
+  Lab and one for the mock CDN. Start them with
+  `SPFX_LAB_HOST=0.0.0.0 SPFX_KIT_MOCK_CDN_LAB_ORIGIN=https://<lab-host> SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN=https://<cdn-host> SPFX_KIT_MOCK_CDN_LISTEN_HOST=0.0.0.0 npm run dev`.
+  The placeholder hosts must be the forwarders seen by the browser; do not use
+  loopback values. The launcher fails closed if this configuration is incomplete.
 - If port 5173 is busy, use `SPFX_LAB_PORT=5175 npm run dev`; port 5174 is
   reserved for the local mock CDN started by the same command.
 - Fresh clones include `examples/hello-card-spfx`; managed apps live under

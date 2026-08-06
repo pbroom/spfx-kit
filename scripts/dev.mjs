@@ -42,10 +42,16 @@ export function resolveDevConfig(environment = process.env) {
   if (cdnListenPort === labPort) {
     throw new Error('The SPFx Lab and local CDN must use different ports.');
   }
-  if (labHost === '0.0.0.0' && publicCdnOrigin === cdnOrigin) {
-    throw new Error(
-      'SPFX_LAB_HOST=0.0.0.0 requires an HTTPS SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN and a separately forwarded CDN listener.'
-    );
+  if (labHost === '0.0.0.0') {
+    if (publicCdnOrigin === cdnOrigin) {
+      throw new Error('SPFX_LAB_HOST=0.0.0.0 requires an HTTPS SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN.');
+    }
+    if (!isForwardedHttpsOrigin(labOrigin)) {
+      throw new Error('SPFX_LAB_HOST=0.0.0.0 requires an HTTPS SPFX_KIT_MOCK_CDN_LAB_ORIGIN.');
+    }
+    if (isLoopbackListenHost(cdnListenHost)) {
+      throw new Error('SPFX_LAB_HOST=0.0.0.0 requires a non-loopback SPFX_KIT_MOCK_CDN_LISTEN_HOST.');
+    }
   }
 
   return {
@@ -57,6 +63,23 @@ export function resolveDevConfig(environment = process.env) {
     cdnListenHost,
     cdnListenPort
   };
+}
+
+function isForwardedHttpsOrigin(value) {
+  const url = new URL(value);
+  return (
+    url.protocol === 'https:' &&
+    url.hostname !== 'localhost' &&
+    url.hostname !== '0.0.0.0' &&
+    url.hostname !== '127.0.0.1' &&
+    url.hostname !== '::1' &&
+    url.hostname !== '[::1]'
+  );
+}
+
+function isLoopbackListenHost(value) {
+  const host = String(value).toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
 }
 
 export async function assertPortAvailable(host, port, serviceName) {

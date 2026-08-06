@@ -123,6 +123,14 @@ describe('loadCdnPackageDescriptor', () => {
       'loopback HTTP or forwarded HTTPS origin'
     ],
     [
+      'a bracketed IPv6 loopback forwarded origin',
+      {
+        ...descriptor,
+        delivery: { ...descriptor.delivery, origin: 'https://[::1]', bucketBaseUrl: 'https://[::1]/' }
+      },
+      'loopback HTTP or forwarded HTTPS origin'
+    ],
+    [
       'a loopback origin without an explicit port',
       {
         ...descriptor,

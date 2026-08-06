@@ -84,6 +84,7 @@ export function normalizeMockCdnPublicOrigin(value = DEFAULT_MOCK_CDN_ORIGIN) {
       url.hostname === '0.0.0.0' ||
       url.hostname === '127.0.0.1' ||
       url.hostname === '::1' ||
+      url.hostname === '[::1]' ||
       url.username ||
       url.password ||
       url.pathname !== '/' ||

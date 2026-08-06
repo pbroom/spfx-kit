@@ -92,6 +92,23 @@ describe('SPFx Kit development launcher', () => {
     expect(() => resolveDevConfig({ SPFX_LAB_HOST: '0.0.0.0' })).toThrow('requires an HTTPS SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN');
   });
 
+  it('requires both forwarded browser origins and a non-loopback CDN listener for cloud previews', () => {
+    expect(() =>
+      resolveDevConfig({
+        SPFX_LAB_HOST: '0.0.0.0',
+        SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN: 'https://cdn-preview.example.test',
+        SPFX_KIT_MOCK_CDN_LISTEN_HOST: '0.0.0.0'
+      })
+    ).toThrow('requires an HTTPS SPFX_KIT_MOCK_CDN_LAB_ORIGIN');
+    expect(() =>
+      resolveDevConfig({
+        SPFX_LAB_HOST: '0.0.0.0',
+        SPFX_KIT_MOCK_CDN_LAB_ORIGIN: 'https://lab-preview.example.test',
+        SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN: 'https://cdn-preview.example.test'
+      })
+    ).toThrow('requires a non-loopback SPFX_KIT_MOCK_CDN_LISTEN_HOST');
+  });
+
   it('uses taskkill tree termination arguments on Windows', () => {
     expect(getWindowsTaskkillArgs(1234, false)).toEqual(['/pid', '1234', '/t']);
     expect(getWindowsTaskkillArgs(1234, true)).toEqual(['/pid', '1234', '/t', '/f']);

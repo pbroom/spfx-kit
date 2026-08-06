@@ -320,7 +320,8 @@ function validateMockCdnOrigin(value: string, labOrigin: string): URL {
     url.hostname !== 'localhost' &&
     url.hostname !== '0.0.0.0' &&
     url.hostname !== '127.0.0.1' &&
-    url.hostname !== '::1';
+    url.hostname !== '::1' &&
+    url.hostname !== '[::1]';
   if ((!loopback && !forwarded) || url.origin === labOrigin || url.username || url.password || url.search || url.hash) {
     throw new Error(
       'Staged CDN descriptor delivery.origin must be a separate credential-free loopback HTTP or forwarded HTTPS origin.'

@@ -139,11 +139,18 @@
       throw new Error('The staged CDN smoke-check delivery origin is invalid.');
     }
     const url = tryParseUrl(value);
+    const loopback = url?.protocol === 'http:' && url.hostname === '127.0.0.1' && Boolean(url.port);
+    const forwarded =
+      url?.protocol === 'https:' &&
+      Boolean(url.hostname) &&
+      url.hostname !== 'localhost' &&
+      url.hostname !== '0.0.0.0' &&
+      url.hostname !== '127.0.0.1' &&
+      url.hostname !== '::1' &&
+      url.hostname !== '[::1]';
     if (
       !url ||
-      url.protocol !== 'http:' ||
-      url.hostname !== '127.0.0.1' ||
-      !url.port ||
+      (!loopback && !forwarded) ||
       url.origin === self.location.origin ||
       url.href !== `${url.origin}/` ||
       url.username ||
@@ -151,7 +158,7 @@
       url.search ||
       url.hash
     ) {
-      throw new Error('The staged CDN smoke-check requires a separate explicit loopback mock-CDN origin.');
+      throw new Error('The staged CDN smoke-check requires a separate loopback HTTP or forwarded HTTPS mock-CDN origin.');
     }
     return url.origin;
   }
