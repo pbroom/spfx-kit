@@ -77,7 +77,7 @@ describe('committed UI profile provenance', () => {
   it('verifies the pinned schema plus every committed raw and canonical snapshot digest', async () => {
     const { packageRoot, provenance } = await provenanceFixture();
 
-    await expect(assertProfileUpdateProvenance({ packageRoot, provenance })).resolves.toBeUndefined();
+    await expect(assertProfileUpdateProvenance({ packageRoot, provenance })).resolves.toBeInstanceOf(Map);
   });
 
   it('rejects provenance schema drift before trusting snapshot metadata', async () => {

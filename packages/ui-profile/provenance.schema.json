@@ -117,10 +117,11 @@
     "normalization": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["contractVersion", "implementation"],
+      "required": ["contractVersion", "implementation", "implementationSha256"],
       "properties": {
         "contractVersion": { "const": "react17-classic-jsx-v1" },
-        "implementation": { "const": "scripts/lib/profile.mjs" }
+        "implementation": { "const": "scripts/lib/profile.mjs" },
+        "implementationSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       }
     },
     "registryIds": {
