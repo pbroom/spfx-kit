@@ -24,6 +24,16 @@ operator records values from the proof that actually ran.
 - `baseline-artifacts-2026-08-05.md` records clean exact-head local builds and
   emitted-package identities; it does not claim hosted, remote, SharePoint, or
   rollback proof.
+- `monaco-0.53.0-min-vs-inventory.json` records the exact npm-package `min/vs`
+  regular-file tree used to bound the Monaco decision. It enumerates modules,
+  workers, CSS, embedded support assets, byte counts, and digests, but is not a
+  runtime request graph and does not claim CDN or browser delivery proof.
+- `workbench-v1-public-source-format-inventory.json` records the public V1 format,
+  default source digest, generic property-bag bridge, approved modules, and
+  tracked prefixed-envelope search. No concrete `codeWorkspace` registration
+  exists in the pinned public source, no persisted population is inferred,
+  private authored records were not inspected or counted, and V2 compatibility
+  remains unproven.
 - `bootstrap-main-ruleset.md` defines the guarded post-merge probe and required
   candidate-head status procedure; it grants no merge or settings authority.
 - `trust-base.v1.json` binds the reviewed workflow tree, isolated validator

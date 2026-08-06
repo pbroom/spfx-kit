@@ -17,6 +17,21 @@ registry source, package locks, managed `.spfx-kit/apps`, dependencies, build
 and release output, and documentation. Vendored source, generator-emitted
 source, and declared/transitive dependencies are reported separately.
 
+Two focused, public-safe inventories close source-record gaps without widening
+this boundary:
+
+- [`monaco-0.53.0-min-vs-inventory.json`](monaco-0.53.0-min-vs-inventory.json)
+  records every regular file in the exact npm `monaco-editor@0.53.0/min/vs`
+  tree, including workers, CSS, embedded support assets, and per-file digests.
+  It is not a runtime request graph and does not claim CDN or browser delivery
+  proof.
+- [`workbench-v1-public-source-format-inventory.json`](workbench-v1-public-source-format-inventory.json)
+  records the public Code Workbench V1 envelope, default source digest,
+  generic property-bag bridge, approved modules, absence of a tracked concrete
+  `codeWorkspace` registration, and absence of tracked prefixed envelopes. It
+  does not infer a persisted population, inspect or count private authored
+  records, inventory unprefixed raw-JSON fixtures, or claim V2 compatibility.
+
 ## Exact Revisions
 
 | Repository                   | Default branch commit                      |
@@ -215,3 +230,16 @@ builds, package identities, and current Fluent/Griffel/asset closure. Phase 1
 must still produce all four export targets from one migration release set and
 record them as separate proof events. Neither source counts nor this baseline
 satisfies hosted CI, CDN, SharePoint runtime, or rollback gates.
+
+Reproduce the two focused inventories with Node `22.22.3`:
+
+```sh
+npm pack monaco-editor@0.53.0 --ignore-scripts --json
+node scripts/generate-monaco-runtime-inventory.mjs monaco-editor-0.53.0.tgz
+node scripts/generate-workbench-v1-inventory.mjs
+```
+
+Compare the generated JSON to the tracked inventories. The Monaco generator
+verifies and extracts the registry tarball in a temporary directory; the
+Workbench command reads the pinned baseline revision through Git. Neither
+command contacts a private system.

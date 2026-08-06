@@ -1879,6 +1879,70 @@ describe('shadcn migration evidence validator', () => {
     expect(calls[0].url).toContain('/pulls/88');
   });
 
+  it('checks focused inventories in the checkout selected by --root', async () => {
+    const target = await mkdtemp(path.join(os.tmpdir(), 'spfx-shadcn-root-checkout-'));
+    temporaryDirectories.push(target);
+    await execFileAsync('git', ['clone', '--quiet', '--shared', process.cwd(), target]);
+
+    const targetInventoryPath = path.join(
+      target,
+      'docs',
+      'evidence',
+      'shadcn-migration',
+      'workbench-v1-public-source-format-inventory.json'
+    );
+    const targetInventory = JSON.parse(await readFile(targetInventoryPath, 'utf8'));
+    targetInventory.sourceRevision.commitSha = 'f'.repeat(40);
+    await writeFile(targetInventoryPath, `${JSON.stringify(targetInventory, null, 2)}\n`);
+
+    await expect(validateShadcnEvidence({ rootDirectory: target })).resolves.toMatchObject({
+      eventCount: 0,
+      releaseSetCount: 0
+    });
+
+    const wrapper = path.join(process.cwd(), 'scripts', 'check-shadcn-evidence.mjs');
+    await expect(execFileAsync(process.execPath, [wrapper, '--root', target], { cwd: process.cwd() })).rejects.toThrow();
+  });
+
+  it('checks focused inventories from the candidate ref instead of the checked-out base', async () => {
+    const target = await mkdtemp(path.join(os.tmpdir(), 'spfx-shadcn-candidate-checkout-'));
+    temporaryDirectories.push(target);
+    await execFileAsync('git', ['clone', '--quiet', '--shared', process.cwd(), target]);
+    const { stdout: baseOutput } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: target });
+    const base = baseOutput.trim();
+
+    const targetInventoryPath = path.join(
+      target,
+      'docs',
+      'evidence',
+      'shadcn-migration',
+      'workbench-v1-public-source-format-inventory.json'
+    );
+    const targetInventory = JSON.parse(await readFile(targetInventoryPath, 'utf8'));
+    targetInventory.sourceRevision.commitSha = 'f'.repeat(40);
+    await writeFile(targetInventoryPath, `${JSON.stringify(targetInventory, null, 2)}\n`);
+    await execFileAsync(
+      'git',
+      ['-c', 'user.name=Codex', '-c', 'user.email=codex@example.invalid', 'commit', '--quiet', '-am', 'corrupt inventory'],
+      { cwd: target }
+    );
+    const { stdout: candidateOutput } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: target });
+    const candidate = candidateOutput.trim();
+    await execFileAsync('git', ['checkout', '--quiet', '--detach', base], { cwd: target });
+    await symlink(path.join(process.cwd(), 'node_modules'), path.join(target, 'node_modules'), 'dir');
+
+    await expect(
+      validateShadcnEvidence({ rootDirectory: target, baseRef: base, candidateRef: candidate })
+    ).resolves.toMatchObject({ eventCount: 0, releaseSetCount: 0 });
+
+    const wrapper = path.join(process.cwd(), 'scripts', 'check-shadcn-evidence.mjs');
+    await expect(
+      execFileAsync(process.execPath, [wrapper, '--root', target, '--base-ref', base, '--candidate-ref', candidate], {
+        cwd: process.cwd()
+      })
+    ).rejects.toThrow();
+  });
+
   it('structurally keeps the trusted workflow on base code and candidate Git data', async () => {
     const source = await readFile(path.join(process.cwd(), '.github', 'workflows', 'evidence-history.yml'), 'utf8');
     const workflow = parseYaml(source) as {
