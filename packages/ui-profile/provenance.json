@@ -22,14 +22,9 @@
     "baseUi": "1.6.0",
     "lucideReact": "1.25.0"
   },
-  "hostTypeContract": {
+  "reactTypeContract": {
     "@types/react": "17.0.45",
     "@types/react-dom": "17.0.17"
-  },
-  "isolatedCompilerTypeContract": {
-    "@types/react": "17.0.93",
-    "@types/react-dom": "17.0.17",
-    "@types/scheduler": "0.16.8"
   },
   "utilities": {
     "class-variance-authority": "0.7.1",
