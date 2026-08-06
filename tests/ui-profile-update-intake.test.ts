@@ -1,10 +1,12 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
 import {
+  assertProfileUpdateProvenance,
   assertPinnedShadcnToolchain,
   fetchPinnedRegistrySnapshots,
   fetchValidatedProfileUpdateSnapshots
@@ -15,6 +17,18 @@ const registry = {
   preset: 'base-nova',
   endpointTemplate: 'https://ui.shadcn.com/r/styles/base-nova/{id}.json',
   cli: { name: 'shadcn', version: '4.16.1', integrity: SHADCN_INTEGRITY }
+};
+const dependencyPolicy = {
+  excludedDependencies: ['cmdk@1.1.1', 'sonner@2.0.7', '@radix-ui/*', 'react-aria-components', 'vaul'],
+  directProductionDependencies: {
+    '@base-ui/react': '1.6.0',
+    'class-variance-authority': '0.7.1',
+    clsx: '2.1.1',
+    'lucide-react': '1.25.0',
+    react: '17.0.1',
+    'react-dom': '17.0.1',
+    'tailwind-merge': '3.6.0'
+  }
 };
 const temporaryRoots: string[] = [];
 
@@ -47,6 +61,59 @@ async function toolchainFixture(): Promise<{
   await writeFile(registryModule, 'export const fixture = true;\n');
   return { repositoryRoot, packageRoot, resolvedRegistryUrl: pathToFileURL(registryModule).href };
 }
+
+async function provenanceFixture() {
+  const root = await mkdtemp(path.join(tmpdir(), 'ui-profile-provenance-'));
+  temporaryRoots.push(root);
+  const packageRoot = path.join(root, 'ui-profile');
+  await cp(path.resolve('packages/ui-profile'), packageRoot, { recursive: true });
+  return {
+    packageRoot,
+    provenance: JSON.parse(await readFile(path.join(packageRoot, 'provenance.json'), 'utf8'))
+  };
+}
+
+describe('committed UI profile provenance', () => {
+  it('verifies the pinned schema plus every committed raw and canonical snapshot digest', async () => {
+    const { packageRoot, provenance } = await provenanceFixture();
+
+    await expect(assertProfileUpdateProvenance({ packageRoot, provenance })).resolves.toBeUndefined();
+  });
+
+  it('rejects provenance schema drift before trusting snapshot metadata', async () => {
+    const { packageRoot, provenance } = await provenanceFixture();
+    const schemaPath = path.join(packageRoot, 'provenance.schema.json');
+    const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
+    schema.title = 'Unreviewed schema';
+    await writeFile(schemaPath, JSON.stringify(schema));
+
+    await expect(assertProfileUpdateProvenance({ packageRoot, provenance })).rejects.toThrow(
+      'Profile update provenance schema identity differs'
+    );
+  });
+
+  it.each(['raw', 'canonical'])('rejects independently changed %s snapshot bytes', async (kind) => {
+    const { packageRoot, provenance } = await provenanceFixture();
+    const snapshotPath = path.join(packageRoot, 'snapshots', kind, 'button.json');
+    await writeFile(snapshotPath, `${await readFile(snapshotPath, 'utf8')} `);
+
+    await expect(assertProfileUpdateProvenance({ packageRoot, provenance })).rejects.toThrow(
+      `${kind === 'raw' ? 'Raw' : 'Canonical'} registry snapshot digest differs for button`
+    );
+  });
+
+  it('rejects canonical bytes that match their recorded digest but not canonical JSON', async () => {
+    const { packageRoot, provenance } = await provenanceFixture();
+    const canonicalPath = path.join(packageRoot, 'snapshots', 'canonical', 'button.json');
+    const noncanonical = await readFile(path.join(packageRoot, 'snapshots', 'raw', 'button.json'));
+    await writeFile(canonicalPath, noncanonical);
+    provenance.registrySnapshots.button.canonicalSha256 = createHash('sha256').update(noncanonical).digest('hex');
+
+    await expect(assertProfileUpdateProvenance({ packageRoot, provenance })).rejects.toThrow(
+      'Canonical registry snapshot bytes differ for button'
+    );
+  });
+});
 
 describe('pinned shadcn network intake', () => {
   it.each([
@@ -82,6 +149,7 @@ describe('pinned shadcn network intake', () => {
       packageRoot,
       registry,
       registryIds: ['button'],
+      dependencyPolicy,
       fetchImpl,
       getRegistryItemsImpl,
       resolvedRegistryUrl
@@ -92,6 +160,90 @@ describe('pinned shadcn network intake', () => {
       config: { style: 'base-nova' },
       useCache: false
     });
+  });
+
+  it('accepts the complete committed dependency and fetched-source closure', async () => {
+    const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    const committedRoot = path.resolve('packages/ui-profile');
+    const provenance = JSON.parse(await readFile(path.join(committedRoot, 'provenance.json'), 'utf8'));
+    const cliItems = await Promise.all(
+      provenance.registryIds.map(async (id: string) =>
+        JSON.parse(await readFile(path.join(committedRoot, 'snapshots', 'canonical', `${id}.json`), 'utf8'))
+      )
+    );
+    const fetchImpl = vi.fn(async (url: string) => {
+      const id = /\/([^/]+)\.json$/u.exec(url)?.[1];
+      return new Response(await readFile(path.join(committedRoot, 'snapshots', 'raw', `${id}.json`)), { status: 200 });
+    });
+
+    const snapshots = await fetchPinnedRegistrySnapshots({
+      packageRoot,
+      registry: provenance.registry,
+      registryIds: provenance.registryIds,
+      dependencyPolicy: {
+        excludedDependencies: provenance.excludedDependencies,
+        directProductionDependencies: provenance.directProductionDependencies
+      },
+      fetchImpl,
+      getRegistryItemsImpl: async () => cliItems,
+      resolvedRegistryUrl
+    });
+
+    expect(snapshots.size).toBe(provenance.registryIds.length);
+  });
+
+  it.each([
+    [
+      'declared excluded dependency',
+      { dependencies: ['cmdk'], files: [] },
+      'Pinned registry item button uses excluded dependency cmdk'
+    ],
+    [
+      'excluded source import',
+      {
+        files: [{ path: 'registry/base-nova/ui/button.tsx', type: 'registry:ui', content: 'import "@radix-ui/react-slot"\n' }]
+      },
+      'registry/base-nova/ui/button.tsx uses excluded dependency @radix-ui/react-slot'
+    ],
+    [
+      'undeclared source import',
+      { files: [{ path: 'registry/base-nova/ui/button.tsx', type: 'registry:ui', content: 'import "left-pad"\n' }] },
+      'registry/base-nova/ui/button.tsx uses undeclared production dependency left-pad'
+    ],
+    [
+      'unfetched registry dependency',
+      { registryDependencies: ['input'], files: [] },
+      'requires source outside the fetched registry closure: input'
+    ],
+    [
+      'unfetched source import',
+      {
+        files: [
+          {
+            path: 'registry/base-nova/ui/button.tsx',
+            type: 'registry:ui',
+            content: 'import "@/registry/base-nova/ui/input"\n'
+          }
+        ]
+      },
+      'requires source outside the fetched registry closure: input'
+    ]
+  ])('rejects a %s from semantically matching hosted and CLI items', async (_label, patch, expectedMessage) => {
+    const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    const cliItem = { name: 'button', type: 'registry:ui', ...patch };
+    const raw = JSON.stringify(cliItem);
+
+    await expect(
+      fetchPinnedRegistrySnapshots({
+        packageRoot,
+        registry,
+        registryIds: ['button'],
+        dependencyPolicy,
+        fetchImpl: async () => new Response(raw, { status: 200 }),
+        getRegistryItemsImpl: async () => [cliItem],
+        resolvedRegistryUrl
+      })
+    ).rejects.toThrow(expectedMessage);
   });
 
   it.each([
@@ -106,6 +258,7 @@ describe('pinned shadcn network intake', () => {
         packageRoot,
         registry,
         registryIds: ['button'],
+        dependencyPolicy,
         fetchImpl: async () => new Response(raw, { status: 200 }),
         getRegistryItemsImpl: async () => cliItems,
         resolvedRegistryUrl
@@ -120,11 +273,95 @@ describe('pinned shadcn network intake', () => {
         packageRoot,
         registry,
         registryIds: ['button'],
+        dependencyPolicy,
         fetchImpl: async () => new Response('{not-json', { status: 200 }),
         getRegistryItemsImpl: async () => [{ name: 'button', type: 'registry:ui', files: [] }],
         resolvedRegistryUrl
       })
     ).rejects.toThrow('Hosted registry response is not JSON for button');
+  });
+
+  it.each([
+    ['item', ['button'], 3, 16, 'exceeds the 3-byte item limit'],
+    ['aggregate', ['button', 'input'], 8, 7, 'exceeds the aggregate byte limit at input']
+  ])(
+    'streams and rejects a registry response that exceeds the %s byte limit',
+    async (_label, registryIds, itemLimit, aggregateLimit, message) => {
+      const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+
+      await expect(
+        fetchPinnedRegistrySnapshots({
+          packageRoot,
+          registry,
+          registryIds,
+          dependencyPolicy,
+          fetchImpl: async () => new Response('1234', { status: 200 }),
+          getRegistryItemsImpl: async () => [],
+          resolvedRegistryUrl,
+          maxRegistryItemBytes: itemLimit,
+          maxRegistryAggregateBytes: aggregateLimit
+        })
+      ).rejects.toThrow(message);
+    }
+  );
+
+  it('aborts a stalled hosted registry request at its deadline', async () => {
+    const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const fetchImpl = vi.fn(
+        async (_url: string, init: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+          })
+      );
+      const pending = fetchPinnedRegistrySnapshots({
+        packageRoot,
+        registry,
+        registryIds: ['button'],
+        dependencyPolicy,
+        fetchImpl,
+        getRegistryItemsImpl: async () => [],
+        resolvedRegistryUrl,
+        requestTimeoutMs: 50
+      });
+      while (fetchImpl.mock.calls.length === 0) await new Promise((resolve) => setImmediate(resolve));
+      const rejection = expect(pending).rejects.toThrow('Registry update request for button exceeded the 50ms deadline');
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      await rejection;
+      expect(fetchImpl.mock.calls[0]?.[1]?.signal).toMatchObject({ aborted: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('bounds the pinned CLI-backed registry intake with the same deadline', async () => {
+    const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    const cliItem = { name: 'button', type: 'registry:ui', files: [] };
+    const getRegistryItemsImpl = vi.fn(async () => new Promise<never>(() => {}));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const pending = fetchPinnedRegistrySnapshots({
+        packageRoot,
+        registry,
+        registryIds: ['button'],
+        dependencyPolicy,
+        fetchImpl: async () => new Response(JSON.stringify(cliItem), { status: 200 }),
+        getRegistryItemsImpl,
+        resolvedRegistryUrl,
+        requestTimeoutMs: 50
+      });
+      while (getRegistryItemsImpl.mock.calls.length === 0) await new Promise((resolve) => setImmediate(resolve));
+      const rejection = expect(pending).rejects.toThrow('Pinned shadcn CLI registry intake exceeded the 50ms deadline');
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('rejects lock integrity drift before any registry request', async () => {
@@ -140,6 +377,7 @@ describe('pinned shadcn network intake', () => {
         packageRoot,
         registry,
         registryIds: ['button'],
+        dependencyPolicy,
         fetchImpl,
         getRegistryItemsImpl: async () => [],
         resolvedRegistryUrl
