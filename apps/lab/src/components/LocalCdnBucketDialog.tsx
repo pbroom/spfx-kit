@@ -12,6 +12,7 @@ import {
 import { Check, Database, RefreshCw, Upload, X } from 'lucide-react';
 import {
   loadLocalCdnBucketInventory,
+  publicLocalCdnManifestUrl,
   publishLocalCdnSource,
   selectedLocalCdnRelease,
   selectLocalCdnRelease,
@@ -193,7 +194,7 @@ export function LocalCdnBucketDialog({
   const verifiedSources = inventory?.publishSources.filter(isVerifiedPublishSource) || [];
   const selectableReleases = inventory?.namespaces.apps.releases.filter(isSelectableRelease) || [];
   const activeRelease = selectedLocalCdnRelease(inventory, selectedAppId);
-  const activeManifestUrl = activeRelease ? `${activeRelease.releaseBaseUrl}deployment-manifest.json` : '';
+  const activeManifestUrl = inventory && activeRelease ? publicLocalCdnManifestUrl(inventory, activeRelease) : '';
 
   return (
     <Dialog modalType="modal" open={open} onOpenChange={(_event, data) => onOpenChange(data.open)}>

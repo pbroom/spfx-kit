@@ -14,6 +14,7 @@ const {
   getMockCdnBucketInventory,
   inspectMockCdnAppStage,
   normalizeMockCdnOrigin,
+  normalizeMockCdnPublicOrigin,
   publishMockCdnAppStage,
   resolveMockCdnBucketRoot,
   selectMockCdnAppRelease
@@ -27,6 +28,7 @@ interface LocalCdnAdminOptions {
   bucketRoot?: string;
   mockCdnOrigin?: string;
   labOrigin?: string;
+  publicMockCdnOrigin?: string;
 }
 
 interface ApprovedPublishSource {
@@ -46,7 +48,9 @@ export function spfxLocalCdnAdminApi(): Plugin {
   const options: LocalCdnAdminOptions = {
     bucketRoot: process.env.SPFX_KIT_MOCK_CDN_ROOT || DEFAULT_MOCK_CDN_BUCKET_PATH,
     mockCdnOrigin: process.env.SPFX_KIT_MOCK_CDN_ORIGIN || DEFAULT_MOCK_CDN_ORIGIN,
-    labOrigin: process.env.SPFX_KIT_MOCK_CDN_LAB_ORIGIN || 'http://127.0.0.1:5173'
+    labOrigin: process.env.SPFX_KIT_MOCK_CDN_LAB_ORIGIN || 'http://127.0.0.1:5173',
+    publicMockCdnOrigin:
+      process.env.SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN || process.env.SPFX_KIT_MOCK_CDN_ORIGIN || DEFAULT_MOCK_CDN_ORIGIN
   };
   return {
     name: 'spfx-kit-local-cdn-admin-api',
@@ -135,6 +139,7 @@ export function createLocalCdnAdminStore(workspaceRoot: string, options: LocalCd
   const resolvedWorkspaceRoot = path.resolve(workspaceRoot);
   const bucketRoot = resolveMockCdnBucketRoot(resolvedWorkspaceRoot, options.bucketRoot || DEFAULT_MOCK_CDN_BUCKET_PATH);
   const origin = normalizeMockCdnOrigin(options.mockCdnOrigin || DEFAULT_MOCK_CDN_ORIGIN);
+  const publicOrigin = normalizeMockCdnPublicOrigin(options.publicMockCdnOrigin || origin);
   const approvedSources = new Map<string, ApprovedPublishSource>();
 
   return {
@@ -143,7 +148,7 @@ export function createLocalCdnAdminStore(workspaceRoot: string, options: LocalCd
         getMockCdnBucketInventory({ bucketRoot, origin }),
         enumerateApprovedPublishSources(resolvedWorkspaceRoot, origin, approvedSources)
       ]);
-      return { ...inventory, publishSources };
+      return { ...inventory, publicOrigin, publishSources };
     },
 
     async publish(sourceId: string) {

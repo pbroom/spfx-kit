@@ -13,6 +13,7 @@ import { mockCdnAppReleaseBaseUrl } from '../packages/spfx-tools/src/lib/mock-cd
 const temporaryDirectories: string[] = [];
 const runningServers: Server[] = [];
 const mockCdnOrigin = 'http://127.0.0.1:54174';
+const publicMockCdnOrigin = 'https://cdn-preview.example.test';
 const appId = 'fixture-spfx';
 const releaseId = '1.2.3-20260804T120000000Z-admin01';
 
@@ -26,6 +27,16 @@ afterEach(async () => {
 });
 
 describe('local CDN bucket administration API', () => {
+  it('reports the configured forwarded CDN origin separately from the loopback bucket origin', async () => {
+    const workspaceRoot = await temporaryDirectory();
+    const inventory = await createLocalCdnAdminStore(workspaceRoot, {
+      mockCdnOrigin,
+      publicMockCdnOrigin
+    }).inventory();
+
+    expect(inventory).toMatchObject({ origin: mockCdnOrigin, publicOrigin: publicMockCdnOrigin });
+  });
+
   it('lists the empty bucket, publishes only an enumerated source, and selects only by explicit action', async () => {
     const workspaceRoot = await temporaryDirectory();
     await createLocalCdnAdminStore(workspaceRoot, { mockCdnOrigin }).inventory();

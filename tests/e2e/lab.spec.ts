@@ -3,11 +3,13 @@ import { expect, test, type Locator } from '@playwright/test';
 
 const pinnedAppStorageKey = 'spfx-kit.lab.pinned-app.v1';
 const syntheticMockCdnOrigin = 'http://127.0.0.1:4400';
+const syntheticMockCdnPublicOrigin = 'https://cdn-preview.example.test';
 
 function bucketInventory(selectedReleaseId: string, releaseIds: string[]) {
   return {
     schemaVersion: 1,
     origin: syntheticMockCdnOrigin,
+    publicOrigin: syntheticMockCdnPublicOrigin,
     namespaces: {
       apps: {
         status: 'supported',
@@ -195,6 +197,7 @@ test('opens a distinct accessible Local CDN inventory table with a truthful empt
       body: JSON.stringify({
         schemaVersion: 1,
         origin: syntheticMockCdnOrigin,
+        publicOrigin: syntheticMockCdnPublicOrigin,
         namespaces: {
           apps: { status: 'supported', releases: [] },
           shared: {
@@ -314,7 +317,7 @@ test('keeps controls fixed while a populated bucket inventory scrolls independen
   const inventory = dialog.getByRole('region', { name: 'Local CDN bucket inventory' });
   await expect(controls).toBeVisible();
   await expect(inventory).toBeVisible();
-  const activeManifestUrl = `${syntheticMockCdnOrigin}/apps/hello-card-spfx/versions/${releases[0]}/deployment-manifest.json`;
+  const activeManifestUrl = `${syntheticMockCdnPublicOrigin}/apps/hello-card-spfx/versions/${releases[0]}/deployment-manifest.json`;
   const sourceRepositoryLink = dialog.getByRole('link', { name: 'Open GitHub source repository for hello-card-spfx' });
   await expect(sourceRepositoryLink).toHaveText('https://github.com/acme/hello-card-spfx');
   await expect(sourceRepositoryLink).toHaveAttribute('href', 'https://github.com/acme/hello-card-spfx');
@@ -376,6 +379,7 @@ test('identifies the exact release behind an invalid selected pointer', async ({
       body: JSON.stringify({
         schemaVersion: 1,
         origin: syntheticMockCdnOrigin,
+        publicOrigin: syntheticMockCdnPublicOrigin,
         namespaces: {
           apps: { status: 'supported', releases: [] },
           shared: {
@@ -1002,7 +1006,7 @@ test('shows selected app state, saves export config, and can select a source rel
   await expect(fileNameSuffix).not.toHaveAttribute('tabindex', /.+/);
   await expectFileNameSuffixToTrail(fileNameControl, fileNameMirror, fileNameSuffix);
   await expect(sidebar.getByRole('textbox', { name: 'Export version' })).toHaveValue('1.3.0');
-  const activeLocalCdnManifestUrl = `${syntheticMockCdnOrigin}/apps/hello-card-spfx/versions/${selectedLocalReleaseId}/deployment-manifest.json`;
+  const activeLocalCdnManifestUrl = `${syntheticMockCdnPublicOrigin}/apps/hello-card-spfx/versions/${selectedLocalReleaseId}/deployment-manifest.json`;
   const sourceRepositoryLink = sidebar.getByRole('link', { name: 'Open GitHub source repository for Hello Card' });
   await expect(sourceRepositoryLink).toHaveText('https://github.com/acme/hello-card-spfx');
   await expect(sourceRepositoryLink).toHaveAttribute('href', 'https://github.com/acme/hello-card-spfx');

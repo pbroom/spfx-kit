@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { selectedLocalCdnRelease, validateLocalCdnBucketInventory } from '../apps/lab/src/api/localCdnBucket';
+import {
+  publicLocalCdnManifestUrl,
+  selectedLocalCdnRelease,
+  validateLocalCdnBucketInventory
+} from '../apps/lab/src/api/localCdnBucket';
 
 const origin = 'http://127.0.0.1:5174';
+const publicOrigin = 'https://cdn-preview.example.test';
 const appId = 'hello-card-spfx';
 const releaseId = '1.2.3-local.1';
 const namespacePath = `apps/${appId}/versions/${releaseId}/`;
@@ -12,6 +17,7 @@ function inventoryFixture() {
   return {
     schemaVersion: 1,
     origin,
+    publicOrigin,
     namespaces: {
       apps: {
         status: 'supported',
@@ -84,6 +90,7 @@ describe('Local CDN bucket browser contract', () => {
     const result = validateLocalCdnBucketInventory(inventoryFixture());
 
     expect(result.origin).toBe(origin);
+    expect(result.publicOrigin).toBe(publicOrigin);
     expect(result.namespaces.apps.releases[0]).toMatchObject({ appId, releaseId, selected: true, status: 'verified' });
     expect(result.namespaces.apps.releases[0]).toMatchObject({
       sourceProvenance: {
@@ -98,6 +105,9 @@ describe('Local CDN bucket browser contract', () => {
       message: 'Shared resource publication awaits a canonical verifier.'
     });
     expect(selectedLocalCdnRelease(result, appId)?.releaseBaseUrl).toBe(releaseBaseUrl);
+    expect(publicLocalCdnManifestUrl(result, result.namespaces.apps.releases[0])).toBe(
+      `${publicOrigin}/${namespacePath}deployment-manifest.json`
+    );
     expect(selectedLocalCdnRelease(result, 'another-app')).toBeUndefined();
   });
 
@@ -169,6 +179,10 @@ describe('Local CDN bucket browser contract', () => {
     const inventedSharedRelease = inventoryFixture();
     inventedSharedRelease.namespaces.shared.releases.push({ fake: true } as never);
     expect(() => validateLocalCdnBucketInventory(inventedSharedRelease)).toThrow('empty and reserved');
+
+    const unsafePublicOrigin = inventoryFixture();
+    unsafePublicOrigin.publicOrigin = 'https://cdn-preview.example.test/not-a-root';
+    expect(() => validateLocalCdnBucketInventory(unsafePublicOrigin)).toThrow('public origin');
   });
 
   it('rejects duplicate pointers/sources and non-canonical server source ids', () => {

@@ -25,7 +25,12 @@ import {
   ManageAppsApiResult,
   readApiJson
 } from '../api/labApi';
-import { loadLocalCdnBucketInventory, selectedLocalCdnRelease, type LocalCdnBucketInventory } from '../api/localCdnBucket';
+import {
+  loadLocalCdnBucketInventory,
+  publicLocalCdnManifestUrl,
+  selectedLocalCdnRelease,
+  type LocalCdnBucketInventory
+} from '../api/localCdnBucket';
 import { managedAppPath, titleFromSlug } from '../lib/text';
 
 type AppManagementPhase = 'idle' | 'loading' | 'running' | 'complete' | 'error';
@@ -478,9 +483,8 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
     onTogglePinned(appId);
     setPinAnnouncement(nextPinnedAppId ? `${app.title} pinned as the startup app.` : `${app.title} is no longer pinned.`);
   };
-  const activeLocalCdnManifestUrl = activeLocalCdnRelease
-    ? `${activeLocalCdnRelease.releaseBaseUrl}deployment-manifest.json`
-    : undefined;
+  const activeLocalCdnManifestUrl =
+    localCdnInventory && activeLocalCdnRelease ? publicLocalCdnManifestUrl(localCdnInventory, activeLocalCdnRelease) : undefined;
   const sourceRepositoryUrl = selectedManagedApp?.version.repositoryUrl;
 
   return (
