@@ -60,6 +60,42 @@ export function normalizeMockCdnOrigin(value = DEFAULT_MOCK_CDN_ORIGIN) {
   return url.origin;
 }
 
+// The bucket itself remains local-only. A cloud preview may deliberately
+// advertise that bucket through a separately configured HTTPS forwarder; this
+// origin is used only in browser-facing runtime descriptors.
+export function normalizeMockCdnPublicOrigin(value = DEFAULT_MOCK_CDN_ORIGIN) {
+  const normalized = String(value);
+  try {
+    return normalizeMockCdnOrigin(normalized);
+  } catch {
+    // A non-loopback origin is acceptable only when TLS terminates at the
+    // configured forwarder. Keep the URL shape as constrained as the local
+    // endpoint so it cannot become an arbitrary asset base path.
+    let url;
+    try {
+      url = new URL(normalized);
+    } catch {
+      throw new Error(`Mock CDN public origin must be a valid HTTPS origin: ${value}`);
+    }
+    if (
+      url.protocol !== 'https:' ||
+      !url.hostname ||
+      url.hostname === 'localhost' ||
+      url.hostname === '0.0.0.0' ||
+      url.hostname === '127.0.0.1' ||
+      url.hostname === '::1' ||
+      url.username ||
+      url.password ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash
+    ) {
+      throw new Error(`Mock CDN public origin must be a credential-free HTTPS origin with no path: ${value}`);
+    }
+    return url.origin;
+  }
+}
+
 export function mockCdnAppReleaseBaseUrl(origin, appId, releaseId) {
   const normalizedOrigin = normalizeMockCdnOrigin(origin);
   const normalizedAppId = normalizeBucketName(appId, 'app id');

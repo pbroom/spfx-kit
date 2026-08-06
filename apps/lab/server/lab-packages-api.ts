@@ -9,6 +9,7 @@ const {
   DEFAULT_MOCK_CDN_BUCKET_PATH,
   DEFAULT_MOCK_CDN_ORIGIN,
   normalizeMockCdnOrigin,
+  normalizeMockCdnPublicOrigin,
   resolveMockCdnBucketRoot,
   resolveSelectedMockCdnAppRelease
 } = mockCdnBucket;
@@ -58,6 +59,7 @@ interface ValidatedSelectedRelease extends SelectedMockCdnRelease {
 export interface CdnRuntimeSessionStoreOptions {
   bucketRoot?: string;
   mockCdnOrigin?: string;
+  publicMockCdnOrigin?: string;
 }
 
 export interface CdnRuntimeDescriptor {
@@ -99,7 +101,9 @@ export interface CdnRuntimeDescriptor {
 export function spfxLabPackagesApi(): Plugin {
   const options: CdnRuntimeSessionStoreOptions = {
     bucketRoot: process.env.SPFX_KIT_MOCK_CDN_ROOT || DEFAULT_MOCK_CDN_BUCKET_PATH,
-    mockCdnOrigin: process.env.SPFX_KIT_MOCK_CDN_ORIGIN || DEFAULT_MOCK_CDN_ORIGIN
+    mockCdnOrigin: process.env.SPFX_KIT_MOCK_CDN_ORIGIN || DEFAULT_MOCK_CDN_ORIGIN,
+    publicMockCdnOrigin:
+      process.env.SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN || process.env.SPFX_KIT_MOCK_CDN_ORIGIN || DEFAULT_MOCK_CDN_ORIGIN
   };
   return {
     name: 'spfx-kit-lab-packages-api',
@@ -159,6 +163,7 @@ export function createCdnRuntimeSessionStore(
 } {
   const bucketRoot = resolveMockCdnBucketRoot(workspaceRoot, options.bucketRoot || DEFAULT_MOCK_CDN_BUCKET_PATH);
   const mockCdnOrigin = normalizeMockCdnOrigin(options.mockCdnOrigin || DEFAULT_MOCK_CDN_ORIGIN);
+  const publicMockCdnOrigin = normalizeMockCdnPublicOrigin(options.publicMockCdnOrigin || mockCdnOrigin);
 
   return {
     async resolveDescriptor(requestedAppId, requestedComponentId) {
@@ -173,7 +178,7 @@ export function createCdnRuntimeSessionStore(
       } catch {
         throw unavailable();
       }
-      return describeSelectedMockCdnRelease(await validateSelectedPackage(release), requestedComponentId, mockCdnOrigin);
+      return describeSelectedMockCdnRelease(await validateSelectedPackage(release), requestedComponentId, publicMockCdnOrigin);
     }
   };
 }
@@ -194,7 +199,7 @@ async function validateSelectedPackage(release: SelectedMockCdnRelease): Promise
 async function describeSelectedMockCdnRelease(
   release: ValidatedSelectedRelease,
   requestedComponentId: string | undefined,
-  mockCdnOrigin: string
+  publicMockCdnOrigin: string
 ): Promise<CdnRuntimeDescriptor> {
   const componentId = requestedComponentId === undefined ? undefined : sanitizeComponentId(requestedComponentId);
   const componentManifests = componentId
@@ -224,7 +229,12 @@ async function describeSelectedMockCdnRelease(
     throw unavailable();
   }
 
-  const releaseBaseUrl = release.releaseBaseUrl;
+  const namespacePath = `apps/${release.appId}/versions/${release.releaseId}/`;
+  // The release was verified against the local bucket before reaching this
+  // point. Browser-facing descriptor URLs must use the configured public
+  // forwarder rather than leaking an unreachable loopback address to a cloud
+  // preview.
+  const releaseBaseUrl = new URL(namespacePath, `${publicMockCdnOrigin}/`).href;
   const entryAsset = resolveUniqueManifestAsset(release.manifest, entryResourcePath);
   const dependencyAssets = Object.entries(scriptResources)
     .filter(([moduleId, resource]) => moduleId !== entryModuleId && !isComponentScriptResource(resource))
@@ -244,18 +254,17 @@ async function describeSelectedMockCdnRelease(
     .filter((entry): entry is [string, Record<string, unknown>] => isComponentScriptResource(entry[1]))
     .map(([moduleId, resource]) => describeDeferredComponentResource(moduleId, resource))
     .sort((left, right) => left.moduleId.localeCompare(right.moduleId));
-  const namespacePath = `apps/${release.appId}/versions/${release.releaseId}/`;
 
   return {
     mode: 'cdn',
     appId: release.appId,
     releaseId: release.releaseId,
     generatedAt: release.manifest.generatedAt,
-    cdnBasePath: release.manifest.cdnBasePath,
+    cdnBasePath: releaseBaseUrl,
     delivery: {
       kind: 'local-mock-cdn',
-      origin: mockCdnOrigin,
-      bucketBaseUrl: `${mockCdnOrigin}/`,
+      origin: publicMockCdnOrigin,
+      bucketBaseUrl: `${publicMockCdnOrigin}/`,
       namespaceKind: 'app-release',
       namespacePath,
       releaseBaseUrl,

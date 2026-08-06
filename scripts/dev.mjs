@@ -3,7 +3,11 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_MOCK_CDN_ORIGIN, normalizeMockCdnOrigin } from '../packages/spfx-tools/src/lib/mock-cdn-bucket.mjs';
+import {
+  DEFAULT_MOCK_CDN_ORIGIN,
+  normalizeMockCdnOrigin,
+  normalizeMockCdnPublicOrigin
+} from '../packages/spfx-tools/src/lib/mock-cdn-bucket.mjs';
 import { normalizeMockCdnLabOrigin } from '../packages/spfx-tools/src/lib/mock-cdn-server.mjs';
 
 const DEFAULT_LAB_HOST = '127.0.0.1';
@@ -29,18 +33,29 @@ export function resolveDevConfig(environment = process.env) {
 
   const cdnOrigin = normalizeMockCdnOrigin(environment.SPFX_KIT_MOCK_CDN_ORIGIN || DEFAULT_MOCK_CDN_ORIGIN);
   const cdnUrl = new URL(cdnOrigin);
-  const cdnPort = Number(cdnUrl.port);
-  if (cdnPort === labPort) {
+  const publicCdnOrigin = normalizeMockCdnPublicOrigin(environment.SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN || cdnOrigin);
+  const cdnListenHost = String(environment.SPFX_KIT_MOCK_CDN_LISTEN_HOST || cdnUrl.hostname).trim();
+  const cdnListenPort = normalizePort(environment.SPFX_KIT_MOCK_CDN_LISTEN_PORT || cdnUrl.port, 'SPFX_KIT_MOCK_CDN_LISTEN_PORT');
+  if (!cdnListenHost) {
+    throw new Error('SPFX_KIT_MOCK_CDN_LISTEN_HOST must not be empty.');
+  }
+  if (cdnListenPort === labPort) {
     throw new Error('The SPFx Lab and local CDN must use different ports.');
+  }
+  if (labHost === '0.0.0.0' && publicCdnOrigin === cdnOrigin) {
+    throw new Error(
+      'SPFX_LAB_HOST=0.0.0.0 requires an HTTPS SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN and a separately forwarded CDN listener.'
+    );
   }
 
   return {
     labHost,
     labOrigin,
     labPort,
-    cdnHost: cdnUrl.hostname,
     cdnOrigin,
-    cdnPort
+    publicCdnOrigin,
+    cdnListenHost,
+    cdnListenPort
   };
 }
 
@@ -67,19 +82,22 @@ async function main() {
   const config = resolveDevConfig();
   await Promise.all([
     assertPortAvailable(config.labHost, config.labPort, 'SPFx Lab'),
-    assertPortAvailable(config.cdnHost, config.cdnPort, 'Local CDN')
+    assertPortAvailable(config.cdnListenHost, config.cdnListenPort, 'Local CDN')
   ]);
 
   console.log('Starting SPFx Kit development services:');
   console.log(`  Lab:       ${config.labOrigin}`);
-  console.log(`  Local CDN: ${config.cdnOrigin}`);
+  console.log(`  Local CDN: ${config.cdnListenHost}:${config.cdnListenPort} (advertised as ${config.publicCdnOrigin})`);
 
   const childEnvironment = {
     ...process.env,
     SPFX_LAB_HOST: config.labHost,
     SPFX_LAB_PORT: String(config.labPort),
     SPFX_KIT_MOCK_CDN_LAB_ORIGIN: config.labOrigin,
-    SPFX_KIT_MOCK_CDN_ORIGIN: config.cdnOrigin
+    SPFX_KIT_MOCK_CDN_ORIGIN: config.cdnOrigin,
+    SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN: config.publicCdnOrigin,
+    SPFX_KIT_MOCK_CDN_LISTEN_HOST: config.cdnListenHost,
+    SPFX_KIT_MOCK_CDN_LISTEN_PORT: String(config.cdnListenPort)
   };
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const services = [

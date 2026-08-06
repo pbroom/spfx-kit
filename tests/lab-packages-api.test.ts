@@ -118,6 +118,28 @@ describe('Lab local mock CDN runtime', () => {
     expect(JSON.stringify(descriptor)).not.toContain('/api/lab-packages/cdn-assets');
   });
 
+  it('advertises a separately forwarded HTTPS CDN without changing the local bucket provenance', async () => {
+    const workspaceRoot = await temporaryDirectory();
+    const selected = await createAndPublishStage(workspaceRoot, {
+      releaseId: '1.0.2-20260804T120000000Z-forward',
+      entryContents: 'forwarded();',
+      select: true
+    });
+    const publicOrigin = 'https://cdn-preview.example.test';
+    const descriptor = await createCdnRuntimeSessionStore(workspaceRoot, {
+      mockCdnOrigin,
+      publicMockCdnOrigin: publicOrigin
+    }).resolveDescriptor(appId);
+    const releaseBaseUrl = `${publicOrigin}/apps/${appId}/versions/${selected.releaseId}/`;
+
+    expect(descriptor.cdnBasePath).toBe(releaseBaseUrl);
+    expect(descriptor.delivery).toMatchObject({ origin: publicOrigin, releaseBaseUrl });
+    expect(descriptor.assets.map((asset) => asset.assetUrl)).toEqual(
+      expect.arrayContaining([`${releaseBaseUrl}main.js`, `${releaseBaseUrl}helper.js`])
+    );
+    expect(JSON.stringify(descriptor)).not.toContain(mockCdnOrigin);
+  });
+
   it('requires a component id only for multi-component packages and uses localized default assets', async () => {
     const multiWorkspace = await temporaryDirectory();
     await createAndPublishStage(multiWorkspace, {

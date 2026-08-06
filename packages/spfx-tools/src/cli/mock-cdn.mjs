@@ -18,7 +18,7 @@ const usage = `Usage:
   mock-cdn publish-source --descriptor <staging-source.json> --materialization <checkout-or-extracted-root> [--select] [--origin http://127.0.0.1:5174] [--root .spfx-kit/mock-cdn/v1] [--json]
   mock-cdn select --app <slug> --release <immutable-id> [--origin http://127.0.0.1:5174] [--root .spfx-kit/mock-cdn/v1] [--json]
   mock-cdn status [--app <slug>] [--origin http://127.0.0.1:5174] [--root .spfx-kit/mock-cdn/v1] [--json]
-  mock-cdn serve [--origin http://127.0.0.1:5174] [--lab-origin http://127.0.0.1:5173] [--root .spfx-kit/mock-cdn/v1] [--json]
+  mock-cdn serve [--origin http://127.0.0.1:5174] [--public-origin https://cdn-preview.example.test] [--listen-host 0.0.0.0] [--listen-port 5174] [--lab-origin http://127.0.0.1:5173] [--root .spfx-kit/mock-cdn/v1] [--json]
 
 The local mock CDN accepts only verified immutable staging-CDN releases whose recorded base URL exactly matches the configured mock origin. Publishing never overwrites a release. Selection is an explicit mutable local control-plane action.
 
@@ -115,10 +115,21 @@ async function main() {
     const labOrigin = normalizeMockCdnLabOrigin(
       stringOption(args['lab-origin'], process.env.SPFX_KIT_MOCK_CDN_LAB_ORIGIN || 'http://127.0.0.1:5173')
     );
-    const running = await listenMockCdnServer({ bucketRoot, origin, labOrigin });
-    const report = { bucketRoot, origin: running.origin, labOrigin, status: 'listening' };
+    const publicOrigin = stringOption(args['public-origin'], process.env.SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN || origin);
+    const listenHost = stringOption(args['listen-host'], process.env.SPFX_KIT_MOCK_CDN_LISTEN_HOST || new URL(origin).hostname);
+    const listenPort = stringOption(args['listen-port'], process.env.SPFX_KIT_MOCK_CDN_LISTEN_PORT || new URL(origin).port);
+    const running = await listenMockCdnServer({ bucketRoot, origin, publicOrigin, listenHost, listenPort, labOrigin });
+    const report = {
+      bucketRoot,
+      origin: running.origin,
+      publicOrigin,
+      listenHost: running.listenHost,
+      listenPort: running.listenPort,
+      labOrigin,
+      status: 'listening'
+    };
     printResult(report, json, [
-      `Mock CDN listening at ${running.origin}`,
+      `Mock CDN listening at ${running.listenHost}:${running.listenPort} (advertised as ${publicOrigin})`,
       `  Lab origin: ${labOrigin}`,
       `  Bucket: ${bucketRoot}`
     ]);

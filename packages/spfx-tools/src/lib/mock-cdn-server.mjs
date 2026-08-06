@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import {
   loadMockCdnAppRelease,
   normalizeMockCdnOrigin,
+  normalizeMockCdnPublicOrigin,
   readMockCdnReleaseAsset,
   readMockCdnReleaseManifest,
   readSelectedMockCdnAppReference
@@ -29,10 +30,11 @@ export function normalizeMockCdnLabOrigin(value) {
   return url.origin;
 }
 
-export function createMockCdnRequestHandler({ bucketRoot, origin, labOrigin }) {
+export function createMockCdnRequestHandler({ bucketRoot, origin, publicOrigin = origin, labOrigin }) {
   const configuredOrigin = normalizeMockCdnOrigin(origin);
+  const configuredPublicOrigin = normalizeMockCdnPublicOrigin(publicOrigin);
   const configuredLabOrigin = normalizeMockCdnLabOrigin(labOrigin);
-  const configuredHost = new URL(configuredOrigin).host.toLowerCase();
+  const configuredHost = new URL(configuredPublicOrigin).host.toLowerCase();
   const releaseCache = new Map();
 
   return async (req, res) => {
@@ -125,6 +127,11 @@ export function createMockCdnServer(options) {
 export async function listenMockCdnServer(options) {
   const origin = normalizeMockCdnOrigin(options.origin);
   const url = new URL(origin);
+  const listenHost = String(options.listenHost || url.hostname).trim();
+  const listenPort = Number(options.listenPort || url.port || 80);
+  if (!listenHost || !Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65_535) {
+    throw new Error('Mock CDN listen host and port must be valid.');
+  }
   const server = createMockCdnServer({ ...options, origin });
   await new Promise((resolve, reject) => {
     const onError = (error) => {
@@ -137,10 +144,12 @@ export async function listenMockCdnServer(options) {
     };
     server.once('error', onError);
     server.once('listening', onListening);
-    server.listen(Number(url.port || 80), url.hostname);
+    server.listen(listenPort, listenHost);
   });
   return {
     origin,
+    listenHost,
+    listenPort,
     server,
     close: () =>
       new Promise((resolve, reject) => {

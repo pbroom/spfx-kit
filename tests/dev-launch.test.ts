@@ -41,6 +41,9 @@ describe('SPFx Kit development launcher', () => {
         'SPFX_LAB_PORT',
         'SPFX_KIT_MOCK_CDN_LAB_ORIGIN',
         'SPFX_KIT_MOCK_CDN_ORIGIN',
+        'SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN',
+        'SPFX_KIT_MOCK_CDN_LISTEN_HOST',
+        'SPFX_KIT_MOCK_CDN_LISTEN_PORT',
         'SPFX_KIT_MOCK_CDN_ROOT'
       ])
     );
@@ -51,9 +54,10 @@ describe('SPFx Kit development launcher', () => {
       labHost: '127.0.0.1',
       labOrigin: 'http://127.0.0.1:5173',
       labPort: 5173,
-      cdnHost: '127.0.0.1',
       cdnOrigin: 'http://127.0.0.1:5174',
-      cdnPort: 5174
+      publicCdnOrigin: 'http://127.0.0.1:5174',
+      cdnListenHost: '127.0.0.1',
+      cdnListenPort: 5174
     });
   });
 
@@ -61,7 +65,8 @@ describe('SPFx Kit development launcher', () => {
     expect(resolveDevConfig({ SPFX_LAB_PORT: '5190' })).toMatchObject({
       labOrigin: 'http://127.0.0.1:5190',
       labPort: 5190,
-      cdnOrigin: 'http://127.0.0.1:5174'
+      cdnOrigin: 'http://127.0.0.1:5174',
+      cdnListenPort: 5174
     });
   });
 
@@ -69,13 +74,22 @@ describe('SPFx Kit development launcher', () => {
     expect(
       resolveDevConfig({
         SPFX_LAB_HOST: '0.0.0.0',
-        SPFX_KIT_MOCK_CDN_LAB_ORIGIN: 'https://preview.example.test'
+        SPFX_KIT_MOCK_CDN_LAB_ORIGIN: 'https://preview.example.test',
+        SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN: 'https://cdn-preview.example.test',
+        SPFX_KIT_MOCK_CDN_LISTEN_HOST: '0.0.0.0'
       })
     ).toMatchObject({
       labHost: '0.0.0.0',
       labOrigin: 'https://preview.example.test',
-      labPort: 5173
+      labPort: 5173,
+      publicCdnOrigin: 'https://cdn-preview.example.test',
+      cdnListenHost: '0.0.0.0',
+      cdnListenPort: 5174
     });
+  });
+
+  it('fails closed instead of sending loopback CDN URLs to cloud browsers', () => {
+    expect(() => resolveDevConfig({ SPFX_LAB_HOST: '0.0.0.0' })).toThrow('requires an HTTPS SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN');
   });
 
   it('uses taskkill tree termination arguments on Windows', () => {

@@ -313,18 +313,17 @@ function validateMockCdnOrigin(value: string, labOrigin: string): URL {
   if (url.href !== url.origin && url.href !== `${url.origin}/`) {
     throw new Error('Staged CDN descriptor delivery.origin must contain only an origin.');
   }
-  if (
-    url.protocol !== 'http:' ||
-    url.hostname !== '127.0.0.1' ||
-    !url.port ||
-    url.origin === labOrigin ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash
-  ) {
+  const loopback = url.protocol === 'http:' && url.hostname === '127.0.0.1' && Boolean(url.port);
+  const forwarded =
+    url.protocol === 'https:' &&
+    Boolean(url.hostname) &&
+    url.hostname !== 'localhost' &&
+    url.hostname !== '0.0.0.0' &&
+    url.hostname !== '127.0.0.1' &&
+    url.hostname !== '::1';
+  if ((!loopback && !forwarded) || url.origin === labOrigin || url.username || url.password || url.search || url.hash) {
     throw new Error(
-      'Staged CDN descriptor delivery.origin must be a separate credential-free http://127.0.0.1 origin with an explicit port.'
+      'Staged CDN descriptor delivery.origin must be a separate credential-free loopback HTTP or forwarded HTTPS origin.'
     );
   }
   return url;
