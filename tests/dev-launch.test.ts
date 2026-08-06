@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
 import {
   assertPortAvailable,
@@ -226,5 +226,26 @@ describe('SPFx Kit development launcher', () => {
     expect(failure.error).toBeInstanceOf(Error);
     await expect(stopServices([missing, running], 'SIGTERM')).resolves.toBeUndefined();
     expect(running.exitCode !== null || running.signalCode !== null).toBe(true);
+  });
+
+  it('signals a detached Unix process group after its npm wrapper has exited', async () => {
+    if (process.platform === 'win32') {
+      return;
+    }
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const exitedWrapper = {
+      pid: 1_234,
+      processGroupId: 5_678,
+      exitCode: 0,
+      signalCode: null,
+      serviceName: 'exited npm wrapper'
+    };
+
+    try {
+      await expect(stopServices([exitedWrapper], 'SIGTERM')).resolves.toBeUndefined();
+      expect(kill).toHaveBeenCalledWith(-5_678, 'SIGTERM');
+    } finally {
+      kill.mockRestore();
+    }
   });
 });

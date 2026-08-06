@@ -237,6 +237,9 @@ function startService(serviceName, command, args, environment) {
     stdio: 'inherit'
   });
   child.serviceName = serviceName;
+  // Keep this before the npm wrapper can exit: its detached group can still
+  // contain the actual service process after the wrapper is gone.
+  child.processGroupId = process.platform === 'win32' ? undefined : child.pid;
   return child;
 }
 
@@ -283,13 +286,19 @@ export async function stopServices(children, signal) {
 }
 
 async function signalService(child, signal) {
-  if (child.exitCode !== null || child.signalCode !== null || !Number.isInteger(child.pid)) {
+  if (!Number.isInteger(child.pid)) {
     return;
   }
   if (process.platform === 'win32') {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return;
+    }
     await terminateWindowsProcessTree(child.pid, signal === 'SIGKILL');
   } else {
-    process.kill(-child.pid, signal);
+    const processGroupId = child.processGroupId ?? child.pid;
+    if (Number.isInteger(processGroupId)) {
+      process.kill(-processGroupId, signal);
+    }
   }
 }
 
