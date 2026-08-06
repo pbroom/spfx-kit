@@ -107,7 +107,7 @@ function isLoopbackHostname(value) {
 
 function isUnspecifiedHostname(value) {
   const hostname = String(value).trim().toLowerCase().replace(/^\[|\]$/g, '');
-  return hostname === '0.0.0.0' || hostname === '::';
+  return hostname === '0.0.0.0' || hostname === '::' || hostname === '::ffff:0:0' || hostname === '::ffff:0.0.0.0';
 }
 
 export function mockCdnAppReleaseBaseUrl(origin, appId, releaseId) {

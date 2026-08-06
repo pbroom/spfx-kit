@@ -71,6 +71,13 @@ describe('SPFx Kit development launcher', () => {
     });
   });
 
+  it.each(['localhost', '::1'])('derives the mock CDN CORS origin from the configured Lab host: %s', (labHost) => {
+    expect(resolveDevConfig({ SPFX_LAB_HOST: labHost })).toMatchObject({
+      labHost,
+      labOrigin: labHost === '::1' ? 'http://[::1]:5173' : 'http://localhost:5173'
+    });
+  });
+
   it('accepts an HTTP default port after URL normalization', () => {
     expect(resolveDevConfig({ SPFX_LAB_PORT: '80' })).toMatchObject({
       labOrigin: 'http://127.0.0.1',
@@ -134,6 +141,7 @@ describe('SPFx Kit development launcher', () => {
     'https://preview.localhost',
     'https://127.0.0.2',
     'https://[::]',
+    'https://[::ffff:0.0.0.0]',
     'https://[::1]',
     'https://[::ffff:127.0.0.1]'
   ])('rejects loopback-form forwarded origins for cloud previews: %s', (loopbackOrigin) => {
@@ -182,6 +190,9 @@ describe('SPFx Kit development launcher', () => {
         SPFX_KIT_MOCK_CDN_LAB_ORIGIN: 'http://127.0.0.1:5173'
       })
     ).toThrow('must use the configured SPFX_LAB_PORT');
+    expect(() => resolveDevConfig({ SPFX_KIT_MOCK_CDN_LISTEN_PORT: '6000' })).toThrow(
+      'SPFX_KIT_MOCK_CDN_LISTEN_PORT must match SPFX_KIT_MOCK_CDN_ORIGIN without a public CDN origin'
+    );
   });
 
   it('fails before launch when a configured service port is already in use', async () => {

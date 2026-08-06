@@ -26,9 +26,12 @@ export function resolveDevConfig(environment = process.env) {
   }
 
   const labPort = normalizePort(environment.SPFX_LAB_PORT || DEFAULT_LAB_PORT, 'SPFX_LAB_PORT');
-  const labOrigin = normalizeMockCdnLabOrigin(environment.SPFX_KIT_MOCK_CDN_LAB_ORIGIN || `http://127.0.0.1:${labPort}`);
+  const normalizedLabHost = normalizeListenHost(labHost);
+  const labOrigin = normalizeMockCdnLabOrigin(
+    environment.SPFX_KIT_MOCK_CDN_LAB_ORIGIN || `http://${formatHostForUrl(normalizedLabHost)}:${labPort}`
+  );
   const labOriginUrl = new URL(labOrigin);
-  if (labOriginUrl.hostname === '127.0.0.1' && getEffectiveOriginPort(labOriginUrl) !== labPort) {
+  if (normalizeListenHost(labOriginUrl.hostname) === normalizedLabHost && getEffectiveOriginPort(labOriginUrl) !== labPort) {
     throw new Error('SPFX_KIT_MOCK_CDN_LAB_ORIGIN must use the configured SPFX_LAB_PORT.');
   }
 
@@ -42,6 +45,9 @@ export function resolveDevConfig(environment = process.env) {
   }
   if (cdnListenPort === labPort) {
     throw new Error('The SPFx Lab and local CDN must use different ports.');
+  }
+  if (publicCdnOrigin === cdnOrigin && cdnListenPort !== getEffectiveOriginPort(cdnUrl)) {
+    throw new Error('SPFX_KIT_MOCK_CDN_LISTEN_PORT must match SPFX_KIT_MOCK_CDN_ORIGIN without a public CDN origin.');
   }
   if (isUnspecifiedListenHost(labHost)) {
     if (publicCdnOrigin === cdnOrigin) {
@@ -100,12 +106,16 @@ function normalizeListenHost(value) {
   }
 }
 
+function formatHostForUrl(host) {
+  return host.includes(':') ? `[${host}]` : host;
+}
+
 function isUnspecifiedHostname(value) {
   const hostname = String(value)
     .trim()
     .toLowerCase()
     .replace(/^\[|\]$/g, '');
-  return hostname === '0.0.0.0' || hostname === '::';
+  return hostname === '0.0.0.0' || hostname === '::' || hostname === '::ffff:0:0' || hostname === '::ffff:0.0.0.0';
 }
 
 function isUnspecifiedListenHost(value) {

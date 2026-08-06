@@ -184,7 +184,7 @@
       .trim()
       .toLowerCase()
       .replace(/^\[|\]$/g, '');
-    return hostname === '0.0.0.0' || hostname === '::';
+    return hostname === '0.0.0.0' || hostname === '::' || hostname === '::ffff:0:0' || hostname === '::ffff:0.0.0.0';
   }
 
   function validateReleaseBaseUrl(value, deliveryOrigin) {
