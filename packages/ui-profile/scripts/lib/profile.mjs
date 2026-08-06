@@ -169,14 +169,14 @@ function hasAppOwnedAliasSpecifier(source, label) {
 function hasJsx(source) {
   const sourceFile = ts.createSourceFile('jsx-detection.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let found = false;
-  const inspect = (node) => {
+  function visit(node) {
     if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node)) {
       found = true;
       return;
     }
-    ts.forEachChild(node, inspect);
-  };
-  inspect(sourceFile);
+    if (!found) ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
   return found;
 }
 
@@ -185,6 +185,7 @@ function hasReactBinding(source) {
   return sourceFile.statements.some((statement) => {
     if (
       ts.isImportEqualsDeclaration(statement) &&
+      !statement.isTypeOnly &&
       statement.name.text === 'React' &&
       ts.isExternalModuleReference(statement.moduleReference) &&
       statement.moduleReference.expression &&
@@ -201,15 +202,78 @@ function hasReactBinding(source) {
     }
     const clause = statement.importClause;
     return Boolean(
-      clause?.name?.text === 'React' ||
-        (clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings) && clause.namedBindings.name.text === 'React')
+      clause &&
+        !clause.isTypeOnly &&
+        (clause.name?.text === 'React' ||
+          (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings) && clause.namedBindings.name.text === 'React'))
     );
   });
 }
 
+function hasTypeOnlyReactBinding(source) {
+  const sourceFile = ts.createSourceFile('react-type-binding.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  return sourceFile.statements.some((statement) => {
+    if (
+      ts.isImportEqualsDeclaration(statement) &&
+      statement.isTypeOnly &&
+      statement.name.text === 'React' &&
+      ts.isExternalModuleReference(statement.moduleReference) &&
+      statement.moduleReference.expression &&
+      ts.isStringLiteralLike(statement.moduleReference.expression)
+    ) {
+      return statement.moduleReference.expression.text === 'react';
+    }
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== 'react' ||
+      !statement.importClause
+    ) {
+      return false;
+    }
+    const clause = statement.importClause;
+    if (clause.isTypeOnly) {
+      return Boolean(
+        clause.name?.text === 'React' ||
+          (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings) && clause.namedBindings.name.text === 'React')
+      );
+    }
+    return Boolean(
+      clause.namedBindings &&
+        ts.isNamedImports(clause.namedBindings) &&
+        clause.namedBindings.elements.some((element) => element.isTypeOnly && element.name.text === 'React')
+    );
+  });
+}
+
+function hasReactRuntimeUse(source) {
+  const sourceFile = ts.createSourceFile('react-runtime-use.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let found = false;
+  function visit(node) {
+    if (ts.isIdentifier(node) && node.text === 'React' && !isDeclarationOrPropertyName(node)) {
+      found = true;
+      return;
+    }
+    if (!found) ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return found;
+}
+
 function insertImport(source, declaration) {
-  const directive = /^("use client"|'use client')\n\n/.exec(source);
-  const offset = directive ? directive[0].length : 0;
+  const preprocessed = ts.preProcessFile(source, true, true);
+  const references = [
+    ...preprocessed.referencedFiles,
+    ...preprocessed.typeReferenceDirectives,
+    ...preprocessed.libReferenceDirectives
+  ];
+  let offset = references.reduce((maximum, reference) => Math.max(maximum, reference.end), 0);
+  if (offset > 0) {
+    const lineEnd = source.indexOf('\n', offset);
+    offset = lineEnd === -1 ? source.length : lineEnd + 1;
+  }
+  const directive = /^("use client"|'use client')\n\n/.exec(source.slice(offset));
+  if (directive) offset += directive[0].length;
   return `${source.slice(0, offset)}${declaration}\n${source.slice(offset)}`;
 }
 
@@ -454,6 +518,9 @@ export function normalizeRegistrySource({ source, registrySourcePath }) {
   const outputPath = outputPathForRegistrySource(registrySourcePath);
   const transformations = ['normalize-line-endings'];
   let normalized = source.replace(/\r\n?/g, '\n');
+  const sourceFile = ts.createSourceFile(outputPath, normalized, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  assertSupportedJsxPragmas(sourceFile, outputPath);
+  assertSupportedNormalizationDirectives(sourceFile, outputPath);
 
   if (registrySourcePath.endsWith('/combobox.tsx')) {
     const comboboxResult = rewriteModuleSpecifiers(normalized, registrySourcePath, (specifier) =>
@@ -477,15 +544,18 @@ export function normalizeRegistrySource({ source, registrySourcePath }) {
   if (iconResult.transformed) transformations.push('resolve-lucide-icon-placeholders');
   normalized = iconResult.source;
 
-  if (registrySourcePath.endsWith('.tsx') && hasJsx(normalized) && !hasReactBinding(normalized)) {
-    normalized = insertImport(normalized, 'import * as React from "react"');
-    transformations.push('bind-react-namespace');
-  }
-
   if (registrySourcePath.endsWith('.tsx')) {
+    const sourceRequiresReactRuntime = hasJsx(normalized) || hasReactRuntimeUse(normalized);
     const forwardRefResult = normalizePublicForwardRefs(normalized);
+    const requiresReactBinding =
+      (sourceRequiresReactRuntime || forwardRefResult.transformed) && !hasReactBinding(forwardRefResult.source);
+    if (requiresReactBinding && hasTypeOnlyReactBinding(forwardRefResult.source)) {
+      throw new Error(`${outputPath}: a type-only React binding cannot provide the classic React 17 runtime`);
+    }
+    if (requiresReactBinding) transformations.push('bind-react-namespace');
     if (forwardRefResult.transformed) transformations.push('react17-forward-ref-public-wrappers');
     normalized = forwardRefResult.source;
+    if (requiresReactBinding) normalized = insertImport(normalized, 'import * as React from "react"');
   }
 
   normalized = `${normalized.replace(/\s+$/u, '')}\n`;
@@ -674,10 +744,21 @@ function unwrapExpression(node) {
   return current;
 }
 
-function dependencyCall(node) {
-  const current = unwrapExpression(node);
+function unwrapDependencyExpression(node) {
+  let current = unwrapExpression(node);
+  while (
+    ts.isBinaryExpression(current) &&
+    current.operatorToken.kind === ts.SyntaxKind.CommaToken
+  ) {
+    current = unwrapExpression(current.right);
+  }
+  return current;
+}
+
+export function dependencyCall(node) {
+  const current = unwrapDependencyExpression(node);
   if (!ts.isCallExpression(current)) return null;
-  const expression = unwrapExpression(current.expression);
+  const expression = unwrapDependencyExpression(current.expression);
   const isDynamicImport = expression.kind === ts.SyntaxKind.ImportKeyword;
   const isRequire = ts.isIdentifier(expression) && expression.text === 'require';
   const isRequireResolve =
@@ -693,6 +774,150 @@ function dependencyCall(node) {
     kind: isDynamicImport ? 'dynamic-import' : isRequireResolve ? 'require-resolve' : 'require',
     moduleName: current.arguments[0].text
   };
+}
+
+const unsupportedCommonJsGlobals = new Set(['module', 'exports', '__dirname', '__filename']);
+
+function isDeclarationOrPropertyName(node) {
+  const parent = node.parent;
+  if (
+    ((ts.isVariableDeclaration(parent) ||
+      ts.isParameter(parent) ||
+      ts.isBindingElement(parent) ||
+      ts.isImportClause(parent) ||
+      ts.isImportEqualsDeclaration(parent) ||
+      ts.isNamespaceImport(parent) ||
+      ts.isImportSpecifier(parent) ||
+      ts.isExportSpecifier(parent) ||
+      ts.isTypeAliasDeclaration(parent) ||
+      ts.isInterfaceDeclaration(parent) ||
+      ts.isTypeParameterDeclaration(parent) ||
+      ts.isFunctionDeclaration(parent) ||
+      ts.isFunctionExpression(parent) ||
+      ts.isClassDeclaration(parent) ||
+      ts.isClassExpression(parent)) &&
+      parent.name === node) ||
+    ((ts.isPropertySignature(parent) ||
+      ts.isMethodSignature(parent) ||
+      ts.isPropertyDeclaration(parent) ||
+      ts.isMethodDeclaration(parent) ||
+      ts.isPropertyAssignment(parent)) &&
+      parent.name === node)
+  ) {
+    return true;
+  }
+  for (let current = parent; current; current = current.parent) {
+    if (ts.isTypeNode(current)) return true;
+    if (ts.isExpression(current) || ts.isStatement(current)) break;
+  }
+  return false;
+}
+
+function staticPropertyName(node) {
+  const current = unwrapExpression(node);
+  if (ts.isStringLiteralLike(current)) return current.text;
+  if (
+    ts.isBinaryExpression(current) &&
+    current.operatorToken.kind === ts.SyntaxKind.PlusToken
+  ) {
+    const left = staticPropertyName(current.left);
+    const right = staticPropertyName(current.right);
+    if (left !== null && right !== null) return left + right;
+  }
+  return null;
+}
+
+function isSupportedRequireCallUse(node) {
+  let current = node;
+  while (current.parent) {
+    const parent = current.parent;
+    if (
+      (ts.isParenthesizedExpression(parent) ||
+        ts.isAsExpression(parent) ||
+        ts.isTypeAssertionExpression(parent) ||
+        ts.isNonNullExpression(parent) ||
+        ts.isSatisfiesExpression(parent)) &&
+      parent.expression === current
+    ) {
+      current = parent;
+      continue;
+    }
+    if (
+      ts.isBinaryExpression(parent) &&
+      parent.operatorToken.kind === ts.SyntaxKind.CommaToken &&
+      parent.right === current
+    ) {
+      current = parent;
+      continue;
+    }
+    if (
+      ts.isPropertyAccessExpression(parent) &&
+      parent.expression === current &&
+      parent.name.text === 'resolve'
+    ) {
+      current = parent;
+      continue;
+    }
+    return ts.isCallExpression(parent) && parent.expression === current && dependencyCall(parent) !== null;
+  }
+  return false;
+}
+
+export function assertSupportedRequireBindings(sourceFile, label) {
+  function visit(node) {
+    if (
+      ts.isElementAccessExpression(node) &&
+      node.argumentExpression &&
+      staticPropertyName(node.argumentExpression) === 'require'
+    ) {
+      throw new Error(`${label}: indirect or unsupported require binding use is not accepted`);
+    }
+    if (
+      ts.isIdentifier(node) &&
+      node.text === 'require' &&
+      !isDeclarationOrPropertyName(node) &&
+      !isSupportedRequireCallUse(node)
+    ) {
+      throw new Error(`${label}: indirect or unsupported require binding use is not accepted`);
+    }
+    if (
+      ts.isIdentifier(node) &&
+      unsupportedCommonJsGlobals.has(node.text) &&
+      !isDeclarationOrPropertyName(node) &&
+      !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)
+    ) {
+      throw new Error(`${label}: CommonJS global ${node.text} is not accepted in generated ESM source`);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+}
+
+export function assertSupportedJsxPragmas(sourceFile, label) {
+  if (sourceFile.pragmas.has('jsx') || sourceFile.pragmas.has('jsxfrag')) {
+    throw new Error(`${label}: custom JSX factory pragmas are not accepted in generated profile source`);
+  }
+  const jsxRuntimePragma = sourceFile.pragmas.get('jsxruntime');
+  for (const pragma of jsxRuntimePragma ? (Array.isArray(jsxRuntimePragma) ? jsxRuntimePragma : [jsxRuntimePragma]) : []) {
+    const runtime = pragma.arguments?.factory;
+    if (runtime !== 'classic') {
+      throw new Error(
+        `${label}: JSX runtime pragma ${JSON.stringify(runtime)} is not accepted; generated source must use the classic React 17 runtime`
+      );
+    }
+  }
+  if (sourceFile.pragmas.has('jsximportsource')) {
+    throw new Error(`${label}: JSX import source pragmas are not accepted in generated profile source`);
+  }
+}
+
+function assertSupportedNormalizationDirectives(sourceFile, label) {
+  if (sourceFile.amdDependencies.length > 0 || sourceFile.moduleName) {
+    throw new Error(`${label}: AMD directives are not accepted in generated profile source`);
+  }
+  if (ts.preProcessFile(sourceFile.text, true, true).isLibFile) {
+    throw new Error(`${label}: no-default-lib directives are not accepted in generated profile source`);
+  }
 }
 
 function bindingPropertyName(element) {
@@ -712,6 +937,8 @@ function assertReact17AstSource(source, label) {
   if (sourceFile.parseDiagnostics.length > 0) {
     throw new Error(`${label}: source could not be parsed for React 17 compatibility`);
   }
+  assertSupportedRequireBindings(sourceFile, label);
+  assertSupportedJsxPragmas(sourceFile, label);
 
   const namespaceBindings = new Map();
   for (const statement of sourceFile.statements) {

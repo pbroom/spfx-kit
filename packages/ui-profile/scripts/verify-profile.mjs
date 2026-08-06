@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 
+import { assertGeneratedTreeClosure, pinnedTypeDirectiveNames } from './lib/generated-tree-closure.mjs';
 import {
   GENERATOR_VERSION,
   NORMALIZATION_CONTRACT_VERSION,
@@ -46,7 +47,7 @@ const expectedDevDependencies = {
   '@floating-ui/dom': '1.7.6',
   '@floating-ui/react-dom': '2.1.8',
   '@floating-ui/utils': '0.2.11',
-  '@types/react': '17.0.93',
+  '@types/react': '17.0.45',
   '@types/react-dom': '17.0.17',
   '@types/scheduler': '0.16.8',
   ajv: '8.20.0',
@@ -71,7 +72,7 @@ assert(
   'profile.schema.json identity differs'
 );
 assert(
-  sha256(Buffer.from(canonicalJson(provenanceSchema))) === 'b79151e532599f4fb3d4a5192a8827fa660b8ff3f421fb6635c50d8b5cb36186',
+  sha256(Buffer.from(canonicalJson(provenanceSchema))) === '50dc4e94abc96cecb6ce8dd729a9b486708d25c5ec35793a02049d51139c2a49',
   'provenance.schema.json identity differs'
 );
 assert(validateProfile(profile), `profile.json schema errors: ${ajv.errorsText(validateProfile.errors)}`);
@@ -133,16 +134,7 @@ assert(
 );
 assert(provenance.registry.mutableHostedResponses === true, 'Hosted registry mutability must remain explicit');
 assert(provenance.registry.hostedResponsesRevisionBound === false, 'Hosted registry responses must not claim revision binding');
-assertExact(
-  provenance.hostTypeContract,
-  { '@types/react': '17.0.45', '@types/react-dom': '17.0.17' },
-  'Host React type contract'
-);
-assertExact(
-  provenance.isolatedCompilerTypeContract,
-  { '@types/react': '17.0.93', '@types/react-dom': '17.0.17', '@types/scheduler': '0.16.8' },
-  'Isolated compiler type contract'
-);
+assertExact(provenance.reactTypeContract, { '@types/react': '17.0.45', '@types/react-dom': '17.0.17' }, 'React type contract');
 assert(provenance.normalization.contractVersion === NORMALIZATION_CONTRACT_VERSION, 'Normalization contract differs');
 assertExact(
   provenance.dependencyResolutionPins,
@@ -172,8 +164,13 @@ assertExact(
 
 const expectedRawPaths = new Set();
 const expectedCanonicalPaths = new Set();
-const expectedNormalizedPaths = new Set();
 const allowedImports = new Set(Object.keys(expectedDirectDependencies));
+const { emittedPaths: expectedNormalizedPaths } = await assertGeneratedTreeClosure({
+  outputRoot: packageRoot,
+  profile,
+  allowedExternalPackages: allowedImports,
+  allowedTypeDirectives: pinnedTypeDirectiveNames(manifest.devDependencies)
+});
 for (const item of profile.items) {
   const expectedRawPath = `snapshots/raw/${item.id}.json`;
   const expectedCanonicalPath = `snapshots/canonical/${item.id}.json`;
@@ -205,8 +202,6 @@ for (const item of profile.items) {
 
   assert(Array.isArray(item.normalized) && item.normalized.length === raw.files.length, `${item.id}: source count differs`);
   for (const output of item.normalized) {
-    assert(!expectedNormalizedPaths.has(output.path), `${item.id}: duplicate normalized path ${output.path}`);
-    expectedNormalizedPaths.add(output.path);
     const registryFile = raw.files.find((file) => file.path === output.registrySourcePath);
     assert(registryFile && typeof registryFile.content === 'string', `${item.id}: registry source is missing`);
     assert(

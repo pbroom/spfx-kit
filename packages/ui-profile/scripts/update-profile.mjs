@@ -2,11 +2,10 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { generateProfile } from './lib/generate-profile.mjs';
+import { generateValidatedProfile } from './lib/generate-validated-profile.mjs';
 import { createGeneratedProfileStaging, withGeneratedProfileSession } from './lib/generation-transaction.mjs';
 import { PROFILE_ID } from './lib/profile.mjs';
 import { assertProfileGenerationProvenance, fetchValidatedProfileUpdateSnapshots } from './lib/profile-update-intake.mjs';
-import { replaceGeneratedPaths } from './lib/replace-generated.mjs';
 
 if (process.argv.length !== 3 || process.argv[2] !== '--allow-network') {
   throw new Error('Profile updates require the explicit --allow-network flag');
@@ -33,17 +32,12 @@ await withGeneratedProfileSession({ packageRoot, operation: 'update' }, async (g
       await writeFile(path.join(stagingRoot, 'snapshots', 'raw', `${id}.json`), snapshots.get(id));
     }
 
-    generated = await generateProfile({
+    generated = await generateValidatedProfile({
       packageRoot,
       rawRoot: path.join(stagingRoot, 'snapshots', 'raw'),
       outputRoot: stagingRoot,
       provenance,
-      provenanceBytes
-    });
-
-    await replaceGeneratedPaths({
-      packageRoot,
-      stagingRoot,
+      provenanceBytes,
       generatedPaths: ['snapshots', 'normalized', 'profile.json'],
       generationSession
     });

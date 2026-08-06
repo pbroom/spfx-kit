@@ -15,7 +15,7 @@ import {
 const SHADCN_NAME = 'shadcn';
 const SHADCN_VERSION = '4.16.1';
 const SHADCN_INTEGRITY = 'sha512-XLFzfNNIUPlUlyheFEzj0H4Vnhi9nI0nl3Nfgg8HYXW1FkUVhVT1X+mgmOUW8aWL5SeG0A+yJIV5fm3Hr9MVkQ==';
-const PROVENANCE_SCHEMA_SHA256 = 'b79151e532599f4fb3d4a5192a8827fa660b8ff3f421fb6635c50d8b5cb36186';
+const PROVENANCE_SCHEMA_SHA256 = '50dc4e94abc96cecb6ce8dd729a9b486708d25c5ec35793a02049d51139c2a49';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);

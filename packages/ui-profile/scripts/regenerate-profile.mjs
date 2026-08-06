@@ -2,10 +2,9 @@ import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { generateProfile } from './lib/generate-profile.mjs';
+import { generateValidatedProfile } from './lib/generate-validated-profile.mjs';
 import { createGeneratedProfileStaging, withGeneratedProfileSession } from './lib/generation-transaction.mjs';
 import { assertProfileGenerationProvenance } from './lib/profile-update-intake.mjs';
-import { replaceGeneratedPaths } from './lib/replace-generated.mjs';
 
 if (process.argv.length !== 2) throw new Error('Offline profile regeneration does not accept arguments');
 
@@ -18,16 +17,12 @@ await withGeneratedProfileSession({ packageRoot, operation: 'regenerate' }, asyn
   let generated;
   let operationFailure;
   try {
-    generated = await generateProfile({
+    generated = await generateValidatedProfile({
       packageRoot,
       rawRoot: path.join(packageRoot, 'snapshots', 'raw'),
       outputRoot: stagingRoot,
       provenance,
-      provenanceBytes
-    });
-    await replaceGeneratedPaths({
-      packageRoot,
-      stagingRoot,
+      provenanceBytes,
       generatedPaths: ['snapshots/canonical', 'normalized', 'profile.json'],
       generationSession
     });

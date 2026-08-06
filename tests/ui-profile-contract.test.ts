@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cp, mkdtemp, readFile, readdir, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,7 +63,7 @@ const expectedFloatingUiPins = {
 const expectedDevelopmentDependencies = {
   ...expectedToolingDependencies,
   ...expectedFloatingUiPins,
-  '@types/react': '17.0.93',
+  '@types/react': '17.0.45',
   '@types/react-dom': '17.0.17',
   '@types/scheduler': '0.16.8',
   ajv: '8.20.0',
@@ -91,7 +91,8 @@ async function writeCanonicalJson(root: string, relativePath: string, value: unk
 async function copyProfile(): Promise<string> {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'spfx-ui-profile-test-'));
   temporaryRoots.push(temporaryRoot);
-  const copyRoot = path.join(temporaryRoot, 'ui-profile');
+  const copyRoot = path.join(temporaryRoot, 'packages', 'ui-profile');
+  await mkdir(path.dirname(copyRoot), { recursive: true });
   await cp(profileRoot, copyRoot, {
     recursive: true,
     filter: (source) => {
@@ -101,13 +102,21 @@ async function copyProfile(): Promise<string> {
       );
     }
   });
-  await symlink(path.join(profileRoot, 'node_modules'), path.join(copyRoot, 'node_modules'), 'dir');
+  await cp(path.join(repositoryRoot, 'package.json'), path.join(temporaryRoot, 'package.json'));
   await symlink(path.join(repositoryRoot, 'node_modules'), path.join(temporaryRoot, 'node_modules'), 'dir');
   return copyRoot;
 }
 
 function runOfflineVerifier(root: string): ReturnType<typeof spawnSync> {
   return spawnSync(process.execPath, ['--import', networkBlocker, path.join(root, 'scripts/verify-profile.mjs')], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, CI: '1' }
+  });
+}
+
+function runOfflineRegenerator(root: string): ReturnType<typeof spawnSync> {
+  return spawnSync(process.execPath, ['--import', networkBlocker, path.join(root, 'scripts/regenerate-profile.mjs')], {
     cwd: root,
     encoding: 'utf8',
     env: { ...process.env, CI: '1' }
@@ -248,7 +257,7 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(manifest.resolutions).toBeUndefined();
   });
 
-  it('pins the exact 24 registry IDs and owner-corrected compiler identities', async () => {
+  it('pins the exact 24 registry IDs and React 17 declaration contract', async () => {
     const provenance = await readJson<any>(profileRoot, 'provenance.json');
 
     expect(provenance.schemaVersion).toBe(1);
@@ -272,14 +281,9 @@ describe('private offline React 17 UI profile artifacts', () => {
       baseUi: '1.6.0',
       lucideReact: '1.25.0'
     });
-    expect(provenance.hostTypeContract).toEqual({
+    expect(provenance.reactTypeContract).toEqual({
       '@types/react': '17.0.45',
       '@types/react-dom': '17.0.17'
-    });
-    expect(provenance.isolatedCompilerTypeContract).toEqual({
-      '@types/react': '17.0.93',
-      '@types/react-dom': '17.0.17',
-      '@types/scheduler': '0.16.8'
     });
     expect(provenance.dependencyResolutionPins).toEqual(expectedFloatingUiPins);
     expect(provenance.directProductionDependencies).toEqual(expectedToolingDependencies);
@@ -307,14 +311,9 @@ describe('private offline React 17 UI profile artifacts', () => {
       baseUi: { const: '1.6.0' },
       lucideReact: { const: '1.25.0' }
     });
-    expect(provenanceSchema.properties.hostTypeContract.const).toEqual({
+    expect(provenanceSchema.properties.reactTypeContract.const).toEqual({
       '@types/react': '17.0.45',
       '@types/react-dom': '17.0.17'
-    });
-    expect(provenanceSchema.properties.isolatedCompilerTypeContract.const).toEqual({
-      '@types/react': '17.0.93',
-      '@types/react-dom': '17.0.17',
-      '@types/scheduler': '0.16.8'
     });
     expect(provenanceSchema.properties.directProductionDependencies.additionalProperties).toBe(false);
   });
@@ -440,6 +439,24 @@ describe('offline profile verifier', () => {
     expect(verifierMessage(mutated)).toContain('Forced peer resolution must remain disabled');
   });
 
+  it('rejects forced dependency resolution in both the profile and repository manifests', async () => {
+    for (const [scope, relativePath, expectedMessage] of [
+      ['profile', 'package.json', 'UI profile manifest contains forced dependency resolution'],
+      ['repository', '../../package.json', 'Repository root manifest contains forced dependency resolution']
+    ] as const) {
+      for (const key of ['overrides', 'resolutions'] as const) {
+        const root = await copyProfile();
+        const manifest = await readJson<any>(root, relativePath);
+        manifest[key] = { react: '17.0.1' };
+        await writeCanonicalJson(root, relativePath, manifest);
+
+        const result = runOfflineClosureVerifier(root, '--manifest-only');
+        expect(result.status, `${scope} ${key} unexpectedly passed`).not.toBe(0);
+        expect(verifierMessage(result)).toContain(expectedMessage);
+      }
+    }
+  });
+
   it('keeps network capability isolated to the explicit updater', async () => {
     const manifest = await readJson<any>(profileRoot, 'package.json');
     expect(manifest.scripts['profile:update:network']).toContain('--allow-network');
@@ -517,5 +534,40 @@ describe('offline profile verifier', () => {
     const result = runOfflineVerifier(root);
     expect(result.status).not.toBe(0);
     expect(verifierMessage(result)).toContain(`undeclared external import hostile-package`);
+  });
+
+  it('rejects a normalized relative import that has no emitted profile target', async () => {
+    const root = await copyProfile();
+    const profile = await readJson<ProfileManifest>(root, 'profile.json');
+    const item = profile.items.find((candidate) => candidate.id === 'button')!;
+    const raw = await readJson<RegistrySnapshot>(root, item.raw.path);
+    const output = item.normalized[0];
+    const registryFile = raw.files.find((candidate) => candidate.path === output.registrySourcePath)!;
+    registryFile.content = `import { Calendar } from "@/registry/base-nova/ui/calendar"\n${registryFile.content}`;
+    const rerun = normalizeRegistrySource({ source: registryFile.content, registrySourcePath: registryFile.path });
+    output.upstreamSha256 = sha256(Buffer.from(registryFile.content));
+    output.sha256 = sha256(Buffer.from(rerun.source));
+    output.transformations = rerun.transformations;
+    await writeFile(path.join(root, output.path), rerun.source);
+    await rewriteSnapshot(root, profile, item, raw);
+
+    const result = runOfflineVerifier(root);
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toContain('relative import "./calendar" does not resolve to an emitted normalized output');
+  });
+
+  it('preserves every committed generated byte when offline regeneration produces an open module closure', async () => {
+    const root = await copyProfile();
+    const rawPath = path.join(root, 'snapshots/raw/button.json');
+    const raw = await readJson<RegistrySnapshot>(root, 'snapshots/raw/button.json');
+    raw.files[0].content = `import { Calendar } from "@/registry/base-nova/ui/calendar"\n${raw.files[0].content}`;
+    await writeFile(rawPath, JSON.stringify(raw));
+    const before = await treeDigests(root);
+
+    const result = runOfflineRegenerator(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toContain('relative import "./calendar" does not resolve to an emitted normalized output');
+    expect(await treeDigests(root)).toEqual(before);
   });
 });
