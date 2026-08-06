@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "kind": "shadcn-evidence-trust-base",
+  "statusContext": "spfx-kit/evidence-history-v1",
+  "protectedTrees": {
+    ".github/workflows": {
+      "entryCount": 3,
+      "sha256": "973755b1fa749a4c937573e02e3d3f8fc1dac33ce20e43fc65a5fbb451e0082b"
+    },
+    ".github/evidence-trust/v1": {
+      "entryCount": 6,
+      "sha256": "c494049f6a8efe41277f90ff0ace50d7080ad31b5c6722f7658bb265bea481a2"
+    }
+  },
+  "schema": {
+    "mode": "100644",
+    "sha256": "3a2f226503741b15a3157f3399ee704c7457426d8ab8812a1f3e0c2522addede"
+  },
+  "runtime": {
+    "nodeVersion": "22.22.3",
+    "npmVersion": "10.9.8",
+    "packages": {
+      "node_modules/ajv": "8.20.0",
+      "node_modules/fast-deep-equal": "3.1.3",
+      "node_modules/fast-uri": "3.1.5",
+      "node_modules/json-schema-traverse": "1.0.0",
+      "node_modules/require-from-string": "2.0.2"
+    }
+  }
+}

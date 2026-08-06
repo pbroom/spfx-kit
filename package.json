@@ -26,6 +26,7 @@
     "create:spfx": "node packages/spfx-tools/src/cli/create-spfx-app.mjs",
     "export:spfx": "node packages/spfx-tools/src/cli/export-spfx-app.mjs",
     "bump:spfx": "node packages/spfx-tools/src/cli/bump-spfx-app.mjs",
+    "evidence:check": "node scripts/validate-shadcn-evidence.mjs",
     "guard:public": "node packages/spfx-tools/src/cli/guard-public-repo.mjs",
     "mock-cdn": "node packages/spfx-tools/src/cli/mock-cdn.mjs",
     "sync:cdn": "node packages/spfx-tools/src/cli/sync-cdn-config.mjs",

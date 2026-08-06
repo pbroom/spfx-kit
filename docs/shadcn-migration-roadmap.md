@@ -2,7 +2,9 @@
 
 Last reviewed: 2026-08-05
 
-Overall status: Blocked — Phase 0 accountability and tracking are unassigned
+Overall status: In progress — Phase 0 governance and exact source/artifact
+baselines are implemented; trusted-history bootstrap and compatibility proof
+remain open
 
 Progress: 0 of 8 phase gates complete
 
@@ -191,33 +193,38 @@ ledger contains the required atomic proof rows.
 
 ## Roadmap Summary
 
-| Surface                                   | Rules                  | Delivery  | Required terminal events                          | Evidence IDs | Accountability | Exception/blocker              | Next gate                     |
-| ----------------------------------------- | ---------------------- | --------- | ------------------------------------------------- | ------------ | -------------- | ------------------------------ | ----------------------------- |
-| Baseline and decisions                    | R1-R14                 | `blocked` | Accepted baselines and ADRs                       | —            | A0             | Unassigned owners and tracking | Assign accountability         |
-| React 17 UI and CSS foundation            | R1-R5, R7-R10, R12-R14 | `planned` | Exact-head CI and canary artifact closure         | —            | A1             | —                              | Phase 1 compatibility harness |
-| Canonical editor, Lab shell, and controls | R1-R14                 | `planned` | Exact-head CI, vendor sync, and harness artifacts | —            | A2             | —                              | Foundation accepted           |
-| Better Text                               | R1-R14                 | `planned` | CI, all app artifacts, and SharePoint runtime     | —            | A3             | —                              | Phase 2 accepted              |
-| Better Divider                            | R1-R14                 | `planned` | CI, all app artifacts, and SharePoint runtime     | —            | A4             | —                              | Color-control decision        |
-| Better List                               | R1-R14                 | `planned` | CI, all app artifacts, and SharePoint runtime     | —            | A5             | —                              | UI shell and portal contract  |
-| Workbench, generator, and canary          | R1-R14                 | `planned` | CI, persisted-source migration, export canaries   | —            | A6             | —                              | Owned module accepted         |
-| Fluent removal and release acceptance     | R1-R14                 | `planned` | Every required ledger event and rollback drill    | —            | A7             | —                              | All earlier phase evidence    |
+| Surface                                   | Rules                  | Delivery      | Required terminal events                          | Evidence IDs | Accountability                                                                  | Exception/blocker                        | Next gate                      |
+| ----------------------------------------- | ---------------------- | ------------- | ------------------------------------------------- | ------------ | ------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------ |
+| Baseline and decisions                    | R1-R14                 | `in-progress` | Accepted baselines and ADRs                       | —            | A0 / [#81](https://github.com/pbroom/spfx-kit/issues/81)                        | Compatibility and artifact evidence open | Complete Phase 0 evidence      |
+| React 17 UI and CSS foundation            | R1-R5, R7-R10, R12-R14 | `planned`     | Exact-head CI and canary artifact closure         | —            | A1 / [#82](https://github.com/pbroom/spfx-kit/issues/82)                        | Phase 0 gate incomplete                  | Phase 1 compatibility harness  |
+| Canonical editor, Lab shell, and controls | R1-R14                 | `planned`     | Exact-head CI, vendor sync, and harness artifacts | —            | A2 / [#83](https://github.com/pbroom/spfx-kit/issues/83)                        | Phase 1 gate incomplete                  | Foundation accepted            |
+| Better Text                               | R1-R14                 | `planned`     | CI, all app artifacts, and SharePoint runtime     | —            | A3 / [better-text#6](https://github.com/pbroom/better-text-spfx/issues/6)       | Phase 2 gate incomplete                  | Phase 2 accepted               |
+| Better Divider                            | R1-R14                 | `planned`     | CI, all app artifacts, and SharePoint runtime     | —            | A4 / [better-divider#3](https://github.com/pbroom/better-divider-spfx/issues/3) | Phase 2 gate incomplete                  | Color-control evidence         |
+| Better List                               | R1-R14                 | `planned`     | CI, all app artifacts, and SharePoint runtime     | —            | A5 / [better-list#59](https://github.com/pbroom/better-list-spfx/issues/59)     | Phase 2 gate incomplete                  | UI shell and portal contract   |
+| Workbench, generator, and canary          | R1-R14                 | `planned`     | CI, persisted-source migration, export canaries   | —            | A6 / [#84](https://github.com/pbroom/spfx-kit/issues/84)                        | App phases incomplete                    | Owned module accepted          |
+| Fluent removal and release acceptance     | R1-R14                 | `planned`     | Every required ledger event and rollback drill    | —            | A7 / [#85](https://github.com/pbroom/spfx-kit/issues/85)                        | All earlier phase evidence               | Explicit operational authority |
 
 ### Accountability Register
 
-The entries below are deliberate blockers, not assignments. Phase 0 cannot
-complete until the program names an accountable person or team, an approver,
-and a concrete issue or ADR for every row and every open risk.
+`@pbroom` is the only evidence-supported durable human identity and repository
+administrator across the four public personal repositories. The same identity
+therefore owns code and phase acceptance. This is self-acceptance, not an
+independent GitHub review. Automated checks are evidence, not approvers.
 
-| ID  | Phase | Repositories                                     | Accountable owner/team | Approver   | Tracking issue/ADR | Due gate                  |
-| --- | ----- | ------------------------------------------------ | ---------------------- | ---------- | ------------------ | ------------------------- |
-| A0  | 0     | All in-scope repositories                        | Unassigned             | Unassigned | Unlinked           | Before Phase 0 completion |
-| A1  | 1     | SPFx Kit and fixture repositories                | Unassigned             | Unassigned | Unlinked           | Before Phase 0 completion |
-| A2  | 2     | SPFx Kit and all editor consumers                | Unassigned             | Unassigned | Unlinked           | Before Phase 0 completion |
-| A3  | 3     | Better Text and SPFx Kit                         | Unassigned             | Unassigned | Unlinked           | Before Phase 0 completion |
-| A4  | 4     | Better Divider and SPFx Kit                      | Unassigned             | Unassigned | Unlinked           | Before Phase 0 completion |
-| A5  | 5     | Better List and SPFx Kit                         | Unassigned             | Unassigned | Unlinked           | Before Phase 0 completion |
-| A6  | 6     | SPFx Kit and supported persisted-source owners   | Unassigned             | Unassigned | Unlinked           | Before Phase 0 completion |
-| A7  | 7     | All in-scope repositories and release operations | Unassigned             | Unassigned | Unlinked           | Before Phase 0 completion |
+No accountability entry authorizes an operational action. CDN publication,
+App Catalog changes, site installation/update, SharePoint deployment, rollback,
+merge, tag, and release each retain their explicit authority boundary.
+
+| ID  | Phase | Repositories                                     | Accountable owner/team | Approver  | Tracking issue/ADR                                                                   | Due gate                  |
+| --- | ----- | ------------------------------------------------ | ---------------------- | --------- | ------------------------------------------------------------------------------------ | ------------------------- |
+| A0  | 0     | All in-scope repositories                        | `@pbroom`              | `@pbroom` | [spfx-kit#81](https://github.com/pbroom/spfx-kit/issues/81), ADR-0001–0004           | Before Phase 0 completion |
+| A1  | 1     | SPFx Kit and fixture repositories                | `@pbroom`              | `@pbroom` | [spfx-kit#82](https://github.com/pbroom/spfx-kit/issues/82), ADR-0001, ADR-0003      | Before Phase 0 completion |
+| A2  | 2     | SPFx Kit and all editor consumers                | `@pbroom`              | `@pbroom` | [spfx-kit#83](https://github.com/pbroom/spfx-kit/issues/83), ADR-0001, ADR-0002      | Before Phase 0 completion |
+| A3  | 3     | Better Text and SPFx Kit                         | `@pbroom`              | `@pbroom` | [better-text#6](https://github.com/pbroom/better-text-spfx/issues/6), ADR-0002       | Before Phase 0 completion |
+| A4  | 4     | Better Divider and SPFx Kit                      | `@pbroom`              | `@pbroom` | [better-divider#3](https://github.com/pbroom/better-divider-spfx/issues/3), ADR-0002 | Before Phase 0 completion |
+| A5  | 5     | Better List and SPFx Kit                         | `@pbroom`              | `@pbroom` | [better-list#59](https://github.com/pbroom/better-list-spfx/issues/59), ADR-0002     | Before Phase 0 completion |
+| A6  | 6     | SPFx Kit and supported persisted-source owners   | `@pbroom`              | `@pbroom` | [spfx-kit#84](https://github.com/pbroom/spfx-kit/issues/84), ADR-0004                | Before Phase 0 completion |
+| A7  | 7     | All in-scope repositories and release operations | `@pbroom`              | `@pbroom` | [spfx-kit#85](https://github.com/pbroom/spfx-kit/issues/85), ADR-0003                | Before Phase 0 completion |
 
 ### Exception Register
 
@@ -249,10 +256,10 @@ Included work:
 - Record the public Google Fonts behavior in Better Text as a separate asset
   policy decision. Do not add another font origin by default.
 - Inventory the Lab and Workbench Monaco runtime, including the current
-  jsDelivr origin and its modules, CSS, workers, Codicon, and support assets.
-  Assign an owner and issue/ADR that requires removal to bundled/local assets
-  or the complete shared-resource proof before retention; never permit an
-  implicit public-CDN fallback.
+  `https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs` default and its
+  modules, CSS, workers, Codicon, and support assets. A2/A7 and issues #83/#85
+  own removal to bundled/local assets or the complete shared-resource proof;
+  never permit an implicit public-CDN fallback.
 - Define the evidence-ledger storage and required terminal event matrix.
 - Define the authorized non-production rollback-drill playbook.
 - Inventory supported persisted Code Workbench sources and decide their owned
@@ -275,10 +282,58 @@ example, the Monaco criterion requires its inventory, accountability, and
 decision rows. The post-merge trust-bootstrap probes are external observations;
 they do not substitute for these first post-bootstrap ledger rows.
 
+Decision records:
+
+- [ADR-0001](adr/0001-react17-shadcn-foundation.md) pins the proposed React 17
+  shadcn/Base UI source profile, normalization, CSS isolation, and delivery
+  architecture. Its compatibility and toolchain spikes remain blocking proof.
+- [ADR-0002](adr/0002-owned-ui-asset-policy.md) accepts the source-owned color
+  organism and preserves Better Text's existing Google Fonts behavior without
+  adding a shared font dependency.
+- [ADR-0003](adr/0003-evidence-release-and-rollback-governance.md) defines
+  atomic public/private evidence, release-set and topology binding, retention,
+  and the separately authorized non-production rollback drill.
+- [ADR-0004](adr/0004-workbench-v1-v2-migration.md) accepts the lossless V1
+  reader, explicit V2 module/profile bindings, deterministic classification,
+  and the Phase 6 Fluent-resolver removal deadline.
+
+Tracking topology:
+
+- Umbrella and Phase 0: [spfx-kit#81](https://github.com/pbroom/spfx-kit/issues/81)
+- Foundation and editor/Lab: [spfx-kit#82](https://github.com/pbroom/spfx-kit/issues/82),
+  [spfx-kit#83](https://github.com/pbroom/spfx-kit/issues/83)
+- Applications: [better-text#6](https://github.com/pbroom/better-text-spfx/issues/6),
+  [better-divider#3](https://github.com/pbroom/better-divider-spfx/issues/3),
+  [better-list#59](https://github.com/pbroom/better-list-spfx/issues/59)
+- Workbench/generator and final acceptance:
+  [spfx-kit#84](https://github.com/pbroom/spfx-kit/issues/84),
+  [spfx-kit#85](https://github.com/pbroom/spfx-kit/issues/85)
+
+Bootstrap sequencing: the governance PR introduces the empty ledger and the
+base-trusted history workflow, complete protected workflow tree, isolated v1
+validator runtime, and trust manifest. It does not self-record immutable
+evidence. The first release-set manifest and rows land only after that trust
+base exists on the base branch, positive and negative probes prove its
+`spfx-kit/evidence-history-v1` status is attached to the exact candidate head,
+and that status is required on `main`.
+
+Later trust-version changes follow the fail-closed cutover in
+[`bootstrap-main-ruleset.md`](evidence/shadcn-migration/bootstrap-main-ruleset.md):
+a named bypass actor is configured temporarily under an authorization limited
+to the exact replacement SHA while v1 stays required, the bypass actor is
+removed immediately, and v1 blocks ordinary merges during v2 probes. Repository
+policy adds the proven v2 requirement before removing v1; a failed transition
+restores the reviewed v1 tree through the same temporary named-actor mechanism
+under a new exact-SHA authorization. Simultaneously green v1/v2 statuses are not
+claimed.
+
 Acceptance checklist:
 
 - [ ] Each repository baseline is tied to a commit SHA.
-- [ ] Direct-source and emitted-artifact inventories are recorded.
+- [ ] Direct-source and emitted-artifact inventories are recorded in
+      [`baseline-source-2026-08-05.md`](evidence/shadcn-migration/baseline-source-2026-08-05.md)
+      and
+      [`baseline-artifacts-2026-08-05.md`](evidence/shadcn-migration/baseline-artifacts-2026-08-05.md).
 - [ ] The source/app/shared-resource classification is accepted.
 - [ ] The registry update and rollback process is accepted.
 - [ ] The color-control and font-policy decisions are recorded or explicitly
@@ -292,7 +347,10 @@ Acceptance checklist:
       issue/ADR.
 - [ ] The Workbench migration has a named owner, a removal issue, and an expiry
       no later than Phase 7 acceptance.
-- [ ] The evidence ledger, terminal matrix, and rollback drill are accepted.
+- [ ] The evidence ledger, terminal matrix, protected v1 validator contract,
+      and rollback-drill procedure are accepted in repository governance.
+- [ ] The v1 trust base is present on `main`, its positive and negative probes
+      pass, and its candidate-head status is required by the effective ruleset.
 
 Exit evidence: architecture decision records, inventory output, and linked
 issues/PRs. No UI migration starts before this gate is complete.
@@ -305,7 +363,7 @@ way in the lab and SPFx production paths.
 Included work:
 
 - Curate Button, Input, Field, Textarea, Checkbox, Switch, Select, Combobox,
-  Toggle Group, Tabs, Accordion, Menu, Dialog, Sheet, Popover, Tooltip, Alert,
+  Toggle Group, Tabs, Accordion, Dropdown Menu, Dialog, Sheet, Popover, Tooltip, Alert,
   Badge, and Spinner as needed. Do not assume optional shadcn dependencies such
   as toast libraries support React 17.
 - Compile and render every selected primitive against React 17.0.1, the
@@ -325,12 +383,16 @@ Acceptance checklist:
 - [ ] A clean install resolves one React/ReactDOM 17.0.1 runtime.
 - [ ] Representative primitives typecheck, build, render, and unmount in React
       17 without forced peers.
+- [ ] Button/Input/Dialog-trigger refs resolve to DOM elements; controlled state,
+      keyboard behavior, the 1,940-option font combobox, and Axe checks pass.
 - [ ] Vite, Heft, and retained Gulp fixtures consume the same source and CSS
       contract.
 - [ ] Production CSS contains expected prefixed selectors and no unscoped
       reset or generic `:root` token block.
 - [ ] Portal, theme, deterministic-ID, focus-return, Escape, and teardown tests
-      pass for multiple roots in one document.
+      pass for multiple roots and two independently bundled app copies in one
+      document, with unique IDs and correct label/ARIA relationships across
+      deterministic remounts.
 - [ ] A host-style lifecycle test proves mount, theme change, and unmount do not
       alter SharePoint-owned styles or nodes.
 - [ ] `single`/embedded, `cdn`, `staging-cdn`, and `standalone` export/build
@@ -784,33 +846,33 @@ the roadmap summary.
 
 ## Decision Log
 
-| ID  | Status   | Decision                                                                                                                                                                   | Accountability | Recorded   | Evidence/ADR                        | Revisit condition                                                          |
-| --- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- | ----------------------------------- | -------------------------------------------------------------------------- |
-| D1  | Accepted | Keep React and ReactDOM at `17.0.1`.                                                                                                                                       | A1             | 2026-08-05 | SPFx matrix and `toolchain.md`      | Microsoft's supported SPFx runtime changes.                                |
-| D2  | Proposed | Use a pinned shadcn profile backed by Base UI.                                                                                                                             | A1             | 2026-08-05 | Unlinked — blocks Phase 0           | Compatibility spike fails or primitive support changes.                    |
-| D3  | Proposed | Distribute UI components as reviewed source with deterministic digests.                                                                                                    | A1             | 2026-08-05 | Unlinked — blocks Phase 0           | Standalone or drift enforcement cannot be proven.                          |
-| D4  | Proposed | Compile generated UI CSS per app and keep it essential/app-owned.                                                                                                          | A1             | 2026-08-05 | Unlinked — blocks Phase 0           | CSS closure, isolation, or parity gates fail.                              |
-| D5  | Accepted | Keep app-CDN and shared-resource contracts separate.                                                                                                                       | A7             | 2026-08-05 | Current app export contracts        | One contract proves both lifecycles without weakening either validator.    |
-| D6  | Accepted | Keep the `/shared/...` runtime namespace closed.                                                                                                                           | A7             | 2026-08-05 | Reserved mock route and validators  | Production closure, provider deployment, and browser runtime are proven.   |
-| D7  | Accepted | Keep Better List's source editor canonical.                                                                                                                                | A2             | 2026-08-05 | Existing shared-editor architecture | A separately approved replacement becomes canonical.                       |
-| D8  | Proposed | Migrate the foundation, canonical editor/Lab, Better Text, Better Divider, Better List, then platform cleanup.                                                             | A0             | 2026-08-05 | Unlinked — blocks Phase 0           | Phase dependencies or compatibility evidence require resequencing.         |
-| D9  | Proposed | Replace the Lab/Workbench jsDelivr Monaco runtime with bundled/local assets unless the full shared-resource contract is proven; never use an implicit public-CDN fallback. | A2/A7          | 2026-08-05 | Unlinked — blocks Phase 0           | A complete immutable resource closure and real-browser proof are accepted. |
+| ID  | Status   | Decision                                                                                                                                       | Accountability | Recorded   | Evidence/ADR                                                                                                                                                                                                       | Revisit condition                                                          |
+| --- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| D1  | Accepted | Keep React and ReactDOM at `17.0.1`.                                                                                                           | A1             | 2026-08-05 | SPFx matrix and `toolchain.md`                                                                                                                                                                                     | Microsoft's supported SPFx runtime changes.                                |
+| D2  | Accepted | Use the pinned `spfx-react17-base-nova-v1` shadcn profile backed by Base UI `1.6.0`.                                                           | A1             | 2026-08-05 | [ADR-0001](adr/0001-react17-shadcn-foundation.md), [#82](https://github.com/pbroom/spfx-kit/issues/82)                                                                                                             | Phase 1 compatibility spike fails or primitive support changes.            |
+| D3  | Accepted | Distribute UI components as reviewed source with committed registry payloads and deterministic digests.                                        | A1             | 2026-08-05 | [ADR-0001](adr/0001-react17-shadcn-foundation.md), [#82](https://github.com/pbroom/spfx-kit/issues/82)                                                                                                             | Standalone or drift enforcement cannot be proven.                          |
+| D4  | Accepted | Compile generated UI CSS per app and keep it essential/app-owned.                                                                              | A1             | 2026-08-05 | [ADR-0001](adr/0001-react17-shadcn-foundation.md), [#82](https://github.com/pbroom/spfx-kit/issues/82)                                                                                                             | CSS closure, isolation, or parity gates fail.                              |
+| D5  | Accepted | Keep app-CDN and shared-resource contracts separate.                                                                                           | A7             | 2026-08-05 | Current app export contracts                                                                                                                                                                                       | One contract proves both lifecycles without weakening either validator.    |
+| D6  | Accepted | Keep the `/shared/...` runtime namespace closed.                                                                                               | A7             | 2026-08-05 | Reserved mock route and validators                                                                                                                                                                                 | Production closure, provider deployment, and browser runtime are proven.   |
+| D7  | Accepted | Keep Better List's source editor canonical.                                                                                                    | A2             | 2026-08-05 | Existing shared-editor architecture                                                                                                                                                                                | A separately approved replacement becomes canonical.                       |
+| D8  | Accepted | Migrate the foundation, canonical editor/Lab, Better Text, Better Divider, Better List, then platform cleanup.                                 | A0             | 2026-08-05 | [Roadmap](shadcn-migration-roadmap.md), [#81](https://github.com/pbroom/spfx-kit/issues/81)                                                                                                                        | Phase dependencies or compatibility evidence require resequencing.         |
+| D9  | Accepted | Remove the implicit Lab/Workbench jsDelivr Monaco default in favor of bundled/local assets unless the full shared-resource contract is proven. | A2/A7          | 2026-08-05 | [Roadmap](shadcn-migration-roadmap.md), [ADR-0003](adr/0003-evidence-release-and-rollback-governance.md), [#83](https://github.com/pbroom/spfx-kit/issues/83), [#85](https://github.com/pbroom/spfx-kit/issues/85) | A complete immutable resource closure and real-browser proof are accepted. |
 
 ## Risks And Blockers
 
-| Risk or blocker                                                     | Accountability | State | Effect                                                                    | Required response                                                                                                                                     | Tracking issue/ADR        | Due gate           |
-| ------------------------------------------------------------------- | -------------- | ----- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------ |
-| A selected shadcn dependency requires React 18/19.                  | A1             | Open  | Breaks the SPFx runtime contract.                                         | Reject or adapt the component source; never force the peer graph.                                                                                     | Unlinked — blocks Phase 0 | Phase 1 start      |
-| Tailwind selectors are hashed as CSS Modules.                       | A1             | Open  | Literal component classes stop working.                                   | Use the targeted global-CSS contract and assert emitted selectors.                                                                                    | Unlinked — blocks Phase 0 | Phase 1 acceptance |
-| Preflight or tokens escape the owned root.                          | A1             | Open  | SharePoint or another web part changes appearance.                        | Fail CSS and host-style lifecycle gates.                                                                                                              | Unlinked — blocks Phase 0 | Phase 1 acceptance |
-| A portal targets global `document.body` without scope.              | A1/A2          | Open  | Theme, focus, document ownership, or z-order fails.                       | Require the UI context's portal host.                                                                                                                 | Unlinked — blocks Phase 0 | Phase 2 acceptance |
-| Better Divider/Better List color control lacks parity.              | A4/A5          | Open  | Blocks complete Fluent removal.                                           | Decide the contract, owner, and issue in Phase 0; implement and validate it in Phase 2.                                                               | Unlinked — blocks Phase 0 | Phase 2 acceptance |
-| Ordinary `cdn` output contains stale assets.                        | A1/A7          | Open  | Mixed generations may pass a weak handoff.                                | Clear generated sources and prefer strict staging proof.                                                                                              | Unlinked — blocks Phase 0 | Phase 1 acceptance |
-| CSS-relative fonts/images or lazy chunks are absent.                | A1/A7          | Open  | Local manifest passes but production breaks.                              | Add closure checks and real browser network proof.                                                                                                    | Unlinked — blocks Phase 0 | Before CDN claim   |
-| Lab/Workbench Monaco still loads from jsDelivr.                     | A2/A7          | Open  | An implicit public runtime origin can break private, CSP, or offline use. | Inventory its full closure and owner; remove it to bundled/local assets or satisfy the complete shared-resource contract without public-CDN fallback. | Unlinked — blocks Phase 0 | Phase 0 acceptance |
-| Protected CDN verification works but browser auth fails.            | A7             | Open  | Server-side proof overstates runtime readiness.                           | Prove the actual browser auth/CORS/CSP model before adoption.                                                                                         | Unlinked — blocks Phase 0 | Before CDN claim   |
-| A shared resource version is removed too early.                     | A7             | Open  | Deployed apps fail after rollback or cache expiry.                        | Maintain reverse references and retention policy.                                                                                                     | Unlinked — blocks Phase 0 | Before publication |
-| Source scan reports zero Fluent imports while emitted code remains. | A3-A7          | Open  | False completion.                                                         | Inspect production bundles, CSS, packages, and runtime requests.                                                                                      | Unlinked — blocks Phase 0 | Phase 7 acceptance |
+| Risk or blocker                                                     | Accountability | State | Effect                                              | Required response                                                                                                 | Tracking issue/ADR                                                                                                                                                                                                                       | Due gate           |
+| ------------------------------------------------------------------- | -------------- | ----- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| A selected shadcn dependency requires React 18/19.                  | A1             | Open  | Breaks the SPFx runtime contract.                   | Reject or adapt the component source; never force the peer graph.                                                 | [ADR-0001](adr/0001-react17-shadcn-foundation.md), [#82](https://github.com/pbroom/spfx-kit/issues/82)                                                                                                                                   | Phase 1 start      |
+| Tailwind selectors are hashed as CSS Modules.                       | A1             | Open  | Literal component classes stop working.             | Use the targeted global-CSS contract and assert emitted selectors.                                                | [ADR-0001](adr/0001-react17-shadcn-foundation.md), [#82](https://github.com/pbroom/spfx-kit/issues/82)                                                                                                                                   | Phase 1 acceptance |
+| Preflight or tokens escape the owned root.                          | A1             | Open  | SharePoint or another web part changes appearance.  | Fail CSS and host-style lifecycle gates.                                                                          | [ADR-0001](adr/0001-react17-shadcn-foundation.md), [#82](https://github.com/pbroom/spfx-kit/issues/82)                                                                                                                                   | Phase 1 acceptance |
+| A portal targets global `document.body` without scope.              | A1/A2          | Open  | Theme, focus, document ownership, or z-order fails. | Require the UI context's portal host.                                                                             | [ADR-0001](adr/0001-react17-shadcn-foundation.md), [#83](https://github.com/pbroom/spfx-kit/issues/83)                                                                                                                                   | Phase 2 acceptance |
+| Better Divider/Better List color control lacks parity.              | A4/A5          | Open  | Blocks complete Fluent removal.                     | Implement and validate the accepted organism in Phase 2 before app adoption.                                      | [ADR-0002](adr/0002-owned-ui-asset-policy.md), [#83](https://github.com/pbroom/spfx-kit/issues/83), [divider#3](https://github.com/pbroom/better-divider-spfx/issues/3), [list#59](https://github.com/pbroom/better-list-spfx/issues/59) | Phase 2 acceptance |
+| Ordinary `cdn` output contains stale assets.                        | A1/A7          | Open  | Mixed generations may pass a weak handoff.          | Clear generated sources and prefer strict staging proof.                                                          | [ADR-0003](adr/0003-evidence-release-and-rollback-governance.md), [#82](https://github.com/pbroom/spfx-kit/issues/82), [#85](https://github.com/pbroom/spfx-kit/issues/85)                                                               | Phase 1 acceptance |
+| CSS-relative fonts/images or lazy chunks are absent.                | A1/A7          | Open  | Local manifest passes but production breaks.        | Add closure checks and real browser network proof.                                                                | [ADR-0003](adr/0003-evidence-release-and-rollback-governance.md), [#82](https://github.com/pbroom/spfx-kit/issues/82), [#85](https://github.com/pbroom/spfx-kit/issues/85)                                                               | Before CDN claim   |
+| Lab/Workbench Monaco still loads from jsDelivr.                     | A2/A7          | Open  | Private, CSP, or offline use can fail.              | Remove the implicit public default or satisfy the full shared-resource proof; never retain a public-CDN fallback. | [ADR-0003](adr/0003-evidence-release-and-rollback-governance.md), [#83](https://github.com/pbroom/spfx-kit/issues/83), [#85](https://github.com/pbroom/spfx-kit/issues/85)                                                               | Phase 2 acceptance |
+| Protected CDN verification works but browser auth fails.            | A7             | Open  | Server-side proof overstates runtime readiness.     | Prove the actual browser auth/CORS/CSP model before adoption.                                                     | [ADR-0003](adr/0003-evidence-release-and-rollback-governance.md), [#85](https://github.com/pbroom/spfx-kit/issues/85)                                                                                                                    | Before CDN claim   |
+| A shared resource version is removed too early.                     | A7             | Open  | Deployed apps fail after rollback or cache expiry.  | Maintain reverse references and retention policy.                                                                 | [ADR-0003](adr/0003-evidence-release-and-rollback-governance.md), [#85](https://github.com/pbroom/spfx-kit/issues/85)                                                                                                                    | Before publication |
+| Source scan reports zero Fluent imports while emitted code remains. | A3-A7          | Open  | False completion.                                   | Inspect production bundles, CSS, packages, and runtime requests.                                                  | [Phase 7 #85](https://github.com/pbroom/spfx-kit/issues/85)                                                                                                                                                                              | Phase 7 acceptance |
 
 ## Update Protocol
 

@@ -1,0 +1,511 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/pbroom/spfx-kit/blob/main/docs/evidence/shadcn-migration/schema.v1.json",
+  "title": "SPFx Kit shadcn migration public evidence schema v1",
+  "oneOf": [{ "$ref": "#/$defs/proofEvent" }, { "$ref": "#/$defs/releaseSetManifest" }],
+  "$defs": {
+    "opaqueId": {
+      "type": "string",
+      "pattern": "^(?:ev|rs|top|env|sub|app|art|prof|res|rel|dep|auth|op|priv)-[a-f0-9]{16,64}$",
+      "maxLength": 73
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "gitSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "publicRepository": {
+      "enum": ["pbroom/spfx-kit", "pbroom/better-text-spfx", "pbroom/better-divider-spfx", "pbroom/better-list-spfx"]
+    },
+    "exportTarget": {
+      "enum": ["source", "single", "cdn", "staging-cdn", "standalone"]
+    },
+    "sourceRevision": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "repository", "commitSha"],
+          "properties": {
+            "kind": { "const": "public-git" },
+            "repository": { "$ref": "#/$defs/publicRepository" },
+            "commitSha": { "$ref": "#/$defs/gitSha" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "revisionEvidenceId"],
+          "properties": {
+            "kind": { "const": "private-opaque" },
+            "revisionEvidenceId": { "$ref": "#/$defs/opaqueId" }
+          }
+        }
+      ]
+    },
+    "validatorIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "repository", "commitSha", "scriptPath", "schemaSha256"],
+      "properties": {
+        "name": { "const": "spfx-kit-shadcn-evidence" },
+        "repository": { "const": "pbroom/spfx-kit" },
+        "commitSha": { "$ref": "#/$defs/gitSha" },
+        "scriptPath": { "const": ".github/evidence-trust/v1/validate-shadcn-evidence.mjs" },
+        "schemaSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "prExactHead": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "repository", "pullRequest", "commitSha"],
+          "properties": {
+            "kind": { "const": "public-git" },
+            "repository": { "$ref": "#/$defs/publicRepository" },
+            "pullRequest": { "type": "integer", "minimum": 1 },
+            "commitSha": { "$ref": "#/$defs/gitSha" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "exactHeadEvidenceId"],
+          "properties": {
+            "kind": { "const": "private-opaque" },
+            "exactHeadEvidenceId": { "$ref": "#/$defs/opaqueId" }
+          }
+        }
+      ]
+    },
+    "publicEvidenceReference": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "path"],
+          "properties": {
+            "kind": { "const": "repository-path" },
+            "path": {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*(?:^|/)[.][.](?:/|$))[A-Za-z0-9._/-]+$",
+              "maxLength": 256
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "url"],
+          "properties": {
+            "kind": { "const": "public-url" },
+            "url": {
+              "type": "string",
+              "pattern": "^https://github[.]com/pbroom/(?:spfx-kit|better-text-spfx|better-divider-spfx|better-list-spfx)/(?:actions/runs/[0-9]+(?:/job/[0-9]+)?|commit/[a-f0-9]{40}|pull/[1-9][0-9]*(?:/checks)?|issues/[1-9][0-9]*|blob/[a-f0-9]{40}/[A-Za-z0-9._/-]+)$",
+              "maxLength": 512
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "opaqueEvidenceId"],
+          "properties": {
+            "kind": { "const": "private-opaque" },
+            "opaqueEvidenceId": { "$ref": "#/$defs/opaqueId" }
+          }
+        }
+      ]
+    },
+    "resourceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resourceId", "releaseId", "manifestSha256"],
+      "properties": {
+        "resourceId": { "$ref": "#/$defs/opaqueId" },
+        "releaseId": { "$ref": "#/$defs/opaqueId" },
+        "manifestSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "deploymentIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deploymentId", "applicationId", "exportTarget", "packageArtifactId", "packageSha256", "resourceBinding"],
+      "properties": {
+        "deploymentId": { "$ref": "#/$defs/opaqueId" },
+        "applicationId": { "$ref": "#/$defs/opaqueId" },
+        "exportTarget": { "$ref": "#/$defs/exportTarget" },
+        "packageArtifactId": { "$ref": "#/$defs/opaqueId" },
+        "packageSha256": { "$ref": "#/$defs/sha256" },
+        "resourceBinding": {
+          "oneOf": [{ "$ref": "#/$defs/resourceBinding" }, { "type": "null" }]
+        }
+      }
+    },
+    "rollbackReleaseIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "releaseSetId",
+        "deploymentId",
+        "applicationId",
+        "exportTarget",
+        "packageArtifactId",
+        "packageSha256",
+        "resourceBinding"
+      ],
+      "properties": {
+        "releaseSetId": { "$ref": "#/$defs/opaqueId" },
+        "deploymentId": { "$ref": "#/$defs/opaqueId" },
+        "applicationId": { "$ref": "#/$defs/opaqueId" },
+        "exportTarget": { "$ref": "#/$defs/exportTarget" },
+        "packageArtifactId": { "$ref": "#/$defs/opaqueId" },
+        "packageSha256": { "$ref": "#/$defs/sha256" },
+        "resourceBinding": {
+          "oneOf": [{ "$ref": "#/$defs/resourceBinding" }, { "type": "null" }]
+        }
+      }
+    },
+    "proofSubject": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "subjectId", "sourceRevision"],
+          "properties": {
+            "kind": { "const": "source" },
+            "subjectId": { "$ref": "#/$defs/opaqueId" },
+            "sourceRevision": { "$ref": "#/$defs/sourceRevision" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "subjectId", "artifactId", "applicationId", "artifactKind", "exportTarget", "sha256"],
+          "properties": {
+            "kind": { "const": "artifact" },
+            "subjectId": { "$ref": "#/$defs/opaqueId" },
+            "artifactId": { "$ref": "#/$defs/opaqueId" },
+            "applicationId": { "$ref": "#/$defs/opaqueId" },
+            "artifactKind": {
+              "enum": ["package", "archive", "app-assets", "source-profile", "report"]
+            },
+            "exportTarget": { "$ref": "#/$defs/exportTarget" },
+            "sha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "subjectId",
+            "applicationId",
+            "exportTarget",
+            "packageArtifactId",
+            "packageSha256",
+            "resourceId",
+            "releaseId",
+            "manifestSha256"
+          ],
+          "properties": {
+            "kind": { "const": "resource" },
+            "subjectId": { "$ref": "#/$defs/opaqueId" },
+            "applicationId": { "$ref": "#/$defs/opaqueId" },
+            "exportTarget": { "$ref": "#/$defs/exportTarget" },
+            "packageArtifactId": { "$ref": "#/$defs/opaqueId" },
+            "packageSha256": { "$ref": "#/$defs/sha256" },
+            "resourceId": { "$ref": "#/$defs/opaqueId" },
+            "releaseId": { "$ref": "#/$defs/opaqueId" },
+            "manifestSha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "subjectId",
+            "deploymentId",
+            "applicationId",
+            "exportTarget",
+            "packageArtifactId",
+            "packageSha256",
+            "resourceBinding"
+          ],
+          "properties": {
+            "kind": { "const": "deployment" },
+            "subjectId": { "$ref": "#/$defs/opaqueId" },
+            "deploymentId": { "$ref": "#/$defs/opaqueId" },
+            "applicationId": { "$ref": "#/$defs/opaqueId" },
+            "exportTarget": { "$ref": "#/$defs/exportTarget" },
+            "packageArtifactId": { "$ref": "#/$defs/opaqueId" },
+            "packageSha256": { "$ref": "#/$defs/sha256" },
+            "resourceBinding": {
+              "oneOf": [{ "$ref": "#/$defs/resourceBinding" }, { "type": "null" }]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "subjectId", "candidate", "prior"],
+          "properties": {
+            "kind": { "const": "rollback" },
+            "subjectId": { "$ref": "#/$defs/opaqueId" },
+            "candidate": { "$ref": "#/$defs/rollbackReleaseIdentity" },
+            "prior": { "$ref": "#/$defs/rollbackReleaseIdentity" }
+          }
+        }
+      ]
+    },
+    "proofEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "evidenceId",
+        "eventKey",
+        "releaseSetId",
+        "deploymentTopologyId",
+        "phaseSurface",
+        "sourceRevision",
+        "validator",
+        "exportTarget",
+        "environment",
+        "proofSubject",
+        "proofEvent",
+        "result",
+        "publicEvidenceReference",
+        "recordedUtc",
+        "accountabilityId"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "proof-event" },
+        "evidenceId": { "$ref": "#/$defs/opaqueId" },
+        "eventKey": {
+          "type": "string",
+          "pattern": "^[a-z0-9./:-]+$",
+          "maxLength": 640
+        },
+        "supersedesEvidenceIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/opaqueId" }
+        },
+        "releaseSetId": { "$ref": "#/$defs/opaqueId" },
+        "deploymentTopologyId": { "$ref": "#/$defs/opaqueId" },
+        "phaseSurface": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[./-][a-z0-9]+)*$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "sourceRevision": { "$ref": "#/$defs/sourceRevision" },
+        "validator": { "$ref": "#/$defs/validatorIdentity" },
+        "prExactHead": { "$ref": "#/$defs/prExactHead" },
+        "exportTarget": { "$ref": "#/$defs/exportTarget" },
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["class", "opaqueId"],
+          "properties": {
+            "class": {
+              "enum": ["local", "ci", "non-production", "production"]
+            },
+            "opaqueId": { "$ref": "#/$defs/opaqueId" }
+          }
+        },
+        "proofSubject": { "$ref": "#/$defs/proofSubject" },
+        "proofEvent": {
+          "enum": [
+            "baseline-inventory",
+            "classification-acceptance",
+            "accountability-acceptance",
+            "decision-acceptance",
+            "local-validation",
+            "exact-head-ci",
+            "local-mock-smoke",
+            "artifact-closure",
+            "remote-bytes",
+            "remote-headers",
+            "app-catalog-deployment",
+            "site-install-update",
+            "sharepoint-runtime",
+            "fallback-negative-case",
+            "rollback-artifacts-retained",
+            "rollback-drill"
+          ]
+        },
+        "result": { "enum": ["pass", "fail", "blocked", "expired"] },
+        "authorizationEvidenceId": { "$ref": "#/$defs/opaqueId" },
+        "operatorEvidenceId": { "$ref": "#/$defs/opaqueId" },
+        "publicEvidenceReference": { "$ref": "#/$defs/publicEvidenceReference" },
+        "recordedUtc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+        },
+        "accountabilityId": {
+          "type": "string",
+          "pattern": "^A[0-7]$"
+        }
+      }
+    },
+    "releaseSetManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "releaseSetId",
+        "releaseSetProfile",
+        "sourceRevisions",
+        "uiProfiles",
+        "exportTargets",
+        "artifacts",
+        "resourceManifests",
+        "deployments"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "release-set-manifest" },
+        "releaseSetId": { "$ref": "#/$defs/opaqueId" },
+        "releaseSetProfile": { "enum": ["source-only", "application-matrix"] },
+        "sourceRevisions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/sourceRevision" }
+        },
+        "uiProfiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["profileId", "sha256"],
+            "properties": {
+              "profileId": { "$ref": "#/$defs/opaqueId" },
+              "sha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        },
+        "exportTargets": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/exportTarget" }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["artifactId", "applicationId", "artifactKind", "exportTarget", "sha256"],
+            "properties": {
+              "artifactId": { "$ref": "#/$defs/opaqueId" },
+              "applicationId": { "$ref": "#/$defs/opaqueId" },
+              "artifactKind": {
+                "enum": ["package", "archive", "app-assets", "source-profile", "report"]
+              },
+              "exportTarget": { "$ref": "#/$defs/exportTarget" },
+              "sha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        },
+        "resourceManifests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/resourceBinding" }
+        },
+        "deployments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/deploymentIdentity" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "releaseSetProfile": { "const": "source-only" } },
+            "required": ["releaseSetProfile"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "exportTargets": { "const": ["source"] } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "releaseSetProfile": { "const": "application-matrix" } },
+            "required": ["releaseSetProfile"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "exportTargets": { "const": ["source", "single", "cdn", "staging-cdn", "standalone"] },
+              "artifacts": {
+                "type": "array",
+                "allOf": [
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": ["exportTarget"],
+                      "properties": { "exportTarget": { "const": "single" } },
+                      "not": {
+                        "type": "object",
+                        "required": ["artifactKind"],
+                        "properties": { "artifactKind": { "const": "report" } }
+                      }
+                    }
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": ["exportTarget"],
+                      "properties": { "exportTarget": { "const": "cdn" } },
+                      "not": {
+                        "type": "object",
+                        "required": ["artifactKind"],
+                        "properties": { "artifactKind": { "const": "report" } }
+                      }
+                    }
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": ["exportTarget"],
+                      "properties": { "exportTarget": { "const": "staging-cdn" } },
+                      "not": {
+                        "type": "object",
+                        "required": ["artifactKind"],
+                        "properties": { "artifactKind": { "const": "report" } }
+                      }
+                    }
+                  },
+                  {
+                    "contains": {
+                      "type": "object",
+                      "required": ["exportTarget"],
+                      "properties": { "exportTarget": { "const": "standalone" } },
+                      "not": {
+                        "type": "object",
+                        "required": ["artifactKind"],
+                        "properties": { "artifactKind": { "const": "report" } }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
