@@ -96,6 +96,17 @@ const CATALOG_CATEGORY_OPTIONS = [
   'Workflow & Process Management'
 ] as const;
 
+function isPinShortcut(event: React.KeyboardEvent<HTMLElement>): boolean {
+  return (
+    !event.repeat &&
+    event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.getModifierState('AltGraph') &&
+    event.code === 'KeyP'
+  );
+}
+
 export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Element {
   const {
     open,
@@ -116,6 +127,7 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
   const [exportConfig, setExportConfig] = React.useState<ManagedAppExportConfig>(EMPTY_EXPORT_CONFIG);
   const [sidebarSelectedAppId, setSidebarSelectedAppId] = React.useState(selectedAppId);
   const [selectedAppPickerOpen, setSelectedAppPickerOpen] = React.useState(false);
+  const [pinAnnouncement, setPinAnnouncement] = React.useState('');
   const refreshInFlightRef = React.useRef(false);
   const mutationInFlightRef = React.useRef(false);
   const syncSuccessTimerRef = React.useRef<number | undefined>(undefined);
@@ -440,6 +452,15 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
   const selectedAppBusy = busyAppId === selectedApp?.id || busyAppId === '__all__';
   const connected = selectedManagedApp?.status === 'connected';
   const canToggleConnection = selectedManagedApp?.status === 'connected' || selectedManagedApp?.status === 'disconnected';
+  const togglePinnedAppWithAnnouncement = (appId: string): void => {
+    const app = appRows.find((item) => item.id === appId);
+    if (!app) {
+      return;
+    }
+    const nextPinnedAppId = pinnedAppId === appId ? '' : appId;
+    onTogglePinned(appId);
+    setPinAnnouncement(nextPinnedAppId ? `${app.title} pinned as the startup app.` : `${app.title} is no longer pinned.`);
+  };
 
   return (
     <Drawer
@@ -486,7 +507,7 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                 activeAppOptionIdRef.current = data.nextOption?.value || selectedApp?.id || '';
               }}
               onKeyDown={(event) => {
-                if (!selectedAppPickerOpen || !event.altKey || event.code !== 'KeyP') {
+                if (!selectedAppPickerOpen || !isPinShortcut(event)) {
                   return;
                 }
                 const activeAppId = activeAppOptionIdRef.current;
@@ -495,7 +516,7 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                 }
                 event.preventDefault();
                 event.stopPropagation();
-                onTogglePinned(activeAppId);
+                togglePinnedAppWithAnnouncement(activeAppId);
               }}
               onOpenChange={(_event, data) => {
                 setSelectedAppPickerOpen(data.open);
@@ -547,7 +568,7 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
-                          onTogglePinned(app.id);
+                          togglePinnedAppWithAnnouncement(app.id);
                         }}
                       >
                         {appPinned ? <Pin16Filled aria-hidden="true" /> : <Pin16Regular aria-hidden="true" />}
@@ -558,6 +579,9 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
               })}
             </Dropdown>
           </Field>
+          <span aria-live="polite" className="visually-hidden" role="status">
+            {pinAnnouncement}
+          </span>
 
           {selectedApp ? (
             <div className="app-management-sidebar__app-controls">

@@ -1241,6 +1241,11 @@ test('pins one startup app and restores it after refresh', async ({ page }) => {
   await page.keyboard.up('Alt');
   await expect(page.getByRole('button', { name: 'Pin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'false');
   await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
+  await expect(sidebar.getByRole('status')).toContainText('Hello Card is no longer pinned.');
+
+  await selectedAppSelector.dispatchEvent('keydown', { altKey: true, code: 'KeyP', repeat: true });
+  await selectedAppSelector.dispatchEvent('keydown', { altKey: true, code: 'KeyP', ctrlKey: true });
+  await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
 
   await selectedAppSelector.press('Escape');
   await sidebar.getByRole('button', { name: 'Close app settings sidebar' }).click();
@@ -1248,6 +1253,12 @@ test('pins one startup app and restores it after refresh', async ({ page }) => {
   const unpinnedRightOption = page.getByRole('option', { name: /Hello Card\. Not pinned\./ });
   await unpinnedRightOption.hover();
   await expect(page.getByRole('button', { name: 'Pin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'false');
+  await restoredSelector.focus();
+  await restoredSelector.dispatchEvent('keydown', { altKey: true, code: 'KeyP' });
+  await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBe('hello-card-spfx');
+  await restoredSelector.dispatchEvent('keydown', { altKey: true, code: 'KeyP', repeat: true });
+  await restoredSelector.dispatchEvent('keydown', { altKey: true, code: 'KeyP', ctrlKey: true });
+  await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBe('hello-card-spfx');
 });
 
 interface ManagedAppFixture {
