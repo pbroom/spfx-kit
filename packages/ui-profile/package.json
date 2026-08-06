@@ -1,0 +1,40 @@
+{
+  "name": "@spfx-kit/ui-profile",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline, non-runtime source profile for the React 17 Base Nova compatibility spike.",
+  "scripts": {
+    "profile:update:network": "node ./scripts/update-profile.mjs --allow-network",
+    "profile:regenerate": "node ./scripts/regenerate-profile.mjs",
+    "profile:verify": "node ./scripts/verify-profile.mjs",
+    "profile:verify:closure": "node ./scripts/verify-dependency-closure.mjs",
+    "profile:verify:base-ui": "node ./scripts/transform-base-ui-select-value.mjs --verify-fixtures && node ./scripts/transform-base-ui-popup-lifecycle.mjs --verify-fixtures",
+    "profile:prepare:base-ui": "node ./scripts/prepare-base-ui.mjs",
+    "typecheck:ts53": "node ./scripts/typecheck.mjs typescript ./tsconfig.ts53.json",
+    "typecheck:ts58": "node ./scripts/typecheck.mjs typescript-5-8 ./tsconfig.ts58.json",
+    "typecheck": "npm run profile:prepare:base-ui && npm run typecheck:ts53 && npm run typecheck:ts58",
+    "verify": "npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure",
+    "build": "npm run verify && npm run typecheck"
+  },
+  "devDependencies": {
+    "@base-ui/react": "1.6.0",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.25.0",
+    "react": "17.0.1",
+    "react-dom": "17.0.1",
+    "tailwind-merge": "3.6.0",
+    "@floating-ui/core": "1.7.5",
+    "@floating-ui/dom": "1.7.6",
+    "@floating-ui/react-dom": "2.1.8",
+    "@floating-ui/utils": "0.2.11",
+    "@types/react": "17.0.93",
+    "@types/react-dom": "17.0.17",
+    "@types/scheduler": "0.16.8",
+    "ajv": "8.20.0",
+    "shadcn": "4.16.1",
+    "typescript": "5.3.3",
+    "typescript-5-8": "npm:typescript@5.8.3"
+  }
+}

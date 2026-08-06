@@ -14,6 +14,9 @@ export default tseslint.config(
       '**/release/**',
       '**/jest-output/**',
       'apps/lab/src/generated/**',
+      'packages/ui-profile/compat/base-ui-1.6.0/select-value/**',
+      'packages/ui-profile/.prepared/**',
+      'packages/ui-profile/normalized/**',
       '.spfx-kit/**',
       'apps/*-spfx/**',
       '.tmp-*/**'

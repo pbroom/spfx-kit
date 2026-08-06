@@ -1,0 +1,616 @@
+{
+  "$schema": "./profile.schema.json",
+  "baseUiDeclarationTransform": {
+    "path": "compat/base-ui-1.6.0/select-value/contract.json",
+    "sha256": "39bc2e24fea78e7e68f8518c217698489d7963c049d44cdb85ffaba539d66072"
+  },
+  "baseUiPopupLifecycleTransform": {
+    "path": "compat/base-ui-1.6.0/popup-lifecycle/contract.json",
+    "sha256": "772b9777c7fed2b1a2672c99616aac31f7df3a4a30526d6d94115c9f6fb06deb"
+  },
+  "dependencyClosure": {
+    "path": "dependency-closure.json",
+    "sha256": "071df6ff0af2debfd0cbbdbdbd372ad6d94230242e6a3cb0f4f9e70c347ef736"
+  },
+  "generatorVersion": "1.0.0",
+  "items": [
+    {
+      "canonical": {
+        "path": "snapshots/canonical/button.json",
+        "sha256": "e7f2a3eb916b7fd0ed1506ea7ce7205bb50ab18bef3ee7d29b3a112f1b95e407"
+      },
+      "id": "button",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/button.tsx",
+          "registrySourcePath": "registry/base-nova/ui/button.tsx",
+          "sha256": "68a741e99a9a497b30a89dd75f07bdd28bcdbe2f9d794bea37ef0428d6ede63f",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "bind-react-namespace",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "93edbf2075d6104e1b20d263419d91a9587208d3d05efdd06dfafcfe4d0dfd65"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/button.json",
+        "sha256": "434eb70c9158f687770752468a88fd9e164417620ab7047da10d06fe923a04bc"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/input.json",
+        "sha256": "981b9be554c9a0a8ff4d463356578086e2e971ef7647bdb57e579490b1c1e0a9"
+      },
+      "id": "input",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/input.tsx",
+          "registrySourcePath": "registry/base-nova/ui/input.tsx",
+          "sha256": "1c7b7350d7c48f337d562d5296331aa5aaa51592d4de5cf00be05f90ca11a4b3",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "451323f9b25c6d52713165a248197a9724f602915b18a8460cf3d888138ea83b"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/input.json",
+        "sha256": "00e3d8e2bbf597b632bafde6cc1b6006d2f759b9083b32bfd024f0b2edeb2fc1"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/field.json",
+        "sha256": "808fe30010b506e02664f06387068453659c09fb2634736fef818e19e00da058"
+      },
+      "id": "field",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/field.tsx",
+          "registrySourcePath": "registry/base-nova/ui/field.tsx",
+          "sha256": "b953f3a9269d404877934ca08588addbb135a86662446363349d8b8dfe8c65c8",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "bind-react-namespace",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "eebead4799a4cf2b32c89a2ea8c492882f4436108de76f5a3f77484c9d7db404"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/field.json",
+        "sha256": "ebeeb6e0def63bce60ff4270c9c028ac8635e68d1d654f4f09a65c80505cdc38"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/textarea.json",
+        "sha256": "f72ac933b59e736da0f2d56d1c1568c88753fe5cbce2ee0641deb5ebeb9ff856"
+      },
+      "id": "textarea",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/textarea.tsx",
+          "registrySourcePath": "registry/base-nova/ui/textarea.tsx",
+          "sha256": "ac1d1839a8925c77329d522fca83e8d0fc77083a73f817f3c6da2f363b756578",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "ce8f5b4444a917f31bd02f163a6d06d5db0b6eb9fc65f631a05157e041b664b5"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/textarea.json",
+        "sha256": "8bd80124e0c845fef615f7d1da05f77521ee50bb4be15676860aa48a74a9f8d8"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/checkbox.json",
+        "sha256": "f7eb599c3c47a977212878c4c29f11a554a20f41f2a067d1611d143a395aea02"
+      },
+      "id": "checkbox",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/checkbox.tsx",
+          "registrySourcePath": "registry/base-nova/ui/checkbox.tsx",
+          "sha256": "c404bf971c5c29a04bceea3d4e8a2c2c25af0441ad10e1b4b9c9352d3d59e107",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "resolve-lucide-icon-placeholders",
+            "bind-react-namespace",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "f6278a2b514ca8db557c133119b4bb2710bc9fca8630c11f9d754b618d80ca5b"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/checkbox.json",
+        "sha256": "88da4986fb88c20601369ce3bbf138c8baf7834bc760893bd4ed553e0c50187b"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/switch.json",
+        "sha256": "e4cb767b84022b988c016eff16adf33aecb7c17bef9379c0dfab570efefe2a43"
+      },
+      "id": "switch",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/switch.tsx",
+          "registrySourcePath": "registry/base-nova/ui/switch.tsx",
+          "sha256": "1bb34327a7ffc822ae24ba96e11b0f960d80865a780192a8b57a36377b9945bb",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "bind-react-namespace",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "bf6e6cdf20d482569608185aa9def360ecab50ec0eeb621c9f05eccf0e189f97"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/switch.json",
+        "sha256": "954741233ca5c0eac9eb42e3928c4e8087846e71d2b0b781e65ca072767456fb"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/select.json",
+        "sha256": "aca3d460c8f1eac00d1c18c48524db601353b84e0df9a2afbf1cd4a1e1606ff4"
+      },
+      "id": "select",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/select.tsx",
+          "registrySourcePath": "registry/base-nova/ui/select.tsx",
+          "sha256": "a0d372a01b054021bfdef56d5020c6b3c00bcf122879297f772877286f2e700f",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "resolve-lucide-icon-placeholders",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "098125c59bb186d22083637e48a6c3427fd469f4f98363ff915fc0c3ac32e5d3"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/select.json",
+        "sha256": "bac6f97b9dd3ad2c2f1fb587099fc4dbfc06d66b8d5b3f535486225550843997"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/combobox.json",
+        "sha256": "33c97dc4e5835e5d53435f6cb0a0785b59a78ad983fc4e7cf83b6ff71d60fbc2"
+      },
+      "id": "combobox",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/combobox.tsx",
+          "registrySourcePath": "registry/base-nova/ui/combobox.tsx",
+          "sha256": "b5198246c6592a21d24dfa0422e6a214290ffd5bf90703bd9112cb7296a2fb3f",
+          "transformations": [
+            "normalize-line-endings",
+            "pin-base-ui-combobox-subpath",
+            "rewrite-app-owned-aliases",
+            "resolve-lucide-icon-placeholders",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "3122d4c4d2219beee472a394490ee0934e46778a1ba4c2a97447d6871e7968d2"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/combobox.json",
+        "sha256": "aa9233050ea97499948cfbd50fddcc3215710607f0f36924c651931440e6e209"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/toggle-group.json",
+        "sha256": "65e8470516f9d508a0db7cb9200d1b093d5a04c7be90a647dc09548a9e2b2c1f"
+      },
+      "id": "toggle-group",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/toggle-group.tsx",
+          "registrySourcePath": "registry/base-nova/ui/toggle-group.tsx",
+          "sha256": "57c4f4cf69b5624c111d8fac35086028c53ff6b100ea15d2c792f228cc953798",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "a4d6534abfafdf2c7d47b56c68ca69ba77c9df715aa81b7b95079c48edd8de30"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/toggle-group.json",
+        "sha256": "de923fb386aefd1829ae22586413fa35436181acc65af9a06c1608935c69b5a4"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/tabs.json",
+        "sha256": "4179b303aa457dac2cfb9c85b703b1b25a455a28dc53906a177979a6bf13b8fd"
+      },
+      "id": "tabs",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/tabs.tsx",
+          "registrySourcePath": "registry/base-nova/ui/tabs.tsx",
+          "sha256": "7dd589249b3b75df25eaee737e7a10917b1762e61d6bc6e10650bfb4af66c031",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "bind-react-namespace",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "fce559ee7903a2599277021fcf14687ec269ebb3b3a7666d5398d396f7b904aa"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/tabs.json",
+        "sha256": "2d55e20ae416ce9ca89253b5b4e5288a23b5a36013293685c8d5ebd3e9331ecb"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/accordion.json",
+        "sha256": "5695e7ddfd8b8e050d5f2e391e2a11067b659534079b2e875da376ca0994ba46"
+      },
+      "id": "accordion",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/accordion.tsx",
+          "registrySourcePath": "registry/base-nova/ui/accordion.tsx",
+          "sha256": "badf8e0601d84358c05374c459f972c352902a7848dc23cb9db95d607bab16c3",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "resolve-lucide-icon-placeholders",
+            "bind-react-namespace",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "9f934dd0f2401eb0405a78b2aa04bde96dbab36663e031629511e125c76f3531"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/accordion.json",
+        "sha256": "ecb8e864a54894642c7f008ff95efae1885a7c0338c5eb64c9474e213cb9d36d"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/dropdown-menu.json",
+        "sha256": "abafbe52c9b25b92ed6f88d0c7d0a80d0d8b655758ac7def2f777e6d0752c043"
+      },
+      "id": "dropdown-menu",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/dropdown-menu.tsx",
+          "registrySourcePath": "registry/base-nova/ui/dropdown-menu.tsx",
+          "sha256": "ceba289602b78cf3fff930a6697f9421f75a2c69d82199c94d1bbdf6bb623c04",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "resolve-lucide-icon-placeholders",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "ff60876271751b8427b3dd0f60be44db305c4a5faaedc3516b2b581ce3f676b0"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/dropdown-menu.json",
+        "sha256": "0a7909c9c8ce8dcbcfb4b355071daad0aae56cf31dfde808253309346e5fdd64"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/dialog.json",
+        "sha256": "523ae921e2ffaa94bc13d67cc23735ce2193114ee6db215647fd1cc4e041f80c"
+      },
+      "id": "dialog",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/dialog.tsx",
+          "registrySourcePath": "registry/base-nova/ui/dialog.tsx",
+          "sha256": "2b56efb58941939e043c33687b425e532d89382c2a3212432c251e6844111e38",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "resolve-lucide-icon-placeholders",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "4a20c4f16cf1564f0852155736a6041a7f2a5a94d29c3103c06ba2a1aed3a72f"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/dialog.json",
+        "sha256": "99e9d7851f7d00fa85cd66157dd6ee3d6759f149a0a2b850d837407fba61648f"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/sheet.json",
+        "sha256": "54f6430d36b63266f27c1e7ccb80c85c84c0107e5b8ef52b45816c340a8e76a2"
+      },
+      "id": "sheet",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/sheet.tsx",
+          "registrySourcePath": "registry/base-nova/ui/sheet.tsx",
+          "sha256": "33a815283f9c0f2aa1a19b2cf88a154b71b93d39d544c18342dc9b938f478b85",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "resolve-lucide-icon-placeholders",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "2457641a7ef9dd578859999b38649854cc7b044c3d6c711aa7643b1fe83d0bb0"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/sheet.json",
+        "sha256": "d3eae408d743da78ac8fad76480bece794679b6f7b8e61317eac8d97e6f8db0a"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/popover.json",
+        "sha256": "5d634ad32fe4da572110a4b495e0baa46b686a505dedac4ca9ab6f72087ac859"
+      },
+      "id": "popover",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/popover.tsx",
+          "registrySourcePath": "registry/base-nova/ui/popover.tsx",
+          "sha256": "97c513cd3febda781cff8aeb58e383dcd1089a0fea0cf65c59f39b1d27250db0",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "a0f7a4621b3ef94b2cfbaf2585b59bb5b7934dd1aee188fa2875d9e82e17c065"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/popover.json",
+        "sha256": "8c6cec209d1004a1ca4ea06d41c50f54eca991535f75bc72c3c9b3672d4a6f43"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/tooltip.json",
+        "sha256": "4cc26bc8653d76197dafd1ae67ef8a7db8199b4bf9f37ca45528aad30d9b775b"
+      },
+      "id": "tooltip",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/tooltip.tsx",
+          "registrySourcePath": "registry/base-nova/ui/tooltip.tsx",
+          "sha256": "71dd20153348fdda2d87487fec79970262ccba091eb33432b3eb3d79ba08195b",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "bind-react-namespace",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "a4a8106beaa100e641fbdda90a36f640062b360decca374784edcd68e29d9447"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/tooltip.json",
+        "sha256": "8a3be42a6400f31a8631a03b76c5221b1f4ce3d667b1e7a6ad51cdf6a89e00b6"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/alert.json",
+        "sha256": "060db530bfaad8467bb495fc432dbbadfa322ef1d28c590e0d3270f456e6e33f"
+      },
+      "id": "alert",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/alert.tsx",
+          "registrySourcePath": "registry/base-nova/ui/alert.tsx",
+          "sha256": "f8ed8bba3f94be5c7c8235db25fca42162ed1ebe0b6a85b3db4c756497117a8f",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "9b320b60371cf5a10d557a1c625210e44c0e2101575a5f20921cdb96d32b64a2"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/alert.json",
+        "sha256": "f48151ef5f0a8a77d503d382bcf833c25b4d3b1a8e956dd7a0e30af8048b60de"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/badge.json",
+        "sha256": "bab55dbf38a65f508ccfdc07a1cd5b33c91432a6856931cdb27ee02085aad2ee"
+      },
+      "id": "badge",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/badge.tsx",
+          "registrySourcePath": "registry/base-nova/ui/badge.tsx",
+          "sha256": "549b61545bffb7d3acc46fb566bebcd583c88c120b04a68f5801d99a7918daf7",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "bind-react-namespace",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "cf51b4988c4c7e6eec9f107259ebd8af6be31a29a5f5b50716c99e9dd6bdee32"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/badge.json",
+        "sha256": "a8ceb87a9ea72b744909215319a48d9a69983a76dca94831bf66bab21d8d85fb"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/spinner.json",
+        "sha256": "086e87fdd5cc0cf4bf70832756f6fa07fff3e9c7ad5f185954b9651c1dc7c3e6"
+      },
+      "id": "spinner",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/spinner.tsx",
+          "registrySourcePath": "registry/base-nova/ui/spinner.tsx",
+          "sha256": "0df96c91b251feb6ea566a539762d72cdf55ce57ec3d3ddd78607e55be3fef32",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "resolve-lucide-icon-placeholders",
+            "bind-react-namespace",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "28d55babd3a141b406b5103e4566fe53875ed9bb44df168fd0e6b4564ce12fbf"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/spinner.json",
+        "sha256": "f969d7c19667752d1696767ea2e823766825e705351b93d8ad018cd556b1d17f"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/label.json",
+        "sha256": "37e20674d12c0ed3d9a17fd7f74dff963389e37fc6b7770131804a5295a87104"
+      },
+      "id": "label",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/label.tsx",
+          "registrySourcePath": "registry/base-nova/ui/label.tsx",
+          "sha256": "71fafedbbc3f6f88bfccc04aeea102947b76373ff69aa777e8d4ff8ff28caeaa",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "e144f164426dedf34a64b570539c13854fd655157cd022ca5deb53d17b3be290"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/label.json",
+        "sha256": "5fb122b9665fa5c68e900b07d88d167a43eb1af5d751654dc8d8ba2313073af9"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/separator.json",
+        "sha256": "2b86438d2d4d96d32d2f5bd821c93670573e0406effb08f196e5b67fc26406ef"
+      },
+      "id": "separator",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/separator.tsx",
+          "registrySourcePath": "registry/base-nova/ui/separator.tsx",
+          "sha256": "370fe6fcff457aab467d3a2a13e36e195f10990ec22ecc38017f20497a2a016c",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "bind-react-namespace",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "bae21788c7454bee017799fbe99e8ea75cc88b1f586e8e07b7bbd0246fa60afe"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/separator.json",
+        "sha256": "11022cc2607efcaf8394b5b927c1926475624dc0db920557d51ab06e96343032"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/input-group.json",
+        "sha256": "fd2a3d04580ff2aac6379bfb5a8befcb1896fc194eded4e3591653ab39973f99"
+      },
+      "id": "input-group",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/input-group.tsx",
+          "registrySourcePath": "registry/base-nova/ui/input-group.tsx",
+          "sha256": "4fb674dfa219024661d5060082d03e028a736435c13d5696b4b37e22c0559229",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "ec50201ca8686a84f192ee00f77c103bdbed7ff8c191b1d836dbae44287dbaab"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/input-group.json",
+        "sha256": "2dd738138ad08fd8ac7e44d10a1db0078142c6354ef41ebe0880fb40936559c1"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/toggle.json",
+        "sha256": "51566899e5f2d6a2380af1076fc88ca79d1a24eef8b6f34c110a6d2bc5127945"
+      },
+      "id": "toggle",
+      "normalized": [
+        {
+          "path": "normalized/src/components/ui/toggle.tsx",
+          "registrySourcePath": "registry/base-nova/ui/toggle.tsx",
+          "sha256": "62506938d94a9ea8159a679e8e6ef6c6b0f94547ac1af4e7396355bd40725602",
+          "transformations": [
+            "normalize-line-endings",
+            "rewrite-app-owned-aliases",
+            "bind-react-namespace",
+            "react17-forward-ref-public-wrappers"
+          ],
+          "upstreamSha256": "e489c66669a2d8667807ff14c5a00c735f1aba08af57a40d92f20b94705d98a5"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/toggle.json",
+        "sha256": "b763397b40e49430614d2ea525e19f64c9e0ebad75b41080aa49292b861a953c"
+      }
+    },
+    {
+      "canonical": {
+        "path": "snapshots/canonical/utils.json",
+        "sha256": "8c1ac292b1798286eeff6ec6cb4ece7803b2550344d5c8363c5c0091e424426f"
+      },
+      "id": "utils",
+      "normalized": [
+        {
+          "path": "normalized/src/lib/utils.ts",
+          "registrySourcePath": "registry/base-nova/lib/utils.ts",
+          "sha256": "7c8c3dfc0cdd370d44932828eb067ef771c8fe7996693221d5d4b90af6d54f2d",
+          "transformations": [
+            "normalize-line-endings"
+          ],
+          "upstreamSha256": "7c8c3dfc0cdd370d44932828eb067ef771c8fe7996693221d5d4b90af6d54f2d"
+        }
+      ],
+      "raw": {
+        "path": "snapshots/raw/utils.json",
+        "sha256": "af372df97b7b1017008b14be3f723ff73524759022123bf9717689f4f778025e"
+      }
+    }
+  ],
+  "normalizationImplementationSha256": "41279e07d287d14701d42bb78e3d7c70bb800ac6b0408cc0ae31ccf45d603e93",
+  "profileId": "spfx-react17-base-nova-v1",
+  "provenanceSha256": "0531c9bfacf9cf591d9ab6da2a72d78d78327df0be70c42225b7e9a4af57488c",
+  "schemaVersion": 1
+}
