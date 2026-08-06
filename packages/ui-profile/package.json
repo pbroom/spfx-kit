@@ -11,7 +11,11 @@
     "profile:verify:closure": "node ./scripts/verify-dependency-closure.mjs",
     "profile:verify:base-ui": "node ./scripts/transform-base-ui-select-value.mjs --verify-fixtures && node ./scripts/transform-base-ui-popup-lifecycle.mjs --verify-fixtures",
     "profile:prepare:base-ui": "node ./scripts/prepare-base-ui.mjs",
-    "verify": "npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure"
+    "typecheck:ts53": "node ./scripts/typecheck.mjs typescript ./tsconfig.ts53.json",
+    "typecheck:ts58": "node ./scripts/typecheck.mjs typescript-5-8 ./tsconfig.ts58.json",
+    "typecheck": "npm run profile:prepare:base-ui && npm run typecheck:ts53 && npm run typecheck:ts58",
+    "verify": "npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure",
+    "build": "npm run verify && npm run typecheck"
   },
   "devDependencies": {
     "@base-ui/react": "1.6.0",
