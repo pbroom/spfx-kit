@@ -49,6 +49,11 @@ export function resolveDevConfig(environment = process.env) {
     if (!isForwardedHttpsOrigin(labOrigin)) {
       throw new Error('SPFX_LAB_HOST=0.0.0.0 requires an HTTPS SPFX_KIT_MOCK_CDN_LAB_ORIGIN.');
     }
+    if (labOrigin === publicCdnOrigin) {
+      throw new Error(
+        'SPFX_LAB_HOST=0.0.0.0 requires different SPFX_KIT_MOCK_CDN_LAB_ORIGIN and SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN values.'
+      );
+    }
     if (isLoopbackListenHost(cdnListenHost)) {
       throw new Error('SPFX_LAB_HOST=0.0.0.0 requires a non-loopback SPFX_KIT_MOCK_CDN_LISTEN_HOST.');
     }
@@ -57,6 +62,7 @@ export function resolveDevConfig(environment = process.env) {
   return {
     labHost,
     labOrigin,
+    labAllowedHost: new URL(labOrigin).hostname,
     labPort,
     cdnOrigin,
     publicCdnOrigin,
@@ -117,6 +123,7 @@ async function main() {
     SPFX_LAB_HOST: config.labHost,
     SPFX_LAB_PORT: String(config.labPort),
     SPFX_KIT_MOCK_CDN_LAB_ORIGIN: config.labOrigin,
+    SPFX_LAB_ALLOWED_HOST: config.labAllowedHost,
     SPFX_KIT_MOCK_CDN_ORIGIN: config.cdnOrigin,
     SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN: config.publicCdnOrigin,
     SPFX_KIT_MOCK_CDN_LISTEN_HOST: config.cdnListenHost,

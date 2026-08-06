@@ -38,6 +38,7 @@ describe('SPFx Kit development launcher', () => {
     expect(turboConfig.tasks.dev.env).toEqual(
       expect.arrayContaining([
         'SPFX_LAB_HOST',
+        'SPFX_LAB_ALLOWED_HOST',
         'SPFX_LAB_PORT',
         'SPFX_KIT_MOCK_CDN_LAB_ORIGIN',
         'SPFX_KIT_MOCK_CDN_ORIGIN',
@@ -81,6 +82,7 @@ describe('SPFx Kit development launcher', () => {
     ).toMatchObject({
       labHost: '0.0.0.0',
       labOrigin: 'https://preview.example.test',
+      labAllowedHost: 'preview.example.test',
       labPort: 5173,
       publicCdnOrigin: 'https://cdn-preview.example.test',
       cdnListenHost: '0.0.0.0',
@@ -107,6 +109,17 @@ describe('SPFx Kit development launcher', () => {
         SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN: 'https://cdn-preview.example.test'
       })
     ).toThrow('requires a non-loopback SPFX_KIT_MOCK_CDN_LISTEN_HOST');
+  });
+
+  it('requires distinct forwarded Lab and CDN origins for cloud previews', () => {
+    expect(() =>
+      resolveDevConfig({
+        SPFX_LAB_HOST: '0.0.0.0',
+        SPFX_KIT_MOCK_CDN_LAB_ORIGIN: 'https://preview.example.test',
+        SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN: 'https://preview.example.test',
+        SPFX_KIT_MOCK_CDN_LISTEN_HOST: '0.0.0.0'
+      })
+    ).toThrow('requires different SPFX_KIT_MOCK_CDN_LAB_ORIGIN and SPFX_KIT_MOCK_CDN_PUBLIC_ORIGIN');
   });
 
   it('uses taskkill tree termination arguments on Windows', () => {
