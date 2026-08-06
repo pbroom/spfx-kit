@@ -1,15 +1,31 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { link, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  link,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  symlink,
+  utimes,
+  writeFile
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
 import {
+  captureGeneratedProfileTemporaryCandidate,
   createGeneratedProfileStaging,
   observeGeneratedProfileProcess,
   recoverGeneratedReplacement,
+  removeGeneratedProfileTemporaryCandidate,
   startGeneratedProfileLeaseHeartbeat,
   withGeneratedProfileSession
 } from '../packages/ui-profile/scripts/lib/generation-transaction.mjs';
@@ -365,6 +381,81 @@ describe('generated profile process observation', () => {
     failingTick();
     await expect(failing.stopAndDrain()).rejects.toBe(failure);
     await expect(failing.assertHealthy()).rejects.toBe(failure);
+  });
+});
+
+describe('generated profile temporary candidate cleanup', () => {
+  async function candidateFixture(): Promise<{ sandbox: string; candidate: string; ownedFile: string }> {
+    const sandbox = await mkdtemp(path.join(tmpdir(), 'ui-profile-candidate-cleanup-'));
+    temporaryRoots.push(sandbox);
+    const candidate = path.join(sandbox, 'candidate');
+    await mkdir(candidate);
+    const ownedFile = path.join(candidate, 'owned.json');
+    await writeFile(ownedFile, '{"owned":true}\n');
+    return { sandbox, candidate, ownedFile };
+  }
+
+  it('removes a temporary candidate only while its root and complete inventory still match', async () => {
+    const { sandbox, candidate } = await candidateFixture();
+    const binding = await captureGeneratedProfileTemporaryCandidate(candidate);
+
+    await removeGeneratedProfileTemporaryCandidate(candidate, binding, 'test candidate');
+
+    expect(await readdir(sandbox)).toEqual([]);
+  });
+
+  it('preserves a copied-metadata root replacement and its sentinel', async () => {
+    const { sandbox, candidate, ownedFile } = await candidateFixture();
+    const binding = await captureGeneratedProfileTemporaryCandidate(candidate);
+    const [rootDetails, fileDetails] = await Promise.all([lstat(candidate), lstat(ownedFile)]);
+    const parked = path.join(sandbox, 'parked-candidate');
+    await rename(candidate, parked);
+    await mkdir(candidate);
+    const replacementFile = path.join(candidate, 'owned.json');
+    await writeFile(replacementFile, '{"owned":true}\n');
+    await writeFile(path.join(candidate, 'foreign-sentinel'), 'preserve');
+    await chmod(replacementFile, fileDetails.mode);
+    await utimes(replacementFile, fileDetails.atime, fileDetails.mtime);
+    await chmod(candidate, rootDetails.mode);
+    await utimes(candidate, rootDetails.atime, rootDetails.mtime);
+
+    await expect(removeGeneratedProfileTemporaryCandidate(candidate, binding, 'test candidate')).rejects.toThrow(
+      'recursive removal skipped'
+    );
+
+    expect(await readFile(path.join(candidate, 'foreign-sentinel'), 'utf8')).toBe('preserve');
+    expect(await readFile(path.join(parked, 'owned.json'), 'utf8')).toBe('{"owned":true}\n');
+  });
+
+  it('preserves a copied-metadata descendant replacement within the bound root', async () => {
+    const { sandbox, candidate, ownedFile } = await candidateFixture();
+    const binding = await captureGeneratedProfileTemporaryCandidate(candidate);
+    const fileDetails = await lstat(ownedFile);
+    const parked = path.join(sandbox, 'parked-owned.json');
+    await rename(ownedFile, parked);
+    await writeFile(ownedFile, '{"owned":true}\n');
+    await chmod(ownedFile, fileDetails.mode);
+    await utimes(ownedFile, fileDetails.atime, fileDetails.mtime);
+
+    await expect(removeGeneratedProfileTemporaryCandidate(candidate, binding, 'test candidate')).rejects.toThrow(
+      'recursive removal skipped'
+    );
+
+    expect(await readFile(ownedFile, 'utf8')).toBe('{"owned":true}\n');
+    expect(await readFile(parked, 'utf8')).toBe('{"owned":true}\n');
+  });
+
+  it('preserves an unexpected sentinel added to an otherwise bound candidate', async () => {
+    const { candidate } = await candidateFixture();
+    const binding = await captureGeneratedProfileTemporaryCandidate(candidate);
+    const sentinel = path.join(candidate, 'foreign-sentinel');
+    await writeFile(sentinel, 'preserve');
+
+    await expect(removeGeneratedProfileTemporaryCandidate(candidate, binding, 'test candidate')).rejects.toThrow(
+      'recursive removal skipped'
+    );
+
+    expect(await readFile(sentinel, 'utf8')).toBe('preserve');
   });
 });
 
