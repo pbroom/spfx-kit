@@ -1454,6 +1454,25 @@ async function bindRetiredClaim(lockRoot, lockIdentity, ownerToken, ownerOperati
   return { binding, destination: path.join(lockRoot, retainedRelativePath(binding)) };
 }
 
+const RECOVERY_CLAIM_CANDIDATE_NAME = /^\.recovery-claim-acquire-[A-Za-z0-9]+$/u;
+
+async function reconcileInterruptedRecoveryClaimCandidates(lockRoot) {
+  for (const entry of await readdir(lockRoot, { withFileTypes: true })) {
+    if (!RECOVERY_CLAIM_CANDIDATE_NAME.test(entry.name) || !entry.isDirectory() || entry.isSymbolicLink()) continue;
+    const candidate = path.join(lockRoot, entry.name);
+    try {
+      await assertContainedRealPath(lockRoot, candidate, 'recovery claim candidate', { includeTarget: true });
+      const before = await realDirectoryIdentity(candidate, 'recovery claim candidate');
+      const after = await realDirectoryIdentity(candidate, 'recovery claim candidate');
+      if (!sameIdentity(before, after)) continue;
+      await rm(candidate, { recursive: true, force: true });
+    } catch {
+      // A changed candidate remains visible and causes the final detached-lock
+      // inventory to preserve the outer lock rather than deleting on a guess.
+    }
+  }
+}
+
 async function acquireRecoveryClaim(
   lockRoot,
   packageRoot,
@@ -1480,8 +1499,8 @@ async function acquireRecoveryClaim(
     ...processIdentity
   });
   const claimRoot = path.join(lockRoot, CLAIM_NAME);
-  const temporary = await mkdtemp(path.join(lockRoot, '.recovery-claim-acquire-'));
-  let temporaryOwned = true;
+  let temporary;
+  let temporaryOwned = false;
   const gateContext = {
     lockRoot,
     packageRoot,
@@ -1499,6 +1518,13 @@ async function acquireRecoveryClaim(
   let publishedOwned = false;
   let candidateBinding;
   try {
+    gate = await acquireMutationGate(gateContext);
+    // The mutation gate serializes recovery claim creation.  Once held, it is
+    // safe to remove only exact abandoned candidate names left by a hard kill
+    // before publication; an active creator retains the gate and is skipped.
+    await reconcileInterruptedRecoveryClaimCandidates(lockRoot);
+    temporary = await mkdtemp(path.join(lockRoot, '.recovery-claim-acquire-'));
+    temporaryOwned = true;
     await writeFile(path.join(temporary, CLAIM_FILE), `${JSON.stringify(claim, null, 2)}\n`, { flag: 'wx' });
     await writeFile(
       path.join(temporary, LEASE_FILE),
@@ -1521,7 +1547,6 @@ async function acquireRecoveryClaim(
       rootIdentity: identityRecord(candidateIdentity),
       descendantInventory: await inventoryOwnedTree(temporary)
     };
-    gate = await acquireMutationGate(gateContext);
     const currentOwner = await assertOuterOwner(lockRoot, packageRoot, identity, ownerToken);
     if (
       await processInstanceIsActive(currentOwner, lockRoot, ownerLeaseBinding(currentOwner), {
@@ -1917,7 +1942,10 @@ const RELEASED_LOCK_NAME = /^\.profile-generation-lock\.release-[0-9a-f-]{36}$/u
  * exact inode bindings, and remove a candidate only when the same exhaustive
  * detached-lock inventory used by the original releaser still passes.
  */
-async function resumeReleasedLockCleanup(packageRoot) {
+async function resumeReleasedLockCleanup(
+  packageRoot,
+  { observeProcess = observeGeneratedProfileProcess, isProcessAlive, now = () => Date.now() } = {}
+) {
   const candidates = [];
   for (const entry of await readdir(packageRoot, { withFileTypes: true })) {
     if (!RELEASED_LOCK_NAME.test(entry.name) || !entry.isDirectory() || entry.isSymbolicLink()) continue;
@@ -1939,6 +1967,17 @@ async function resumeReleasedLockCleanup(packageRoot) {
       const hasClaim = await pathExists(claimRoot);
       const claim = hasClaim ? await readClaimRoot(claimRoot) : undefined;
       const claimIdentity = hasClaim ? await realDirectoryIdentity(claimRoot, 'released recovery claim') : undefined;
+      const liveActor = hasClaim ? claim : owner;
+      const liveBinding = hasClaim ? claimLeaseBinding(claim) : ownerLeaseBinding(owner);
+      if (await processInstanceIsActive(liveActor, hasClaim ? claimRoot : lockRoot, liveBinding, {
+        observeProcess,
+        isProcessAlive,
+        now
+      })) {
+        // The releaser still owns this detached lock.  A concurrent invocation
+        // must leave its final inventory and recursive removal to that owner.
+        continue;
+      }
       const context = {
         lockRoot,
         packageRoot,
@@ -2599,7 +2638,7 @@ export async function recoverGeneratedReplacement({
 } = {}) {
   packageRoot = await assertPackageRoot(packageRoot);
   const lockRoot = path.join(packageRoot, LOCK_NAME);
-  await resumeReleasedLockCleanup(packageRoot);
+  await resumeReleasedLockCleanup(packageRoot, { observeProcess, isProcessAlive, now });
   if (!(await pathExists(lockRoot))) return false;
   const identity = await realDirectoryIdentity(lockRoot, 'lock');
   let owner;
