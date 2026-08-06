@@ -8,7 +8,7 @@ import { canonicalJson, moduleSpecifiers, sha256 } from './profile.mjs';
 const SHADCN_NAME = 'shadcn';
 const SHADCN_VERSION = '4.16.1';
 const SHADCN_INTEGRITY = 'sha512-XLFzfNNIUPlUlyheFEzj0H4Vnhi9nI0nl3Nfgg8HYXW1FkUVhVT1X+mgmOUW8aWL5SeG0A+yJIV5fm3Hr9MVkQ==';
-const PROVENANCE_SCHEMA_SHA256 = '90b5356a18bf59926191302422a44aaaa14ab8da44d810edec09612bc08f27d7';
+const PROVENANCE_SCHEMA_SHA256 = 'd402c9716a05eb39a73615c2ebca00f28dfc67bbbba1ea54cf7c859eef43128e';
 const DEFAULT_REGISTRY_ITEM_MAX_BYTES = 256 * 1024;
 const DEFAULT_REGISTRY_AGGREGATE_MAX_BYTES = 4 * 1024 * 1024;
 const DEFAULT_REGISTRY_REQUEST_TIMEOUT_MS = 30_000;
@@ -117,7 +117,7 @@ function resolveRelativeSourcePath(sourcePath, specifier, sourcePaths) {
   assert(candidates.length === 1, `${sourcePath} has an unresolved or ambiguous relative source import: ${specifier}`);
 }
 
-function assertFetchedRegistryClosure(items, registryIds, policy) {
+function assertFetchedRegistryClosure(items, registryIds, policy, expectedSourcePathsById = new Map()) {
   const registryIdSet = new Set(registryIds);
   const sourcePaths = new Set();
   for (const item of items) {
@@ -129,6 +129,14 @@ function assertFetchedRegistryClosure(items, registryIds, policy) {
       );
       assert(!sourcePaths.has(file.path), `Pinned registry source path is duplicated: ${file.path}`);
       sourcePaths.add(file.path);
+    }
+    const expected = expectedSourcePathsById.get(item.name);
+    if (expected) {
+      const actual = item.files.map((file) => file.path).sort();
+      assert(
+        canonicalJson(actual) === canonicalJson(expected),
+        `Pinned registry item ${item.name} source-file inventory differs from the committed profile`
+      );
     }
   }
 
@@ -177,6 +185,7 @@ function assertFetchedRegistryClosure(items, registryIds, policy) {
 }
 
 async function assertCommittedRegistrySnapshots(packageRoot, provenance) {
+  const expectedSourcePathsById = new Map();
   for (const id of provenance.registryIds) {
     const expected = provenance.registrySnapshots[id];
     const raw = await readFile(path.join(packageRoot, 'snapshots', 'raw', `${id}.json`));
@@ -190,7 +199,17 @@ async function assertCommittedRegistrySnapshots(packageRoot, provenance) {
       throw new Error(`Committed raw registry snapshot is not JSON for ${id}`, { cause: error });
     }
     assert(canonical.equals(Buffer.from(canonicalJson(parsed))), `Canonical registry snapshot bytes differ for ${id}`);
+    expectedSourcePathsById.set(
+      id,
+      parsed.files.map((file) => file.path).sort()
+    );
   }
+  const implementationBytes = await readFile(path.join(packageRoot, provenance.normalization.implementation));
+  assert(
+    sha256(implementationBytes) === provenance.normalization.implementationSha256,
+    'Normalization implementation digest differs'
+  );
+  return expectedSourcePathsById;
 }
 
 export async function assertProfileUpdateProvenance({ packageRoot, provenance }) {
@@ -202,7 +221,7 @@ export async function assertProfileUpdateProvenance({ packageRoot, provenance })
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   const validate = ajv.compile(schema);
   assert(validate(provenance), `Profile update provenance is invalid: ${ajv.errorsText(validate.errors)}`);
-  await assertCommittedRegistrySnapshots(packageRoot, provenance);
+  return assertCommittedRegistrySnapshots(packageRoot, provenance);
 }
 
 export async function assertPinnedShadcnToolchain({
@@ -235,6 +254,7 @@ export async function fetchPinnedRegistrySnapshots({
   registry,
   registryIds,
   dependencyPolicy,
+  expectedSourcePathsById,
   fetchImpl = fetch,
   getRegistryItemsImpl,
   resolvedRegistryUrl,
@@ -296,7 +316,7 @@ export async function fetchPinnedRegistrySnapshots({
       `Hosted registry response differs from pinned shadcn CLI intake for ${id}`
     );
   }
-  assertFetchedRegistryClosure(cliItems, registryIds, dependencyPolicy);
+  assertFetchedRegistryClosure(cliItems, registryIds, dependencyPolicy, expectedSourcePathsById);
 
   return snapshots;
 }
@@ -308,7 +328,7 @@ export async function fetchValidatedProfileUpdateSnapshots({
   getRegistryItemsImpl,
   resolvedRegistryUrl
 }) {
-  await assertProfileUpdateProvenance({ packageRoot, provenance });
+  const expectedSourcePathsById = await assertProfileUpdateProvenance({ packageRoot, provenance });
   return fetchPinnedRegistrySnapshots({
     packageRoot,
     registry: provenance.registry,
@@ -317,6 +337,7 @@ export async function fetchValidatedProfileUpdateSnapshots({
       excludedDependencies: provenance.excludedDependencies,
       directProductionDependencies: provenance.directProductionDependencies
     },
+    expectedSourcePathsById,
     fetchImpl,
     getRegistryItemsImpl,
     resolvedRegistryUrl

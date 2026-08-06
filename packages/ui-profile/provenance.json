@@ -45,7 +45,8 @@
   "typescriptMatrix": ["5.3.3", "5.8.3"],
   "normalization": {
     "contractVersion": "react17-classic-jsx-v1",
-    "implementation": "scripts/lib/profile.mjs"
+    "implementation": "scripts/lib/profile.mjs",
+    "implementationSha256": "a08bca7e1d6be67335f22fc44cb6e3fdafb1edfa7810c7fe2b18cd71a669fe8d"
   },
   "registryIds": [
     "button",
