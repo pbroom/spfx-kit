@@ -527,8 +527,8 @@ function assertOwnedTreeInventory(inventory, label) {
   return inventory;
 }
 
-async function assertOwnedTreeInventoryMatches(root, expected, label) {
-  const actual = await inventoryOwnedTree(root, { ignoreRootMarker: true });
+async function assertOwnedTreeInventoryMatches(root, expected, label, { ignoreRootMarker = true } = {}) {
+  const actual = await inventoryOwnedTree(root, { ignoreRootMarker });
   if (actual.length !== expected.length) {
     throw new Error(`Generated profile ${label} descendant inventory changed`);
   }
@@ -537,6 +537,66 @@ async function assertOwnedTreeInventoryMatches(root, expected, label) {
       throw new Error(`Generated profile ${label} descendant inventory changed at ${actual[index].relativePath}`);
     }
   }
+}
+
+export async function captureGeneratedProfileTemporaryCandidate(root, previousBinding, label = 'temporary candidate') {
+  const before = await realDirectoryIdentity(root, label);
+  if (previousBinding && !sameIdentityRecord(before, previousBinding.rootIdentity)) {
+    throw new Error(`Generated profile ${label} identity changed`);
+  }
+  const descendantInventory = await inventoryOwnedTree(root);
+  const after = await realDirectoryIdentity(root, label);
+  if (!sameIdentity(before, after) || (previousBinding && !sameIdentityRecord(after, previousBinding.rootIdentity))) {
+    throw new Error(`Generated profile ${label} identity changed while inventorying`);
+  }
+  return {
+    rootIdentity: previousBinding?.rootIdentity ?? identityRecord(after),
+    descendantInventory
+  };
+}
+
+export async function removeGeneratedProfileTemporaryCandidate(root, binding, label = 'temporary candidate') {
+  try {
+    assertIdentityRecord(binding?.rootIdentity, `${label} root`);
+    assertOwnedTreeInventory(binding?.descendantInventory, label);
+    const before = await realDirectoryIdentity(root, label);
+    if (!sameIdentityRecord(before, binding.rootIdentity)) {
+      throw new Error(`Generated profile ${label} identity changed`);
+    }
+    await assertOwnedTreeInventoryMatches(root, binding.descendantInventory, label, { ignoreRootMarker: false });
+    const after = await realDirectoryIdentity(root, label);
+    if (!sameIdentityRecord(after, binding.rootIdentity)) {
+      throw new Error(`Generated profile ${label} identity changed after inventory validation`);
+    }
+  } catch (error) {
+    throw new Error(`Generated profile ${label} recursive removal skipped at ${root}`, { cause: error });
+  }
+  try {
+    await rm(root, { recursive: true, force: true });
+  } catch (error) {
+    throw new Error(`Generated profile ${label} recursive removal failed at ${root}`, { cause: error });
+  }
+}
+
+async function finishGeneratedProfileTemporaryCandidate(root, binding, label, actionError) {
+  let cleanupError;
+  if (!binding) {
+    cleanupError = new Error(`Generated profile ${label} has no authoritative binding; recursive removal skipped at ${root}`);
+  } else {
+    try {
+      await removeGeneratedProfileTemporaryCandidate(root, binding, label);
+    } catch (error) {
+      cleanupError = error;
+    }
+  }
+  if (!cleanupError) return;
+  if (actionError) {
+    throw new AggregateError(
+      [actionError, cleanupError],
+      `Generated profile ${label} creation failed; temporary candidate preserved`
+    );
+  }
+  throw cleanupError;
 }
 
 async function assertPathDigest(target, expected, label) {
@@ -958,8 +1018,20 @@ async function acquireMutationGate(context) {
     const gate = createMutationGateRecord(context, actionToken);
     const temporary = await mkdtemp(path.join(context.lockRoot, '.mutation-gate-acquire-'));
     let temporaryOwned = true;
+    let candidateBinding;
+    let actionError;
     try {
+      candidateBinding = await captureGeneratedProfileTemporaryCandidate(
+        temporary,
+        undefined,
+        'mutation gate candidate'
+      );
       await writeFile(path.join(temporary, MUTATION_GATE_FILE), `${JSON.stringify(gate, null, 2)}\n`, { flag: 'wx' });
+      candidateBinding = await captureGeneratedProfileTemporaryCandidate(
+        temporary,
+        candidateBinding,
+        'mutation gate candidate'
+      );
       try {
         await rename(temporary, gateRoot);
         temporaryOwned = false;
@@ -972,8 +1044,18 @@ async function acquireMutationGate(context) {
       } catch (error) {
         if (!isConflict(error)) throw error;
       }
+    } catch (error) {
+      actionError = error;
+      throw error;
     } finally {
-      if (temporaryOwned) await rm(temporary, { recursive: true, force: true });
+      if (temporaryOwned) {
+        await finishGeneratedProfileTemporaryCandidate(
+          temporary,
+          candidateBinding,
+          'mutation gate candidate',
+          actionError
+        );
+      }
     }
 
     const before = await realDirectoryIdentity(gateRoot, 'mutation gate');
@@ -1162,12 +1244,16 @@ async function acquireLock(
   operation = assertOperation(operation);
   const temporary = await mkdtemp(`${lockRoot}.acquire-`);
   let temporaryOwned = true;
+  let candidateBinding;
+  let actionError;
   let initialGate;
   let owner;
   try {
+    candidateBinding = await captureGeneratedProfileTemporaryCandidate(temporary, undefined, 'lock candidate');
     const temporaryIdentity = await realDirectoryIdentity(temporary, 'lock candidate');
     const retainedBindingRoot = path.join(temporary, RETAINED_BINDING_ROOT);
     await mkdir(retainedBindingRoot);
+    candidateBinding = await captureGeneratedProfileTemporaryCandidate(temporary, candidateBinding, 'lock candidate');
     const retainedBindingRootIdentity = await realDirectoryIdentity(retainedBindingRoot, 'retained binding root');
     owner = assertOwner(
       {
@@ -1182,6 +1268,7 @@ async function acquireLock(
       lockRoot
     );
     await writeFile(path.join(temporary, OWNER_FILE), `${JSON.stringify(owner, null, 2)}\n`, { flag: 'wx' });
+    candidateBinding = await captureGeneratedProfileTemporaryCandidate(temporary, candidateBinding, 'lock candidate');
     await writeFile(
       path.join(temporary, LEASE_FILE),
       `${JSON.stringify(
@@ -1197,7 +1284,9 @@ async function acquireLock(
       )}\n`,
       { flag: 'wx' }
     );
+    candidateBinding = await captureGeneratedProfileTemporaryCandidate(temporary, candidateBinding, 'lock candidate');
     await createInitialDiscardRoot(temporary, owner, temporaryIdentity);
+    candidateBinding = await captureGeneratedProfileTemporaryCandidate(temporary, candidateBinding, 'lock candidate');
     initialGate = await createInitialMutationGate(temporary, {
       actorScope: 'owner',
       actorRecord: owner,
@@ -1207,6 +1296,7 @@ async function acquireLock(
       now,
       leaseMs
     });
+    candidateBinding = await captureGeneratedProfileTemporaryCandidate(temporary, candidateBinding, 'lock candidate');
     try {
       await rename(temporary, lockRoot);
       temporaryOwned = false;
@@ -1220,8 +1310,13 @@ async function acquireLock(
       }
       throw new Error(`Another generated profile session owns ${lockRoot} (pid ${existing.pid}, started ${existing.startedAt})`);
     }
+  } catch (error) {
+    actionError = error;
+    throw error;
   } finally {
-    if (temporaryOwned) await rm(temporary, { recursive: true, force: true });
+    if (temporaryOwned) {
+      await finishGeneratedProfileTemporaryCandidate(temporary, candidateBinding, 'lock candidate', actionError);
+    }
   }
   const identity = await realDirectoryIdentity(lockRoot, 'lock');
   return {
@@ -1937,10 +2032,22 @@ async function readCleanupBinding(bindingRoot, transaction, kind) {
 async function publishCleanupBinding(bindingRoot, transaction, kind, directoryIdentity, descendantInventory) {
   const temporary = await mkdtemp(`${bindingRoot}.acquire-`);
   let temporaryOwned = true;
+  let candidateBinding;
+  let actionError;
   try {
+    candidateBinding = await captureGeneratedProfileTemporaryCandidate(
+      temporary,
+      undefined,
+      `${kind} cleanup binding candidate`
+    );
     const bindingRootIdentity = await realDirectoryIdentity(temporary, `${kind} cleanup binding candidate`);
     const bindingFile = path.join(temporary, CLEANUP_BINDING_FILE);
     await writeFile(bindingFile, '', { flag: 'wx' });
+    candidateBinding = await captureGeneratedProfileTemporaryCandidate(
+      temporary,
+      candidateBinding,
+      `${kind} cleanup binding candidate`
+    );
     const bindingFileIdentity = await lstat(bindingFile);
     const binding = assertCleanupBinding(
       {
@@ -1958,14 +2065,29 @@ async function publishCleanupBinding(bindingRoot, transaction, kind, directoryId
       kind
     );
     await writeFile(bindingFile, `${JSON.stringify(binding, null, 2)}\n`);
+    candidateBinding = await captureGeneratedProfileTemporaryCandidate(
+      temporary,
+      candidateBinding,
+      `${kind} cleanup binding candidate`
+    );
     try {
       await rename(temporary, bindingRoot);
       temporaryOwned = false;
     } catch (error) {
       if (!isConflict(error)) throw error;
     }
+  } catch (error) {
+    actionError = error;
+    throw error;
   } finally {
-    if (temporaryOwned) await rm(temporary, { recursive: true, force: true });
+    if (temporaryOwned) {
+      await finishGeneratedProfileTemporaryCandidate(
+        temporary,
+        candidateBinding,
+        `${kind} cleanup binding candidate`,
+        actionError
+      );
+    }
   }
   return readCleanupBinding(bindingRoot, transaction, kind);
 }
