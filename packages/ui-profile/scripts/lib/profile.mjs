@@ -147,7 +147,16 @@ function moduleSpecifierNodes(sourceFile) {
 }
 
 export function moduleSpecifiers(source, label) {
-  return moduleSpecifierNodes(parsedSource(source, label)).map((specifier) => specifier.text);
+  const sourceFile = parsedSource(source, label);
+  function rejectComputedDependency(node) {
+    const dependency = dependencyCall(node);
+    if (dependency?.kind === 'computed') {
+      throw new Error(`${label}: non-literal dynamic dependency is not accepted`);
+    }
+    ts.forEachChild(node, rejectComputedDependency);
+  }
+  rejectComputedDependency(sourceFile);
+  return moduleSpecifierNodes(sourceFile).map((specifier) => specifier.text);
 }
 
 function rewriteModuleSpecifiers(source, label, rewrite) {

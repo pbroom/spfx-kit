@@ -227,7 +227,14 @@ describe('pinned shadcn network intake', () => {
         ]
       },
       'requires source outside the fetched registry closure: input'
-    ]
+    ],
+    ...['import(name)', 'require(name)', 'require.resolve(name)', 'require()', 'require("react", "extra")'].map((content) => [
+      `computed dependency call ${content}`,
+      {
+        files: [{ path: 'registry/base-nova/ui/button.tsx', type: 'registry:ui', content }]
+      },
+      'non-literal dynamic dependency is not accepted'
+    ])
   ])('rejects a %s from semantically matching hosted and CLI items', async (_label, patch, expectedMessage) => {
     const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
     const cliItem = { name: 'button', type: 'registry:ui', ...patch };
