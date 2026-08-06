@@ -86,7 +86,17 @@ function relativeImport(fromOutputPath, targetOutputPath) {
 }
 
 function hasJsx(source) {
-  return /<([A-Z][A-Za-z0-9.]*|[a-z][a-z0-9-]*)(?:\s|\/?>)/.test(source);
+  const sourceFile = ts.createSourceFile('jsx-detection.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let found = false;
+  const inspect = (node) => {
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, inspect);
+  };
+  inspect(sourceFile);
+  return found;
 }
 
 function hasReactBinding(source) {
@@ -193,14 +203,70 @@ function findMatching(source, openIndex, openCharacter, closeCharacter) {
 }
 
 function exportedNames(source) {
+  const sourceFile = ts.createSourceFile('public-exports.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const names = new Set();
-  for (const match of source.matchAll(/export\s*{([^}]+)}/g)) {
-    for (const entry of match[1].split(',')) {
-      const name = entry.trim().split(/\s+as\s+/)[0];
-      if (/^[A-Za-z_$][\w$]*$/.test(name)) names.add(name);
+  for (const statement of sourceFile.statements) {
+    if (
+      (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement) || ts.isVariableStatement(statement)) &&
+      statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+    ) {
+      if (ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name)) names.add(declaration.name.text);
+        }
+      } else if (statement.name) {
+        names.add(statement.name.text);
+      }
+    }
+    if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+      for (const element of statement.exportClause.elements) {
+        names.add((element.propertyName ?? element.name).text);
+      }
     }
   }
   return names;
+}
+
+function rewriteAppOwnedModuleSpecifiers(source, outputPath) {
+  const sourceFile = ts.createSourceFile('registry-source.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const replacements = [];
+  const rewrittenSpecifier = (specifier) => {
+    if (specifier === '@/registry/base-nova/lib/utils') {
+      return relativeImport(outputPath, 'normalized/src/lib/utils.ts');
+    }
+    const component = /^@\/registry\/base-nova\/ui\/([a-z0-9-]+)$/u.exec(specifier);
+    return component ? relativeImport(outputPath, `normalized/src/components/ui/${component[1]}.tsx`) : null;
+  };
+  const record = (specifier) => {
+    if (!specifier || !ts.isStringLiteralLike(specifier)) return;
+    const replacement = rewrittenSpecifier(specifier.text);
+    if (replacement) replacements.push({ start: specifier.getStart(sourceFile) + 1, end: specifier.getEnd() - 1, replacement });
+  };
+  const inspect = (node) => {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) record(node.moduleSpecifier);
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) record(node.arguments[0]);
+    ts.forEachChild(node, inspect);
+  };
+  inspect(sourceFile);
+  let normalized = source;
+  for (const replacement of replacements.sort((left, right) => right.start - left.start)) {
+    normalized = `${normalized.slice(0, replacement.start)}${replacement.replacement}${normalized.slice(replacement.end)}`;
+  }
+  return { source: normalized, transformed: replacements.length > 0 };
+}
+
+function hasUnresolvedAppOwnedModuleSpecifier(source) {
+  const sourceFile = ts.createSourceFile('registry-source.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let unresolved = false;
+  const inspect = (node) => {
+    const moduleSpecifier =
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node) ? node.moduleSpecifier : undefined) ??
+      (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword ? node.arguments[0] : undefined);
+    if (moduleSpecifier && ts.isStringLiteralLike(moduleSpecifier) && moduleSpecifier.text.startsWith('@/')) unresolved = true;
+    ts.forEachChild(node, inspect);
+  };
+  inspect(sourceFile);
+  return unresolved;
 }
 
 const NON_REF_STRUCTURAL_TARGETS = new Set([
@@ -278,6 +344,8 @@ function normalizePublicForwardRefs(source) {
   let transformed = false;
   for (const candidate of candidates.reverse()) {
     const functionStart = candidate.start;
+    const defaultExport = /export\s+default\s+$/.exec(normalized.slice(0, functionStart));
+    const declarationStart = defaultExport ? defaultExport.index : functionStart;
     const parameterOpen = normalized.indexOf('(', functionStart);
     const parameterClose = findMatching(normalized, parameterOpen, '(', ')');
     if (parameterClose === -1) throw new Error(`Unable to parse ${candidate.name} parameters`);
@@ -316,8 +384,10 @@ function normalizePublicForwardRefs(source) {
       }
     }
     const elementType = refElementType(targetName, propsType);
-    const replacement = `const ${candidate.name} = React.forwardRef<\n  ${elementType},\n  React.PropsWithoutRef<${propsType}>\n>(function ${candidate.name}(${destructuring}, ref) {${body}\n})`;
-    normalized = `${normalized.slice(0, functionStart)}${replacement}${normalized.slice(bodyClose + 1)}`;
+    const replacement =
+      `const ${candidate.name} = React.forwardRef<\n  ${elementType},\n  React.PropsWithoutRef<${propsType}>\n>(function ${candidate.name}(${destructuring}, ref) {${body}\n})` +
+      (defaultExport ? `\nexport default ${candidate.name}` : '');
+    normalized = `${normalized.slice(0, declarationStart)}${replacement}${normalized.slice(bodyClose + 1)}`;
     transformed = true;
   }
   return { source: normalized, transformed };
@@ -352,22 +422,9 @@ export function normalizeRegistrySource({ source, registrySourcePath }) {
     transformations.push('pin-base-ui-combobox-subpath');
   }
 
-  const aliases = [
-    [/(\bfrom\s*|\bimport\s*\(\s*)(["'])@\/registry\/base-nova\/lib\/utils\2/g, `$1$2${relativeImport(outputPath, 'normalized/src/lib/utils.ts')}$2`],
-    [
-      /(\bfrom\s*|\bimport\s*\(\s*)(["'])@\/registry\/base-nova\/ui\/([a-z0-9-]+)\2/g,
-      (_match, prefix, quote, component) =>
-        `${prefix}${quote}${relativeImport(outputPath, `normalized/src/components/ui/${component}.tsx`)}${quote}`
-    ]
-  ];
-
-  for (const [pattern, replacement] of aliases) {
-    const next = normalized.replace(pattern, replacement);
-    if (next !== normalized) {
-      transformations.push('rewrite-app-owned-aliases');
-      normalized = next;
-    }
-  }
+  const aliasResult = rewriteAppOwnedModuleSpecifiers(normalized, outputPath);
+  if (aliasResult.transformed) transformations.push('rewrite-app-owned-aliases');
+  normalized = aliasResult.source;
 
   const iconResult = resolveIconPlaceholders(normalized);
   if (iconResult.transformed) transformations.push('resolve-lucide-icon-placeholders');
@@ -815,7 +872,7 @@ function assertReact17AstSource(source, label) {
 
 export function assertReact17Source(source, label) {
   assertReact17AstSource(source, label);
-  if (/@\/|<IconPlaceholder\b|\bIcons\./.test(source)) {
+  if (hasUnresolvedAppOwnedModuleSpecifier(source) || /<IconPlaceholder\b|\bIcons\./.test(source)) {
     throw new Error(`${label}: unresolved alias or icon placeholder remains after normalization`);
   }
   if (label.endsWith('.tsx') && hasJsx(source) && !hasReactBinding(source)) {

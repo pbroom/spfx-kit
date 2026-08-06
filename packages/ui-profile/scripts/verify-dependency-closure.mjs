@@ -9,8 +9,10 @@ import { canonicalJson } from './lib/profile.mjs';
 const execFileAsync = promisify(execFile);
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const repositoryRoot = path.resolve(packageRoot, '..', '..');
 const closure = JSON.parse(await readFile(path.join(packageRoot, 'dependency-closure.json'), 'utf8'));
 const manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
+const rootManifest = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -23,7 +25,8 @@ function assertExact(actual, expected, message) {
 assert(closure.schemaVersion === 1 && closure.profileId === 'spfx-react17-base-nova-v1', 'Closure identity differs');
 assert(closure.policy.allowForcedPeerResolution === false, 'Forced peer resolution must remain disabled');
 assert(closure.policy.allowLegacyPeerDeps === false, 'Legacy peer resolution must remain disabled');
-assert(!manifest.overrides && !manifest.resolutions, 'Package manifest contains forced dependency resolution');
+assert(!manifest.overrides && !manifest.resolutions, 'UI profile manifest contains forced dependency resolution');
+assert(!rootManifest.overrides && !rootManifest.resolutions, 'Repository root manifest contains forced dependency resolution');
 assert(manifest.dependencies === undefined, 'Tooling-only profile must not declare production dependencies');
 assert(
   closure.productionRoots.every((dependency) => manifest.devDependencies[dependency]),
