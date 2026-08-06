@@ -13,19 +13,18 @@ export function normalizeMockCdnLabOrigin(value) {
   try {
     url = new URL(String(value));
   } catch {
-    throw new Error(`Mock CDN Lab origin must be a valid loopback HTTP origin: ${value}`);
+    throw new Error(`Mock CDN Lab origin must be a valid HTTP(S) origin: ${value}`);
   }
   if (
-    url.protocol !== 'http:' ||
-    url.hostname !== '127.0.0.1' ||
-    !url.port ||
+    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    !url.hostname ||
     url.username ||
     url.password ||
     url.pathname !== '/' ||
     url.search ||
     url.hash
   ) {
-    throw new Error(`Mock CDN Lab origin must be a credential-free loopback HTTP origin with no path: ${value}`);
+    throw new Error(`Mock CDN Lab origin must be a credential-free HTTP(S) origin with no path: ${value}`);
   }
   return url.origin;
 }

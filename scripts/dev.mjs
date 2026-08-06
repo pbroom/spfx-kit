@@ -23,7 +23,7 @@ export function resolveDevConfig(environment = process.env) {
 
   const labPort = normalizePort(environment.SPFX_LAB_PORT || DEFAULT_LAB_PORT, 'SPFX_LAB_PORT');
   const labOrigin = normalizeMockCdnLabOrigin(environment.SPFX_KIT_MOCK_CDN_LAB_ORIGIN || `http://127.0.0.1:${labPort}`);
-  if (Number(new URL(labOrigin).port) !== labPort) {
+  if (new URL(labOrigin).hostname === '127.0.0.1' && Number(new URL(labOrigin).port) !== labPort) {
     throw new Error('SPFX_KIT_MOCK_CDN_LAB_ORIGIN must use the configured SPFX_LAB_PORT.');
   }
 
@@ -144,7 +144,7 @@ export async function stopServices(children, signal) {
   const cleanupErrors = [];
   for (const child of children) {
     try {
-      signalService(child, signal);
+      await signalService(child, signal);
     } catch (error) {
       if (!error || typeof error !== 'object' || error.code !== 'ESRCH') {
         cleanupErrors.push(error);
@@ -156,7 +156,7 @@ export async function stopServices(children, signal) {
   const stalled = children.filter((_child, index) => !stopped[index]);
   for (const child of stalled) {
     try {
-      signalService(child, 'SIGKILL');
+      await signalService(child, 'SIGKILL');
     } catch (error) {
       if (!error || typeof error !== 'object' || error.code !== 'ESRCH') {
         cleanupErrors.push(error);
@@ -175,15 +175,33 @@ export async function stopServices(children, signal) {
   }
 }
 
-function signalService(child, signal) {
+async function signalService(child, signal) {
   if (child.exitCode !== null || child.signalCode !== null || !Number.isInteger(child.pid)) {
     return;
   }
   if (process.platform === 'win32') {
-    child.kill(signal);
+    await terminateWindowsProcessTree(child.pid, signal === 'SIGKILL');
   } else {
     process.kill(-child.pid, signal);
   }
+}
+
+export function getWindowsTaskkillArgs(pid, force) {
+  return ['/pid', String(pid), '/t', ...(force ? ['/f'] : [])];
+}
+
+async function terminateWindowsProcessTree(pid, force) {
+  await new Promise((resolve, reject) => {
+    const taskkill = spawn('taskkill', getWindowsTaskkillArgs(pid, force), { stdio: 'ignore', windowsHide: true });
+    taskkill.once('error', reject);
+    taskkill.once('exit', (code) => {
+      if (code === 0 || code === 128) {
+        resolve();
+        return;
+      }
+      reject(new Error(`taskkill failed while stopping development service tree (exit ${code ?? 'unknown'}).`));
+    });
+  });
 }
 
 function waitForStoppedService(child, timeoutMs) {

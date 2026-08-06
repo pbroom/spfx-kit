@@ -5,7 +5,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
-import { assertPortAvailable, getShutdownSignals, resolveDevConfig, stopServices, waitForService } from '../scripts/dev.mjs';
+import {
+  assertPortAvailable,
+  getShutdownSignals,
+  getWindowsTaskkillArgs,
+  resolveDevConfig,
+  stopServices,
+  waitForService
+} from '../scripts/dev.mjs';
 
 const servers: ReturnType<typeof createServer>[] = [];
 const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -29,7 +36,13 @@ describe('SPFx Kit development launcher', () => {
     const turboConfig = JSON.parse(readFileSync(path.join(workspaceRoot, 'turbo.json'), 'utf8'));
 
     expect(turboConfig.tasks.dev.env).toEqual(
-      expect.arrayContaining(['SPFX_LAB_HOST', 'SPFX_LAB_PORT', 'SPFX_KIT_MOCK_CDN_LAB_ORIGIN', 'SPFX_KIT_MOCK_CDN_ORIGIN'])
+      expect.arrayContaining([
+        'SPFX_LAB_HOST',
+        'SPFX_LAB_PORT',
+        'SPFX_KIT_MOCK_CDN_LAB_ORIGIN',
+        'SPFX_KIT_MOCK_CDN_ORIGIN',
+        'SPFX_KIT_MOCK_CDN_ROOT'
+      ])
     );
   });
 
@@ -50,6 +63,24 @@ describe('SPFx Kit development launcher', () => {
       labPort: 5190,
       cdnOrigin: 'http://127.0.0.1:5174'
     });
+  });
+
+  it('accepts an explicit externally visible HTTPS Lab origin for cloud previews', () => {
+    expect(
+      resolveDevConfig({
+        SPFX_LAB_HOST: '0.0.0.0',
+        SPFX_KIT_MOCK_CDN_LAB_ORIGIN: 'https://preview.example.test'
+      })
+    ).toMatchObject({
+      labHost: '0.0.0.0',
+      labOrigin: 'https://preview.example.test',
+      labPort: 5173
+    });
+  });
+
+  it('uses taskkill tree termination arguments on Windows', () => {
+    expect(getWindowsTaskkillArgs(1234, false)).toEqual(['/pid', '1234', '/t']);
+    expect(getWindowsTaskkillArgs(1234, true)).toEqual(['/pid', '1234', '/t', '/f']);
   });
 
   it('rejects overlapping or inconsistent service configuration', () => {
