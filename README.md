@@ -239,6 +239,7 @@ adapter so CDN mode can select the matching packaged component unambiguously.
   `npm run test:e2e`.
 - [`docs/toolchain.md`](docs/toolchain.md) - the Heft, Gulp compatibility, app-boundary, and SPFx
   CLI decision record.
+- [`docs/shadcn-migration-roadmap.md`](docs/shadcn-migration-roadmap.md) - the cross-repository React 17 UI migration roadmap, rules, CDN foundations, and evidence tracker.
 - `.spfx-kit/apps/<slug>-spfx` - ignored local SPFx apps created or imported
   on your machine.
 
