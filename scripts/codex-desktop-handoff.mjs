@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { findingPriority } from './codex-review-priority.mjs';
 
 export const CODEX_REVIEW_ACTOR = 'chatgpt-codex-connector';
 export const CODEX_REVIEW_ACTOR_ID = 199175422;
@@ -13,9 +14,7 @@ export function parseRepository(value) {
 }
 
 export function priority(body) {
-  return String(body || '')
-    .match(/\[P([0-3])\]/i)?.[0]
-    ?.toUpperCase();
+  return findingPriority(body);
 }
 
 export function currentFindings(threads, reviewId, headSha) {

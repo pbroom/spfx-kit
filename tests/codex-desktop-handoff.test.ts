@@ -1,5 +1,13 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CODEX_REVIEW_ACTOR_ID, currentFindings, parseRepository, validateHandoff } from '../scripts/codex-desktop-handoff.mjs';
+import {
+  CODEX_REVIEW_ACTOR_ID,
+  currentFindings,
+  parseRepository,
+  priority,
+  validateHandoff
+} from '../scripts/codex-desktop-handoff.mjs';
 
 const head = 'a'.repeat(40);
 const repository = parseRepository('pbroom/spfx-kit');
@@ -37,6 +45,17 @@ const threads = [
 ];
 
 describe('desktop Codex remediation handoff', () => {
+  it('accepts the native Codex image-badge priority from the observed review fixture', async () => {
+    const fixturePath = path.join(import.meta.dirname, 'fixtures', 'codex-review-loop', 'pr87-review-threads.json');
+    const [thread] = JSON.parse(await readFile(fixturePath, 'utf8'));
+    const badgeBody = thread.comments.nodes[0].body;
+
+    expect(priority(badgeBody)).toBe('P2');
+    expect(currentFindings([thread], 4867398051, '479d10ce6d3ddd187f20ac59e44de4d37fe8a72b')).toEqual([
+      expect.objectContaining({ priority: 'P2', threadId: 'PRRT_kwDOTKm-F86WvxLA' })
+    ]);
+  });
+
   it('emits only a current exact-head trusted finding', () => {
     const findings = currentFindings(threads, 4, head);
     expect(validateHandoff({ repository, pullRequest, review, findings, expectedHead: head })).toMatchObject({
