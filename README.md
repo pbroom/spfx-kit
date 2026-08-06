@@ -154,10 +154,11 @@ reserved namespace is not evidence that npm packages or shared resources are
 already CDN-hosted.
 
 The Lab administration API is development-only and fail-closed: requests must
-arrive over the local Lab origin from loopback, and writes also require the
-Lab's explicit same-origin intent header. Invalid, missing, ambiguous,
-symbolic-link, traversal, immutable-conflict, or checksum-mismatched sources are
-rejected without disclosing arbitrary local paths.
+arrive from the loopback Lab connection with the configured browser-facing
+`Host` preserved, and writes also require the Lab's explicit same-origin intent
+header. Invalid, missing, ambiguous, symbolic-link, traversal,
+immutable-conflict, or checksum-mismatched sources are rejected without
+disclosing arbitrary local paths.
 
 #### GitHub staging-source intake
 
