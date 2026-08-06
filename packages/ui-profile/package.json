@@ -5,9 +5,13 @@
   "type": "module",
   "description": "Offline, non-runtime source profile for the React 17 Base Nova compatibility spike.",
   "scripts": {
+    "profile:update:network": "node ./scripts/update-profile.mjs --allow-network",
+    "profile:regenerate": "node ./scripts/regenerate-profile.mjs",
+    "profile:verify": "node ./scripts/verify-profile.mjs",
     "profile:verify:closure": "node ./scripts/verify-dependency-closure.mjs",
     "profile:verify:base-ui": "node ./scripts/transform-base-ui-select-value.mjs --verify-fixtures && node ./scripts/transform-base-ui-popup-lifecycle.mjs --verify-fixtures",
-    "profile:prepare:base-ui": "node ./scripts/prepare-base-ui.mjs"
+    "profile:prepare:base-ui": "node ./scripts/prepare-base-ui.mjs",
+    "verify": "npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure"
   },
   "devDependencies": {
     "@base-ui/react": "1.6.0",
