@@ -1,0 +1,132 @@
+[
+  {
+    "name": "react-dom client import",
+    "source": "import { createRoot } from \"react-dom/client\"\n",
+    "message": "react-dom/client"
+  },
+  {
+    "name": "react-dom client require",
+    "source": "const client = require(\"react-dom/client\")\n",
+    "message": "react-dom/client"
+  },
+  {
+    "name": "automatic JSX runtime import",
+    "source": "import { jsx } from \"react/jsx-runtime\"\n",
+    "message": "automatic JSX runtime"
+  },
+  {
+    "name": "automatic JSX runtime output",
+    "source": "export const Example = _jsx(\"div\", {})\n",
+    "message": "automatic JSX runtime"
+  },
+  {
+    "name": "automatic JSX development runtime output",
+    "source": "export const Example = _jsxDEV(\"div\", {}, undefined, false, undefined, this)\n",
+    "message": "automatic JSX runtime"
+  },
+  {
+    "name": "React useId namespace API",
+    "source": "import * as React from \"react\"\nexport const id = React.useId()\n",
+    "message": "namespace API"
+  },
+  {
+    "name": "React use namespace API",
+    "source": "import * as React from \"react\"\nexport const value = React.use(resource)\n",
+    "message": "namespace API"
+  },
+  {
+    "name": "named transition API",
+    "source": "import { useTransition as usePending } from \"react\"\n",
+    "message": "useTransition"
+  },
+  {
+    "name": "named deferred value API",
+    "source": "import { useDeferredValue } from \"react\"\n",
+    "message": "useDeferredValue"
+  },
+  {
+    "name": "named insertion effect API",
+    "source": "import { useInsertionEffect } from \"react\"\n",
+    "message": "useInsertionEffect"
+  },
+  {
+    "name": "named sync external store API",
+    "source": "import { useSyncExternalStore } from \"react\"\n",
+    "message": "useSyncExternalStore"
+  },
+  {
+    "name": "named startTransition API",
+    "source": "import { startTransition as beginTransition } from \"react\"\n",
+    "message": "startTransition"
+  },
+  {
+    "name": "React startTransition namespace API",
+    "source": "import * as React from \"react\"\nReact.startTransition(() => {})\n",
+    "message": "namespace API"
+  },
+  {
+    "name": "ReactDOM namespace createRoot API",
+    "source": "import * as DOMClient from \"react-dom\"\nDOMClient.createRoot(host)\n",
+    "message": "namespace API"
+  },
+  {
+    "name": "ReactDOM namespace hydrateRoot API",
+    "source": "import * as DOMClient from \"react-dom\"\nDOMClient.hydrateRoot(host, app)\n",
+    "message": "namespace API"
+  },
+  {
+    "name": "ReactDOM default createRoot API",
+    "source": "import DOMClient from \"react-dom\"\nDOMClient.createRoot(host)\n",
+    "message": "namespace API"
+  },
+  {
+    "name": "ReactDOM default hydrateRoot API",
+    "source": "import DOMClient from \"react-dom\"\nDOMClient.hydrateRoot(host, app)\n",
+    "message": "namespace API"
+  },
+  {
+    "name": "named React 19 action API",
+    "source": "import { useActionState } from \"react\"\n",
+    "message": "useActionState"
+  },
+  {
+    "name": "named React 19 optimistic API",
+    "source": "import { useOptimistic } from \"react\"\n",
+    "message": "useOptimistic"
+  },
+  {
+    "name": "named React 19 form state API",
+    "source": "import { useFormState } from \"react-dom\"\n",
+    "message": "useFormState"
+  },
+  {
+    "name": "named React 19 form API",
+    "source": "import { useFormStatus } from \"react-dom\"\n",
+    "message": "useFormStatus"
+  },
+  {
+    "name": "named ReactDOM request form reset API",
+    "source": "import { requestFormReset } from \"react-dom\"\n",
+    "message": "requestFormReset"
+  },
+  {
+    "name": "unresolved registry alias",
+    "source": "import { cn } from \"@/registry/base-nova/lib/utils\"\n",
+    "message": "unresolved alias or icon placeholder"
+  },
+  {
+    "name": "unresolved icon element",
+    "source": "import * as React from \"react\"\nexport const Icon = () => <IconPlaceholder />\n",
+    "message": "unresolved alias or icon placeholder"
+  },
+  {
+    "name": "unresolved icon namespace",
+    "source": "export const Icon = Icons.Search\n",
+    "message": "unresolved alias or icon placeholder"
+  },
+  {
+    "name": "unconverted public ref wrapper",
+    "source": "import * as React from \"react\"\nimport { Trigger as TriggerPrimitive } from \"@base-ui/react/trigger\"\nfunction Trigger({ ...props }: TriggerPrimitive.Props) { return <TriggerPrimitive {...props} /> }\nexport { Trigger }\n",
+    "message": "public ref-bearing wrapper Trigger is not normalized with React.forwardRef"
+  }
+]
