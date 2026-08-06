@@ -23,6 +23,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   captureGeneratedProfileTemporaryCandidate,
   createGeneratedProfileStaging,
+  generatedProfileIdentityRecord,
   observeGeneratedProfileProcess,
   recoverGeneratedReplacement,
   removeGeneratedProfileTemporaryCandidate,
@@ -381,6 +382,16 @@ describe('generated profile process observation', () => {
     failingTick();
     await expect(failing.stopAndDrain()).rejects.toBe(failure);
     await expect(failing.assertHealthy()).rejects.toBe(failure);
+  });
+});
+
+describe('generated profile filesystem identity fencing', () => {
+  it('serializes large filesystem identities without Number rounding', () => {
+    expect(generatedProfileIdentityRecord({ dev: 18_446_744_073_709_551_615n, ino: 9_007_199_254_740_993n })).toEqual({
+      dev: '18446744073709551615',
+      ino: '9007199254740993'
+    });
+    expect(() => generatedProfileIdentityRecord({ dev: 1, ino: 2 })).toThrow('must use bigint');
   });
 });
 
@@ -928,6 +939,36 @@ describe('generated profile full-command transaction', () => {
     expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
   });
 
+  it('rejects a symlinked staging ancestor before a regenerate can move external content', async () => {
+    const { root, packageRoot } = await fixture();
+    const external = path.join(root, 'external-staging');
+    await makeCollection(external, 'external');
+    let failure: unknown;
+
+    try {
+      await withGeneratedProfileSession({ packageRoot, operation: 'regenerate' }, async (generationSession: unknown) => {
+        const stagingRoot = await createGeneratedProfileStaging(generationSession);
+        await symlink(path.join(external, 'snapshots'), path.join(stagingRoot, 'snapshots'), 'dir');
+        await mkdir(path.join(stagingRoot, 'normalized'), { recursive: true });
+        await writeFile(path.join(stagingRoot, 'normalized', 'version.txt'), 'new');
+        await writeFile(path.join(stagingRoot, 'profile.json'), JSON.stringify({ version: 'new' }) + '\n');
+        await replaceGeneratedPaths({
+          packageRoot,
+          stagingRoot,
+          generatedPaths: ['snapshots/canonical', 'normalized', 'profile.json'],
+          generationSession
+        });
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect((failure as AggregateError).errors.some((error) => String(error).includes('symlinked ancestor'))).toBe(true);
+    expect(await readFile(path.join(external, 'snapshots', 'canonical', 'version.txt'), 'utf8')).toBe('external');
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+  });
+
   it('canonicalizes differently cased package roots on case-insensitive filesystems', async ({ skip }) => {
     const { packageRoot, token } = await fixture();
     const letter = packageRoot.search(/[a-z]/u);
@@ -995,6 +1036,35 @@ describe('generated profile full-command transaction', () => {
     await expect(readFile(changed, 'utf8')).resolves.toBe('editor-change');
   });
 
+  it('refuses a generated target recreated after backup before staged installation', async () => {
+    const { packageRoot } = await fixture();
+    let failure: unknown;
+    try {
+      await withGeneratedProfileSession({ packageRoot, operation: 'update' }, async (generationSession: unknown) => {
+        const stagingRoot = await createGeneratedProfileStaging(generationSession);
+        await makeCollection(stagingRoot, 'new');
+        await replaceGeneratedPaths({
+          packageRoot,
+          stagingRoot,
+          generatedPaths,
+          generationSession,
+          onBoundary: async (boundary: string) => {
+            if (boundary === 'backed-up:profile.json') {
+              await writeFile(path.join(packageRoot, 'profile.json'), '{"version":"editor"}\n');
+            }
+          }
+        });
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(
+      (failure as AggregateError).errors.some((error) => String(error).includes('target was recreated before installation'))
+    ).toBe(true);
+    expect(await readFile(path.join(packageRoot, 'profile.json'), 'utf8')).toBe('{"version":"editor"}\n');
+  });
+
   it('allows a new session after interrupted partial cleanup of a detached settled lock', async () => {
     const { packageRoot, token } = await fixture();
     await killAtBoundary(packageRoot, token, 'lock-removing', async () => {
@@ -1010,6 +1080,17 @@ describe('generated profile full-command transaction', () => {
     await expect(withGeneratedProfileSession({ packageRoot, operation: 'update' }, async () => {})).resolves.toBeUndefined();
     expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new']);
     await expect(realpath(path.join(packageRoot, '.profile-generation-lock'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('rediscovers and removes a fully bound released lock after a restart', async () => {
+    const { packageRoot, token } = await fixture();
+    await killAtBoundary(packageRoot, token, 'lock-detached');
+    const released = (await readdir(packageRoot)).filter((name) => name.startsWith('.profile-generation-lock.release-'));
+    expect(released).toHaveLength(1);
+
+    await expect(recoverGeneratedReplacement({ packageRoot })).resolves.toBe(false);
+    expect((await readdir(packageRoot)).filter((name) => name.startsWith('.profile-generation-lock.release-'))).toEqual([]);
+    await expect(withGeneratedProfileSession({ packageRoot, operation: 'update' }, async () => {})).resolves.toBeUndefined();
   });
 
   it('resumes markerless backup and staging quarantine cleanup after repeated restarts', async () => {

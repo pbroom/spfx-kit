@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises';
+import { link, lstat as lstatNative, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -26,6 +26,15 @@ const OPERATION_PATHS = Object.freeze({
   update: Object.freeze(['snapshots', 'normalized', 'profile.json']),
   regenerate: Object.freeze(['snapshots/canonical', 'normalized', 'profile.json'])
 });
+
+// Filesystem device and inode numbers are uint64 values on supported Node
+// platforms.  The default Stats representation is Number, which can silently
+// round a value above Number.MAX_SAFE_INTEGER and turn two distinct objects
+// into the same cleanup identity.  All ownership fencing in this module must
+// retain the exact bigint values until they are serialized as decimal strings.
+async function lstat(target) {
+  return lstatNative(target, { bigint: true });
+}
 
 function processExists(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 0) return 'missing';
@@ -109,11 +118,21 @@ async function pathExists(target) {
 }
 
 function sameIdentity(left, right) {
+  if (typeof left?.dev !== 'bigint' || typeof left?.ino !== 'bigint' || typeof right?.dev !== 'bigint' || typeof right?.ino !== 'bigint') {
+    throw new Error('Generated profile filesystem identity must use bigint device and inode values');
+  }
   return left.dev === right.dev && left.ino === right.ino;
 }
 
-function identityRecord(details) {
+export function generatedProfileIdentityRecord(details) {
+  if (typeof details?.dev !== 'bigint' || typeof details?.ino !== 'bigint') {
+    throw new Error('Generated profile filesystem identity must use bigint device and inode values');
+  }
   return { dev: String(details.dev), ino: String(details.ino) };
+}
+
+function identityRecord(details) {
+  return generatedProfileIdentityRecord(details);
 }
 
 function assertIdentityRecord(identity, label) {
@@ -276,6 +295,9 @@ async function publishRetainedBinding({
       ownerToken,
       ownerOperation
     );
+    // A hard kill during this publication leaves a single-link candidate.
+    // reconcileRetainedBindingPendingFiles removes only that verified bounded
+    // candidate instead of making detached-lock cleanup permanently fail.
     await writeFile(pending, `${JSON.stringify(binding, null, 2)}\n`);
     try {
       await link(pending, target);
@@ -322,7 +344,19 @@ async function reconcileRetainedBindingPendingFiles(lockRoot, lockIdentity, owne
       if (!sameRetainedPayload(pending, published)) continue;
       await unlink(pendingPath);
     } catch {
-      // Unverifiable entries are preserved for the detached final-inventory check.
+      // A pending binding has no published hard link yet.  Its randomized
+      // candidate name lives under the identity-bound retained-binding root;
+      // an unreadable single-link regular file can therefore only be an
+      // interrupted candidate and is safe to unlink rather than poisoning all
+      // later detached-lock cleanup.
+      try {
+        const details = await lstat(pendingPath);
+        if (details.isFile() && !details.isSymbolicLink() && details.nlink === 1n) {
+          await unlink(pendingPath);
+        }
+      } catch {
+        // A concurrent replacement is retained for the final inventory check.
+      }
     }
   }
 }
@@ -393,6 +427,49 @@ async function assertPackageRoot(packageRoot) {
   const canonical = await realpath(resolved);
   await realDirectoryIdentity(canonical, 'package root');
   return canonical;
+}
+
+/**
+ * Reject a path whose existing ancestry escapes an owned root through a
+ * symlink.  `path.join` alone only constrains the spelling of a path; a
+ * symlinked `snapshots` or `normalized` ancestor would otherwise let a later
+ * mkdir/rename mutate a location outside the package or transaction lock.
+ *
+ * Missing trailing ancestors are permitted because replacement creates them,
+ * but every existing component is checked immediately before the mutation.
+ */
+async function assertContainedRealPath(root, target, label, { includeTarget = false } = {}) {
+  const relative = path.relative(root, target);
+  if (
+    relative === '' ||
+    path.isAbsolute(relative) ||
+    relative === '..' ||
+    relative.startsWith(`..${path.sep}`) ||
+    relative.split(path.sep).some((segment) => segment.length === 0 || segment === '.' || segment === '..')
+  ) {
+    throw new Error(`Generated profile ${label} is outside its owned root`);
+  }
+  const rootDetails = await realDirectoryIdentity(root, `${label} root`);
+  const segments = relative.split(path.sep);
+  const limit = includeTarget ? segments.length : segments.length - 1;
+  let current = root;
+  for (let index = 0; index < limit; index += 1) {
+    current = path.join(current, segments[index]);
+    try {
+      const details = await lstat(current);
+      const isTerminal = index === segments.length - 1;
+      if (details.isSymbolicLink() || (!isTerminal && !details.isDirectory())) {
+        throw new Error(`Generated profile ${label} has a non-directory or symlinked ancestor: ${current}`);
+      }
+    } catch (error) {
+      if (isMissing(error)) break;
+      throw error;
+    }
+  }
+  const finalRoot = await realDirectoryIdentity(root, `${label} root`);
+  if (!sameIdentity(rootDetails, finalRoot)) {
+    throw new Error(`Generated profile ${label} root identity changed while checking containment`);
+  }
 }
 
 function assertStagingRoot(lockRoot, stagingRoot) {
@@ -787,7 +864,13 @@ function assertOwner(owner, packageRoot, lockRoot) {
   }
   assertProcessIdentity(owner, 'lock owner');
   assertIdentityRecord(owner.retainedBindingRootIdentity, 'retained binding root');
+  if (owner.stagingPending !== undefined && owner.stagingPending !== true) {
+    throw new Error('Generated profile lock owner staging state is invalid');
+  }
   if (owner.stagingIdentity !== undefined) assertIdentityRecord(owner.stagingIdentity, 'pre-journal staging');
+  if (owner.stagingPending === true && (owner.stagingIdentity !== undefined || owner.transaction !== undefined)) {
+    throw new Error('Generated profile lock owner staging state is invalid');
+  }
   if (owner.preJournalBackupIdentity !== undefined) {
     assertIdentityRecord(owner.preJournalBackupIdentity, 'pre-journal backup');
     if (owner.transaction !== undefined) {
@@ -1800,7 +1883,10 @@ async function assertDetachedLockInventory(lockRoot, context) {
   const stagingRoot = path.join(lockRoot, 'staging');
   if (await pathExists(stagingRoot)) {
     const stagingIdentity = await realDirectoryIdentity(stagingRoot, 'pre-journal staging');
-    if (!owner.stagingIdentity || !sameIdentityRecord(stagingIdentity, owner.stagingIdentity)) {
+    if (
+      (owner.stagingIdentity && !sameIdentityRecord(stagingIdentity, owner.stagingIdentity)) ||
+      (!owner.stagingIdentity && owner.stagingPending !== true)
+    ) {
       throw new Error('Generated profile pre-journal staging identity changed');
     }
     allowedNames.add('staging');
@@ -1819,6 +1905,64 @@ async function assertDetachedLockCanBeRemoved(lockRoot, context) {
   } catch (error) {
     throw new Error(`Generated profile detached lock cleanup retained at ${lockRoot}`, { cause: error });
   }
+}
+
+const RELEASED_LOCK_NAME = /^\.profile-generation-lock\.release-[0-9a-f-]{36}$/u;
+
+/**
+ * A process can die after atomically detaching its fully settled lock but
+ * before the final recursive remove.  The canonical lock name is then free,
+ * so the next session used to leave the owned release directory behind
+ * forever.  Rediscover only names made by releaseOwnedLock, reconstruct the
+ * exact inode bindings, and remove a candidate only when the same exhaustive
+ * detached-lock inventory used by the original releaser still passes.
+ */
+async function resumeReleasedLockCleanup(packageRoot) {
+  const candidates = [];
+  for (const entry of await readdir(packageRoot, { withFileTypes: true })) {
+    if (!RELEASED_LOCK_NAME.test(entry.name) || !entry.isDirectory() || entry.isSymbolicLink()) continue;
+    candidates.push(path.join(packageRoot, entry.name));
+  }
+  let removed = false;
+  for (const lockRoot of candidates) {
+    try {
+      await assertContainedRealPath(packageRoot, lockRoot, 'released lock');
+      const identity = await realDirectoryIdentity(lockRoot, 'released lock');
+      const owner = await readOwner(lockRoot, packageRoot);
+      // A detached lock is recoverable only after the transaction journal was
+      // settled.  An active journal remains preserved for explicit recovery.
+      if (owner.transaction) continue;
+      const gateRoot = path.join(lockRoot, MUTATION_GATE_NAME);
+      const gateIdentity = await realDirectoryIdentity(gateRoot, 'released mutation gate');
+      const gate = await readMutationGate(gateRoot, identity);
+      const claimRoot = path.join(lockRoot, CLAIM_NAME);
+      const hasClaim = await pathExists(claimRoot);
+      const claim = hasClaim ? await readClaimRoot(claimRoot) : undefined;
+      const claimIdentity = hasClaim ? await realDirectoryIdentity(claimRoot, 'released recovery claim') : undefined;
+      const context = {
+        lockRoot,
+        packageRoot,
+        identity,
+        ownerToken: owner.token,
+        operation: owner.operation,
+        retainedBindingRootIdentity: owner.retainedBindingRootIdentity,
+        actorScope: hasClaim ? 'claim' : 'owner',
+        ...(hasClaim ? { claim, claimIdentity } : {}),
+        gate: { gateRoot, gateIdentity, gate }
+      };
+      await assertDetachedLockCanBeRemoved(lockRoot, context);
+      const finalIdentity = await realDirectoryIdentity(lockRoot, 'released lock');
+      if (!sameIdentity(finalIdentity, identity)) continue;
+      await assertDetachedLockCanBeRemoved(lockRoot, context);
+      await rm(lockRoot, { recursive: true, force: true });
+      removed = true;
+    } catch {
+      // A malformed, changed, or contested released lock is deliberately
+      // retained.  It must never prevent a new canonical lock from being
+      // acquired, and it must never be recursively removed on a guess.
+    }
+  }
+  return removed;
 }
 
 async function markOuterLockOwnershipLost(context) {
@@ -1965,6 +2109,17 @@ async function validateTransactionPaths(transaction, { packageRoot, lockRoot, lo
       !backup.startsWith(`${transaction.backupRoot}${path.sep}`)
     ) {
       throw new Error('Generated profile transaction contains an unsafe resolved path');
+    }
+    await assertContainedRealPath(packageRoot, target, `transaction target ${relativePath}`, { includeTarget: true });
+    if (await pathExists(transaction.stagingRoot)) {
+      await assertContainedRealPath(transaction.stagingRoot, staged, `transaction staging ${relativePath}`, {
+        includeTarget: true
+      });
+    }
+    if (await pathExists(transaction.backupRoot)) {
+      await assertContainedRealPath(transaction.backupRoot, backup, `transaction backup ${relativePath}`, {
+        includeTarget: true
+      });
     }
   }
 }
@@ -2136,6 +2291,8 @@ async function cleanupJournalOwnedDirectory({
   onBoundary = async () => {}
 }) {
   const cleanup = transactionCleanupPath(lockRoot, transaction, kind);
+  await assertContainedRealPath(lockRoot, source, `transaction ${kind}`);
+  await assertContainedRealPath(lockRoot, cleanup, `transaction ${kind} cleanup`);
   const sourceExists = await pathExists(source);
   const cleanupExists = await pathExists(cleanup);
   if (sourceExists && cleanupExists) {
@@ -2235,6 +2392,7 @@ async function moveTargetToDiscard({
   expectedDigest,
   assertMutation
 }) {
+  await assertContainedRealPath(lockRoot, discarded, `recovery discard ${generatedPath}`, { includeTarget: true });
   const sourceDetails = await lstat(target);
   const payloadDigest = await digestPath(target);
   if (payloadDigest !== expectedDigest) {
@@ -2319,6 +2477,10 @@ async function recoverActiveTransaction(
           await onRecoveryBoundary(`recovery-discarded:${relativePath}`, transaction);
         }
         await assertMutation();
+        await assertContainedRealPath(packageRoot, target, `recovery target ${relativePath}`, { includeTarget: true });
+        await assertContainedRealPath(transaction.backupRoot, backup, `recovery backup ${relativePath}`, {
+          includeTarget: true
+        });
         await mkdir(path.dirname(target), { recursive: true });
         await rename(backup, target);
         await onRecoveryBoundary(`recovery-restored:${relativePath}`, transaction);
@@ -2437,6 +2599,7 @@ export async function recoverGeneratedReplacement({
 } = {}) {
   packageRoot = await assertPackageRoot(packageRoot);
   const lockRoot = path.join(packageRoot, LOCK_NAME);
+  await resumeReleasedLockCleanup(packageRoot);
   if (!(await pathExists(lockRoot))) return false;
   const identity = await realDirectoryIdentity(lockRoot, 'lock');
   let owner;
@@ -2548,7 +2711,11 @@ async function beginTransaction(session, { stagingRoot, generatedPaths, onBounda
   }
   await realDirectoryIdentity(stagingRoot, 'staging root');
   for (const relativePath of generatedPaths) {
-    if (!(await pathExists(resolveGeneratedPath(stagingRoot, relativePath)))) {
+    const staged = resolveGeneratedPath(stagingRoot, relativePath);
+    const target = resolveGeneratedPath(session.packageRoot, relativePath);
+    await assertContainedRealPath(stagingRoot, staged, `transaction staging ${relativePath}`, { includeTarget: true });
+    await assertContainedRealPath(session.packageRoot, target, `transaction target ${relativePath}`, { includeTarget: true });
+    if (!(await pathExists(staged))) {
       throw new Error(`Staged generated path is missing: ${relativePath}`);
     }
   }
@@ -2616,10 +2783,22 @@ export async function createGeneratedProfileStaging(session) {
   }
   await assertSessionMutation(session);
   const stagingRoot = path.join(session.lockRoot, 'staging');
+  const owner = await assertSessionMutation(session);
+  if (owner.stagingIdentity || owner.stagingPending === true) {
+    throw new Error('Generated profile session already contains a staging directory');
+  }
+  // Publish intent before the directory becomes visible.  If the process dies
+  // between mkdir and the identity update, detached-lock recovery recognizes
+  // this bounded pending state and removes only the enclosing owned lock.
+  await writeOwnerAtomically(session, { ...owner, stagingPending: true });
   await mkdir(stagingRoot);
   const stagingIdentity = await realDirectoryIdentity(stagingRoot, 'pre-journal staging');
-  const owner = await assertSessionMutation(session);
-  await writeOwnerAtomically(session, { ...owner, stagingIdentity: identityRecord(stagingIdentity) });
+  const pending = await assertSessionMutation(session);
+  if (pending.stagingPending !== true || pending.stagingIdentity !== undefined) {
+    throw new Error('Generated profile pre-journal staging state changed');
+  }
+  const { stagingPending: _stagingPending, ...boundOwner } = pending;
+  await writeOwnerAtomically(session, { ...boundOwner, stagingIdentity: identityRecord(stagingIdentity) });
   return stagingRoot;
 }
 
@@ -2632,6 +2811,10 @@ export async function runGeneratedReplacementTransaction({ session, stagingRoot,
     const target = resolveGeneratedPath(transaction.packageRoot, relativePath);
     const backup = resolveGeneratedPath(transaction.backupRoot, relativePath);
     await assertSessionMutation(session);
+    await assertContainedRealPath(session.packageRoot, target, `transaction target ${relativePath}`, { includeTarget: true });
+    await assertContainedRealPath(transaction.backupRoot, backup, `transaction backup ${relativePath}`, {
+      includeTarget: true
+    });
     await assertJournaledTarget(target, transaction.existed[relativePath], transaction.priorDigests[relativePath]);
     await mkdir(path.dirname(backup), { recursive: true });
     await rename(target, backup);
@@ -2641,7 +2824,17 @@ export async function runGeneratedReplacementTransaction({ session, stagingRoot,
     const target = resolveGeneratedPath(transaction.packageRoot, relativePath);
     const staged = resolveGeneratedPath(transaction.stagingRoot, relativePath);
     await assertSessionMutation(session);
+    await assertContainedRealPath(session.packageRoot, target, `transaction target ${relativePath}`, { includeTarget: true });
+    await assertContainedRealPath(transaction.stagingRoot, staged, `transaction staging ${relativePath}`, {
+      includeTarget: true
+    });
+    if (await pathExists(target)) {
+      throw new Error(`Generated profile target was recreated before installation: ${relativePath}`);
+    }
     await mkdir(path.dirname(target), { recursive: true });
+    if (await pathExists(target)) {
+      throw new Error(`Generated profile target was recreated before installation: ${relativePath}`);
+    }
     await rename(staged, target);
     await onBoundary(`installed:${relativePath}`, transaction);
   }
