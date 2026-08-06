@@ -84,8 +84,17 @@ function isForwardedHttpsOrigin(value) {
 }
 
 function isRoutableForwardedHostname(value) {
-  const host = String(value).trim().toLowerCase().replace(/^\[|\]$/g, '');
-  return !isUnspecifiedHostname(host) && !isLoopbackHostname(host) && !/^25[0-5](?:\.25[0-5]){3}$/.test(host) && !/^(?:22[4-9]|23\d)\./.test(host) && !/^ff[0-9a-f]{2}:/i.test(host);
+  const host = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '');
+  return (
+    !isUnspecifiedHostname(host) &&
+    !isLoopbackHostname(host) &&
+    !/^25[0-5](?:\.25[0-5]){3}$/.test(host) &&
+    !/^(?:22[4-9]|23\d)\./.test(host) &&
+    !/^ff[0-9a-f]{2}:/i.test(host)
+  );
 }
 
 function getEffectiveOriginPort(url) {
@@ -324,7 +333,7 @@ function waitForStoppedService(child, timeoutMs) {
   if (!Number.isInteger(child.pid)) {
     return Promise.resolve(true);
   }
-  const processGroupId = process.platform === 'win32' ? undefined : child.processGroupId ?? child.pid;
+  const processGroupId = process.platform === 'win32' ? undefined : (child.processGroupId ?? child.pid);
   if (child.exitCode !== null || child.signalCode !== null) {
     if (!Number.isInteger(processGroupId) || !isProcessGroupAlive(processGroupId)) {
       return Promise.resolve(true);
