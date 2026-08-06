@@ -3,14 +3,10 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const tarballPath = process.argv[2];
 const expectedSha1 = '2f485492e0ee822be13b1b45e3092922963737ae';
 const expectedIntegrity = 'sha512-0WNThgC6CMWNXXBxTbaYYcunj08iB5rnx4/G56UOPeL9UVIUGGHA1GR0EWIh9Ebabj7NpCRawQ5b0hfN1jQmYQ==';
-
-if (!tarballPath) {
-  throw new Error('Usage: node scripts/generate-monaco-runtime-inventory.mjs <monaco-editor-0.53.0.tgz>');
-}
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -66,7 +62,7 @@ function cssUrlInventory(css) {
   };
 }
 
-async function generateInventory(packageRoot) {
+export async function generateInventory(packageRoot) {
   const files = [];
   for (const absolute of (await walk(packageRoot)).sort()) {
     const bytes = await readFile(absolute);
@@ -189,24 +185,34 @@ async function generateInventory(packageRoot) {
   return `${JSON.stringify(inventory, null, 2)}\n`;
 }
 
-const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'spfx-kit-monaco-inventory-'));
-
-try {
-  const tarball = await readFile(tarballPath);
-  const actualSha1 = createHash('sha1').update(tarball).digest('hex');
-  const actualIntegrity = `sha512-${createHash('sha512').update(tarball).digest('base64')}`;
-  if (actualSha1 !== expectedSha1 || actualIntegrity !== expectedIntegrity) {
-    throw new Error('The Monaco tarball does not match the pinned npm shasum and integrity.');
+async function main() {
+  const tarballPath = process.argv[2];
+  if (!tarballPath) {
+    throw new Error('Usage: node scripts/generate-monaco-runtime-inventory.mjs <monaco-editor-0.53.0.tgz>');
   }
 
-  execFileSync('tar', ['-xzf', tarballPath, '-C', temporaryRoot]);
-  const extractedPackageRoot = path.join(temporaryRoot, 'package');
-  const metadata = JSON.parse(await readFile(path.join(extractedPackageRoot, 'package.json'), 'utf8'));
-  if (metadata.name !== 'monaco-editor' || metadata.version !== '0.53.0') {
-    throw new Error(`Unexpected extracted package identity: ${metadata.name}@${metadata.version}`);
-  }
+  const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'spfx-kit-monaco-inventory-'));
+  try {
+    const tarball = await readFile(tarballPath);
+    const actualSha1 = createHash('sha1').update(tarball).digest('hex');
+    const actualIntegrity = `sha512-${createHash('sha512').update(tarball).digest('base64')}`;
+    if (actualSha1 !== expectedSha1 || actualIntegrity !== expectedIntegrity) {
+      throw new Error('The Monaco tarball does not match the pinned npm shasum and integrity.');
+    }
 
-  process.stdout.write(await generateInventory(path.join(extractedPackageRoot, 'min', 'vs')));
-} finally {
-  await rm(temporaryRoot, { recursive: true, force: true });
+    execFileSync('tar', ['-xzf', tarballPath, '-C', temporaryRoot]);
+    const extractedPackageRoot = path.join(temporaryRoot, 'package');
+    const metadata = JSON.parse(await readFile(path.join(extractedPackageRoot, 'package.json'), 'utf8'));
+    if (metadata.name !== 'monaco-editor' || metadata.version !== '0.53.0') {
+      throw new Error(`Unexpected extracted package identity: ${metadata.name}@${metadata.version}`);
+    }
+
+    process.stdout.write(await generateInventory(path.join(extractedPackageRoot, 'min', 'vs')));
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
 }

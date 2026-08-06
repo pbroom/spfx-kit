@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { generateInventory as generateMonacoInventory } from './generate-monaco-runtime-inventory.mjs';
 
 const evidenceRoot = path.join('docs', 'evidence', 'shadcn-migration');
 const monacoInventoryPath = path.join(evidenceRoot, 'monaco-0.53.0-min-vs-inventory.json');
@@ -41,7 +42,8 @@ const generatedWorkbench = execFileSync(process.execPath, ['scripts/generate-wor
 });
 assert.equal(generatedWorkbench, trackedWorkbench, 'The tracked Workbench V1 inventory is not reproducible.');
 
-const monaco = JSON.parse(await readFile(monacoInventoryPath, 'utf8'));
+const trackedMonaco = await readFile(monacoInventoryPath, 'utf8');
+const monaco = JSON.parse(trackedMonaco);
 const packageMetadata = JSON.parse(await readFile('node_modules/monaco-editor/package.json', 'utf8'));
 const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
 const lockedMonaco = lock.packages['node_modules/monaco-editor'];
@@ -52,6 +54,13 @@ assert.equal(lockedMonaco.resolved, monaco.package.registryTarball);
 assert.equal(lockedMonaco.integrity, monaco.package.npmIntegrity);
 
 const installedRoot = path.join('node_modules', 'monaco-editor', 'min', 'vs');
+const generatedMonaco = await generateMonacoInventory(installedRoot);
+assert.equal(
+  generatedMonaco,
+  trackedMonaco,
+  'The tracked Monaco inventory, including provenance and disposition metadata, is not reproducible.'
+);
+
 const installedFiles = [];
 for (const absolute of (await walk(installedRoot)).sort()) {
   const bytes = await readFile(absolute);
