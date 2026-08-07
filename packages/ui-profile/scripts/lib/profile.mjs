@@ -963,30 +963,25 @@ function reactWrapperBindings(sourceFile) {
   return { namespaces, namedMemo, namedForwardRef };
 }
 
-function bindingWrites(sourceFile, name) {
-  const writes = [];
-  function visit(node) {
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
-      ts.isIdentifier(unwrapExpression(node.left)) &&
-      unwrapExpression(node.left).text === name
-    ) {
-      writes.push(node);
+function isConstVariableDeclaration(declaration) {
+  return (declaration.parent.flags & ts.NodeFlags.Const) !== 0;
+}
+
+function contextualTypeTextsForExpression(expression, sourceFile) {
+  const typeTexts = [];
+  let current = expression;
+  while (true) {
+    if (ts.isParenthesizedExpression(current) || ts.isNonNullExpression(current)) {
+      current = current.expression;
+      continue;
     }
-    if (
-      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
-      (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken) &&
-      ts.isIdentifier(unwrapExpression(node.operand)) &&
-      unwrapExpression(node.operand).text === name
-    ) {
-      writes.push(node);
+    if (ts.isAsExpression(current) || ts.isTypeAssertionExpression(current) || ts.isSatisfiesExpression(current)) {
+      typeTexts.push(current.type.getText(sourceFile));
+      current = current.expression;
+      continue;
     }
-    ts.forEachChild(node, visit);
+    return typeTexts;
   }
-  visit(sourceFile);
-  return writes;
 }
 
 function callableFromExportExpression(
@@ -999,23 +994,7 @@ function callableFromExportExpression(
   const contextualTypeTexts = [];
   if (typeof contextualType === 'string') contextualTypeTexts.push(contextualType);
   else if (contextualType) contextualTypeTexts.push(contextualType.getText(sourceFile));
-  let contextualExpression = expression;
-  while (true) {
-    if (ts.isParenthesizedExpression(contextualExpression) || ts.isNonNullExpression(contextualExpression)) {
-      contextualExpression = contextualExpression.expression;
-      continue;
-    }
-    if (
-      ts.isAsExpression(contextualExpression) ||
-      ts.isTypeAssertionExpression(contextualExpression) ||
-      ts.isSatisfiesExpression(contextualExpression)
-    ) {
-      contextualTypeTexts.push(contextualExpression.type.getText(sourceFile));
-      contextualExpression = contextualExpression.expression;
-      continue;
-    }
-    break;
-  }
+  contextualTypeTexts.push(...contextualTypeTextsForExpression(expression, sourceFile));
   const unwrapped = unwrapExpression(expression);
   if (ts.isArrowFunction(unwrapped) || ts.isFunctionExpression(unwrapped)) {
     const kind = ts.isArrowFunction(unwrapped) ? 'arrow' : 'function-expression';
@@ -1025,17 +1004,21 @@ function callableFromExportExpression(
       contextualPropsType: contextualTypeTexts.join(' & ')
     };
   }
+  if (ts.isConditionalExpression(unwrapped)) {
+    const branches = [unwrapped.whenTrue, unwrapped.whenFalse]
+      .map((branch) => callableFromExportExpression(branch, sourceFile, new Set(seen), memoized, contextualTypeTexts.join(' & ')))
+      .filter(Boolean);
+    if (branches.length === 0) return null;
+    throw new Error('conditional exported callable wrappers are not accepted');
+  }
   if (ts.isIdentifier(unwrapped)) {
     if (seen.has(unwrapped.text)) return null;
     seen.add(unwrapped.text);
-    if (bindingWrites(sourceFile, unwrapped.text).length > 0) {
-      throw new Error(`mutable exported callable alias ${unwrapped.text} is not accepted`);
-    }
     const functionDeclaration = sourceFile.statements.find(
       (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === unwrapped.text && statement.body
     );
     if (functionDeclaration) {
-      return { declaration: functionDeclaration, kind: memoized ? 'memoized function' : 'function' };
+      throw new Error(`function-declaration exported callable alias ${unwrapped.text} is not accepted`);
     }
     for (const statement of sourceFile.statements) {
       if (!ts.isVariableStatement(statement)) continue;
@@ -1043,6 +1026,9 @@ function callableFromExportExpression(
         (candidate) => ts.isIdentifier(candidate.name) && candidate.name.text === unwrapped.text
       );
       if (declaration?.initializer) {
+        if (!isConstVariableDeclaration(declaration)) {
+          throw new Error(`mutable exported callable alias ${unwrapped.text} is not accepted`);
+        }
         return callableFromExportExpression(
           declaration.initializer,
           sourceFile,
@@ -1141,7 +1127,12 @@ function exportedVariableFunctionContracts(source, name) {
     }
   }
   if (!exportedDeclaration) return contracts;
-  if (bindingWrites(sourceFile, name).length > 0) {
+  const declarationContext = exportedDeclaration.type?.getText(sourceFile) ?? '';
+  if (
+    !isConstVariableDeclaration(exportedDeclaration) &&
+    declarationContext &&
+    isRefBearingPropsType(source, declarationContext)
+  ) {
     throw new Error(`mutable exported callable binding ${name} is not accepted`);
   }
   const candidates = [];
@@ -1154,7 +1145,18 @@ function exportedVariableFunctionContracts(source, name) {
       false,
       exportedDeclaration.type
     );
+    const expressionContext = contextualTypeTextsForExpression(candidate, sourceFile).join(' & ');
+    if (
+      !callable &&
+      (declarationContext || expressionContext) &&
+      isRefBearingPropsType(source, [declarationContext, expressionContext].filter(Boolean).join(' & '))
+    ) {
+      throw new Error(`unsupported contextually typed exported callable ${name} is not accepted`);
+    }
     if (!callable || callable.forwarded) continue;
+    if (!isConstVariableDeclaration(exportedDeclaration)) {
+      throw new Error(`mutable exported callable binding ${name} is not accepted`);
+    }
     const parameter = callable.declaration.parameters.find(
       (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
     );
