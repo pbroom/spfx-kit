@@ -1,7 +1,7 @@
 {
   "$schema": "./provenance.schema.json",
   "schemaVersion": 1,
-  "generatorVersion": "1.1.0",
+  "generatorVersion": "1.2.0",
   "profileId": "spfx-react17-base-nova-v1",
   "registry": {
     "preset": "base-nova",
@@ -74,7 +74,7 @@
       "fontHeadingMarker": "font-heading"
     },
     "implementation": "scripts/lib/profile.mjs",
-    "implementationSha256": "4cb0cc83118b3de63f20d95de88bebcba1ddf07ce8959ceb505088bf041ed827"
+    "implementationSha256": "daac81c193053273c2df03a30dd05dbe0488ad3b7063d607afddfa07b5352b94"
   },
   "registryIds": [
     "button",

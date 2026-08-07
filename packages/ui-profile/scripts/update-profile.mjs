@@ -45,7 +45,7 @@ await withGeneratedProfileSession({ packageRoot, operation: 'update' }, async (g
       outputRoot: stagingRoot,
       provenance: updatedProvenance,
       provenanceBytes: updatedProvenanceBytes,
-      generatedPaths: ['snapshots', 'normalized', 'profile.json', 'provenance.json'],
+      generatedPaths: ['snapshots', 'normalized', 'generated', 'profile.json', 'provenance.json'],
       generationSession
     });
   } catch (error) {

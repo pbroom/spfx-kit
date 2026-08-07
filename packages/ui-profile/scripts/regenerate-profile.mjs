@@ -23,7 +23,7 @@ await withGeneratedProfileSession({ packageRoot, operation: 'regenerate' }, asyn
       outputRoot: stagingRoot,
       provenance,
       provenanceBytes,
-      generatedPaths: ['snapshots/canonical', 'normalized', 'profile.json'],
+      generatedPaths: ['snapshots/canonical', 'normalized', 'generated', 'profile.json'],
       generationSession
     });
   } catch (error) {

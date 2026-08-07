@@ -5,6 +5,8 @@
   "type": "module",
   "description": "Offline, non-runtime source profile for the React 17 Base Nova compatibility spike.",
   "scripts": {
+    "css:build": "node ./scripts/build-tailwind-css.mjs",
+    "css:verify": "node ./scripts/verify-tailwind-css.mjs",
     "profile:update:network": "node ./scripts/update-profile.mjs --allow-network",
     "profile:regenerate": "node ./scripts/regenerate-profile.mjs",
     "profile:verify": "node ./scripts/verify-profile.mjs",

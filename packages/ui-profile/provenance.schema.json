@@ -37,7 +37,7 @@
   "properties": {
     "$schema": { "const": "./provenance.schema.json" },
     "schemaVersion": { "const": 1 },
-    "generatorVersion": { "const": "1.1.0" },
+    "generatorVersion": { "const": "1.2.0" },
     "profileId": { "const": "spfx-react17-base-nova-v1" },
     "registry": {
       "type": "object",

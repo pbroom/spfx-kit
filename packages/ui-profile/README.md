@@ -47,7 +47,23 @@ configuration markers, and fails closed on computed or concatenated profile
 classes. Consumer-supplied `className` values remain outside this source profile
 and must be included by each later app compiler or a finite reviewed safelist.
 The exact Tailwind CLI, CSS parsers, and animation input are pinned with registry
-integrity in provenance; pinning them here does not yet compile or load CSS.
+integrity in provenance and the lockfile; reproducible installs use `npm ci`.
+Offline regeneration compiles the normalized source into
+`generated/tailwind-profile.css`, removes Tailwind Preflight and global property
+rules, retains a deliberately narrow component-owned baseline, flattens global
+cascade layers, and scopes every selector and fallback property beneath the
+digest-derived `data-spfx-ui-scope` value recorded in `profile.json`.
+Tailwind state properties, keyframes, and named containers receive the same
+digest namespace. A nested root carrying a different digest scope is an explicit
+style boundary, so an outer profile version cannot restyle the inner copy; roots
+with the same digest intentionally share one identical CSS contract. Candidate
+and custom-property closure, structural markers, conditional selector classes,
+artifact bytes, and every committed compiler/scoper input are manifest-bound
+and reverified from a clean temporary output. Installed toolchain packages are
+root- and version-checked against the provenance/lock identities. The CLI child
+imports the committed network blocker. `css:build` enters the full generation
+lock and atomic profile replacement; it never installs the artifact
+independently.
 
 The repository host and strict profile compiler share the same
 `@types/react@17.0.45` and `@types/react-dom@17.0.17` declaration contract, with
@@ -58,8 +74,9 @@ React 17 equivalents. Both TypeScript matrix runs list and reject React or
 scheduler type files outside their lockfile-resolved roots. This narrow bridge
 does not alter the Lab, Workbench, or SPFx runtime. The profile ID plus its
 manifest and provenance digests identifies an exact generation.
-This workspace does not wire components into an app, compile CSS, implement
-portal ownership, or establish browser, package, or standalone-export proof.
+This workspace does not wire components or the compiled artifact into an app,
+implement portal ownership, or establish Vite, Heft, Gulp, browser, package, or
+standalone-export proof.
 Its public 1,940-option Combobox fixture proves exact-scale cardinality and
 basic DOM behavior only; it does not claim the real-font workload required for
 the final ADR-0001 Phase 1 exit.
@@ -68,6 +85,7 @@ the final ADR-0001 Phase 1 exit.
 
 ```sh
 npm --workspace @spfx-kit/ui-profile run verify
+npm --workspace @spfx-kit/ui-profile run css:verify
 npm --workspace @spfx-kit/ui-profile run profile:verify:closure
 npm --workspace @spfx-kit/ui-profile run typecheck
 ```

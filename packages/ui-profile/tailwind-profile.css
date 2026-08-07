@@ -1,0 +1,94 @@
+@import 'tailwindcss' source(none) prefix(skui);
+@import 'tw-animate-css';
+
+@source "./normalized/src";
+
+@custom-variant dark (&:where([data-spfx-ui-theme="dark"], [data-spfx-ui-theme="dark"] *));
+
+/*
+ * Component-owned baseline, intentionally narrower than Tailwind Preflight.
+ * The scoper confines these invariants to the digest root and stops them at a
+ * differently versioned nested profile root.
+ */
+*,
+::before,
+::after {
+  box-sizing: border-box;
+}
+
+fieldset,
+legend,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+ol,
+p,
+ul {
+  margin: 0;
+  padding: 0;
+}
+
+fieldset {
+  min-width: 0;
+  border: 0;
+}
+
+button,
+input,
+optgroup,
+select,
+textarea,
+::file-selector-button {
+  color: inherit;
+  font: inherit;
+  font-feature-settings: inherit;
+  font-variation-settings: inherit;
+  letter-spacing: inherit;
+  margin: 0;
+  padding: 0;
+}
+
+button,
+input:where([type='button'], [type='reset'], [type='submit']),
+::file-selector-button {
+  appearance: button;
+  background-color: transparent;
+  background-image: none;
+}
+
+@theme inline {
+  --color-background: var(--spfx-ui-color-background);
+  --color-foreground: var(--spfx-ui-color-foreground);
+  --color-card: var(--spfx-ui-color-card);
+  --color-card-foreground: var(--spfx-ui-color-card-foreground);
+  --color-popover: var(--spfx-ui-color-popover);
+  --color-popover-foreground: var(--spfx-ui-color-popover-foreground);
+  --color-primary: var(--spfx-ui-color-primary);
+  --color-primary-foreground: var(--spfx-ui-color-primary-foreground);
+  --color-secondary: var(--spfx-ui-color-secondary);
+  --color-secondary-foreground: var(--spfx-ui-color-secondary-foreground);
+  --color-muted: var(--spfx-ui-color-muted);
+  --color-muted-foreground: var(--spfx-ui-color-muted-foreground);
+  --color-accent: var(--spfx-ui-color-accent);
+  --color-accent-foreground: var(--spfx-ui-color-accent-foreground);
+  --color-destructive: var(--spfx-ui-color-destructive);
+  --color-border: var(--spfx-ui-color-border);
+  --color-input: var(--spfx-ui-color-input);
+  --color-ring: var(--spfx-ui-color-ring);
+  --radius-sm: var(--spfx-ui-radius-sm);
+  --radius-md: var(--spfx-ui-radius-md);
+  --radius-lg: var(--spfx-ui-radius-lg);
+  --radius-xl: var(--spfx-ui-radius-xl);
+  --font-heading: var(--spfx-ui-font-heading);
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

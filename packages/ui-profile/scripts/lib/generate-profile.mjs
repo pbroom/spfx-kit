@@ -13,15 +13,24 @@ import {
   sha256
 } from './profile.mjs';
 import { assertFetchedRegistryClosure, assertProductionDependencyRoots } from './profile-update-intake.mjs';
+import { compileTailwindCss } from './compile-tailwind-css.mjs';
 
 const compilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'compat-consumers/select-value.tsx',
+  'tailwind-profile.css',
+  'scripts/build-tailwind-css.mjs',
+  'scripts/verify-tailwind-css.mjs',
+  'scripts/lib/compile-tailwind-css.mjs',
+  'scripts/lib/scope-tailwind-css.mjs',
+  'scripts/lib/block-network.mjs',
   'scripts/typecheck.mjs',
   'scripts/lib/generate-profile.mjs',
   'scripts/lib/profile-update-intake.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
+  'scripts/lib/generation-transaction.mjs',
+  'scripts/lib/replace-generated.mjs',
   'scripts/lib/generated-tree-closure.mjs',
   'scripts/verify-dependency-closure.mjs',
   'scripts/prepare-base-ui.mjs',
@@ -111,6 +120,7 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
     });
   }
 
+  const css = await compileTailwindCss({ packageRoot, sourceRoot: outputRoot, outputRoot, provenance });
   const profile = {
     $schema: './profile.schema.json',
     schemaVersion: PROFILE_SCHEMA_VERSION,
@@ -136,6 +146,7 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
       path: 'compat/base-ui-1.6.0/popup-lifecycle/contract.json',
       sha256: sha256(await readFile(path.join(packageRoot, 'compat', 'base-ui-1.6.0', 'popup-lifecycle', 'contract.json')))
     },
+    css,
     items
   };
   await writeFile(path.join(outputRoot, 'profile.json'), canonicalJson(profile));

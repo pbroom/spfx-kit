@@ -34,7 +34,7 @@ import {
 import { replaceGeneratedPaths } from '../packages/ui-profile/scripts/lib/replace-generated.mjs';
 
 const temporaryRoots: string[] = [];
-const generatedPaths = ['snapshots', 'normalized', 'profile.json', 'provenance.json'];
+const generatedPaths = ['snapshots', 'normalized', 'generated', 'profile.json', 'provenance.json'];
 const transactionModuleUrl = pathToFileURL(path.resolve('packages/ui-profile/scripts/lib/generation-transaction.mjs')).href;
 const replacementModuleUrl = pathToFileURL(path.resolve('packages/ui-profile/scripts/lib/replace-generated.mjs')).href;
 
@@ -46,9 +46,11 @@ async function makeCollection(root: string, version: string): Promise<void> {
   await mkdir(path.join(root, 'snapshots', 'raw'), { recursive: true });
   await mkdir(path.join(root, 'snapshots', 'canonical'), { recursive: true });
   await mkdir(path.join(root, 'normalized'), { recursive: true });
+  await mkdir(path.join(root, 'generated'), { recursive: true });
   await writeFile(path.join(root, 'snapshots', 'raw', 'version.txt'), version);
   await writeFile(path.join(root, 'snapshots', 'canonical', 'version.txt'), version);
   await writeFile(path.join(root, 'normalized', 'version.txt'), version);
+  await writeFile(path.join(root, 'generated', 'version.txt'), version);
   await writeFile(path.join(root, 'profile.json'), `${JSON.stringify({ version })}\n`);
   await writeFile(path.join(root, 'provenance.json'), `${JSON.stringify({ version })}\n`);
 }
@@ -95,15 +97,17 @@ function childSource(): string {
       await mkdir(path.join(stagingRoot, 'snapshots', 'raw'), { recursive: true });
       await mkdir(path.join(stagingRoot, 'snapshots', 'canonical'), { recursive: true });
       await mkdir(path.join(stagingRoot, 'normalized'), { recursive: true });
+      await mkdir(path.join(stagingRoot, 'generated'), { recursive: true });
       await writeFile(path.join(stagingRoot, 'snapshots', 'raw', 'version.txt'), 'new');
       await writeFile(path.join(stagingRoot, 'snapshots', 'canonical', 'version.txt'), 'new');
       await writeFile(path.join(stagingRoot, 'normalized', 'version.txt'), 'new');
+      await writeFile(path.join(stagingRoot, 'generated', 'version.txt'), 'new');
       await writeFile(path.join(stagingRoot, 'profile.json'), JSON.stringify({ version: 'new' }) + '\\n');
       await writeFile(path.join(stagingRoot, 'provenance.json'), JSON.stringify({ version: 'new' }) + '\\n');
       await replaceGeneratedPaths({
         packageRoot,
         stagingRoot,
-        generatedPaths: ['snapshots', 'normalized', 'profile.json', 'provenance.json'],
+        generatedPaths: ['snapshots', 'normalized', 'generated', 'profile.json', 'provenance.json'],
         generationSession,
         onBoundary: async (boundary) => {
           if (boundary !== requestedBoundary) return;
@@ -545,12 +549,13 @@ describe('generated profile full-command transaction', () => {
         await replaceGeneratedPaths({
           packageRoot,
           stagingRoot,
-          generatedPaths: ['snapshots/canonical', 'normalized', 'profile.json'],
+          generatedPaths: ['snapshots/canonical', 'normalized', 'generated', 'profile.json'],
           generationSession
         });
       }
     );
     expect(await collectionVersion(packageRoot)).toEqual(['old', 'new', 'new', 'new', 'old']);
+    expect(await readFile(path.join(packageRoot, 'generated', 'version.txt'), 'utf8')).toBe('new');
   });
 
   it('rejects a symlinked owner-derived staging root before journaling or mutation', async () => {
@@ -1015,12 +1020,14 @@ describe('generated profile full-command transaction', () => {
         const stagingRoot = await createGeneratedProfileStaging(generationSession);
         await symlink(path.join(external, 'snapshots'), path.join(stagingRoot, 'snapshots'), 'dir');
         await mkdir(path.join(stagingRoot, 'normalized'), { recursive: true });
+        await mkdir(path.join(stagingRoot, 'generated'), { recursive: true });
         await writeFile(path.join(stagingRoot, 'normalized', 'version.txt'), 'new');
+        await writeFile(path.join(stagingRoot, 'generated', 'version.txt'), 'new');
         await writeFile(path.join(stagingRoot, 'profile.json'), JSON.stringify({ version: 'new' }) + '\n');
         await replaceGeneratedPaths({
           packageRoot,
           stagingRoot,
-          generatedPaths: ['snapshots/canonical', 'normalized', 'profile.json'],
+          generatedPaths: ['snapshots/canonical', 'normalized', 'generated', 'profile.json'],
           generationSession
         });
       });

@@ -36,8 +36,8 @@ const RETAINED_BINDING_KIND = 'ui-profile-retained-payload-v1';
 const SESSION = Symbol('ui-profile-generation-session');
 const execFileAsync = promisify(execFile);
 const OPERATION_PATHS = Object.freeze({
-  update: Object.freeze(['snapshots', 'normalized', 'profile.json', 'provenance.json']),
-  regenerate: Object.freeze(['snapshots/canonical', 'normalized', 'profile.json'])
+  update: Object.freeze(['snapshots', 'normalized', 'generated', 'profile.json', 'provenance.json']),
+  regenerate: Object.freeze(['snapshots/canonical', 'normalized', 'generated', 'profile.json'])
 });
 
 // Filesystem device and inode numbers are uint64 values on supported Node
