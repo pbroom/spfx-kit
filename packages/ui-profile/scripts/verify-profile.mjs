@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 
 import { assertGeneratedTreeClosure, pinnedTypeDirectiveNames } from './lib/generated-tree-closure.mjs';
-import { assertRegistryMetadataDependencies } from './lib/profile-update-intake.mjs';
+import { assertFetchedRegistryClosure } from './lib/profile-update-intake.mjs';
 import {
   GENERATOR_VERSION,
   NORMALIZATION_CONTRACT_VERSION,
@@ -214,6 +214,7 @@ assertExact(
 
 const expectedRawPaths = new Set();
 const expectedCanonicalPaths = new Set();
+const rawSnapshots = [];
 const allowedImports = new Set(Object.keys(expectedDirectDependencies));
 const { emittedPaths: expectedNormalizedPaths } = await assertGeneratedTreeClosure({
   outputRoot: packageRoot,
@@ -244,14 +245,10 @@ for (const item of profile.items) {
 
   const raw = JSON.parse(rawBytes);
   const canonical = JSON.parse(canonicalBytes);
+  rawSnapshots.push(raw);
   assert(raw.name === item.id, `${item.id}: raw registry identity differs`);
   assert(canonicalJson(raw) === canonicalBytes.toString('utf8'), `${item.id}: canonical bytes are not reproducible`);
   assertExact(canonical, raw, `${item.id}: canonical JSON value`);
-
-  assertRegistryMetadataDependencies(raw, {
-    excludedDependencies: provenance.excludedDependencies,
-    directProductionDependencies: provenance.directProductionDependencies
-  });
 
   assert(Array.isArray(item.normalized) && item.normalized.length === raw.files.length, `${item.id}: source count differs`);
   for (const output of item.normalized) {
@@ -275,6 +272,11 @@ for (const item of profile.items) {
     }
   }
 }
+
+assertFetchedRegistryClosure(rawSnapshots, provenance.registryIds, {
+  excludedDependencies: provenance.excludedDependencies,
+  directProductionDependencies: provenance.directProductionDependencies
+});
 
 assertExact(await filesUnder('snapshots/raw'), [...expectedRawPaths].sort(), 'Raw snapshot inventory');
 assertExact(await filesUnder('snapshots/canonical'), [...expectedCanonicalPaths].sort(), 'Canonical snapshot inventory');

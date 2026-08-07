@@ -311,6 +311,24 @@ describe('React 17 UI profile normalization', () => {
     }
   });
 
+  it('fails closed for named React component-props helper imports and aliases', () => {
+    for (const [reactImport, propsType] of [
+      ['import type { ComponentProps } from "react"\n', 'ComponentProps<typeof ButtonPrimitive>'],
+      ['import type { ComponentProps as PrimitiveProps } from "react"\n', 'PrimitiveProps<typeof ButtonPrimitive>']
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            reactImport +
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            `function Probe(props: ${propsType}) { return <ButtonPrimitive {...props} /> }\n` +
+            'export { Probe }\n',
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+        })
+      ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+    }
+  });
+
   it('fails closed instead of reconstructing unsupported function declaration shapes', () => {
     for (const declaration of [
       'async function Probe({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }',

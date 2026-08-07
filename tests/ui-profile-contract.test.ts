@@ -153,6 +153,14 @@ function runOfflineClosureVerifier(root: string, ...args: string[]): ReturnType<
   );
 }
 
+function runTypecheckContract(root: string): ReturnType<typeof spawnSync> {
+  return spawnSync(process.execPath, [path.join(root, 'scripts/typecheck.mjs'), 'typescript', '5.3.3', './tsconfig.ts53.json'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, CI: '1' }
+  });
+}
+
 function verifierMessage(result: ReturnType<typeof spawnSync>): string {
   return `${result.stdout ?? ''}${result.stderr ?? ''}`;
 }
@@ -229,6 +237,7 @@ interface RegistrySnapshot {
   name: string;
   dependencies?: string[];
   devDependencies?: string[];
+  registryDependencies?: string[];
   files: RegistryFile[];
 }
 
@@ -594,6 +603,22 @@ describe('offline profile verifier', () => {
     expect(verifierMessage(excluded)).toContain('uses excluded dependency cmdk');
   });
 
+  it('rejects committed registry dependencies outside the pinned snapshot closure', async () => {
+    const root = await copyProfile();
+    const profile = await readJson<ProfileManifest>(root, 'profile.json');
+    const item = profile.items[0];
+    const raw = await readJson<RegistrySnapshot>(root, item.raw.path);
+    raw.registryDependencies = [...(raw.registryDependencies ?? []), 'missing-widget'];
+    await rewriteSnapshot(root, profile, item, raw);
+
+    const result = runOfflineVerifier(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toContain(
+      'Pinned registry item button requires source outside the fetched registry closure: missing-widget'
+    );
+  });
+
   it('rejects snapshot bytes whose manifest digests are updated without rebinding provenance', async () => {
     const root = await copyProfile();
     const profile = await readJson<ProfileManifest>(root, 'profile.json');
@@ -728,6 +753,30 @@ describe('offline profile verifier', () => {
     expect(verifierMessage(result)).toContain('Resolved compiler package typescript@9.9.9 instead of pinned TypeScript 5.8.3');
     expect(result.stdout).toContain('Validated staged normalized sources with TypeScript 5.3.3');
     expect(result.stdout).not.toContain('Validated staged normalized sources with TypeScript 5.8.3');
+    expect(await treeDigests(root)).toEqual(before);
+  });
+
+  it.each([
+    ['@types/react', '17.0.45'],
+    ['@types/react-dom', '17.0.17']
+  ])('rejects a shadowed wrong-version %s declaration package', async (packageName, pinnedVersion) => {
+    const root = await copyProfile();
+    const shadowRoot = path.join(root, 'node_modules', packageName);
+    await mkdir(shadowRoot, { recursive: true });
+    await writeCanonicalJson(root, `node_modules/${packageName}/package.json`, {
+      name: packageName,
+      version: '99.0.0',
+      types: 'index.d.ts'
+    });
+    await writeFile(path.join(shadowRoot, 'index.d.ts'), 'export {}\n');
+    const before = await treeDigests(root);
+
+    const result = runTypecheckContract(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toContain(
+      `Resolved type package ${packageName}@99.0.0 instead of pinned ${packageName}@${pinnedVersion}`
+    );
     expect(await treeDigests(root)).toEqual(before);
   });
 });

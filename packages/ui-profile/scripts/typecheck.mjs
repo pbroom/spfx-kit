@@ -34,6 +34,38 @@ if (lock.packages?.[workspaceKey]?.devDependencies?.[compilerPackage] !== pinned
 if (lock.packages?.[lockPackageKey]?.version !== expectedVersion) {
   throw new Error(`${compilerPackage}: lockfile package version differs from the pinned ${expectedVersion}`);
 }
+function pinnedTypeRoot(packageName, pinnedVersion) {
+  if (packageManifest.devDependencies?.[packageName] !== pinnedVersion) {
+    throw new Error(`${packageName}: package development dependency differs from the pinned type contract`);
+  }
+  if (lock.packages?.[workspaceKey]?.devDependencies?.[packageName] !== pinnedVersion) {
+    throw new Error(`${packageName}: lockfile workspace dependency differs from the pinned type contract`);
+  }
+  const packageKey = `node_modules/${packageName}`;
+  if (lock.packages?.[packageKey]?.version !== pinnedVersion) {
+    throw new Error(`${packageName}: lockfile package version differs from the pinned ${pinnedVersion}`);
+  }
+  const manifestPath = require.resolve(`${packageName}/package.json`);
+  const resolvedManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if (resolvedManifest.name !== packageName || resolvedManifest.version !== pinnedVersion) {
+    throw new Error(
+      `Resolved type package ${resolvedManifest.name ?? 'unknown'}@${resolvedManifest.version ?? 'unknown'} instead of pinned ${packageName}@${pinnedVersion}`
+    );
+  }
+  const resolvedRoot = realpathSync(path.dirname(manifestPath));
+  const lockedRoot = realpathSync(path.join(repositoryRoot, packageKey));
+  if (resolvedRoot !== lockedRoot) throw new Error(`${packageName}: resolved type root differs from the lockfile package root`);
+  const declarationPath = realpathSync(
+    path.join(resolvedRoot, resolvedManifest.types ?? resolvedManifest.typings ?? 'index.d.ts')
+  );
+  const relativeDeclaration = path.relative(resolvedRoot, declarationPath);
+  if (relativeDeclaration.startsWith('..') || path.isAbsolute(relativeDeclaration)) {
+    throw new Error(`${packageName}: declaration entrypoint escapes the pinned package root`);
+  }
+  return resolvedRoot;
+}
+const reactTypeRoot = pinnedTypeRoot('@types/react', '17.0.45');
+pinnedTypeRoot('@types/react-dom', '17.0.17');
 const compilerManifestPath = require.resolve(`${compilerPackage}/package.json`);
 const compilerManifest = JSON.parse(readFileSync(compilerManifestPath, 'utf8'));
 if (compilerManifest.name !== 'typescript' || compilerManifest.version !== expectedVersion) {
@@ -64,7 +96,6 @@ const listedFiles = (fileListing.stdout ?? '')
   .split(/\r?\n/u)
   .filter(Boolean)
   .map((file) => path.resolve(file));
-const reactTypeRoot = path.dirname(require.resolve('@types/react/package.json'));
 const schedulerTypeRoot = path.dirname(require.resolve('@types/scheduler/package.json'));
 const reactTypeFiles = listedFiles.filter((file) =>
   file.includes(`${path.sep}node_modules${path.sep}@types${path.sep}react${path.sep}`)

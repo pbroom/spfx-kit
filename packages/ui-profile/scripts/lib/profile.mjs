@@ -554,9 +554,21 @@ function isRefBearingPropsType(source, propsType) {
   if (!propsType.trim()) return false;
   const sourceFile = parsedSource(source, 'ref-bearing-props.tsx');
   const aliases = new Map();
+  const importedReactPropsHelpers = new Set();
   const addAlias = (name, type) => aliases.set(name, [...(aliases.get(name) ?? []), type]);
   for (const statement of sourceFile.statements) {
-    if (ts.isTypeAliasDeclaration(statement)) {
+    if (
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteralLike(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === 'react' &&
+      statement.importClause?.namedBindings &&
+      ts.isNamedImports(statement.importClause.namedBindings)
+    ) {
+      for (const element of statement.importClause.namedBindings.elements) {
+        const importedName = element.propertyName?.text ?? element.name.text;
+        if (/^ComponentProps(?:WithRef|WithoutRef)?$/u.test(importedName)) importedReactPropsHelpers.add(element.name.text);
+      }
+    } else if (ts.isTypeAliasDeclaration(statement)) {
       addAlias(statement.name.text, statement.type);
     } else if (ts.isInterfaceDeclaration(statement)) {
       for (const type of (statement.heritageClauses ?? []).flatMap((clause) => clause.types)) {
@@ -574,6 +586,7 @@ function isRefBearingPropsType(source, propsType) {
     const nameText = name.getText(name.getSourceFile());
     return (
       (ts.isQualifiedName(name) && name.right.text === 'Props') ||
+      (ts.isIdentifier(name) && importedReactPropsHelpers.has(name.text)) ||
       /^(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?$/u.test(nameText)
     );
   }
@@ -595,6 +608,7 @@ function isRefBearingPropsType(source, propsType) {
       const expressionName = expression.getText(node.getSourceFile());
       if (
         (ts.isPropertyAccessExpression(expression) && expression.name.text === 'Props') ||
+        (ts.isIdentifier(expression) && importedReactPropsHelpers.has(expression.text)) ||
         /^(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?$/u.test(expressionName)
       ) {
         return true;
