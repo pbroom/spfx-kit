@@ -118,6 +118,7 @@ function cdnDescriptor(releaseId: string) {
 }
 
 test('loads the committed web part and supports a core toolbar interaction', async ({ page }) => {
+  await page.addInitScript((key) => window.localStorage.setItem(key, 'hello-card-spfx'), pinnedAppStorageKey);
   await page.goto('/');
 
   const preview = page.getByRole('region', { name: 'Web part preview area' });
@@ -126,9 +127,7 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(page.getByRole('combobox', { name: 'Select web part' })).toHaveText('Hello Card');
   await expect(page.getByRole('tab', { name: 'Standalone', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'false');
-  const packageResources = page.getByRole('region', { name: 'Package resources' });
-  await expect(packageResources).toContainText('No mock-CDN browser check is active');
-  await expect(packageResources).toHaveAttribute('data-package-resource-state', 'standalone');
+  await expect(page.getByRole('region', { name: 'Package resources' })).toHaveCount(0);
 
   await expect(page.getByRole('button', { name: 'Manage apps' })).toHaveCount(0);
   const appMenuButton = page.locator('button[aria-controls="app-management-sidebar"]');
@@ -710,6 +709,7 @@ test('keeps completed evidence and marks a blocked staged asset failed without f
 });
 
 test('shows a clear CDN error without falling back to the standalone package', async ({ page }) => {
+  await page.addInitScript((key) => window.localStorage.setItem(key, 'hello-card-spfx'), pinnedAppStorageKey);
   await page.route('**/api/lab-packages/cdn?*', async (route) => {
     await route.fulfill({
       status: 404,
@@ -884,6 +884,7 @@ test('shows selected app state, saves export config, and can pin a source releas
   });
   const requests: Array<{ appId: string; versionId: string }> = [];
   const exportConfigRequests: Array<{ appId: string; exportConfig: ManagedAppFixture['exportConfig'] }> = [];
+  await page.addInitScript((key) => window.localStorage.setItem(key, 'hello-card-spfx'), pinnedAppStorageKey);
   await page.route('**/api/spfx-apps/**', async (route) => {
     const url = new URL(route.request().url());
     if (route.request().method() === 'POST' && url.pathname.endsWith('/export-config')) {
@@ -938,7 +939,7 @@ test('shows selected app state, saves export config, and can pin a source releas
   const sidebar = page.locator('#app-management-sidebar');
   await expect(sidebar.getByRole('combobox', { name: 'Selected app' })).toHaveText('Hello Card');
   await expect(sidebar.getByRole('switch', { name: 'Active: Hello Card' })).toBeChecked();
-  await expect(sidebar.getByRole('switch', { name: 'Not pinned: Hello Card' })).not.toBeChecked();
+  await expect(sidebar.getByRole('switch', { name: /pinned/i })).toHaveCount(0);
 
   const versionDropdown = sidebar.getByRole('combobox', { name: 'Source version for Hello Card' });
   await expect(versionDropdown).toBeDisabled();
@@ -1199,22 +1200,72 @@ async function expectFileNameSuffixToTrail(control: Locator, mirror: Locator, su
 test('pins one startup app and restores it after refresh', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Open app menu' }).click();
-  let sidebar = page.locator('#app-management-sidebar');
-  const pinSwitch = sidebar.getByRole('switch', { name: 'Not pinned: Hello Card' });
-  await expect(pinSwitch).not.toBeChecked();
-  await pinSwitch.click();
-  await expect(sidebar.getByRole('switch', { name: 'Pinned: Hello Card' })).toBeChecked();
+  const optionsPanel = page.getByRole('complementary', { name: 'Options panel' });
+  const appSelector = optionsPanel.getByRole('combobox', { name: 'Select web part' });
+  await appSelector.click();
+  const helloOption = page.getByRole('option', { name: /Hello Card\. Not pinned\./ });
+  await helloOption.hover();
+  const pinButton = page.getByRole('button', { name: 'Pin Hello Card as startup app' });
+  await expect(pinButton).toHaveAttribute('aria-pressed', 'false');
+  await pinButton.click();
+  await expect(page.getByRole('button', { name: 'Unpin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBe('hello-card-spfx');
 
   await page.reload();
-  await expect(page.getByRole('combobox', { name: 'Select web part' })).toHaveText('Hello Card');
+  const restoredSelector = page
+    .getByRole('complementary', { name: 'Options panel' })
+    .getByRole('combobox', { name: 'Select web part' });
+  await expect(restoredSelector).toHaveText('Hello Card');
+
   await page.getByRole('button', { name: 'Open app menu' }).click();
-  sidebar = page.locator('#app-management-sidebar');
-  const unpinSwitch = sidebar.getByRole('switch', { name: 'Pinned: Hello Card' });
-  await expect(unpinSwitch).toBeChecked();
-  await unpinSwitch.click();
+  const sidebar = page.locator('#app-management-sidebar');
+  await expect(sidebar.getByRole('switch', { name: /pinned/i })).toHaveCount(0);
+  const selectedAppSelector = sidebar.getByRole('combobox', { name: 'Selected app' });
+  await selectedAppSelector.click();
+  const pinnedAppOption = page.getByRole('option', { name: /Hello Card\. Pinned\./ });
+  await pinnedAppOption.hover();
+  const leftUnpinButton = sidebar.getByRole('button', { name: 'Unpin Hello Card as startup app' });
+  await expect(leftUnpinButton).toHaveAttribute('aria-pressed', 'true');
+  const sidebarListbox = page.getByRole('listbox');
+  await expect(sidebarListbox).toBeVisible();
+  await expect(sidebarListbox.getByRole('button')).toHaveCount(0);
+  await leftUnpinButton.click();
+  await expect(sidebar.getByRole('button', { name: 'Pin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'false');
   await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
+  await sidebar.getByRole('button', { name: 'Pin Hello Card as startup app' }).click();
+  await expect(sidebar.getByRole('button', { name: 'Unpin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Control+o');
+  await expect(sidebar).toBeHidden();
+  await page.getByRole('button', { name: 'Close add SPFx app drawer' }).click();
+  await page.getByRole('button', { name: 'Open app menu' }).click();
+  await expect(sidebar).toBeVisible();
+  await expect(page.getByRole('listbox')).toBeHidden();
+  await selectedAppSelector.click();
+  await expect(leftUnpinButton).toBeVisible();
+  await selectedAppSelector.focus();
+  await page.keyboard.down('Alt');
+  await page.keyboard.press('KeyP');
+  await page.keyboard.up('Alt');
+  await expect(page.getByRole('button', { name: 'Pin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
+  await expect(sidebar.getByRole('status')).toContainText('Hello Card is no longer pinned.');
+
+  await selectedAppSelector.dispatchEvent('keydown', { altKey: true, code: 'KeyP', repeat: true });
+  await selectedAppSelector.dispatchEvent('keydown', { altKey: true, code: 'KeyP', ctrlKey: true });
+  await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
+
+  await selectedAppSelector.press('Escape');
+  await sidebar.getByRole('button', { name: 'Close app settings sidebar' }).click();
+  await restoredSelector.click();
+  const unpinnedRightOption = page.getByRole('option', { name: /Hello Card\. Not pinned\./ });
+  await unpinnedRightOption.hover();
+  await expect(page.getByRole('button', { name: 'Pin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'false');
+  await restoredSelector.focus();
+  await restoredSelector.dispatchEvent('keydown', { altKey: true, code: 'KeyP' });
+  await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBe('hello-card-spfx');
+  await restoredSelector.dispatchEvent('keydown', { altKey: true, code: 'KeyP', repeat: true });
+  await restoredSelector.dispatchEvent('keydown', { altKey: true, code: 'KeyP', ctrlKey: true });
+  await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBe('hello-card-spfx');
 });
 
 interface ManagedAppFixture {

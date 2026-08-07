@@ -250,7 +250,8 @@ describe('PackageDependencyPanel', () => {
     expect(container.textContent).not.toContain(descriptorA.releaseId);
 
     await renderRuntime('standalone', appB);
-    expect(container.textContent).toContain('No mock-CDN browser check is active');
+    expect(container.querySelector('[data-package-resource-state]')).toBeNull();
+    expect(container.textContent).toContain('App B standalone');
     expect(container.textContent).not.toContain(descriptorB.releaseId);
 
     // Keep the unused fixture explicit: app A never becomes visible even if its old promise resolves late.

@@ -72,7 +72,7 @@ fall back to Lab-served or Standalone assets. The scripts load from the mock
 origin in an isolated worker that executes their top-level code and records AMD
 module registration. The Lab does not invoke registered AMD factories.
 
-The **Package resources** panel reports the selected app, immutable namespace,
+In CDN mode, the **Package resources** panel reports the selected app, immutable namespace,
 release manifest, and mock-CDN origin, then presents the exact package-local
 scripts selected for the default-locale smoke path in a scrollable resource
 table. It distinguishes staged hash/size verification, protected-bucket
@@ -80,8 +80,8 @@ publication, and browser delivery or top-level execution evidence. Locale-specif
 alternatives are not exercised. SPFx component references that SharePoint
 would resolve are shown separately as deferred loader resources; they are not
 claimed to be staged files or evidence that arbitrary npm dependencies are
-available from a CDN. In Standalone mode, the panel explicitly reports that no
-CDN session is selected.
+available from a CDN. It is intentionally hidden in Standalone mode because
+there is no CDN session to report.
 
 The separate **Local CDN bucket** administration surface is the app-independent
 inventory and control plane. It lists every immutable app release, selected

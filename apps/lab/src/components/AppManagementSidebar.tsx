@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Pin16Filled, Pin16Regular } from '@fluentui/react-icons';
 import {
   Button,
   Drawer,
@@ -95,6 +96,17 @@ const CATALOG_CATEGORY_OPTIONS = [
   'Workflow & Process Management'
 ] as const;
 
+function isPinShortcut(event: React.KeyboardEvent<HTMLElement>): boolean {
+  return (
+    !event.repeat &&
+    event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.getModifierState('AltGraph') &&
+    event.code === 'KeyP'
+  );
+}
+
 export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Element {
   const {
     open,
@@ -114,9 +126,18 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
   const [showSyncSuccess, setShowSyncSuccess] = React.useState(false);
   const [exportConfig, setExportConfig] = React.useState<ManagedAppExportConfig>(EMPTY_EXPORT_CONFIG);
   const [sidebarSelectedAppId, setSidebarSelectedAppId] = React.useState(selectedAppId);
+  const [selectedAppPickerOpen, setSelectedAppPickerOpen] = React.useState(false);
+  const [pinAnnouncement, setPinAnnouncement] = React.useState('');
   const refreshInFlightRef = React.useRef(false);
   const mutationInFlightRef = React.useRef(false);
   const syncSuccessTimerRef = React.useRef<number | undefined>(undefined);
+  const activeAppOptionIdRef = React.useRef(selectedAppId);
+
+  React.useEffect(() => {
+    if (!open) {
+      setSelectedAppPickerOpen(false);
+    }
+  }, [open]);
 
   const refreshManagedApps = React.useCallback(async (options: { quiet?: boolean } = {}): Promise<void> => {
     if (refreshInFlightRef.current || mutationInFlightRef.current) {
@@ -189,6 +210,7 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
   React.useEffect(() => {
     if (open) {
       setSidebarSelectedAppId(selectedAppId);
+      activeAppOptionIdRef.current = selectedAppId;
       setStatus({ phase: 'idle', message: '' });
       void refreshManagedApps();
     }
@@ -430,14 +452,27 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
   const selectedAppBusy = busyAppId === selectedApp?.id || busyAppId === '__all__';
   const connected = selectedManagedApp?.status === 'connected';
   const canToggleConnection = selectedManagedApp?.status === 'connected' || selectedManagedApp?.status === 'disconnected';
-  const pinned = Boolean(selectedApp && pinnedAppId === selectedApp.id);
+  const togglePinnedAppWithAnnouncement = (appId: string): void => {
+    const app = appRows.find((item) => item.id === appId);
+    if (!app) {
+      return;
+    }
+    const nextPinnedAppId = pinnedAppId === appId ? '' : appId;
+    onTogglePinned(appId);
+    setPinAnnouncement(nextPinnedAppId ? `${app.title} pinned as the startup app.` : `${app.title} is no longer pinned.`);
+  };
 
   return (
     <Drawer
       className="app-management-sidebar"
       id="app-management-sidebar"
       modalType="modal"
-      onOpenChange={(_event, data) => onOpenChange(data.open)}
+      onOpenChange={(_event, data) => {
+        if (!data.open) {
+          setSelectedAppPickerOpen(false);
+        }
+        onOpenChange(data.open);
+      }}
       open={open}
       position="start"
       size="medium"
@@ -465,8 +500,30 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
             <Dropdown
               aria-label="Selected app"
               disabled={busy || !appRows.length}
+              open={selectedAppPickerOpen}
               selectedOptions={selectedApp ? [selectedApp.id] : []}
               value={selectedApp?.title || ''}
+              onActiveOptionChange={(_event, data) => {
+                activeAppOptionIdRef.current = data.nextOption?.value || selectedApp?.id || '';
+              }}
+              onKeyDown={(event) => {
+                if (!selectedAppPickerOpen || !isPinShortcut(event)) {
+                  return;
+                }
+                const activeAppId = activeAppOptionIdRef.current;
+                if (!webPartsByAppId.has(activeAppId)) {
+                  return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                togglePinnedAppWithAnnouncement(activeAppId);
+              }}
+              onOpenChange={(_event, data) => {
+                setSelectedAppPickerOpen(data.open);
+                if (data.open) {
+                  activeAppOptionIdRef.current = selectedApp?.id || '';
+                }
+              }}
               onOptionSelect={(_event, data) => {
                 if (data.optionValue) {
                   setSidebarSelectedAppId(data.optionValue);
@@ -476,13 +533,46 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                 }
               }}
             >
-              {appRows.map((app) => (
-                <Option key={app.id} text={app.title} value={app.id}>
-                  {app.title}
-                </Option>
-              ))}
+              {appRows.map((app) => {
+                const appLoaded = webPartsByAppId.has(app.id);
+                const appPinned = pinnedAppId === app.id;
+                return (
+                  <div
+                    className={`webpart-option-row ${appPinned ? 'webpart-option-row--pinned' : ''}`}
+                    key={app.id}
+                    role="presentation"
+                  >
+                    <Option
+                      aria-label={`${app.title}. ${
+                        appLoaded
+                          ? `${appPinned ? 'Pinned' : 'Not pinned'}. Press Alt+P to ${appPinned ? 'unpin' : 'pin'}.`
+                          : 'Pin unavailable.'
+                      }`}
+                      className="webpart-option"
+                      text={app.title}
+                      value={app.id}
+                    >
+                      <span className="webpart-option__label">{app.title}</span>
+                    </Option>
+                  </div>
+                );
+              })}
             </Dropdown>
           </Field>
+          {selectedApp ? (
+            <Button
+              aria-label={`${pinnedAppId === selectedApp.id ? 'Unpin' : 'Pin'} ${selectedApp.title} as startup app`}
+              aria-pressed={pinnedAppId === selectedApp.id}
+              disabled={!webPartsByAppId.has(selectedApp.id)}
+              icon={pinnedAppId === selectedApp.id ? <Pin16Filled /> : <Pin16Regular />}
+              onClick={() => togglePinnedAppWithAnnouncement(selectedApp.id)}
+            >
+              {pinnedAppId === selectedApp.id ? 'Unpin startup app' : 'Pin as startup app'}
+            </Button>
+          ) : null}
+          <span aria-live="polite" className="visually-hidden" role="status">
+            {pinAnnouncement}
+          </span>
 
           {selectedApp ? (
             <div className="app-management-sidebar__app-controls">
@@ -528,14 +618,6 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                   ))}
                 </Dropdown>
               </Field>
-
-              <Switch
-                aria-label={`${pinned ? 'Pinned' : 'Not pinned'}: ${selectedApp.title}`}
-                checked={pinned}
-                disabled={selectedAppBusy || !selectedAppLoaded}
-                label={pinned ? 'Pinned' : 'Not pinned'}
-                onChange={() => onTogglePinned(selectedApp.id)}
-              />
             </div>
           ) : (
             <p className="app-management-sidebar__empty">No workspace apps found.</p>

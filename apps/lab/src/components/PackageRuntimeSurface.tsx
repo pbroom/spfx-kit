@@ -83,15 +83,17 @@ export function PackageRuntimeSurface({
 
   return (
     <>
-      <PackageDependencyPanel
-        appTitle={selected?.title || 'No app selected'}
-        descriptor={descriptor}
-        descriptorError={descriptorError}
-        descriptorLoading={descriptorLoading}
-        mode={mode}
-        smoke={smokeStatus}
-        onRetry={retry}
-      />
+      {mode === 'cdn' ? (
+        <PackageDependencyPanel
+          appTitle={selected?.title || 'No app selected'}
+          descriptor={descriptor}
+          descriptorError={descriptorError}
+          descriptorLoading={descriptorLoading}
+          mode={mode}
+          smoke={smokeStatus}
+          onRetry={retry}
+        />
+      ) : null}
       <div className={`preview-canvas ${mode === 'cdn' && smokeStatus.status === 'ready' ? 'preview-canvas--cdn-ready' : ''}`}>
         <div
           className={`preview-frame ${boundsVisible ? 'preview-frame--bounded' : ''}`}
