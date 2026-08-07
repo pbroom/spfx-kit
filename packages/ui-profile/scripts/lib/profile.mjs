@@ -389,6 +389,27 @@ function hasActualIconPlaceholderJsx(source, label) {
   return found;
 }
 
+function hasActualLegacyIconsReference(source, label) {
+  const sourceFile = parsedSource(source, label);
+  let found = false;
+  function visit(node) {
+    const receiver =
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && unwrapExpression(node.expression);
+    let qualifiedRoot = ts.isQualifiedName(node) ? node : null;
+    while (qualifiedRoot && ts.isQualifiedName(qualifiedRoot)) qualifiedRoot = qualifiedRoot.left;
+    if (
+      (receiver && ts.isIdentifier(receiver) && receiver.text === 'Icons') ||
+      (qualifiedRoot && ts.isIdentifier(qualifiedRoot) && qualifiedRoot.text === 'Icons')
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return found;
+}
+
 function findMatching(source, openIndex, openCharacter, closeCharacter) {
   let depth = 0;
   let quote = null;
@@ -1330,7 +1351,11 @@ function assertReact17AstSource(source, label) {
 
 export function assertReact17Source(source, label) {
   assertReact17AstSource(source, label);
-  if (hasAppOwnedAliasSpecifier(source, label) || hasActualIconPlaceholderJsx(source, label) || /\bIcons\./.test(source)) {
+  if (
+    hasAppOwnedAliasSpecifier(source, label) ||
+    hasActualIconPlaceholderJsx(source, label) ||
+    hasActualLegacyIconsReference(source, label)
+  ) {
     throw new Error(`${label}: unresolved alias or icon placeholder remains after normalization`);
   }
   if (label.endsWith('.tsx') && hasJsx(source) && !hasReactBinding(source)) {

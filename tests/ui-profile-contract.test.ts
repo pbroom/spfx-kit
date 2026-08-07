@@ -367,6 +367,7 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(profile.profileId).toBe('spfx-react17-base-nova-v1');
     expect(profile.provenanceSha256).toBe(sha256(provenanceBytes));
     expect(profile.normalizationImplementationSha256).toBe(sha256(implementationBytes));
+    expect(JSON.parse(provenanceBytes.toString('utf8')).normalization.implementationSha256).toBe(sha256(implementationBytes));
     expect(profile.compilerInputs.map((input) => input.path)).toEqual(expectedCompilerInputPaths);
     for (const input of profile.compilerInputs) {
       expect(input.sha256).toBe(sha256(await readFile(path.join(profileRoot, input.path))));

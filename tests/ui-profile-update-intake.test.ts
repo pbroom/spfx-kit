@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
 import {
+  assertProfileGenerationProvenance,
   assertProfileUpdateProvenance,
   bindVerifiedSnapshotsToProvenance,
   assertPinnedShadcnToolchain,
@@ -100,6 +101,17 @@ describe('committed UI profile provenance', () => {
     const { packageRoot, provenance } = await provenanceFixture();
 
     await expect(assertProfileUpdateProvenance({ packageRoot, provenance })).resolves.toBeInstanceOf(Map);
+  });
+
+  it('binds generation provenance to the exact normalizer implementation bytes', async () => {
+    const { packageRoot, provenance } = await provenanceFixture();
+    await expect(assertProfileGenerationProvenance({ packageRoot, provenance })).resolves.toBeUndefined();
+
+    const implementationPath = path.join(packageRoot, provenance.normalization.implementation);
+    await writeFile(implementationPath, `${await readFile(implementationPath, 'utf8')} `);
+    await expect(assertProfileGenerationProvenance({ packageRoot, provenance })).rejects.toThrow(
+      'Normalization implementation digest differs'
+    );
   });
 
   it('rejects provenance schema drift before trusting snapshot metadata', async () => {

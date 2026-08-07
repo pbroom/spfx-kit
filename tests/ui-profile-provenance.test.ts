@@ -17,6 +17,14 @@ describe('UI profile generation provenance', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('rejects a provenance normalizer digest that does not match the implementation bytes', async () => {
+    const provenance = await canonicalProvenance();
+    provenance.normalization.implementationSha256 = '0'.repeat(64);
+    await expect(assertProfileGenerationProvenance({ packageRoot, provenance })).rejects.toThrow(
+      'Normalization implementation digest differs'
+    );
+  });
+
   it.each([
     [
       'profile ID',

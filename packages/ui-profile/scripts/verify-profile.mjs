@@ -132,6 +132,10 @@ assert(profile.generatorVersion === GENERATOR_VERSION, 'Unexpected profile gener
 assert(profile.profileId === PROFILE_ID, 'Unexpected profile ID');
 assert(profile.provenanceSha256 === sha256(provenanceBytes), 'Provenance digest differs');
 assert(profile.normalizationImplementationSha256 === sha256(implementationBytes), 'Normalization implementation digest differs');
+assert(
+  provenance.normalization.implementationSha256 === sha256(implementationBytes),
+  'Normalization provenance implementation digest differs'
+);
 assertExact(
   profile.compilerInputs.map((input) => input.path),
   expectedCompilerInputPaths,

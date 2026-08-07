@@ -235,11 +235,6 @@ async function assertCommittedRegistrySnapshots(packageRoot, provenance) {
       parsed.files.map((file) => file.path).sort()
     );
   }
-  const implementationBytes = await readFile(path.join(packageRoot, provenance.normalization.implementation));
-  assert(
-    sha256(implementationBytes) === provenance.normalization.implementationSha256,
-    'Normalization implementation digest differs'
-  );
   return expectedSourcePathsById;
 }
 
@@ -259,6 +254,11 @@ export async function assertProfileGenerationProvenance({ packageRoot, provenanc
     'Provenance identity does not match the profile generator'
   );
   assertRegistryIds(provenance.registryIds);
+  const implementationBytes = await readFile(path.join(packageRoot, provenance.normalization.implementation));
+  assert(
+    sha256(implementationBytes) === provenance.normalization.implementationSha256,
+    'Normalization implementation digest differs'
+  );
 }
 
 export async function assertProfileUpdateProvenance(options) {

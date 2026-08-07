@@ -688,6 +688,34 @@ describe('React 17 UI profile normalization', () => {
       'export { examples }\n';
     expect(() => assertReact17Source(compatible, 'comments-and-strings.ts')).not.toThrow();
   });
+
+  it('ignores legacy icon references in comments and literal text', () => {
+    const compatible =
+      '// migrate Icons.Search\n' +
+      '/* preserve Icons.Check */\n' +
+      "const single = 'Icons.Search'\n" +
+      'const note = "Icons.Search"\n' +
+      'const template = `Icons.Check`\n' +
+      'const keyed = { "Icons.Search": true }\n' +
+      'export { single, note, template, keyed }\n';
+    expect(() => assertReact17Source(compatible, 'legacy-icon-text.ts')).not.toThrow();
+  });
+
+  it('rejects actual legacy icon namespace accesses across supported syntax forms', () => {
+    for (const source of [
+      'export const Icon = Icons.Search\n',
+      'export const Icon = Icons?.Search\n',
+      'export const Icon = (Icons as any).Search\n',
+      'export const Icon = Icons["Search"]\n',
+      'export const Icon = () => <Icons.Search />\n',
+      'export const note = `icon: ${Icons.Search}`\n',
+      'export type Icon = Icons.Search\n'
+    ]) {
+      expect(() => assertReact17Source(source, 'legacy-icon-access.tsx')).toThrow(
+        'unresolved alias or icon placeholder remains after normalization'
+      );
+    }
+  });
 });
 
 describe('synthetic 1,940-option cardinality fixture', () => {

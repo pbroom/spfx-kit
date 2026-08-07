@@ -23,7 +23,7 @@
     },
     {
       "path": "scripts/lib/profile-update-intake.mjs",
-      "sha256": "fbfcbe0be7da37d0aae057c94da18220f3729e7c03557b6fbfaacbc00d8a1ddd"
+      "sha256": "8510abfcb90b8785f111b4ce988253f2ce570cd3ff9a5152018a651b67a40cb8"
     },
     {
       "path": "scripts/lib/typecheck-generated-profile.mjs",
@@ -667,8 +667,8 @@
       }
     }
   ],
-  "normalizationImplementationSha256": "eb0e41d6ad5869fa6288c38b50c82e1d94d876a7b698f90c4e2c88b217be6d59",
+  "normalizationImplementationSha256": "e1ef4d34ab0adc98cc26ff7246754804a75d322464f1511f079c9d18ebba0680",
   "profileId": "spfx-react17-base-nova-v1",
-  "provenanceSha256": "670808b29c58bf80e616e819474a51f6bddc997227cf4353297d80d145b885a9",
+  "provenanceSha256": "a39ec0ada16ec03ca9966c8b17fbe9e72f46c5347e6b2fae0df90e46ff63105e",
   "schemaVersion": 1
 }
