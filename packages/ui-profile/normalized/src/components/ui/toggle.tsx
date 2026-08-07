@@ -7,18 +7,18 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "../../lib/utils"
 
 const toggleVariants = cva(
-  "group/toggle inline-flex items-center justify-center gap-1 rounded-lg text-sm font-medium whitespace-nowrap transition-all outline-none hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 aria-pressed:bg-muted data-[state=on]:bg-muted dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "skui:group/toggle skui:inline-flex skui:items-center skui:justify-center skui:gap-1 skui:rounded-lg skui:text-sm skui:font-medium skui:whitespace-nowrap skui:transition-all skui:outline-none skui:hover:bg-muted skui:hover:text-foreground skui:focus-visible:border-ring skui:focus-visible:ring-[3px] skui:focus-visible:ring-ring/50 skui:disabled:pointer-events-none skui:disabled:opacity-50 skui:aria-invalid:border-destructive skui:aria-invalid:ring-destructive/20 skui:aria-pressed:bg-muted skui:data-[state=on]:bg-muted skui:dark:aria-invalid:ring-destructive/40 skui:[&_svg]:pointer-events-none skui:[&_svg]:shrink-0 skui:[&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-transparent",
-        outline: "border border-input bg-transparent hover:bg-muted",
+        default: "skui:bg-transparent",
+        outline: "skui:border skui:border-input skui:bg-transparent skui:hover:bg-muted",
       },
       size: {
         default:
-          "h-8 min-w-8 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        sm: "h-7 min-w-7 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 min-w-9 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
+          "skui:h-8 skui:min-w-8 skui:px-2.5 skui:has-data-[icon=inline-end]:pr-2 skui:has-data-[icon=inline-start]:pl-2",
+        sm: "skui:h-7 skui:min-w-7 skui:rounded-[min(var(--radius-md),12px)] skui:px-2.5 skui:text-[0.8rem] skui:has-data-[icon=inline-end]:pr-1.5 skui:has-data-[icon=inline-start]:pl-1.5 skui:[&_svg:not([class*='size-'])]:size-3.5",
+        lg: "skui:h-9 skui:min-w-9 skui:px-2.5 skui:has-data-[icon=inline-end]:pr-2 skui:has-data-[icon=inline-start]:pl-2",
       },
     },
     defaultVariants: {

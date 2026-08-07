@@ -23,11 +23,11 @@
     },
     {
       "path": "scripts/lib/generate-profile.mjs",
-      "sha256": "020db3ac970d4dad889bdb56c821ee5a2e54fe92ad7e390259f6d5e72566da37"
+      "sha256": "12ae253ca649b2f88d0575fe2e60e54d9dd50f67b75645b3fbcb9f3c077bb8d6"
     },
     {
       "path": "scripts/lib/profile-update-intake.mjs",
-      "sha256": "fd3a9443b8972c5608e2b41bd008a5de21bebc9a9121f11a6517bab6556505e3"
+      "sha256": "09d9c7d3b8bd1bc7dddcf958129772b1f2be0480f255d890203a7d19ef0faded"
     },
     {
       "path": "scripts/lib/typecheck-generated-profile.mjs",
@@ -35,11 +35,15 @@
     },
     {
       "path": "scripts/lib/generate-validated-profile.mjs",
-      "sha256": "91ec19316ff7d7c6d1f48c12731c3df8afdb28d17e5bf448ac7d38949d1a52ef"
+      "sha256": "aa226f17c419df67561e960af9f46460a2c181586df23b45e6e3ee5c437701de"
     },
     {
       "path": "scripts/lib/generated-tree-closure.mjs",
       "sha256": "de6f77c97aab8f5987d10f9358aa09c1bebebe233d29aab4ffa80a945849577a"
+    },
+    {
+      "path": "scripts/verify-dependency-closure.mjs",
+      "sha256": "a5306efbf024c7ab7fa199ad9fbe99c8d926290ee32729c82c1fe76bc6b29135"
     },
     {
       "path": "scripts/prepare-base-ui.mjs",
@@ -74,7 +78,7 @@
     "path": "dependency-closure.json",
     "sha256": "071df6ff0af2debfd0cbbdbdbd372ad6d94230242e6a3cb0f4f9e70c347ef736"
   },
-  "generatorVersion": "1.0.0",
+  "generatorVersion": "1.1.0",
   "items": [
     {
       "canonical": {
@@ -86,10 +90,11 @@
         {
           "path": "normalized/src/components/ui/button.tsx",
           "registrySourcePath": "registry/base-nova/ui/button.tsx",
-          "sha256": "68a741e99a9a497b30a89dd75f07bdd28bcdbe2f9d794bea37ef0428d6ede63f",
+          "sha256": "99383a9b61cef0314525afd41b4ac97c72b2e1c58c1d9e3783d60fa8253cb185",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "bind-react-namespace",
             "react17-forward-ref-public-wrappers"
           ],
@@ -111,10 +116,11 @@
         {
           "path": "normalized/src/components/ui/input.tsx",
           "registrySourcePath": "registry/base-nova/ui/input.tsx",
-          "sha256": "1c7b7350d7c48f337d562d5296331aa5aaa51592d4de5cf00be05f90ca11a4b3",
+          "sha256": "508573dcc4173acf76447a9f5d2f55c374214fd7b084faafd0c4cfc790f3ad2f",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
           "upstreamSha256": "451323f9b25c6d52713165a248197a9724f602915b18a8460cf3d888138ea83b"
@@ -135,10 +141,11 @@
         {
           "path": "normalized/src/components/ui/field.tsx",
           "registrySourcePath": "registry/base-nova/ui/field.tsx",
-          "sha256": "b953f3a9269d404877934ca08588addbb135a86662446363349d8b8dfe8c65c8",
+          "sha256": "6f446015beb746d4c406121b92c3167a205affa4547b1d19094b8787cea87139",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "bind-react-namespace",
             "react17-forward-ref-public-wrappers"
           ],
@@ -160,10 +167,11 @@
         {
           "path": "normalized/src/components/ui/textarea.tsx",
           "registrySourcePath": "registry/base-nova/ui/textarea.tsx",
-          "sha256": "ac1d1839a8925c77329d522fca83e8d0fc77083a73f817f3c6da2f363b756578",
+          "sha256": "2c227acd5387eb28489f42f4481194667da0ff75eeaaa627dd3f43ad3d0a3067",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
           "upstreamSha256": "ce8f5b4444a917f31bd02f163a6d06d5db0b6eb9fc65f631a05157e041b664b5"
@@ -184,11 +192,12 @@
         {
           "path": "normalized/src/components/ui/checkbox.tsx",
           "registrySourcePath": "registry/base-nova/ui/checkbox.tsx",
-          "sha256": "c404bf971c5c29a04bceea3d4e8a2c2c25af0441ad10e1b4b9c9352d3d59e107",
+          "sha256": "6267d50a057b82024898d0ce6f0ced402ab456c7897c0d88ef9f4d9461623fa9",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "prefix-tailwind-utilities",
             "bind-react-namespace",
             "react17-forward-ref-public-wrappers"
           ],
@@ -210,10 +219,11 @@
         {
           "path": "normalized/src/components/ui/switch.tsx",
           "registrySourcePath": "registry/base-nova/ui/switch.tsx",
-          "sha256": "1bb34327a7ffc822ae24ba96e11b0f960d80865a780192a8b57a36377b9945bb",
+          "sha256": "099090b5c7e51c54f1d79280dfc34186009181256c05378a018be2da6f83653e",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "bind-react-namespace",
             "react17-forward-ref-public-wrappers"
           ],
@@ -235,11 +245,12 @@
         {
           "path": "normalized/src/components/ui/select.tsx",
           "registrySourcePath": "registry/base-nova/ui/select.tsx",
-          "sha256": "a0d372a01b054021bfdef56d5020c6b3c00bcf122879297f772877286f2e700f",
+          "sha256": "7a1798bc2b5373cf7a7c91846511f5674479ca8f6000788da45da06aab26eeeb",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
           "upstreamSha256": "098125c59bb186d22083637e48a6c3427fd469f4f98363ff915fc0c3ac32e5d3"
@@ -260,12 +271,13 @@
         {
           "path": "normalized/src/components/ui/combobox.tsx",
           "registrySourcePath": "registry/base-nova/ui/combobox.tsx",
-          "sha256": "cd0fd77cac5bb08a53e152ae606a54477b1678cbdde0a655d6742cbf9516a5a1",
+          "sha256": "4b6f007ae5f2001c763595723af3474fda78da939d9900d1b14464e8f5de8670",
           "transformations": [
             "normalize-line-endings",
             "pin-base-ui-combobox-subpath",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
           "upstreamSha256": "3122d4c4d2219beee472a394490ee0934e46778a1ba4c2a97447d6871e7968d2"
@@ -286,10 +298,11 @@
         {
           "path": "normalized/src/components/ui/toggle-group.tsx",
           "registrySourcePath": "registry/base-nova/ui/toggle-group.tsx",
-          "sha256": "57c4f4cf69b5624c111d8fac35086028c53ff6b100ea15d2c792f228cc953798",
+          "sha256": "10723205ae83b55c65001f6633544df24a8d550c6f2adf28d5c04f9b746643d0",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
           "upstreamSha256": "a4d6534abfafdf2c7d47b56c68ca69ba77c9df715aa81b7b95079c48edd8de30"
@@ -310,10 +323,11 @@
         {
           "path": "normalized/src/components/ui/tabs.tsx",
           "registrySourcePath": "registry/base-nova/ui/tabs.tsx",
-          "sha256": "7dd589249b3b75df25eaee737e7a10917b1762e61d6bc6e10650bfb4af66c031",
+          "sha256": "29f4339e9f7d627fb2409391bba6700a76247e8984feca6c132e791b07e5408d",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "bind-react-namespace",
             "react17-forward-ref-public-wrappers"
           ],
@@ -335,11 +349,12 @@
         {
           "path": "normalized/src/components/ui/accordion.tsx",
           "registrySourcePath": "registry/base-nova/ui/accordion.tsx",
-          "sha256": "badf8e0601d84358c05374c459f972c352902a7848dc23cb9db95d607bab16c3",
+          "sha256": "afa47a79b735906833128d5611b24cd9a37d7a3e6a0739d94f5dba6ddbf3d4a6",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "prefix-tailwind-utilities",
             "bind-react-namespace",
             "react17-forward-ref-public-wrappers"
           ],
@@ -361,11 +376,12 @@
         {
           "path": "normalized/src/components/ui/dropdown-menu.tsx",
           "registrySourcePath": "registry/base-nova/ui/dropdown-menu.tsx",
-          "sha256": "ceba289602b78cf3fff930a6697f9421f75a2c69d82199c94d1bbdf6bb623c04",
+          "sha256": "507cf9fd5f0d8128e705720d169ab71abb1adf8ee7205d7f92fd227f317d674d",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
           "upstreamSha256": "ff60876271751b8427b3dd0f60be44db305c4a5faaedc3516b2b581ce3f676b0"
@@ -386,11 +402,12 @@
         {
           "path": "normalized/src/components/ui/dialog.tsx",
           "registrySourcePath": "registry/base-nova/ui/dialog.tsx",
-          "sha256": "2b56efb58941939e043c33687b425e532d89382c2a3212432c251e6844111e38",
+          "sha256": "f66604d10c61845f89200cae621a6fd392073403bb550565496a7e183d0d6042",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
           "upstreamSha256": "4a20c4f16cf1564f0852155736a6041a7f2a5a94d29c3103c06ba2a1aed3a72f"
@@ -411,11 +428,12 @@
         {
           "path": "normalized/src/components/ui/sheet.tsx",
           "registrySourcePath": "registry/base-nova/ui/sheet.tsx",
-          "sha256": "e37157497a9a72f810ac94bbec07883f22c3861f8e3f3d55151807447385386e",
+          "sha256": "f7756ac8c3304f49c267ce2d5cd51695151067e5a6bb513dfe5275aa0ec5b0fd",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
           "upstreamSha256": "2457641a7ef9dd578859999b38649854cc7b044c3d6c711aa7643b1fe83d0bb0"
@@ -436,10 +454,11 @@
         {
           "path": "normalized/src/components/ui/popover.tsx",
           "registrySourcePath": "registry/base-nova/ui/popover.tsx",
-          "sha256": "97c513cd3febda781cff8aeb58e383dcd1089a0fea0cf65c59f39b1d27250db0",
+          "sha256": "1fd58dc3285de68d0992b659b4a481761976d57641dc209441bffde1ca569ab4",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
           "upstreamSha256": "a0f7a4621b3ef94b2cfbaf2585b59bb5b7934dd1aee188fa2875d9e82e17c065"
@@ -460,10 +479,11 @@
         {
           "path": "normalized/src/components/ui/tooltip.tsx",
           "registrySourcePath": "registry/base-nova/ui/tooltip.tsx",
-          "sha256": "71dd20153348fdda2d87487fec79970262ccba091eb33432b3eb3d79ba08195b",
+          "sha256": "aa859c5e5e1290cdba1dec8bb0e668855cff2207dd31b436ae3542837cf49d96",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "bind-react-namespace",
             "react17-forward-ref-public-wrappers"
           ],
@@ -485,10 +505,11 @@
         {
           "path": "normalized/src/components/ui/alert.tsx",
           "registrySourcePath": "registry/base-nova/ui/alert.tsx",
-          "sha256": "f8ed8bba3f94be5c7c8235db25fca42162ed1ebe0b6a85b3db4c756497117a8f",
+          "sha256": "88479efa1d0cd3e01a0ae0284afee2a010959570f2490454aefcd39ccb7a7e27",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
           "upstreamSha256": "9b320b60371cf5a10d557a1c625210e44c0e2101575a5f20921cdb96d32b64a2"
@@ -509,10 +530,11 @@
         {
           "path": "normalized/src/components/ui/badge.tsx",
           "registrySourcePath": "registry/base-nova/ui/badge.tsx",
-          "sha256": "549b61545bffb7d3acc46fb566bebcd583c88c120b04a68f5801d99a7918daf7",
+          "sha256": "9bc555f50d26e0c72dd6819d1ae9059d69508fe5aa8a86e5a8ec7fc9802cf12e",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "bind-react-namespace",
             "react17-forward-ref-public-wrappers"
           ],
@@ -534,11 +556,12 @@
         {
           "path": "normalized/src/components/ui/spinner.tsx",
           "registrySourcePath": "registry/base-nova/ui/spinner.tsx",
-          "sha256": "0df96c91b251feb6ea566a539762d72cdf55ce57ec3d3ddd78607e55be3fef32",
+          "sha256": "ae31738c2371b843a8c93a676ab64aaa8c808ea801434bea34078a1d6853f8d2",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "prefix-tailwind-utilities",
             "bind-react-namespace",
             "react17-forward-ref-public-wrappers"
           ],
@@ -560,10 +583,11 @@
         {
           "path": "normalized/src/components/ui/label.tsx",
           "registrySourcePath": "registry/base-nova/ui/label.tsx",
-          "sha256": "71fafedbbc3f6f88bfccc04aeea102947b76373ff69aa777e8d4ff8ff28caeaa",
+          "sha256": "fefbf3d0afc532f97449f54e6f21683cf76cfaa24339406152415b5d7d94a4f9",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
           "upstreamSha256": "e144f164426dedf34a64b570539c13854fd655157cd022ca5deb53d17b3be290"
@@ -584,10 +608,11 @@
         {
           "path": "normalized/src/components/ui/separator.tsx",
           "registrySourcePath": "registry/base-nova/ui/separator.tsx",
-          "sha256": "370fe6fcff457aab467d3a2a13e36e195f10990ec22ecc38017f20497a2a016c",
+          "sha256": "c41ef56e5ed72359f20aa297057c0b842a178029f3885611a851b5c69c041805",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "bind-react-namespace",
             "react17-forward-ref-public-wrappers"
           ],
@@ -609,10 +634,11 @@
         {
           "path": "normalized/src/components/ui/input-group.tsx",
           "registrySourcePath": "registry/base-nova/ui/input-group.tsx",
-          "sha256": "4fb674dfa219024661d5060082d03e028a736435c13d5696b4b37e22c0559229",
+          "sha256": "d758a96397d7dd0ff71570e0a21189b1c3f0ef11995de0917d3e1c01712ea986",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
           "upstreamSha256": "ec50201ca8686a84f192ee00f77c103bdbed7ff8c191b1d836dbae44287dbaab"
@@ -633,10 +659,11 @@
         {
           "path": "normalized/src/components/ui/toggle.tsx",
           "registrySourcePath": "registry/base-nova/ui/toggle.tsx",
-          "sha256": "62506938d94a9ea8159a679e8e6ef6c6b0f94547ac1af4e7396355bd40725602",
+          "sha256": "0996405d5812f9b4924c96caacd02ea7a35a14373558b1b6f28bf1ece2be350c",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "prefix-tailwind-utilities",
             "bind-react-namespace",
             "react17-forward-ref-public-wrappers"
           ],
@@ -671,8 +698,8 @@
       }
     }
   ],
-  "normalizationImplementationSha256": "b47e22f385089b46716dacbd207ff8a35b1de53b68e8f4a8db2908faa9011597",
+  "normalizationImplementationSha256": "4cb0cc83118b3de63f20d95de88bebcba1ddf07ce8959ceb505088bf041ed827",
   "profileId": "spfx-react17-base-nova-v1",
-  "provenanceSha256": "bfb316235c96db90cb8772659f4e2c1e0a06624d6be0e3b2c76fde27bbd1616e",
+  "provenanceSha256": "105808f9edf183c4594181d4fdb8b0af3492defe986eed12a26e4d157d0035dc",
   "schemaVersion": 1
 }

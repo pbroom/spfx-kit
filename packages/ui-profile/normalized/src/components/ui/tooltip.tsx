@@ -54,19 +54,19 @@ const TooltipContent = React.forwardRef<
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
-        className="isolate z-50"
+        className="skui:isolate skui:z-50"
       >
         <TooltipPrimitive.Popup
           ref={ref}
           data-slot="tooltip-content"
           className={cn(
-            "z-50 inline-flex w-fit max-w-xs origin-(--transform-origin) items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs text-background has-data-[slot=kbd]:pr-1.5 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-sm data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            "skui:z-50 skui:inline-flex skui:w-fit skui:max-w-xs skui:origin-(--transform-origin) skui:items-center skui:gap-1.5 skui:rounded-md skui:bg-foreground skui:px-3 skui:py-1.5 skui:text-xs skui:text-background skui:has-data-[slot=kbd]:pr-1.5 skui:data-[side=bottom]:slide-in-from-top-2 skui:data-[side=inline-end]:slide-in-from-left-2 skui:data-[side=inline-start]:slide-in-from-right-2 skui:data-[side=left]:slide-in-from-right-2 skui:data-[side=right]:slide-in-from-left-2 skui:data-[side=top]:slide-in-from-bottom-2 skui:**:data-[slot=kbd]:relative skui:**:data-[slot=kbd]:isolate skui:**:data-[slot=kbd]:z-50 skui:**:data-[slot=kbd]:rounded-sm skui:data-[state=delayed-open]:animate-in skui:data-[state=delayed-open]:fade-in-0 skui:data-[state=delayed-open]:zoom-in-95 skui:data-open:animate-in skui:data-open:fade-in-0 skui:data-open:zoom-in-95 skui:data-closed:animate-out skui:data-closed:fade-out-0 skui:data-closed:zoom-out-95",
             className
           )}
           {...props}
         >
           {children}
-          <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%-2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground data-[side=bottom]:top-1 data-[side=inline-end]:top-1/2! data-[side=inline-end]:-left-1 data-[side=inline-end]:-translate-y-1/2 data-[side=inline-start]:top-1/2! data-[side=inline-start]:-right-1 data-[side=inline-start]:-translate-y-1/2 data-[side=left]:top-1/2! data-[side=left]:-right-1 data-[side=left]:-translate-y-1/2 data-[side=right]:top-1/2! data-[side=right]:-left-1 data-[side=right]:-translate-y-1/2 data-[side=top]:-bottom-2.5" />
+          <TooltipPrimitive.Arrow className="skui:z-50 skui:size-2.5 skui:translate-y-[calc(-50%-2px)] skui:rotate-45 skui:rounded-[2px] skui:bg-foreground skui:fill-foreground skui:data-[side=bottom]:top-1 skui:data-[side=inline-end]:top-1/2! skui:data-[side=inline-end]:-left-1 skui:data-[side=inline-end]:-translate-y-1/2 skui:data-[side=inline-start]:top-1/2! skui:data-[side=inline-start]:-right-1 skui:data-[side=inline-start]:-translate-y-1/2 skui:data-[side=left]:top-1/2! skui:data-[side=left]:-right-1 skui:data-[side=left]:-translate-y-1/2 skui:data-[side=right]:top-1/2! skui:data-[side=right]:-left-1 skui:data-[side=right]:-translate-y-1/2 skui:data-[side=top]:-bottom-2.5" />
         </TooltipPrimitive.Popup>
       </TooltipPrimitive.Positioner>
     </TooltipPrimitive.Portal>

@@ -6,20 +6,20 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "../../lib/utils"
 
 const badgeVariants = cva(
-  "group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-4xl border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-all focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3!",
+  "skui:group/badge skui:inline-flex skui:h-5 skui:w-fit skui:shrink-0 skui:items-center skui:justify-center skui:gap-1 skui:overflow-hidden skui:rounded-4xl skui:border skui:border-transparent skui:px-2 skui:py-0.5 skui:text-xs skui:font-medium skui:whitespace-nowrap skui:transition-all skui:focus-visible:border-ring skui:focus-visible:ring-[3px] skui:focus-visible:ring-ring/50 skui:has-data-[icon=inline-end]:pr-1.5 skui:has-data-[icon=inline-start]:pl-1.5 skui:aria-invalid:border-destructive skui:aria-invalid:ring-destructive/20 skui:dark:aria-invalid:ring-destructive/40 skui:[&>svg]:pointer-events-none skui:[&>svg]:size-3!",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        default: "skui:bg-primary skui:text-primary-foreground skui:[a]:hover:bg-primary/80",
         secondary:
-          "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
+          "skui:bg-secondary skui:text-secondary-foreground skui:[a]:hover:bg-secondary/80",
         destructive:
-          "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
+          "skui:bg-destructive/10 skui:text-destructive skui:focus-visible:ring-destructive/20 skui:dark:bg-destructive/20 skui:dark:focus-visible:ring-destructive/40 skui:[a]:hover:bg-destructive/20",
         outline:
-          "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
+          "skui:border-border skui:text-foreground skui:[a]:hover:bg-muted skui:[a]:hover:text-muted-foreground",
         ghost:
-          "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
-        link: "text-primary underline-offset-4 hover:underline",
+          "skui:hover:bg-muted skui:hover:text-muted-foreground skui:dark:hover:bg-muted/50",
+        link: "skui:text-primary skui:underline-offset-4 skui:hover:underline",
       },
     },
     defaultVariants: {

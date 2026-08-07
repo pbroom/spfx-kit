@@ -41,7 +41,7 @@ const DropdownMenuContent = React.forwardRef<
   return (
     <MenuPrimitive.Portal>
       <MenuPrimitive.Positioner
-        className="isolate z-50 outline-none"
+        className="skui:isolate skui:z-50 skui:outline-none"
         align={align}
         alignOffset={alignOffset}
         side={side}
@@ -51,7 +51,7 @@ const DropdownMenuContent = React.forwardRef<
           ref={ref}
           data-slot="dropdown-menu-content"
           className={cn(
-            "cn-menu-target cn-menu-translucent z-50 max-h-(--available-height) w-(--anchor-width) min-w-32 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 outline-none data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:overflow-hidden data-closed:fade-out-0 data-closed:zoom-out-95",
+            "skui:z-50 skui:max-h-(--available-height) skui:w-(--anchor-width) skui:min-w-32 skui:origin-(--transform-origin) skui:overflow-x-hidden skui:overflow-y-auto skui:rounded-lg skui:bg-popover skui:p-1 skui:text-popover-foreground skui:shadow-md skui:ring-1 skui:ring-foreground/10 skui:duration-100 skui:outline-none skui:data-[side=bottom]:slide-in-from-top-2 skui:data-[side=inline-end]:slide-in-from-left-2 skui:data-[side=inline-start]:slide-in-from-right-2 skui:data-[side=left]:slide-in-from-right-2 skui:data-[side=right]:slide-in-from-left-2 skui:data-[side=top]:slide-in-from-bottom-2 skui:data-open:animate-in skui:data-open:fade-in-0 skui:data-open:zoom-in-95 skui:data-closed:animate-out skui:data-closed:overflow-hidden skui:data-closed:fade-out-0 skui:data-closed:zoom-out-95",
             className
           )}
           {...props}
@@ -87,7 +87,7 @@ const DropdownMenuLabel = React.forwardRef<
       data-slot="dropdown-menu-label"
       data-inset={inset}
       className={cn(
-        "px-1.5 py-1 text-xs font-medium text-muted-foreground data-inset:pl-7",
+        "skui:px-1.5 skui:py-1 skui:text-xs skui:font-medium skui:text-muted-foreground skui:data-inset:pl-7",
         className
       )}
       {...props}
@@ -115,7 +115,7 @@ const DropdownMenuItem = React.forwardRef<
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "group/dropdown-menu-item relative flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-inset:pl-7 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-[variant=destructive]:*:[svg]:text-destructive",
+        "skui:group/dropdown-menu-item skui:relative skui:flex skui:cursor-default skui:items-center skui:gap-1.5 skui:rounded-md skui:px-1.5 skui:py-1 skui:text-sm skui:outline-hidden skui:select-none skui:focus:bg-accent skui:focus:text-accent-foreground skui:not-data-[variant=destructive]:focus:**:text-accent-foreground skui:data-inset:pl-7 skui:data-[variant=destructive]:text-destructive skui:data-[variant=destructive]:focus:bg-destructive/10 skui:data-[variant=destructive]:focus:text-destructive skui:dark:data-[variant=destructive]:focus:bg-destructive/20 skui:data-disabled:pointer-events-none skui:data-disabled:opacity-50 skui:[&_svg]:pointer-events-none skui:[&_svg]:shrink-0 skui:[&_svg:not([class*='size-'])]:size-4 skui:data-[variant=destructive]:*:[svg]:text-destructive",
         className
       )}
       {...props}
@@ -145,14 +145,14 @@ const DropdownMenuSubTrigger = React.forwardRef<
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-inset:pl-7 data-popup-open:bg-accent data-popup-open:text-accent-foreground data-open:bg-accent data-open:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "skui:flex skui:cursor-default skui:items-center skui:gap-1.5 skui:rounded-md skui:px-1.5 skui:py-1 skui:text-sm skui:outline-hidden skui:select-none skui:focus:bg-accent skui:focus:text-accent-foreground skui:not-data-[variant=destructive]:focus:**:text-accent-foreground skui:data-inset:pl-7 skui:data-popup-open:bg-accent skui:data-popup-open:text-accent-foreground skui:data-open:bg-accent skui:data-open:text-accent-foreground skui:[&_svg]:pointer-events-none skui:[&_svg]:shrink-0 skui:[&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
     >
       {children}
       <ChevronRightIcon
-        className="cn-rtl-flip ml-auto"
+        className="skui:ml-auto"
       />
     </MenuPrimitive.SubmenuTrigger>
   )
@@ -175,7 +175,7 @@ const DropdownMenuSubContent = React.forwardRef<
       ref={ref}
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        "cn-menu-target cn-menu-translucent w-auto min-w-[96px] rounded-lg bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+        "skui:w-auto skui:min-w-[96px] skui:rounded-lg skui:bg-popover skui:p-1 skui:text-popover-foreground skui:shadow-lg skui:ring-1 skui:ring-foreground/10 skui:duration-100 skui:data-[side=bottom]:slide-in-from-top-2 skui:data-[side=left]:slide-in-from-right-2 skui:data-[side=right]:slide-in-from-left-2 skui:data-[side=top]:slide-in-from-bottom-2 skui:data-open:animate-in skui:data-open:fade-in-0 skui:data-open:zoom-in-95 skui:data-closed:animate-out skui:data-closed:fade-out-0 skui:data-closed:zoom-out-95",
         className
       )}
       align={align}
@@ -206,14 +206,14 @@ const DropdownMenuCheckboxItem = React.forwardRef<
       data-slot="dropdown-menu-checkbox-item"
       data-inset={inset}
       className={cn(
-        "relative flex cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "skui:relative skui:flex skui:cursor-default skui:items-center skui:gap-1.5 skui:rounded-md skui:py-1 skui:pr-8 skui:pl-1.5 skui:text-sm skui:outline-hidden skui:select-none skui:focus:bg-accent skui:focus:text-accent-foreground skui:focus:**:text-accent-foreground skui:data-inset:pl-7 skui:data-disabled:pointer-events-none skui:data-disabled:opacity-50 skui:[&_svg]:pointer-events-none skui:[&_svg]:shrink-0 skui:[&_svg:not([class*='size-'])]:size-4",
         className
       )}
       checked={checked}
       {...props}
     >
       <span
-        className="pointer-events-none absolute right-2 flex items-center justify-center"
+        className="skui:pointer-events-none skui:absolute skui:right-2 skui:flex skui:items-center skui:justify-center"
         data-slot="dropdown-menu-checkbox-item-indicator"
       >
         <MenuPrimitive.CheckboxItemIndicator>
@@ -257,13 +257,13 @@ const DropdownMenuRadioItem = React.forwardRef<
       data-slot="dropdown-menu-radio-item"
       data-inset={inset}
       className={cn(
-        "relative flex cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "skui:relative skui:flex skui:cursor-default skui:items-center skui:gap-1.5 skui:rounded-md skui:py-1 skui:pr-8 skui:pl-1.5 skui:text-sm skui:outline-hidden skui:select-none skui:focus:bg-accent skui:focus:text-accent-foreground skui:focus:**:text-accent-foreground skui:data-inset:pl-7 skui:data-disabled:pointer-events-none skui:data-disabled:opacity-50 skui:[&_svg]:pointer-events-none skui:[&_svg]:shrink-0 skui:[&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
     >
       <span
-        className="pointer-events-none absolute right-2 flex items-center justify-center"
+        className="skui:pointer-events-none skui:absolute skui:right-2 skui:flex skui:items-center skui:justify-center"
         data-slot="dropdown-menu-radio-item-indicator"
       >
         <MenuPrimitive.RadioItemIndicator>
@@ -287,7 +287,7 @@ const DropdownMenuSeparator = React.forwardRef<
     <MenuPrimitive.Separator
       ref={ref}
       data-slot="dropdown-menu-separator"
-      className={cn("-mx-1 my-1 h-px bg-border", className)}
+      className={cn("skui:-mx-1 skui:my-1 skui:h-px skui:bg-border", className)}
       {...props}
     />
   )
@@ -306,7 +306,7 @@ const DropdownMenuShortcut = React.forwardRef<
       ref={ref}
       data-slot="dropdown-menu-shortcut"
       className={cn(
-        "ml-auto text-xs tracking-widest text-muted-foreground group-focus/dropdown-menu-item:text-accent-foreground",
+        "skui:ml-auto skui:text-xs skui:tracking-widest skui:text-muted-foreground skui:group-focus/dropdown-menu-item:text-accent-foreground",
         className
       )}
       {...props}

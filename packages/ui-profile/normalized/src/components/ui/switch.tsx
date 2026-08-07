@@ -21,14 +21,14 @@ const Switch = React.forwardRef<
       data-slot="switch"
       data-size={size}
       className={cn(
-        "peer group/switch relative inline-flex shrink-0 items-center rounded-full border border-transparent transition-all outline-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-[18.4px] data-[size=default]:w-[32px] data-[size=sm]:h-[14px] data-[size=sm]:w-[24px] dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:bg-primary data-unchecked:bg-input dark:data-unchecked:bg-input/80 data-disabled:cursor-not-allowed data-disabled:opacity-50",
+        "skui:peer skui:group/switch skui:relative skui:inline-flex skui:shrink-0 skui:items-center skui:rounded-full skui:border skui:border-transparent skui:transition-all skui:outline-none skui:after:absolute skui:after:-inset-x-3 skui:after:-inset-y-2 skui:focus-visible:border-ring skui:focus-visible:ring-3 skui:focus-visible:ring-ring/50 skui:aria-invalid:border-destructive skui:aria-invalid:ring-3 skui:aria-invalid:ring-destructive/20 skui:data-[size=default]:h-[18.4px] skui:data-[size=default]:w-[32px] skui:data-[size=sm]:h-[14px] skui:data-[size=sm]:w-[24px] skui:dark:aria-invalid:border-destructive/50 skui:dark:aria-invalid:ring-destructive/40 skui:data-checked:bg-primary skui:data-unchecked:bg-input skui:dark:data-unchecked:bg-input/80 skui:data-disabled:cursor-not-allowed skui:data-disabled:opacity-50",
         className
       )}
       {...props}
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
-        className="pointer-events-none block rounded-full bg-background ring-0 transition-transform group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] dark:data-checked:bg-primary-foreground group-data-[size=default]/switch:data-unchecked:translate-x-0 group-data-[size=sm]/switch:data-unchecked:translate-x-0 dark:data-unchecked:bg-foreground"
+        className="skui:pointer-events-none skui:block skui:rounded-full skui:bg-background skui:ring-0 skui:transition-transform skui:group-data-[size=default]/switch:size-4 skui:group-data-[size=sm]/switch:size-3 skui:group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] skui:group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] skui:dark:data-checked:bg-primary-foreground skui:group-data-[size=default]/switch:data-unchecked:translate-x-0 skui:group-data-[size=sm]/switch:data-unchecked:translate-x-0 skui:dark:data-unchecked:bg-foreground"
       />
     </SwitchPrimitive.Root>
   )

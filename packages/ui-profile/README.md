@@ -39,6 +39,16 @@ production dependencies and transitive closure that its reviewed sources would
 eventually require. The normalized sources are evidence inputs, not a production
 package export.
 
+Normalized profile-owned class literals use Tailwind 4's `skui:` prefix as the
+first candidate segment, including variants, named groups, arbitrary selectors,
+and container queries. The TypeScript-AST transform accepts only static strings
+in reviewed `className`, `cn`, and `cva` positions, strips the pinned Base Nova
+configuration markers, and fails closed on computed or concatenated profile
+classes. Consumer-supplied `className` values remain outside this source profile
+and must be included by each later app compiler or a finite reviewed safelist.
+The exact Tailwind CLI, CSS parsers, and animation input are pinned with registry
+integrity in provenance; pinning them here does not yet compile or load CSS.
+
 The repository host and strict profile compiler share the same
 `@types/react@17.0.45` and `@types/react-dom@17.0.17` declaration contract, with
 `@types/scheduler@0.16.8` pinned for its compatible tracing declaration. Base UI

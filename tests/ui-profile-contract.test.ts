@@ -54,6 +54,7 @@ const expectedCompilerInputPaths = [
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
   'scripts/lib/generated-tree-closure.mjs',
+  'scripts/verify-dependency-closure.mjs',
   'scripts/prepare-base-ui.mjs',
   'scripts/transform-base-ui-select-value.mjs',
   'scripts/transform-base-ui-popup-lifecycle.mjs',
@@ -83,11 +84,17 @@ const expectedFloatingUiPins = {
 const expectedDevelopmentDependencies = {
   ...expectedToolingDependencies,
   ...expectedFloatingUiPins,
+  '@tailwindcss/cli': '4.3.3',
   '@types/react': '17.0.45',
   '@types/react-dom': '17.0.17',
   '@types/scheduler': '0.16.8',
   ajv: '8.20.0',
+  postcss: '8.5.19',
+  'postcss-selector-parser': '7.1.4',
+  'postcss-value-parser': '4.2.0',
   shadcn: '4.16.1',
+  tailwindcss: '4.3.3',
+  'tw-animate-css': '1.4.0',
   typescript: '5.3.3',
   'typescript-5-8': 'npm:typescript@5.8.3'
 };
@@ -380,7 +387,7 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(profileSchema.required).toContain('$schema');
     expect(profileSchema.properties.profileId.const).toBe('spfx-react17-base-nova-v1');
     expect(profileSchema.properties.items).toMatchObject({ minItems: 24, maxItems: 24 });
-    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 15, maxItems: 15, items: false });
+    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 16, maxItems: 16, items: false });
     expect(profileSchema.properties.items.uniqueItems).toBe(true);
     expect(profileSchema.$defs.sha256.pattern).toBe('^[a-f0-9]{64}$');
     expect(profileSchema.$defs.item.additionalProperties).toBe(false);
@@ -511,6 +518,21 @@ describe('offline profile verifier', () => {
     expect(result.status, verifierMessage(result)).toBe(0);
     expect(result.stdout).toContain('Verified spfx-react17-base-nova-v1: 24 registry payloads');
     expect(after).toEqual(before);
+  });
+
+  it('rejects transitive Tailwind compiler lock drift before verification or generation', async () => {
+    const root = await copyProfile();
+    const temporaryRepositoryRoot = path.resolve(root, '..', '..');
+    const lock = await readJson<any>(temporaryRepositoryRoot, 'package-lock.json');
+    lock.packages['node_modules/magic-string'].version = '0.30.22';
+    await writeCanonicalJson(temporaryRepositoryRoot, 'package-lock.json', lock);
+    const before = await treeDigests(root);
+
+    for (const result of [runOfflineVerifier(root), runOfflineRegenerator(root)]) {
+      expect(result.status).not.toBe(0);
+      expect(verifierMessage(result)).toContain('Tailwind compiler dependency closure differs from provenance');
+      expect(await treeDigests(root)).toEqual(before);
+    }
   });
 
   it('verifies the accepted production closure offline and rejects forced-peer policy drift', async () => {

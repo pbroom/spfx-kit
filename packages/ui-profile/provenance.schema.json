@@ -13,6 +13,8 @@
     "runtime",
     "reactTypeContract",
     "utilities",
+    "cssToolchain",
+    "tailwindCompilerClosureSha256",
     "dependencyResolutionPins",
     "typescriptMatrix",
     "normalization",
@@ -35,7 +37,7 @@
   "properties": {
     "$schema": { "const": "./provenance.schema.json" },
     "schemaVersion": { "const": 1 },
-    "generatorVersion": { "const": "1.0.0" },
+    "generatorVersion": { "const": "1.1.0" },
     "profileId": { "const": "spfx-react17-base-nova-v1" },
     "registry": {
       "type": "object",
@@ -97,6 +99,37 @@
         "tailwind-merge": { "const": "3.6.0" }
       }
     },
+    "cssToolchain": {
+      "const": {
+        "tailwindcss": {
+          "version": "4.3.3",
+          "integrity": "sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ=="
+        },
+        "@tailwindcss/cli": {
+          "version": "4.3.3",
+          "integrity": "sha512-ZvS/n1ZHOBKcVlhkt8l5NNr1EDXk1NboYO5CYDOs6NUmvT9z6bzkwsosaJftY57T/3gWNzWMJzIXLodZC8ssdw=="
+        },
+        "postcss": {
+          "version": "8.5.19",
+          "integrity": "sha512-Mz8SaolMd8nB+G13WkORcxQKHZ/NE4xXevtkJHVuG+guo9/wYKlIMTKAqGdEmYOXR2ijPjTYNHssizdaVSUNdQ=="
+        },
+        "postcss-selector-parser": {
+          "version": "7.1.4",
+          "integrity": "sha512-HeP7D2wyhkR+XaK6v4W8oRF62Dsz4flyuczALJp61GckGm42u1saSSJ/0auvcBqxs3jMRFEcPK34At/0JBKdOg=="
+        },
+        "postcss-value-parser": {
+          "version": "4.2.0",
+          "integrity": "sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ=="
+        },
+        "tw-animate-css": {
+          "version": "1.4.0",
+          "integrity": "sha512-7bziOlRqH0hJx80h/3mbicLW7o8qLsH5+RaLR2t+OHM3D0JlWGODQKQ4cxbK7WlvmUxpcj6Kgu6EKqjrGFe3QQ=="
+        }
+      }
+    },
+    "tailwindCompilerClosureSha256": {
+      "const": "d6f6eb30ddf06feab95c95ea5262af3d31a95ae2b6ab3ba2c450c93edcad4726"
+    },
     "dependencyResolutionPins": {
       "const": {
         "@floating-ui/core": "1.7.5",
@@ -109,9 +142,17 @@
     "normalization": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["contractVersion", "implementation", "implementationSha256"],
+      "required": ["contractVersion", "configuration", "implementation", "implementationSha256"],
       "properties": {
-        "contractVersion": { "const": "react17-classic-jsx-v1" },
+        "contractVersion": { "const": "react17-classic-jsx-skui-v2" },
+        "configuration": {
+          "const": {
+            "tailwindPrefix": "skui",
+            "rtl": false,
+            "menuColor": null,
+            "fontHeadingMarker": "font-heading"
+          }
+        },
         "implementation": { "const": "scripts/lib/profile.mjs" },
         "implementationSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       }

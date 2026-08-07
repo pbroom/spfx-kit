@@ -16,7 +16,7 @@ const SelectGroup = React.forwardRef<
     <SelectPrimitive.Group
       ref={ref}
       data-slot="select-group"
-      className={cn("scroll-my-1 p-1", className)}
+      className={cn("skui:scroll-my-1 skui:p-1", className)}
       {...props}
     />
   )
@@ -31,7 +31,7 @@ const SelectValue = React.forwardRef<
     <SelectPrimitive.Value
       ref={ref}
       data-slot="select-value"
-      className={cn("flex flex-1 text-left", className)}
+      className={cn("skui:flex skui:flex-1 skui:text-left", className)}
       {...props}
     />
   )
@@ -55,7 +55,7 @@ const SelectTrigger = React.forwardRef<
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "flex w-fit items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-8 data-[size=sm]:h-7 data-[size=sm]:rounded-[min(var(--radius-md),10px)] *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "skui:flex skui:w-fit skui:items-center skui:justify-between skui:gap-1.5 skui:rounded-lg skui:border skui:border-input skui:bg-transparent skui:py-2 skui:pr-2 skui:pl-2.5 skui:text-sm skui:whitespace-nowrap skui:transition-colors skui:outline-none skui:select-none skui:focus-visible:border-ring skui:focus-visible:ring-3 skui:focus-visible:ring-ring/50 skui:disabled:cursor-not-allowed skui:disabled:opacity-50 skui:aria-invalid:border-destructive skui:aria-invalid:ring-3 skui:aria-invalid:ring-destructive/20 skui:data-placeholder:text-muted-foreground skui:data-[size=default]:h-8 skui:data-[size=sm]:h-7 skui:data-[size=sm]:rounded-[min(var(--radius-md),10px)] skui:*:data-[slot=select-value]:line-clamp-1 skui:*:data-[slot=select-value]:flex skui:*:data-[slot=select-value]:items-center skui:*:data-[slot=select-value]:gap-1.5 skui:dark:bg-input/30 skui:dark:hover:bg-input/50 skui:dark:aria-invalid:border-destructive/50 skui:dark:aria-invalid:ring-destructive/40 skui:[&_svg]:pointer-events-none skui:[&_svg]:shrink-0 skui:[&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -64,7 +64,7 @@ const SelectTrigger = React.forwardRef<
       <SelectPrimitive.Icon
         render={
           <ChevronDownIcon
-            className="pointer-events-none size-4 text-muted-foreground"
+            className="skui:pointer-events-none skui:size-4 skui:text-muted-foreground"
           />
         }
       />
@@ -98,14 +98,14 @@ const SelectContent = React.forwardRef<
         align={align}
         alignOffset={alignOffset}
         alignItemWithTrigger={alignItemWithTrigger}
-        className="isolate z-50"
+        className="skui:isolate skui:z-50"
       >
         <SelectPrimitive.Popup
           ref={ref}
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}
           className={cn(
-            "cn-menu-target cn-menu-translucent relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            "skui:relative skui:isolate skui:z-50 skui:max-h-(--available-height) skui:w-(--anchor-width) skui:min-w-36 skui:origin-(--transform-origin) skui:overflow-x-hidden skui:overflow-y-auto skui:rounded-lg skui:bg-popover skui:text-popover-foreground skui:shadow-md skui:ring-1 skui:ring-foreground/10 skui:duration-100 skui:data-[align-trigger=true]:animate-none skui:data-[side=bottom]:slide-in-from-top-2 skui:data-[side=inline-end]:slide-in-from-left-2 skui:data-[side=inline-start]:slide-in-from-right-2 skui:data-[side=left]:slide-in-from-right-2 skui:data-[side=right]:slide-in-from-left-2 skui:data-[side=top]:slide-in-from-bottom-2 skui:data-open:animate-in skui:data-open:fade-in-0 skui:data-open:zoom-in-95 skui:data-closed:animate-out skui:data-closed:fade-out-0 skui:data-closed:zoom-out-95",
             className
           )}
           {...props}
@@ -131,7 +131,7 @@ const SelectLabel = React.forwardRef<
     <SelectPrimitive.GroupLabel
       ref={ref}
       data-slot="select-label"
-      className={cn("px-1.5 py-1 text-xs text-muted-foreground", className)}
+      className={cn("skui:px-1.5 skui:py-1 skui:text-xs skui:text-muted-foreground", className)}
       {...props}
     />
   )
@@ -151,21 +151,21 @@ const SelectItem = React.forwardRef<
       ref={ref}
       data-slot="select-item"
       className={cn(
-        "relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        "skui:relative skui:flex skui:w-full skui:cursor-default skui:items-center skui:gap-1.5 skui:rounded-md skui:py-1 skui:pr-8 skui:pl-1.5 skui:text-sm skui:outline-hidden skui:select-none skui:focus:bg-accent skui:focus:text-accent-foreground skui:not-data-[variant=destructive]:focus:**:text-accent-foreground skui:data-disabled:pointer-events-none skui:data-disabled:opacity-50 skui:[&_svg]:pointer-events-none skui:[&_svg]:shrink-0 skui:[&_svg:not([class*='size-'])]:size-4 skui:*:[span]:last:flex skui:*:[span]:last:items-center skui:*:[span]:last:gap-2",
         className
       )}
       {...props}
     >
-      <SelectPrimitive.ItemText className="flex flex-1 shrink-0 gap-2 whitespace-nowrap">
+      <SelectPrimitive.ItemText className="skui:flex skui:flex-1 skui:shrink-0 skui:gap-2 skui:whitespace-nowrap">
         {children}
       </SelectPrimitive.ItemText>
       <SelectPrimitive.ItemIndicator
         render={
-          <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center" />
+          <span className="skui:pointer-events-none skui:absolute skui:right-2 skui:flex skui:size-4 skui:items-center skui:justify-center" />
         }
       >
         <CheckIcon
-          className="pointer-events-none"
+          className="skui:pointer-events-none"
         />
       </SelectPrimitive.ItemIndicator>
     </SelectPrimitive.Item>
@@ -184,7 +184,7 @@ const SelectSeparator = React.forwardRef<
     <SelectPrimitive.Separator
       ref={ref}
       data-slot="select-separator"
-      className={cn("pointer-events-none -mx-1 my-1 h-px bg-border", className)}
+      className={cn("skui:pointer-events-none skui:-mx-1 skui:my-1 skui:h-px skui:bg-border", className)}
       {...props}
     />
   )
@@ -203,7 +203,7 @@ const SelectScrollUpButton = React.forwardRef<
       ref={ref}
       data-slot="select-scroll-up-button"
       className={cn(
-        "top-0 z-10 flex w-full cursor-default items-center justify-center bg-popover py-1 [&_svg:not([class*='size-'])]:size-4",
+        "skui:top-0 skui:z-10 skui:flex skui:w-full skui:cursor-default skui:items-center skui:justify-center skui:bg-popover skui:py-1 skui:[&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -226,7 +226,7 @@ const SelectScrollDownButton = React.forwardRef<
       ref={ref}
       data-slot="select-scroll-down-button"
       className={cn(
-        "bottom-0 z-10 flex w-full cursor-default items-center justify-center bg-popover py-1 [&_svg:not([class*='size-'])]:size-4",
+        "skui:bottom-0 skui:z-10 skui:flex skui:w-full skui:cursor-default skui:items-center skui:justify-center skui:bg-popover skui:py-1 skui:[&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
