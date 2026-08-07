@@ -47,6 +47,7 @@ const expectedNormalizedPaths = expectedRegistryIds
 
 const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
+  'compat-consumers/select-value.tsx',
   'scripts/typecheck.mjs',
   'scripts/lib/generate-profile.mjs',
   'scripts/lib/profile-update-intake.mjs',
@@ -117,7 +118,8 @@ async function copyProfile(): Promise<string> {
     filter: (source) => {
       const segments = path.relative(profileRoot, source).split(path.sep);
       return !segments.some(
-        (segment) => ['node_modules', '.prepared', '.tsbuildinfo'].includes(segment) || segment.startsWith('.profile-')
+        (segment) =>
+          ['node_modules', '.prepared', '.tsbuildinfo', '.DS_Store'].includes(segment) || segment.startsWith('.profile-')
       );
     }
   });
@@ -192,6 +194,7 @@ async function filesUnder(root: string): Promise<string[]> {
         entry.name === 'node_modules' ||
         entry.name === '.prepared' ||
         entry.name === '.tsbuildinfo' ||
+        entry.name === '.DS_Store' ||
         entry.name.startsWith('.profile-')
       )
         continue;
@@ -377,7 +380,7 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(profileSchema.required).toContain('$schema');
     expect(profileSchema.properties.profileId.const).toBe('spfx-react17-base-nova-v1');
     expect(profileSchema.properties.items).toMatchObject({ minItems: 24, maxItems: 24 });
-    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 14, maxItems: 14, items: false });
+    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 15, maxItems: 15, items: false });
     expect(profileSchema.properties.items.uniqueItems).toBe(true);
     expect(profileSchema.$defs.sha256.pattern).toBe('^[a-f0-9]{64}$');
     expect(profileSchema.$defs.item.additionalProperties).toBe(false);
@@ -803,6 +806,27 @@ describe('offline profile verifier', () => {
     expect(verifierMessage(result)).not.toContain('attempted network access');
     expect(verifierMessage(result)).toContain('Staged profile failed semantic compilation with TypeScript 5.3.3');
     expect(verifierMessage(result)).toContain('__profileInvalidBaseUiProp');
+    expect(await treeDigests(root)).toEqual(before);
+  });
+
+  it('compiles the SelectValue compatibility probe against staged normalized output', async () => {
+    const root = await copyProfile();
+    const profile = await readJson<ProfileManifest>(root, 'profile.json');
+    const item = profile.items.find((candidate) => candidate.id === 'select')!;
+    const raw = await readJson<RegistrySnapshot>(root, 'snapshots/raw/select.json');
+    const select = raw.files.find((file) => file.path.endsWith('/select.tsx'))!;
+    const original = '}: SelectPrimitive.Value.Props)';
+    expect(select.content).toContain(original);
+    select.content = select.content.replace(original, '}: Omit<SelectPrimitive.Value.Props, "placeholder">)');
+    await rewriteSnapshot(root, profile, item, raw);
+    const before = await treeDigests(root);
+
+    const result = runOfflineRegenerator(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).not.toContain('attempted network access');
+    expect(verifierMessage(result)).toContain('Staged profile failed semantic compilation with TypeScript 5.3.3');
+    expect(verifierMessage(result)).toContain('placeholder');
     expect(await treeDigests(root)).toEqual(before);
   });
 

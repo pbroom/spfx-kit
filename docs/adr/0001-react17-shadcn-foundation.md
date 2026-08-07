@@ -1,6 +1,6 @@
 # ADR-0001: React 17 shadcn foundation
 
-- Status: Accepted for implementation; Phase 1 runtime gate unproven
+- Status: Accepted for implementation; amended 2026-08-06; Phase 1 runtime gate unproven
 - Date: 2026-08-05
 - Scope: Phase 0 and Phase 1 foundation work
 - Related roadmap: [`docs/shadcn-migration-roadmap.md`](../shadcn-migration-roadmap.md)
@@ -47,19 +47,42 @@ not reject a React-17-compatible dependency shim.
 
 The first proposed source profile is pinned as follows:
 
-| Field                     | Required value                                                                      |
-| ------------------------- | ----------------------------------------------------------------------------------- |
-| Profile ID                | `spfx-react17-base-nova-v1`                                                         |
-| shadcn preset             | `base-nova`                                                                         |
-| shadcn CLI/source version | `4.16.1`                                                                            |
-| shadcn source revision    | `cb2bcd88d93b2f9bddb030e9136f1f8773e7eac4`                                          |
-| Base UI version           | `1.6.0`                                                                             |
-| React / React DOM         | `17.0.1` / `17.0.1`                                                                 |
-| React types               | `@types/react@17.0.45`, `@types/react-dom@17.0.17`                                  |
-| Class utilities           | `class-variance-authority@0.7.1`, `clsx@2.1.1`, `tailwind-merge@3.6.0`              |
-| Icons                     | retain `lucide-react@1.25.0` until a separate profile update passes                 |
-| TypeScript matrix         | `5.3.3` and `5.8.3`                                                                 |
-| Excluded dependencies     | `cmdk@1.1.1`, `sonner@2.0.7`, Radix primitives, `react-aria-components`, and `vaul` |
+| Field                           | Required value                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------------- |
+| Profile ID                      | `spfx-react17-base-nova-v1`                                                         |
+| shadcn preset                   | `base-nova`                                                                         |
+| shadcn CLI/source version       | `4.16.1`                                                                            |
+| shadcn tool source revision     | `cb2bcd88d93b2f9bddb030e9136f1f8773e7eac4`                                          |
+| Base UI version                 | `1.6.0`                                                                             |
+| React / React DOM               | `17.0.1` / `17.0.1`                                                                 |
+| React declaration contract      | `@types/react@17.0.45`, `@types/react-dom@17.0.17`                                  |
+| Scheduler tracing compatibility | `@types/scheduler@0.16.8`                                                           |
+| Class utilities                 | `class-variance-authority@0.7.1`, `clsx@2.1.1`, `tailwind-merge@3.6.0`              |
+| Icons                           | retain `lucide-react@1.25.0` until a separate profile update passes                 |
+| TypeScript matrix               | `5.3.3` and `5.8.3`                                                                 |
+| Excluded dependencies           | `cmdk@1.1.1`, `sonner@2.0.7`, Radix primitives, `react-aria-components`, and `vaul` |
+
+#### 2026-08-06 compatibility amendment
+
+The owner-authorized Phase 1 compatibility correction recorded in
+[spfx-kit#82](https://github.com/pbroom/spfx-kit/issues/82) keeps the
+repository, SPFx host, and private profile compiler on one declaration contract:
+`@types/react@17.0.45` and `@types/react-dom@17.0.17`. It separately pins the
+compatible `@types/scheduler@0.16.8` tracing declaration. Base UI 1.6.0
+declarations use the newer `React.JSX` namespace, so the profile compiler
+supplies a type-only bridge for `Element` and `IntrinsicElements`, the only
+namespace members referenced by the accepted Base UI declarations, to their
+global React 17 equivalents.
+
+The bridge is not a host type upgrade, production dependency, runtime change,
+or proof that normalized source compiles through the real SPFx host path. Phase
+1 exit still requires representative host/SPFx compilation against the preserved
+`@types/react@17.0.45` contract. The profile ID remains
+`spfx-react17-base-nova-v1` because this correction was authorized before the
+first v1 profile was accepted or published. Exact generations are identified
+by the profile manifest and provenance digests; a later accepted-profile change
+requires a reviewed profile update and new immutable digest, while a breaking
+compatibility-family change requires a new profile ID.
 
 The profile manifest must also pin:
 
@@ -79,6 +102,16 @@ The tooling identity also records npm integrity
 for `shadcn@4.16.1`. Accepted registry payloads record raw and canonical-JSON
 SHA-256 values in addition to final normalized-source digests because the
 hosted registry response is not frozen merely by the Git tag.
+
+The recorded shadcn repository revision identifies the pinned tool source; it
+does not claim that mutable hosted registry responses are immutable outputs of
+that commit. The provenance schema records that distinction explicitly. A
+network update verifies the exact installed `shadcn@4.16.1` identity and npm
+lock integrity, obtains the same allowlisted collection through the pinned
+package API, and accepts captured raw response bytes only when their parsed
+values equal that package API's results. The resulting raw, canonical, and
+normalized digests—not the tool revision—identify the reviewed component
+inputs.
 
 Commit every accepted raw registry JSON payload next to its canonical form and
 normalized output. Normal builds, standalone builds, and CI operate offline and

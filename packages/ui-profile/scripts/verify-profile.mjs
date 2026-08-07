@@ -33,6 +33,7 @@ const manifest = await readJson('package.json');
 const expectedIds = [...REGISTRY_IDS];
 const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
+  'compat-consumers/select-value.tsx',
   'scripts/typecheck.mjs',
   'scripts/lib/generate-profile.mjs',
   'scripts/lib/profile-update-intake.mjs',
@@ -84,7 +85,8 @@ const expectedScripts = {
   'typecheck:ts53': 'node ./scripts/typecheck.mjs typescript 5.3.3 ./tsconfig.ts53.json',
   'typecheck:ts58': 'node ./scripts/typecheck.mjs typescript-5-8 5.8.3 ./tsconfig.ts58.json',
   typecheck: 'npm run profile:prepare:base-ui && npm run typecheck:ts53 && npm run typecheck:ts58',
-  verify: 'npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure'
+  verify: 'npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure',
+  build: 'npm run verify && npm run typecheck'
 };
 
 function assert(condition, message) {
@@ -99,7 +101,7 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === 'e36ae25449c7b917c44d578c33ed12d58cb0e299c2496001669aa3a69638d6d1',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === '5bc6b7437cf0a200faf413f0498deccb3f2d871f212e8528f97ce0cc5bf7d7d1',
   'profile.schema.json identity differs'
 );
 assert(
