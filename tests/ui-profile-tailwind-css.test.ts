@@ -86,7 +86,9 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
     expect(result.containerCount).toBe(1);
     expect(result.fallbackPropertyCount).toBe(2);
     expect(result.css).toContain(`[data-spfx-ui-scope="${scopeValue}"]`);
-    expect(result.css).toContain(`:not(:where([data-spfx-ui-scope="${scopeValue}"] [data-spfx-ui-scope]`);
+    expect(result.css).toContain(
+      `@scope ([data-spfx-ui-scope="${scopeValue}"]) to ([data-spfx-ui-scope]:not([data-spfx-ui-scope="${scopeValue}"]))`
+    );
     expect(result.css).toContain(`@keyframes ${scopeValue}-enter`);
     expect(result.css).toContain(`@container ${scopeValue}-container-pane`);
     expect(result.css).toContain(`animation: ${scopeValue}-enter 150ms ease-out`);
@@ -193,7 +195,7 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
     ).toThrow('Undefined custom property reference: --host-global');
   });
 
-  it('guards nested profile roots and rewrites only animation declarations', () => {
+  it('lets matching scopes re-enter after a nested different-version boundary', () => {
     const scopeValue = 'skui-0123456789abcdef';
     const result = scopeTailwindCss({
       rawCss: String.raw`
@@ -207,8 +209,10 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
     expect(result.css).toContain('font-family: enter');
     expect(result.css).toContain(`animation: ${scopeValue}-enter 1s`);
     expect(result.css).toContain(
-      `:not(:where([data-spfx-ui-scope="${scopeValue}"] [data-spfx-ui-scope]:not([data-spfx-ui-scope="${scopeValue}"])`
+      `@scope ([data-spfx-ui-scope="${scopeValue}"]) to ([data-spfx-ui-scope]:not([data-spfx-ui-scope="${scopeValue}"]))`
     );
+    expect(result.css).not.toContain(':not(:where(');
+    expect(result.css).toContain(`[data-spfx-ui-scope="${scopeValue}"] .skui\\:flex`);
   });
 
   it('uses disjoint selector, property, and keyframe namespaces for two profile copies', () => {

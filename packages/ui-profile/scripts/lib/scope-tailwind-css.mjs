@@ -31,8 +31,6 @@ const RUNTIME_PROPERTIES = new Set([
   '--kb-accordion-content-height',
   '--ngp-accordion-content-height'
 ]);
-const LEGACY_PSEUDO_ELEMENTS = new Set([':after', ':backdrop', ':before', ':first-letter', ':first-line']);
-
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -59,30 +57,10 @@ function cloneSelectorNodes(selector) {
   return ast.nodes[0].nodes.map((node) => node.clone());
 }
 
-function boundaryGuard(scopeValue) {
+function scopeBoundaryParams(scopeValue) {
   const scope = scopeSelector(scopeValue);
   const anyScope = `[${SCOPE_ATTRIBUTE}]`;
-  const parsed = selectorParser().astSync(
-    `.boundary:not(:where(${scope} ${anyScope}:not(${scope}), ${scope} ${anyScope}:not(${scope}) *))`
-  );
-  return parsed.nodes[0].last.clone();
-}
-
-function isPseudoElement(node) {
-  return (
-    node.type === 'pseudo' &&
-    (node.value.startsWith('::') || LEGACY_PSEUDO_ELEMENTS.has(node.value.toLowerCase()))
-  );
-}
-
-function appendBoundaryGuard(selector, guard) {
-  const nodes = selector.nodes;
-  const lastCombinator = nodes.reduce((index, node, current) => (node.type === 'combinator' ? current : index), -1);
-  const finalCompound = nodes.slice(lastCombinator + 1);
-  assert(finalCompound.length > 0, `Selector ends with a combinator: ${selector}`);
-  const pseudoElement = finalCompound.find(isPseudoElement);
-  if (pseudoElement) selector.insertBefore(pseudoElement, guard.clone());
-  else selector.append(guard.clone());
+  return `(${scope}) to (${anyScope}:not(${scope}))`;
 }
 
 function scopeOneSelector(selector, scopeValue) {
@@ -110,7 +88,6 @@ function scopeOneSelector(selector, scopeValue) {
   }
 
   assert(selector.first?.type !== 'combinator', `Leading combinators are not accepted: ${selector}`);
-  appendBoundaryGuard(selector, boundaryGuard(scopeValue));
   selector.prepend(selectorParser.combinator({ value: ' ' }));
   selector.prepend(...cloneSelectorNodes(scope));
 }
@@ -376,7 +353,7 @@ function assertVariableClosure(root) {
 export function auditScopedTailwindCss({ css, scopeValue, candidates = [], allowedClasses = candidates }) {
   const root = postcss.parse(css, { from: undefined });
   const scope = scopeSelector(scopeValue);
-  const guard = boundaryGuard(scopeValue).toString();
+  const boundary = scopeBoundaryParams(scopeValue);
   const emittedCandidates = new Set();
   const allowedClassSet = new Set(allowedClasses);
   const keyframes = new Set();
@@ -387,9 +364,10 @@ export function auditScopedTailwindCss({ css, scopeValue, candidates = [], allow
   root.walkAtRules((atRule) => {
     const name = atRule.name.toLowerCase();
     assert(
-      ['media', 'supports', 'container', 'keyframes', '-webkit-keyframes'].includes(name),
+      ['media', 'supports', 'container', 'scope', 'keyframes', '-webkit-keyframes'].includes(name),
       `Forbidden CSS at-rule remains: @${atRule.name}`
     );
+    if (name === 'scope') assert(atRule.params === boundary, `CSS scope boundary differs: ${atRule.params}`);
     if (/^(?:-webkit-)?keyframes$/u.test(name)) {
       assert(atRule.params.startsWith(`${scopeValue}-`), `Unnamespaced keyframe remains: ${atRule.params}`);
       assert(!keyframes.has(atRule.params), `Duplicate scoped keyframe remains: ${atRule.params}`);
@@ -413,13 +391,20 @@ export function auditScopedTailwindCss({ css, scopeValue, candidates = [], allow
 
   root.walkRules((rule) => {
     if (insideKeyframes(rule)) return;
+    let scopeBoundary;
+    for (let parent = rule.parent; parent; parent = parent.parent) {
+      if (parent.type === 'atrule' && parent.name.toLowerCase() === 'scope') {
+        scopeBoundary = parent;
+        break;
+      }
+    }
+    assert(scopeBoundary?.params === boundary, `Selector lacks a nested-scope boundary: ${rule.selector}`);
     const parsed = selectorParser().astSync(rule.selector);
     for (const selector of parsed.nodes) {
       assert(selectorStartsWithScope(selector, scopeValue), `Selector escapes ${scope}: ${selector}`);
       const isRoot = selector.nodes.length === 1;
       if (!isRoot) {
         assert(selector.nodes[1]?.type === 'combinator' && selector.nodes[1].value.trim() === '', `Selector is not a scoped descendant: ${selector}`);
-        assert(selector.toString().includes(guard), `Selector lacks a nested-scope boundary: ${selector}`);
       }
       selector.walkPseudos((pseudo) => {
         assert(![':root', ':host'].includes(pseudo.value.toLowerCase()), `Page root selector remains: ${selector}`);
@@ -490,6 +475,7 @@ export function scopeTailwindCss({ rawCss, scopeValue, candidates = [], allowedC
   const fallbackPropertyCount = removeAndFlattenGlobalAtRules(root);
 
   const scope = scopeSelector(scopeValue);
+  const scopedRules = [];
   root.walkRules((rule) => {
     if (insideKeyframes(rule)) return;
     rule.selector = selectorParser((selectors) => {
@@ -501,7 +487,13 @@ export function scopeTailwindCss({ rawCss, scopeValue, candidates = [], allowedC
         else seen.add(serialized);
       }
     }).processSync(rule.selector);
+    scopedRules.push(rule);
   });
+  for (const rule of scopedRules) {
+    const boundary = postcss.atRule({ name: 'scope', params: scopeBoundaryParams(scopeValue) });
+    rule.replaceWith(boundary);
+    boundary.append(rule);
+  }
   namespaceTailwindProperties(root, scopeValue);
   rewriteSemanticProperties(root);
   const containers = namespaceContainers(root, scopeValue);
