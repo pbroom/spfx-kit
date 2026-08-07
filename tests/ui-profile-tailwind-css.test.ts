@@ -101,6 +101,27 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
     expect(result.css).not.toContain('https://');
   });
 
+  it('emits both scope-root and descendant utility selectors', () => {
+    const scopeValue = 'skui-0123456789abcdef';
+    const scope = `[data-spfx-ui-scope="${scopeValue}"]`;
+    const result = scopeTailwindCss({
+      rawCss: String.raw`
+        .skui\:flex, button.skui\:block, *.skui\:hidden { display: block }
+        .parent .skui\:block { display: block }
+      `,
+      scopeValue,
+      candidates: ['skui:flex', 'skui:block', 'skui:hidden'],
+      allowedClasses: ['skui:flex', 'skui:block', 'skui:hidden', 'parent']
+    });
+
+    expect(result.css).toContain(`${scope} .skui\\:flex`);
+    expect(result.css).toContain(`${scope}.skui\\:flex`);
+    expect(result.css).toContain(`button${scope}.skui\\:block`);
+    expect(result.css).toContain(`*${scope}.skui\\:hidden`);
+    expect(result.css).toContain(`${scope}.parent .skui\\:block`);
+    expect(result.css).not.toContain(`${scope}button`);
+  });
+
   it('fails closed on unsafe selectors, missing candidates, and asset references', () => {
     expect(() =>
       scopeTailwindCss({

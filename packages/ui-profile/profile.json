@@ -35,7 +35,7 @@
     },
     {
       "path": "scripts/lib/scope-tailwind-css.mjs",
-      "sha256": "952e1277491313fb890382963f34820c46b5bd24adbb4fcb95c838dd4c1417c6"
+      "sha256": "0fa68a7fb45f214b17bd149c05aab73028fe158e15339052fb01261e6360a308"
     },
     {
       "path": "scripts/lib/block-network.mjs",
@@ -63,7 +63,7 @@
     },
     {
       "path": "scripts/lib/generation-transaction.mjs",
-      "sha256": "993fa1042fb92b9b0dc7f587bef4433604a8aa4089aa02147b8315fdf184e780"
+      "sha256": "040e899e0be45dd226e8142edfca79678a067be6da3e594e111871466a4fe02e"
     },
     {
       "path": "scripts/lib/replace-generated.mjs",
@@ -115,7 +115,7 @@
     },
     "artifact": {
       "path": "generated/tailwind-profile.css",
-      "sha256": "9996198c45396fe1f4d2f2562bcbd6b4df7be7bb143545ed080e866d3a9310d7"
+      "sha256": "cc5ed5745180583005f60b650bdff79c560de825a6cf1046bf362bb27085400c"
     },
     "candidateCount": 609,
     "compiler": {
@@ -142,11 +142,11 @@
     },
     "scoper": {
       "path": "scripts/lib/scope-tailwind-css.mjs",
-      "sha256": "952e1277491313fb890382963f34820c46b5bd24adbb4fcb95c838dd4c1417c6"
+      "sha256": "0fa68a7fb45f214b17bd149c05aab73028fe158e15339052fb01261e6360a308"
     },
-    "scopeSeedSha256": "3fb90e4d639652fe9a307189da4248a4fdc1cd4b3041f3a57f49de6b8bf3cb40",
-    "scopeSelector": "[data-spfx-ui-scope=\"skui-3fb90e4d639652fe\"]",
-    "scopeValue": "skui-3fb90e4d639652fe",
+    "scopeSeedSha256": "1b71e5f9b22a62328620a72bb6f76b6238771333d4a596e214f6ccd024603208",
+    "scopeSelector": "[data-spfx-ui-scope=\"skui-1b71e5f9b22a6232\"]",
+    "scopeValue": "skui-1b71e5f9b22a6232",
     "structuralMarkers": [
       "skui:group/accordion-trigger",
       "skui:group/alert",

@@ -119,6 +119,37 @@ function childSource(): string {
   `;
 }
 
+function regenerateChildSource(): string {
+  return `
+    import { mkdir, writeFile } from 'node:fs/promises';
+    import path from 'node:path';
+    import { createGeneratedProfileStaging, withGeneratedProfileSession } from ${JSON.stringify(transactionModuleUrl)};
+    import { replaceGeneratedPaths } from ${JSON.stringify(replacementModuleUrl)};
+    const [packageRoot, token, requestedBoundary] = process.argv.slice(1);
+    await withGeneratedProfileSession({ packageRoot, operation: 'regenerate', lockOptions: { token } }, async (generationSession) => {
+      const stagingRoot = await createGeneratedProfileStaging(generationSession);
+      await mkdir(path.join(stagingRoot, 'snapshots', 'canonical'), { recursive: true });
+      await mkdir(path.join(stagingRoot, 'normalized'), { recursive: true });
+      await mkdir(path.join(stagingRoot, 'generated'), { recursive: true });
+      await writeFile(path.join(stagingRoot, 'snapshots', 'canonical', 'version.txt'), 'new');
+      await writeFile(path.join(stagingRoot, 'normalized', 'version.txt'), 'new');
+      await writeFile(path.join(stagingRoot, 'generated', 'version.txt'), 'new');
+      await writeFile(path.join(stagingRoot, 'profile.json'), JSON.stringify({ version: 'new' }) + '\\n');
+      await replaceGeneratedPaths({
+        packageRoot,
+        stagingRoot,
+        generatedPaths: ['snapshots/canonical', 'normalized', 'generated', 'profile.json'],
+        generationSession,
+        onBoundary: async (boundary) => {
+          if (boundary !== requestedBoundary) return;
+          process.send?.({ boundary });
+          await new Promise(() => setInterval(() => {}, 1_000));
+        }
+      });
+    });
+  `;
+}
+
 function preJournalChildSource(): string {
   return `
     import { createGeneratedProfileStaging, withGeneratedProfileSession } from ${JSON.stringify(transactionModuleUrl)};
@@ -235,6 +266,19 @@ async function killAtBoundary(
   await closed;
 }
 
+async function killRegenerateAtBoundary(packageRoot: string, token: string, boundary: string): Promise<void> {
+  const child = spawn(process.execPath, ['--input-type=module', '-e', regenerateChildSource(), packageRoot, token, boundary], {
+    stdio: ['ignore', 'ignore', 'pipe', 'ipc']
+  });
+  await waitForBoundary(child, boundary);
+  const closed = new Promise<void>((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', () => resolve());
+  });
+  expect(child.kill('SIGKILL')).toBe(true);
+  await closed;
+}
+
 async function killBeforeJournal(packageRoot: string, token: string): Promise<void> {
   const child = spawn(process.execPath, ['--input-type=module', '-e', preJournalChildSource(), packageRoot, token], {
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
@@ -264,6 +308,24 @@ async function killRecoveryAtBoundary(
   });
   expect(child.kill('SIGKILL')).toBe(true);
   await closed;
+}
+
+async function rewriteOwnerAsLegacyUpdate(packageRoot: string): Promise<void> {
+  const ownerPath = path.join(packageRoot, '.profile-generation-lock', 'owner.json');
+  const owner = JSON.parse(await readFile(ownerPath, 'utf8'));
+  owner.transaction.kind = 'ui-profile-generation-v1';
+  owner.transaction.generatedPaths = ['snapshots', 'normalized', 'profile.json', 'provenance.json'];
+  for (const inventory of ['existed', 'priorDigests', 'nextDigests']) delete owner.transaction[inventory].generated;
+  await writeFile(ownerPath, `${JSON.stringify(owner, null, 2)}\n`);
+}
+
+async function rewriteOwnerAsLegacyRegenerate(packageRoot: string): Promise<void> {
+  const ownerPath = path.join(packageRoot, '.profile-generation-lock', 'owner.json');
+  const owner = JSON.parse(await readFile(ownerPath, 'utf8'));
+  owner.transaction.kind = 'ui-profile-generation-v1';
+  owner.transaction.generatedPaths = ['snapshots/canonical', 'normalized', 'profile.json'];
+  for (const inventory of ['existed', 'priorDigests', 'nextDigests']) delete owner.transaction[inventory].generated;
+  await writeFile(ownerPath, `${JSON.stringify(owner, null, 2)}\n`);
 }
 
 describe('generated profile process observation', () => {
@@ -1641,7 +1703,7 @@ describe('generated profile full-command transaction', () => {
 
     await expect(recoverGeneratedReplacement({ packageRoot })).rejects.toThrow('digest differs');
     expect(await readFile(path.join(packageRoot, '.profile-generation-lock', 'owner.json'), 'utf8')).toContain(
-      'ui-profile-generation-v1'
+      'ui-profile-generation-v2'
     );
     expect((await readdir(path.join(packageRoot, '.profile-generation-lock', 'backup'))).length).toBeGreaterThan(0);
 
@@ -1660,6 +1722,36 @@ describe('generated profile full-command transaction', () => {
 
     expect(await recoverGeneratedReplacement({ packageRoot })).toMatchObject({ recovered: true, state: 'rolled-back' });
     expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
+    expect((await readdir(packageRoot)).filter((name) => name.startsWith('.profile-'))).toEqual([]);
+  });
+
+  it('recovers a legacy update journal and its shifted retained discard binding', async () => {
+    const { packageRoot, token } = await fixture();
+    await killAtBoundary(packageRoot, token, 'installed:profile.json', async () => {
+      await rewriteOwnerAsLegacyUpdate(packageRoot);
+    });
+
+    await killRecoveryAtBoundary(packageRoot, 'recovery-cleanup:profile.json');
+    await expect(recoverGeneratedReplacement({ packageRoot })).resolves.toMatchObject({
+      recovered: true,
+      state: 'rolled-back'
+    });
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
+    expect(await readFile(path.join(packageRoot, 'generated', 'version.txt'), 'utf8')).toBe('new');
+    expect((await readdir(packageRoot)).filter((name) => name.startsWith('.profile-'))).toEqual([]);
+  });
+
+  it('recovers the legacy regenerate journal layout without claiming the generated tree', async () => {
+    const { packageRoot, token } = await fixture();
+    await killRegenerateAtBoundary(packageRoot, token, 'journaled');
+    await rewriteOwnerAsLegacyRegenerate(packageRoot);
+
+    await expect(recoverGeneratedReplacement({ packageRoot })).resolves.toMatchObject({
+      recovered: true,
+      state: 'rolled-back'
+    });
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
+    expect(await readFile(path.join(packageRoot, 'generated', 'version.txt'), 'utf8')).toBe('old');
     expect((await readdir(packageRoot)).filter((name) => name.startsWith('.profile-'))).toEqual([]);
   });
 

@@ -84,12 +84,19 @@ function scopeOneSelector(selector, scopeValue) {
     );
     assert(selector.nodes.length === 1, `Root selector must be the complete selector: ${selector}`);
     rootPseudo.replaceWith(...cloneSelectorNodes(scope));
-    return;
+    return null;
   }
 
   assert(selector.first?.type !== 'combinator', `Leading combinators are not accepted: ${selector}`);
+  const selfSelector = selector.clone();
+  const selfScope = cloneSelectorNodes(scope);
+  if (['tag', 'universal'].includes(selfSelector.first?.type)) {
+    selfSelector.insertAfter(selfSelector.first, ...selfScope);
+  }
+  else selfSelector.prepend(...selfScope);
   selector.prepend(selectorParser.combinator({ value: ' ' }));
   selector.prepend(...cloneSelectorNodes(scope));
+  return selfSelector;
 }
 
 function propertyFallbacks(root) {
@@ -272,14 +279,18 @@ function namespaceKeyframes(root, scopeValue) {
   return replacements;
 }
 
-function selectorStartsWithScope(selector, scopeValue) {
-  const first = selector.first;
-  return (
-    first?.type === 'attribute' &&
-    first.attribute === SCOPE_ATTRIBUTE &&
-    first.operator === '=' &&
-    first.value === scopeValue
-  );
+function selectorHasOwnedScopeInLeadingCompound(selector, scopeValue) {
+  let leadingScopeCount = 0;
+  let totalScopeCount = 0;
+  let inLeadingCompound = true;
+  for (const node of selector.nodes) {
+    if (node.type === 'combinator') inLeadingCompound = false;
+    if (node.type !== 'attribute' || node.attribute !== SCOPE_ATTRIBUTE) continue;
+    totalScopeCount += 1;
+    if (node.operator !== '=' || node.value !== scopeValue) return false;
+    if (inLeadingCompound) leadingScopeCount += 1;
+  }
+  return leadingScopeCount === 1 && totalScopeCount === 1;
 }
 
 function insideNegation(node) {
@@ -401,11 +412,7 @@ export function auditScopedTailwindCss({ css, scopeValue, candidates = [], allow
     assert(scopeBoundary?.params === boundary, `Selector lacks a nested-scope boundary: ${rule.selector}`);
     const parsed = selectorParser().astSync(rule.selector);
     for (const selector of parsed.nodes) {
-      assert(selectorStartsWithScope(selector, scopeValue), `Selector escapes ${scope}: ${selector}`);
-      const isRoot = selector.nodes.length === 1;
-      if (!isRoot) {
-        assert(selector.nodes[1]?.type === 'combinator' && selector.nodes[1].value.trim() === '', `Selector is not a scoped descendant: ${selector}`);
-      }
+      assert(selectorHasOwnedScopeInLeadingCompound(selector, scopeValue), `Selector escapes ${scope}: ${selector}`);
       selector.walkPseudos((pseudo) => {
         assert(![':root', ':host'].includes(pseudo.value.toLowerCase()), `Page root selector remains: ${selector}`);
       });
@@ -479,9 +486,12 @@ export function scopeTailwindCss({ rawCss, scopeValue, candidates = [], allowedC
   root.walkRules((rule) => {
     if (insideKeyframes(rule)) return;
     rule.selector = selectorParser((selectors) => {
+      for (const selector of [...selectors.nodes]) {
+        const selfSelector = scopeOneSelector(selector, scopeValue);
+        if (selfSelector) selectors.insertAfter(selector, selfSelector);
+      }
       const seen = new Set();
       for (const selector of [...selectors.nodes]) {
-        scopeOneSelector(selector, scopeValue);
         const serialized = selector.toString();
         if (seen.has(serialized)) selector.remove();
         else seen.add(serialized);
