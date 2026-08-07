@@ -12,18 +12,22 @@ import {
 import { Check, Database, RefreshCw, Upload, X } from 'lucide-react';
 import {
   loadLocalCdnBucketInventory,
+  publicLocalCdnManifestUrl,
   publishLocalCdnSource,
+  selectedLocalCdnRelease,
   selectLocalCdnRelease,
   type LocalCdnAppRelease,
   type LocalCdnBucketAsset,
   type LocalCdnBucketInventory,
   type LocalCdnPublishSource
 } from '../api/localCdnBucket';
+import { loadManagedLabAppSource } from '../api/labApi';
 
 interface LocalCdnBucketDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectionChanged: (appId: string, releaseId: string) => void;
+  selectedAppId: string;
 }
 
 interface AdminStatus {
@@ -34,11 +38,17 @@ interface AdminStatus {
 
 const releaseKey = (appId: string, releaseId: string): string => `${appId}/${releaseId}`;
 
-export function LocalCdnBucketDialog({ open, onOpenChange, onSelectionChanged }: LocalCdnBucketDialogProps): JSX.Element {
+export function LocalCdnBucketDialog({
+  open,
+  onOpenChange,
+  onSelectionChanged,
+  selectedAppId
+}: LocalCdnBucketDialogProps): JSX.Element {
   const [inventory, setInventory] = React.useState<LocalCdnBucketInventory>();
   const [status, setStatus] = React.useState<AdminStatus>({ phase: 'idle', message: '' });
   const [selectedSourceId, setSelectedSourceId] = React.useState('');
   const [selectedReleaseKey, setSelectedReleaseKey] = React.useState('');
+  const [sourceRepositoryUrl, setSourceRepositoryUrl] = React.useState('');
   const mutationInFlight = status.phase === 'running';
 
   const refresh = React.useCallback(async (signal?: AbortSignal, quiet = false): Promise<LocalCdnBucketInventory> => {
@@ -83,6 +93,24 @@ export function LocalCdnBucketDialog({ open, onOpenChange, onSelectionChanged }:
     void refresh(controller.signal).catch(() => undefined);
     return () => controller.abort();
   }, [open, refresh]);
+
+  React.useEffect(() => {
+    if (!open || !selectedAppId) {
+      setSourceRepositoryUrl('');
+      return undefined;
+    }
+    const controller = new AbortController();
+    void loadManagedLabAppSource(selectedAppId, controller.signal)
+      .then((result) => {
+        setSourceRepositoryUrl(result.repositoryUrl || '');
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setSourceRepositoryUrl('');
+        }
+      });
+    return () => controller.abort();
+  }, [open, selectedAppId]);
 
   const publishSource = async (): Promise<void> => {
     const source = inventory?.publishSources.find(
@@ -165,6 +193,8 @@ export function LocalCdnBucketDialog({ open, onOpenChange, onSelectionChanged }:
 
   const verifiedSources = inventory?.publishSources.filter(isVerifiedPublishSource) || [];
   const selectableReleases = inventory?.namespaces.apps.releases.filter(isSelectableRelease) || [];
+  const activeRelease = selectedLocalCdnRelease(inventory, selectedAppId);
+  const activeManifestUrl = inventory && activeRelease ? publicLocalCdnManifestUrl(inventory, activeRelease) : '';
 
   return (
     <Dialog modalType="modal" open={open} onOpenChange={(_event, data) => onOpenChange(data.open)}>
@@ -189,9 +219,37 @@ export function LocalCdnBucketDialog({ open, onOpenChange, onSelectionChanged }:
                 uses the same validated intake primitive as the CLI; it cannot browse arbitrary files or overwrite a release.
               </p>
               {inventory && (
-                <p>
-                  <strong>Origin</strong> <code>{inventory.origin}</code>
-                </p>
+                <div className="local-cdn-admin__endpoints">
+                  <p>
+                    <strong>Local CDN runtime origin</strong> <code>{inventory.origin}</code>
+                  </p>
+                  {sourceRepositoryUrl && (
+                    <p>
+                      <strong>GitHub source repository</strong>{' '}
+                      <a
+                        aria-label={`Open GitHub source repository for ${selectedAppId}`}
+                        href={sourceRepositoryUrl}
+                        rel="noopener noreferrer"
+                        target="_blank"
+                      >
+                        {sourceRepositoryUrl}
+                      </a>
+                    </p>
+                  )}
+                  {activeRelease && (
+                    <p>
+                      <strong>Active local CDN runtime manifest</strong>{' '}
+                      <a
+                        aria-label={`Open active local CDN runtime manifest for ${activeRelease.appId}`}
+                        href={activeManifestUrl}
+                        rel="noopener noreferrer"
+                        target="_blank"
+                      >
+                        {activeManifestUrl}
+                      </a>
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 

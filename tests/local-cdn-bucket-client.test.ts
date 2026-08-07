@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { validateLocalCdnBucketInventory } from '../apps/lab/src/api/localCdnBucket';
+import {
+  publicLocalCdnManifestUrl,
+  selectedLocalCdnRelease,
+  validateLocalCdnBucketInventory
+} from '../apps/lab/src/api/localCdnBucket';
 
 const origin = 'http://127.0.0.1:5174';
+const publicOrigin = 'https://cdn-preview.example.test';
 const appId = 'hello-card-spfx';
 const releaseId = '1.2.3-local.1';
 const namespacePath = `apps/${appId}/versions/${releaseId}/`;
@@ -12,6 +17,7 @@ function inventoryFixture() {
   return {
     schemaVersion: 1,
     origin,
+    publicOrigin,
     namespaces: {
       apps: {
         status: 'supported',
@@ -84,6 +90,7 @@ describe('Local CDN bucket browser contract', () => {
     const result = validateLocalCdnBucketInventory(inventoryFixture());
 
     expect(result.origin).toBe(origin);
+    expect(result.publicOrigin).toBe(publicOrigin);
     expect(result.namespaces.apps.releases[0]).toMatchObject({ appId, releaseId, selected: true, status: 'verified' });
     expect(result.namespaces.apps.releases[0]).toMatchObject({
       sourceProvenance: {
@@ -97,6 +104,11 @@ describe('Local CDN bucket browser contract', () => {
       releases: [],
       message: 'Shared resource publication awaits a canonical verifier.'
     });
+    expect(selectedLocalCdnRelease(result, appId)?.releaseBaseUrl).toBe(releaseBaseUrl);
+    expect(publicLocalCdnManifestUrl(result, result.namespaces.apps.releases[0])).toBe(
+      `${publicOrigin}/${namespacePath}deployment-manifest.json`
+    );
+    expect(selectedLocalCdnRelease(result, 'another-app')).toBeUndefined();
   });
 
   it('distinguishes anchored historical metadata from a deeply verified selected release', () => {
@@ -113,6 +125,7 @@ describe('Local CDN bucket browser contract', () => {
       package: { status: 'anchored' },
       assets: [{ status: 'anchored' }]
     });
+    expect(selectedLocalCdnRelease(validateLocalCdnBucketInventory(anchored), appId)).toBeUndefined();
   });
 
   it('labels legacy releases without immutable record anchors as recorded only', () => {
@@ -166,6 +179,10 @@ describe('Local CDN bucket browser contract', () => {
     const inventedSharedRelease = inventoryFixture();
     inventedSharedRelease.namespaces.shared.releases.push({ fake: true } as never);
     expect(() => validateLocalCdnBucketInventory(inventedSharedRelease)).toThrow('empty and reserved');
+
+    const unsafePublicOrigin = inventoryFixture();
+    unsafePublicOrigin.publicOrigin = 'https://cdn-preview.example.test/not-a-root';
+    expect(() => validateLocalCdnBucketInventory(unsafePublicOrigin)).toThrow('public origin');
   });
 
   it('rejects duplicate pointers/sources and non-canonical server source ids', () => {

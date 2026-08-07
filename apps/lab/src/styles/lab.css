@@ -512,6 +512,17 @@ textarea {
   max-width: 720px;
 }
 
+.local-cdn-admin__endpoints {
+  display: grid;
+  max-width: min(560px, 48vw);
+  gap: 4px;
+  text-align: right;
+}
+
+.local-cdn-admin__endpoints a {
+  overflow-wrap: anywhere;
+}
+
 .local-cdn-admin__intro code,
 .local-cdn-admin__shared code {
   overflow-wrap: anywhere;
@@ -802,6 +813,11 @@ textarea {
     gap: 4px;
   }
 
+  .local-cdn-admin__endpoints {
+    max-width: none;
+    text-align: left;
+  }
+
   .local-cdn-admin__controls {
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
@@ -919,6 +935,18 @@ textarea {
 
 .app-management-sidebar__wide-field {
   grid-column: 1 / -1;
+}
+
+.app-management-sidebar__url-link,
+.app-management-sidebar__url-unavailable {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.app-management-sidebar__url-unavailable {
+  color: var(--colorNeutralForeground3, #616161);
 }
 
 .app-management-sidebar__catalog-intro {

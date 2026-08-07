@@ -3,11 +3,13 @@ import { expect, test, type Locator } from '@playwright/test';
 
 const pinnedAppStorageKey = 'spfx-kit.lab.pinned-app.v1';
 const syntheticMockCdnOrigin = 'http://127.0.0.1:4400';
+const syntheticMockCdnPublicOrigin = 'https://cdn-preview.example.test';
 
 function bucketInventory(selectedReleaseId: string, releaseIds: string[]) {
   return {
     schemaVersion: 1,
     origin: syntheticMockCdnOrigin,
+    publicOrigin: syntheticMockCdnPublicOrigin,
     namespaces: {
       apps: {
         status: 'supported',
@@ -195,6 +197,7 @@ test('opens a distinct accessible Local CDN inventory table with a truthful empt
       body: JSON.stringify({
         schemaVersion: 1,
         origin: syntheticMockCdnOrigin,
+        publicOrigin: syntheticMockCdnPublicOrigin,
         namespaces: {
           apps: { status: 'supported', releases: [] },
           shared: {
@@ -286,6 +289,22 @@ test('opens a distinct accessible Local CDN inventory table with a truthful empt
 
 test('keeps controls fixed while a populated bucket inventory scrolls independently', async ({ page }) => {
   const releases = Array.from({ length: 12 }, (_value, index) => `1.2.3-workspace-${index + 1}`);
+  await page.addInitScript((key) => window.localStorage.setItem(key, 'hello-card-spfx'), pinnedAppStorageKey);
+  await page.route('**/api/spfx-apps/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/source')) {
+      expect(url.searchParams.get('appId')).toBe('hello-card-spfx');
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          appId: 'hello-card-spfx',
+          repositoryUrl: 'https://github.com/acme/hello-card-spfx'
+        })
+      });
+      return;
+    }
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ apps: managedAppFixtures('latest') }) });
+  });
   await page.route('**/api/local-cdn', async (route) => {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(bucketInventory(releases[0], releases)) });
   });
@@ -298,6 +317,22 @@ test('keeps controls fixed while a populated bucket inventory scrolls independen
   const inventory = dialog.getByRole('region', { name: 'Local CDN bucket inventory' });
   await expect(controls).toBeVisible();
   await expect(inventory).toBeVisible();
+  const activeManifestUrl = `${syntheticMockCdnPublicOrigin}/apps/hello-card-spfx/versions/${releases[0]}/deployment-manifest.json`;
+  const sourceRepositoryLink = dialog.getByRole('link', { name: 'Open GitHub source repository for hello-card-spfx' });
+  await expect(sourceRepositoryLink).toHaveText('https://github.com/acme/hello-card-spfx');
+  await expect(sourceRepositoryLink).toHaveAttribute('href', 'https://github.com/acme/hello-card-spfx');
+  const activeCdnLink = dialog.getByRole('link', {
+    name: 'Open active local CDN runtime manifest for hello-card-spfx'
+  });
+  await expect(activeCdnLink).toHaveText(activeManifestUrl);
+  await expect(activeCdnLink).toHaveAttribute('href', activeManifestUrl);
+  await expect(activeCdnLink).toHaveAttribute('target', '_blank');
+  await expect(activeCdnLink).toHaveAttribute('rel', 'noopener noreferrer');
+  const activeCdnPopupPromise = page.waitForEvent('popup');
+  await activeCdnLink.click();
+  const activeCdnPopup = await activeCdnPopupPromise;
+  expect(activeCdnPopup).toBeTruthy();
+  await activeCdnPopup.close();
   const sourceRelease = inventory.locator(`[data-release-id="${releases[0]}"]`);
   await expect(sourceRelease).toContainText(
     'Source: GitHub staging (declared private) · acme-private/staging-assets@0123456789ab…'
@@ -344,6 +379,7 @@ test('identifies the exact release behind an invalid selected pointer', async ({
       body: JSON.stringify({
         schemaVersion: 1,
         origin: syntheticMockCdnOrigin,
+        publicOrigin: syntheticMockCdnPublicOrigin,
         namespaces: {
           apps: { status: 'supported', releases: [] },
           shared: {
@@ -874,7 +910,7 @@ test('has no automatically detectable WCAG A or AA violations', async ({ page })
   expect(results.violations).toEqual([]);
 });
 
-test('shows selected app state, saves export config, and can pin a source release', async ({ page }) => {
+test('shows selected app state, saves export config, and can select a source release', async ({ page }) => {
   let selectedVersion = 'latest';
   let latestVersion = '1.2.0';
   let updateAvailable = true;
@@ -884,7 +920,14 @@ test('shows selected app state, saves export config, and can pin a source releas
   });
   const requests: Array<{ appId: string; versionId: string }> = [];
   const exportConfigRequests: Array<{ appId: string; exportConfig: ManagedAppFixture['exportConfig'] }> = [];
+  const selectedLocalReleaseId = '1.3.0-local.1';
   await page.addInitScript((key) => window.localStorage.setItem(key, 'hello-card-spfx'), pinnedAppStorageKey);
+  await page.route('**/api/local-cdn', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(bucketInventory(selectedLocalReleaseId, [selectedLocalReleaseId]))
+    });
+  });
   await page.route('**/api/spfx-apps/**', async (route) => {
     const url = new URL(route.request().url());
     if (route.request().method() === 'POST' && url.pathname.endsWith('/export-config')) {
@@ -963,6 +1006,13 @@ test('shows selected app state, saves export config, and can pin a source releas
   await expect(fileNameSuffix).not.toHaveAttribute('tabindex', /.+/);
   await expectFileNameSuffixToTrail(fileNameControl, fileNameMirror, fileNameSuffix);
   await expect(sidebar.getByRole('textbox', { name: 'Export version' })).toHaveValue('1.3.0');
+  const activeLocalCdnManifestUrl = `${syntheticMockCdnPublicOrigin}/apps/hello-card-spfx/versions/${selectedLocalReleaseId}/deployment-manifest.json`;
+  const sourceRepositoryLink = sidebar.getByRole('link', { name: 'Open GitHub source repository for Hello Card' });
+  await expect(sourceRepositoryLink).toHaveText('https://github.com/acme/hello-card-spfx');
+  await expect(sourceRepositoryLink).toHaveAttribute('href', 'https://github.com/acme/hello-card-spfx');
+  const activeLocalCdnLink = sidebar.getByRole('link', { name: 'Open active local CDN runtime manifest for Hello Card' });
+  await expect(activeLocalCdnLink).toHaveText(activeLocalCdnManifestUrl);
+  await expect(activeLocalCdnLink).toHaveAttribute('href', activeLocalCdnManifestUrl);
   await expect(sidebar.getByRole('textbox', { name: 'Export CDN URL' })).toHaveValue('https://cdn.example.com/spfx/hello-card/');
 
   const listingGroup = sidebar.getByText('Listing & About', { exact: true });
@@ -1300,6 +1350,7 @@ interface ManagedAppFixture {
     canSelect: boolean;
     updateAvailable: boolean;
     source: 'clone';
+    repositoryUrl: string;
     detail?: string;
   };
 }
@@ -1345,7 +1396,8 @@ function managedAppFixtures(
         canAutoUpdate: true,
         canSelect: true,
         updateAvailable,
-        source: 'clone'
+        source: 'clone',
+        repositoryUrl: 'https://github.com/acme/hello-card-spfx'
       }
     },
     {
@@ -1380,6 +1432,7 @@ function managedAppFixtures(
         canSelect: true,
         updateAvailable: true,
         source: 'clone',
+        repositoryUrl: 'https://github.com/acme/dirty-app-spfx',
         detail:
           'Automatic updates are paused because this app has local changes. Manual version changes save them to a Git stash.'
       }

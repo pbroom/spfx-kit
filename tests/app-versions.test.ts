@@ -3,7 +3,13 @@ import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { describeManagedAppVersion, selectManagedAppVersion, sortVersionTags } from '../apps/lab/server/app-versions';
+import {
+  configuredGitHubRepositoryUrl,
+  describeManagedAppVersion,
+  readConfiguredGitHubRepositoryUrl,
+  selectManagedAppVersion,
+  sortVersionTags
+} from '../apps/lab/server/app-versions';
 
 const temporaryDirectories: string[] = [];
 const gitExecutable = execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
@@ -20,6 +26,29 @@ describe('managed app versions', () => {
       'v1.10.0',
       'v1.9.0'
     ]);
+  });
+
+  it('derives a safe browser URL only from a configured GitHub clone source', () => {
+    expect(configuredGitHubRepositoryUrl('https://github.com/pbroom/better-list-spfx.git')).toBe(
+      'https://github.com/pbroom/better-list-spfx'
+    );
+    expect(configuredGitHubRepositoryUrl('git@github.com:pbroom/better-list-spfx.git')).toBe(
+      'https://github.com/pbroom/better-list-spfx'
+    );
+    expect(configuredGitHubRepositoryUrl('https://token@github.com/pbroom/better-list-spfx.git')).toBeUndefined();
+    expect(configuredGitHubRepositoryUrl('/local/better-list-spfx')).toBeUndefined();
+  });
+
+  it('reads the configured repository without inspecting remote versions', async () => {
+    const appDir = await mkdtemp(path.join(os.tmpdir(), 'spfx-kit-app-source-'));
+    temporaryDirectories.push(appDir);
+    await mkdir(path.join(appDir, '.spfx-kit'), { recursive: true });
+    await writeFile(
+      path.join(appDir, '.spfx-kit', 'clone.json'),
+      `${JSON.stringify({ source: 'git@github.com:pbroom/better-list-spfx.git' })}\n`
+    );
+
+    await expect(readConfiguredGitHubRepositoryUrl(appDir)).resolves.toBe('https://github.com/pbroom/better-list-spfx');
   });
 
   it('discovers tags, switches pinned versions, and returns to Latest', async () => {

@@ -543,6 +543,7 @@ export function LabApp(): JSX.Element {
           open={localCdnBucketOpen}
           onOpenChange={setLocalCdnBucketOpen}
           onSelectionChanged={() => setCdnSelectionRevision((revision) => revision + 1)}
+          selectedAppId={selected?.appId || ''}
         />
         {displayMode === 'edit' ? (
           <>

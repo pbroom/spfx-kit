@@ -13,6 +13,7 @@ const MAX_PUBLISH_SOURCES = 500;
 export interface LocalCdnBucketInventory {
   schemaVersion: 1;
   origin: string;
+  publicOrigin: string;
   namespaces: {
     apps: { status: 'supported'; releases: LocalCdnAppRelease[] };
     shared: { status: 'reserved-unsupported'; message: string; releases: [] };
@@ -115,6 +116,20 @@ export async function selectLocalCdnRelease(appId: string, releaseId: string): P
   await requestBucketMutation('/select', { appId, releaseId });
 }
 
+export function selectedLocalCdnRelease(
+  inventory: LocalCdnBucketInventory | undefined,
+  appId: string
+): LocalCdnInspectableRelease | undefined {
+  return inventory?.namespaces.apps.releases.find(
+    (release): release is LocalCdnInspectableRelease =>
+      release.appId === appId && release.selected && release.status === 'verified'
+  );
+}
+
+export function publicLocalCdnManifestUrl(inventory: LocalCdnBucketInventory, release: LocalCdnAppRelease): string {
+  return `${inventory.publicOrigin}/${release.namespacePath}deployment-manifest.json`;
+}
+
 async function requestBucketMutation(path: string, body: Record<string, string>): Promise<void> {
   const response = await fetch(`${LOCAL_CDN_ENDPOINT}${path}`, {
     method: 'POST',
@@ -131,6 +146,7 @@ export function validateLocalCdnBucketInventory(value: unknown): LocalCdnBucketI
     throw new Error('Local CDN bucket inventory has an unsupported schema version.');
   }
   const origin = validateOrigin(root.origin);
+  const publicOrigin = validatePublicOrigin(root.publicOrigin);
   const namespaces = requireRecord(root.namespaces, 'Local CDN bucket namespaces');
   const apps = requireRecord(namespaces.apps, 'Local CDN app namespace');
   const shared = requireRecord(namespaces.shared, 'Local CDN shared namespace');
@@ -184,6 +200,7 @@ export function validateLocalCdnBucketInventory(value: unknown): LocalCdnBucketI
   return {
     schemaVersion: 1,
     origin,
+    publicOrigin,
     namespaces: {
       apps: { status: 'supported', releases },
       shared: { status: 'reserved-unsupported', message: requireString(shared.message, 'shared namespace message'), releases: [] }
@@ -464,6 +481,25 @@ function validateOrigin(value: unknown): string {
   }
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port || url.href !== `${url.origin}/`) {
     throw new Error('Local CDN origin must be a loopback HTTP origin with an explicit port.');
+  }
+  return url.origin;
+}
+
+function validatePublicOrigin(value: unknown): string {
+  const publicOrigin = requireString(value, 'Local CDN public origin');
+  let url: URL;
+  try {
+    url = new URL(publicOrigin);
+  } catch {
+    throw new Error('Local CDN public origin must be a valid loopback or forwarded URL.');
+  }
+  const loopback = url.protocol === 'http:' && url.hostname === '127.0.0.1' && Boolean(url.port);
+  const forwarded =
+    url.protocol === 'https:' &&
+    Boolean(url.hostname) &&
+    !['localhost', '0.0.0.0', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
+  if ((!loopback && !forwarded) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('Local CDN public origin must be a credential-free loopback HTTP or forwarded HTTPS origin.');
   }
   return url.origin;
 }
