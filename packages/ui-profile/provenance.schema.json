@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spfx-kit.dev/schemas/ui-profile-provenance-v1.json",
+  "title": "SPFx Kit UI source-profile provenance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "generatorVersion",
+    "profileId",
+    "registry",
+    "runtime",
+    "hostTypeContract",
+    "isolatedCompilerTypeContract",
+    "utilities",
+    "dependencyResolutionPins",
+    "typescriptMatrix",
+    "normalization",
+    "registryIds",
+    "registrySnapshots",
+    "excludedDependencies",
+    "directProductionDependencies"
+  ],
+  "$defs": {
+    "snapshotDigests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rawSha256", "canonicalSha256"],
+      "properties": {
+        "rawSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "canonicalSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  },
+  "properties": {
+    "$schema": { "const": "./provenance.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "generatorVersion": { "const": "1.0.0" },
+    "profileId": { "const": "spfx-react17-base-nova-v1" },
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset",
+        "endpointTemplate",
+        "toolSourceRepository",
+        "toolSourceRevision",
+        "cli",
+        "mutableHostedResponses",
+        "hostedResponsesRevisionBound"
+      ],
+      "properties": {
+        "preset": { "const": "base-nova" },
+        "endpointTemplate": { "const": "https://ui.shadcn.com/r/styles/base-nova/{id}.json" },
+        "toolSourceRepository": { "const": "https://github.com/shadcn-ui/ui" },
+        "toolSourceRevision": { "const": "cb2bcd88d93b2f9bddb030e9136f1f8773e7eac4" },
+        "mutableHostedResponses": { "const": true },
+        "hostedResponsesRevisionBound": { "const": false },
+        "cli": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "integrity"],
+          "properties": {
+            "name": { "const": "shadcn" },
+            "version": { "const": "4.16.1" },
+            "integrity": {
+              "const": "sha512-XLFzfNNIUPlUlyheFEzj0H4Vnhi9nI0nl3Nfgg8HYXW1FkUVhVT1X+mgmOUW8aWL5SeG0A+yJIV5fm3Hr9MVkQ=="
+            }
+          }
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["react", "reactDom", "baseUi", "lucideReact"],
+      "properties": {
+        "react": { "const": "17.0.1" },
+        "reactDom": { "const": "17.0.1" },
+        "baseUi": { "const": "1.6.0" },
+        "lucideReact": { "const": "1.25.0" }
+      }
+    },
+    "hostTypeContract": {
+      "const": {
+        "@types/react": "17.0.45",
+        "@types/react-dom": "17.0.17"
+      }
+    },
+    "isolatedCompilerTypeContract": {
+      "const": {
+        "@types/react": "17.0.93",
+        "@types/react-dom": "17.0.17",
+        "@types/scheduler": "0.16.8"
+      }
+    },
+    "utilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class-variance-authority", "clsx", "tailwind-merge"],
+      "properties": {
+        "class-variance-authority": { "const": "0.7.1" },
+        "clsx": { "const": "2.1.1" },
+        "tailwind-merge": { "const": "3.6.0" }
+      }
+    },
+    "dependencyResolutionPins": {
+      "const": {
+        "@floating-ui/core": "1.7.5",
+        "@floating-ui/dom": "1.7.6",
+        "@floating-ui/react-dom": "2.1.8",
+        "@floating-ui/utils": "0.2.11"
+      }
+    },
+    "typescriptMatrix": { "const": ["5.3.3", "5.8.3"] },
+    "normalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contractVersion", "implementation", "implementationSha256"],
+      "properties": {
+        "contractVersion": { "const": "react17-classic-jsx-v1" },
+        "implementation": { "const": "scripts/lib/profile.mjs" },
+        "implementationSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "registryIds": {
+      "const": [
+        "button",
+        "input",
+        "field",
+        "textarea",
+        "checkbox",
+        "switch",
+        "select",
+        "combobox",
+        "toggle-group",
+        "tabs",
+        "accordion",
+        "dropdown-menu",
+        "dialog",
+        "sheet",
+        "popover",
+        "tooltip",
+        "alert",
+        "badge",
+        "spinner",
+        "label",
+        "separator",
+        "input-group",
+        "toggle",
+        "utils"
+      ]
+    },
+    "registrySnapshots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "button",
+        "input",
+        "field",
+        "textarea",
+        "checkbox",
+        "switch",
+        "select",
+        "combobox",
+        "toggle-group",
+        "tabs",
+        "accordion",
+        "dropdown-menu",
+        "dialog",
+        "sheet",
+        "popover",
+        "tooltip",
+        "alert",
+        "badge",
+        "spinner",
+        "label",
+        "separator",
+        "input-group",
+        "toggle",
+        "utils"
+      ],
+      "properties": {
+        "button": { "$ref": "#/$defs/snapshotDigests" },
+        "input": { "$ref": "#/$defs/snapshotDigests" },
+        "field": { "$ref": "#/$defs/snapshotDigests" },
+        "textarea": { "$ref": "#/$defs/snapshotDigests" },
+        "checkbox": { "$ref": "#/$defs/snapshotDigests" },
+        "switch": { "$ref": "#/$defs/snapshotDigests" },
+        "select": { "$ref": "#/$defs/snapshotDigests" },
+        "combobox": { "$ref": "#/$defs/snapshotDigests" },
+        "toggle-group": { "$ref": "#/$defs/snapshotDigests" },
+        "tabs": { "$ref": "#/$defs/snapshotDigests" },
+        "accordion": { "$ref": "#/$defs/snapshotDigests" },
+        "dropdown-menu": { "$ref": "#/$defs/snapshotDigests" },
+        "dialog": { "$ref": "#/$defs/snapshotDigests" },
+        "sheet": { "$ref": "#/$defs/snapshotDigests" },
+        "popover": { "$ref": "#/$defs/snapshotDigests" },
+        "tooltip": { "$ref": "#/$defs/snapshotDigests" },
+        "alert": { "$ref": "#/$defs/snapshotDigests" },
+        "badge": { "$ref": "#/$defs/snapshotDigests" },
+        "spinner": { "$ref": "#/$defs/snapshotDigests" },
+        "label": { "$ref": "#/$defs/snapshotDigests" },
+        "separator": { "$ref": "#/$defs/snapshotDigests" },
+        "input-group": { "$ref": "#/$defs/snapshotDigests" },
+        "toggle": { "$ref": "#/$defs/snapshotDigests" },
+        "utils": { "$ref": "#/$defs/snapshotDigests" }
+      }
+    },
+    "excludedDependencies": {
+      "const": ["cmdk@1.1.1", "sonner@2.0.7", "@radix-ui/*", "react-aria-components", "vaul"]
+    },
+    "directProductionDependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["@base-ui/react", "class-variance-authority", "clsx", "lucide-react", "react", "react-dom", "tailwind-merge"],
+      "properties": {
+        "@base-ui/react": { "const": "1.6.0" },
+        "class-variance-authority": { "const": "0.7.1" },
+        "clsx": { "const": "2.1.1" },
+        "lucide-react": { "const": "1.25.0" },
+        "react": { "const": "17.0.1" },
+        "react-dom": { "const": "17.0.1" },
+        "tailwind-merge": { "const": "3.6.0" }
+      }
+    }
+  }
+}

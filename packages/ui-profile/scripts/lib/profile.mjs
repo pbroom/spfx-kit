@@ -123,7 +123,12 @@ function moduleSpecifierNodes(sourceFile) {
       ts.isStringLiteralLike(node.argument.literal)
     ) {
       specifier = node.argument.literal;
-    } else if (ts.isCallExpression(node) && node.arguments.length === 1 && ts.isStringLiteralLike(node.arguments[0])) {
+    } else if (
+      ts.isCallExpression(node) &&
+      node.arguments.length >= 1 &&
+      ts.isStringLiteralLike(node.arguments[0]) &&
+      (node.expression.kind === ts.SyntaxKind.ImportKeyword || node.arguments.length === 1)
+    ) {
       const expression = node.expression;
       const isDependencyCall =
         expression.kind === ts.SyntaxKind.ImportKeyword ||
@@ -139,6 +144,19 @@ function moduleSpecifierNodes(sourceFile) {
   }
   visit(sourceFile);
   return specifiers;
+}
+
+export function moduleSpecifiers(source, label) {
+  const sourceFile = parsedSource(source, label);
+  function rejectComputedDependency(node) {
+    const dependency = dependencyCall(node);
+    if (dependency?.kind === 'computed') {
+      throw new Error(`${label}: non-literal dynamic dependency is not accepted`);
+    }
+    ts.forEachChild(node, rejectComputedDependency);
+  }
+  rejectComputedDependency(sourceFile);
+  return moduleSpecifierNodes(sourceFile).map((specifier) => specifier.text);
 }
 
 function rewriteModuleSpecifiers(source, label, rewrite) {
@@ -687,7 +705,11 @@ function dependencyCall(node) {
     expression.expression.text === 'require' &&
     expression.name.text === 'resolve';
   if (!isDynamicImport && !isRequire && !isRequireResolve) return null;
-  if (current.arguments.length !== 1 || !ts.isStringLiteralLike(current.arguments[0])) {
+  if (
+    current.arguments.length < 1 ||
+    !ts.isStringLiteralLike(current.arguments[0]) ||
+    (!isDynamicImport && current.arguments.length !== 1)
+  ) {
     return { kind: 'computed', moduleName: null };
   }
   return {
