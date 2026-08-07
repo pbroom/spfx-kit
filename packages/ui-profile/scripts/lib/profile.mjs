@@ -963,16 +963,74 @@ function reactWrapperBindings(sourceFile) {
   return { namespaces, namedMemo, namedForwardRef };
 }
 
-function callableFromExportExpression(expression, sourceFile, seen = new Set(), memoized = false) {
+function bindingWrites(sourceFile, name) {
+  const writes = [];
+  function visit(node) {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      ts.isIdentifier(unwrapExpression(node.left)) &&
+      unwrapExpression(node.left).text === name
+    ) {
+      writes.push(node);
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken) &&
+      ts.isIdentifier(unwrapExpression(node.operand)) &&
+      unwrapExpression(node.operand).text === name
+    ) {
+      writes.push(node);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return writes;
+}
+
+function callableFromExportExpression(
+  expression,
+  sourceFile,
+  seen = new Set(),
+  memoized = false,
+  contextualType = null
+) {
+  const contextualTypeTexts = [];
+  if (typeof contextualType === 'string') contextualTypeTexts.push(contextualType);
+  else if (contextualType) contextualTypeTexts.push(contextualType.getText(sourceFile));
+  let contextualExpression = expression;
+  while (true) {
+    if (ts.isParenthesizedExpression(contextualExpression) || ts.isNonNullExpression(contextualExpression)) {
+      contextualExpression = contextualExpression.expression;
+      continue;
+    }
+    if (
+      ts.isAsExpression(contextualExpression) ||
+      ts.isTypeAssertionExpression(contextualExpression) ||
+      ts.isSatisfiesExpression(contextualExpression)
+    ) {
+      contextualTypeTexts.push(contextualExpression.type.getText(sourceFile));
+      contextualExpression = contextualExpression.expression;
+      continue;
+    }
+    break;
+  }
   const unwrapped = unwrapExpression(expression);
   if (ts.isArrowFunction(unwrapped) || ts.isFunctionExpression(unwrapped)) {
     const kind = ts.isArrowFunction(unwrapped) ? 'arrow' : 'function-expression';
-    return { declaration: unwrapped, kind: memoized ? `memoized ${kind}` : kind };
+    return {
+      declaration: unwrapped,
+      kind: memoized ? `memoized ${kind}` : kind,
+      contextualPropsType: contextualTypeTexts.join(' & ')
+    };
   }
   if (ts.isIdentifier(unwrapped)) {
-    if (!memoized) return null;
     if (seen.has(unwrapped.text)) return null;
     seen.add(unwrapped.text);
+    if (bindingWrites(sourceFile, unwrapped.text).length > 0) {
+      throw new Error(`mutable exported callable alias ${unwrapped.text} is not accepted`);
+    }
     const functionDeclaration = sourceFile.statements.find(
       (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === unwrapped.text && statement.body
     );
@@ -985,7 +1043,13 @@ function callableFromExportExpression(expression, sourceFile, seen = new Set(), 
         (candidate) => ts.isIdentifier(candidate.name) && candidate.name.text === unwrapped.text
       );
       if (declaration?.initializer) {
-        return callableFromExportExpression(declaration.initializer, sourceFile, seen, memoized);
+        return callableFromExportExpression(
+          declaration.initializer,
+          sourceFile,
+          seen,
+          memoized,
+          declaration.type ?? contextualTypeTexts.join(' & ')
+        );
       }
     }
     return null;
@@ -1013,7 +1077,17 @@ function callableFromExportExpression(expression, sourceFile, seen = new Set(), 
     if (memoized) throw new Error('unsupported React.memo wrapper argument is not accepted');
     return null;
   }
-  const wrapped = callableFromExportExpression(unwrapped.arguments[0], sourceFile, seen, true);
+  const memoContextualTypes = [
+    ...contextualTypeTexts,
+    ...(unwrapped.typeArguments ?? []).map((typeArgument) => typeArgument.getText(sourceFile))
+  ];
+  const wrapped = callableFromExportExpression(
+    unwrapped.arguments[0],
+    sourceFile,
+    seen,
+    true,
+    memoContextualTypes.join(' & ')
+  );
   if (!wrapped) throw new Error('unsupported React.memo wrapper argument is not accepted');
   return wrapped;
 }
@@ -1044,6 +1118,7 @@ function anonymousDefaultFunctionContracts(source) {
     ) {
       addContract(statement, 'function');
     } else if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+      if (ts.isIdentifier(unwrapExpression(statement.expression))) continue;
       const callable = callableFromExportExpression(statement.expression, sourceFile);
       if (callable && !callable.forwarded) addContract(callable.declaration, callable.kind);
     }
@@ -1051,31 +1126,49 @@ function anonymousDefaultFunctionContracts(source) {
   return contracts;
 }
 
-function exportedVariableFunctionContract(source, name) {
+function exportedVariableFunctionContracts(source, name) {
   const sourceFile = parsedSource(source, 'normalized-variable-wrapper.tsx');
+  const contracts = [];
+  let exportedDeclaration = null;
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue;
     const declaration = statement.declarationList.declarations.find(
       (candidate) => ts.isIdentifier(candidate.name) && candidate.name.text === name
     );
-    const callable = declaration?.initializer
-      ? callableFromExportExpression(declaration.initializer, sourceFile)
-      : null;
+    if (declaration) {
+      exportedDeclaration = declaration;
+      break;
+    }
+  }
+  if (!exportedDeclaration) return contracts;
+  if (bindingWrites(sourceFile, name).length > 0) {
+    throw new Error(`mutable exported callable binding ${name} is not accepted`);
+  }
+  const candidates = [];
+  if (exportedDeclaration.initializer) candidates.push(exportedDeclaration.initializer);
+  for (const candidate of candidates) {
+    const callable = callableFromExportExpression(
+      candidate,
+      sourceFile,
+      new Set(),
+      false,
+      exportedDeclaration.type
+    );
     if (!callable || callable.forwarded) continue;
     const parameter = callable.declaration.parameters.find(
       (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
     );
-    if (!parameter) return null;
-    return {
+    if (!parameter) continue;
+    contracts.push({
       kind: callable.kind,
       spreadTargets: propsSpreadTargets(callable.declaration, parameter, sourceFile),
-      propsType: parameter.type?.getText(sourceFile) ?? '',
+      propsType: parameter.type?.getText(sourceFile) ?? callable.contextualPropsType ?? '',
       body: ts.isBlock(callable.declaration.body)
         ? callable.declaration.body.getText(sourceFile).slice(1, -1)
         : `return ${callable.declaration.body.getText(sourceFile)}`
-    };
+    });
   }
-  return null;
+  return contracts;
 }
 
 export function normalizeRegistrySource({ source, registrySourcePath }) {
@@ -1722,30 +1815,27 @@ export function assertReact17Source(source, label) {
     }
   }
   for (const name of exportedNames(source)) {
-    const forwardRef = new RegExp(`\\bconst\\s+${name}\\s*=\\s*React\\.forwardRef\\b`);
     const ordinary = exportedFunctionContract(source, name);
     const refProps = ordinary && isRefBearingPropsType(source, ordinary.propsType);
     const useRenderWrapper = ordinary && /return\s+useRender\(\{/.test(ordinary.body);
     if (
       ordinary &&
       refProps &&
-      (ordinary.spreadTargets.some(targetAcceptsPublicRef) || useRenderWrapper) &&
-      !forwardRef.test(source)
+      (ordinary.spreadTargets.some(targetAcceptsPublicRef) || useRenderWrapper)
     ) {
       throw new Error(`${label}: public ref-bearing wrapper ${name} is not normalized with React.forwardRef`);
     }
-    const variableFunction = exportedVariableFunctionContract(source, name);
-    const variableRefProps = variableFunction && isRefBearingPropsType(source, variableFunction.propsType);
-    const variableUseRenderWrapper = variableFunction && /return\s+useRender\(\{/.test(variableFunction.body);
-    if (
-      variableFunction &&
-      variableRefProps &&
-      (variableFunction.spreadTargets.some(targetAcceptsPublicRef) || variableUseRenderWrapper) &&
-      !forwardRef.test(source)
-    ) {
-      throw new Error(
-        `${label}: public ref-bearing ${variableFunction.kind} wrapper ${name} is not normalized with React.forwardRef`
-      );
+    for (const variableFunction of exportedVariableFunctionContracts(source, name)) {
+      const variableRefProps = isRefBearingPropsType(source, variableFunction.propsType);
+      const variableUseRenderWrapper = /return\s+useRender\(\{/.test(variableFunction.body);
+      if (
+        variableRefProps &&
+        (variableFunction.spreadTargets.some(targetAcceptsPublicRef) || variableUseRenderWrapper)
+      ) {
+        throw new Error(
+          `${label}: public ref-bearing ${variableFunction.kind} wrapper ${name} is not normalized with React.forwardRef`
+        );
+      }
     }
   }
 }
