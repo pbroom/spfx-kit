@@ -414,7 +414,6 @@ describe('React 17 UI profile normalization', () => {
 
   it.each([
     'const Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; export const Probe = Inner',
-    'function Inner(props: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }; export const Probe = Inner',
     'const Inner = function (props: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }; export default Inner'
   ])('fails closed for exported aliases to local ref-bearing wrappers: %s', (declaration) => {
     expect(() =>
@@ -423,6 +422,18 @@ describe('React 17 UI profile normalization', () => {
         source: `import { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
       })
     ).toThrow(/ref-bearing (?:arrow|function|function-expression) wrapper/u);
+  });
+
+  it('rejects function-declaration callable aliases', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'function Inner(props: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }\n' +
+          'export const Probe = Inner\n'
+      })
+    ).toThrow('function-declaration exported callable alias Inner is not accepted');
   });
 
   it.each([
@@ -484,6 +495,67 @@ describe('React 17 UI profile normalization', () => {
           `${declaration}\n`
       })
     ).toThrow('mutable exported callable binding Probe is not accepted');
+  });
+
+  it('rejects conditional callable aliases even when their bindings are immutable', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'const Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />\n' +
+          'export const Probe: React.FC<ButtonPrimitive.Props> = ready ? Inner : Inner\n'
+      })
+    ).toThrow('conditional exported callable wrappers are not accepted');
+  });
+
+  it('does not confuse a nested shadow write with an immutable exported forwardRef binding', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'const Probe = React.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />)\n' +
+          'function demo() { let Probe = 0; Probe++ }\n' +
+          'export { Probe }\n'
+      })
+    ).not.toThrow();
+  });
+
+  it('accepts unrelated mutable and conditional scalar exports', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source: 'export let count = 0\nexport const mode = ready ? "a" : "b"\n'
+      })
+    ).not.toThrow();
+  });
+
+  it('rejects unsupported call wrappers with a ref-bearing contextual type', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export const Probe = factory() satisfies React.FC<ButtonPrimitive.Props>\n'
+      })
+    ).toThrow('unsupported contextually typed exported callable Probe is not accepted');
+  });
+
+  it('rejects reassigned function-declaration callable aliases', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'function Inner(props: ButtonPrimitive.Props) { return null }\n' +
+          'Inner = props => <ButtonPrimitive {...props} />\n' +
+          'export const Probe = Inner\n'
+      })
+    ).toThrow('function-declaration exported callable alias Inner is not accepted');
   });
 
   it.each([
