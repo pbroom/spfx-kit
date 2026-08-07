@@ -72,11 +72,11 @@ const fieldVariants = cva(
   {
     variants: {
       orientation: {
-        vertical: "skui:flex-col skui:*:w-full skui:[&>.sr-only]:w-auto",
+        vertical: "skui:flex-col skui:*:w-full skui:[&>.skui\\:sr-only]:w-auto",
         horizontal:
           "skui:flex-row skui:items-center skui:has-[>[data-slot=field-content]]:items-start skui:*:data-[slot=field-label]:flex-auto skui:has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px",
         responsive:
-          "skui:flex-col skui:*:w-full skui:@md/field-group:flex-row skui:@md/field-group:items-center skui:@md/field-group:*:w-auto skui:@md/field-group:has-[>[data-slot=field-content]]:items-start skui:@md/field-group:*:data-[slot=field-label]:flex-auto skui:[&>.sr-only]:w-auto skui:@md/field-group:has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px",
+          "skui:flex-col skui:*:w-full skui:@md/field-group:flex-row skui:@md/field-group:items-center skui:@md/field-group:*:w-auto skui:@md/field-group:has-[>[data-slot=field-content]]:items-start skui:@md/field-group:*:data-[slot=field-label]:flex-auto skui:[&>.skui\\:sr-only]:w-auto skui:@md/field-group:has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px",
       },
     },
     defaultVariants: {

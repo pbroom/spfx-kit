@@ -14,6 +14,7 @@
     "reactTypeContract",
     "utilities",
     "cssToolchain",
+    "tailwindCompilerClosureSha256",
     "dependencyResolutionPins",
     "typescriptMatrix",
     "normalization",
@@ -125,6 +126,9 @@
           "integrity": "sha512-7bziOlRqH0hJx80h/3mbicLW7o8qLsH5+RaLR2t+OHM3D0JlWGODQKQ4cxbK7WlvmUxpcj6Kgu6EKqjrGFe3QQ=="
         }
       }
+    },
+    "tailwindCompilerClosureSha256": {
+      "const": "d6f6eb30ddf06feab95c95ea5262af3d31a95ae2b6ab3ba2c450c93edcad4726"
     },
     "dependencyResolutionPins": {
       "const": {

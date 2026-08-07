@@ -23,11 +23,11 @@
     },
     {
       "path": "scripts/lib/generate-profile.mjs",
-      "sha256": "82a7193f6014843a445f1b1b0157ce52fec7ab4d9949c39e6ea67bf74eb94952"
+      "sha256": "12ae253ca649b2f88d0575fe2e60e54d9dd50f67b75645b3fbcb9f3c077bb8d6"
     },
     {
       "path": "scripts/lib/profile-update-intake.mjs",
-      "sha256": "23d6f26eaf794ed0d86205e043de965c7cce439dbae24113a1753015bface8d7"
+      "sha256": "09d9c7d3b8bd1bc7dddcf958129772b1f2be0480f255d890203a7d19ef0faded"
     },
     {
       "path": "scripts/lib/typecheck-generated-profile.mjs",
@@ -141,7 +141,7 @@
         {
           "path": "normalized/src/components/ui/field.tsx",
           "registrySourcePath": "registry/base-nova/ui/field.tsx",
-          "sha256": "3d04bf94ecacffbf9af8c1561f9279ed65cef56ad46179959ae8ab49c1b89c0a",
+          "sha256": "6f446015beb746d4c406121b92c3167a205affa4547b1d19094b8787cea87139",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
@@ -634,7 +634,7 @@
         {
           "path": "normalized/src/components/ui/input-group.tsx",
           "registrySourcePath": "registry/base-nova/ui/input-group.tsx",
-          "sha256": "6e4aa1a338e6542f98ad301b55d0ff42ec3f4d33925a5c25ef51bb253b83d85a",
+          "sha256": "d758a96397d7dd0ff71570e0a21189b1c3f0ef11995de0917d3e1c01712ea986",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
@@ -698,8 +698,8 @@
       }
     }
   ],
-  "normalizationImplementationSha256": "56fa0a053a5ea491005178f64c8c650806c68b18ab522de9387b656825359293",
+  "normalizationImplementationSha256": "d3130bc4cd5651f2f857631bc82e4bd01c06d256abebed1b194c98bc80d5e096",
   "profileId": "spfx-react17-base-nova-v1",
-  "provenanceSha256": "2da6c31c520092dd7d69e747342e504fa142b9e904d1f502f5d87803ff03ee5f",
+  "provenanceSha256": "14cca8d9b4b29e81287e72709a4a9ed2cff98295c12cd2446757c4661ef92012",
   "schemaVersion": 1
 }

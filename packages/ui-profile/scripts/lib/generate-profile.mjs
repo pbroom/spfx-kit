@@ -6,6 +6,7 @@ import {
   PROFILE_ID,
   PROFILE_SCHEMA_VERSION,
   assertRegistryIds,
+  assertTailwindCompilerClosure,
   canonicalJson,
   createRegistrySourceContext,
   normalizeRegistrySource,
@@ -37,6 +38,8 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
   const dependencyClosureBytes = await readFile(path.join(packageRoot, 'dependency-closure.json'));
   const dependencyClosure = JSON.parse(dependencyClosureBytes.toString('utf8'));
   assertProductionDependencyRoots(dependencyClosure.productionRoots, provenance.directProductionDependencies);
+  const packageLock = JSON.parse(await readFile(path.resolve(packageRoot, '..', '..', 'package-lock.json'), 'utf8'));
+  assertTailwindCompilerClosure(packageLock, provenance);
   await mkdir(path.join(outputRoot, 'snapshots', 'canonical'), { recursive: true });
   const implementationPath = path.join(packageRoot, 'scripts', 'lib', 'profile.mjs');
   const items = [];

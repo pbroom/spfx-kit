@@ -520,6 +520,21 @@ describe('offline profile verifier', () => {
     expect(after).toEqual(before);
   });
 
+  it('rejects transitive Tailwind compiler lock drift before verification or generation', async () => {
+    const root = await copyProfile();
+    const temporaryRepositoryRoot = path.resolve(root, '..', '..');
+    const lock = await readJson<any>(temporaryRepositoryRoot, 'package-lock.json');
+    lock.packages['node_modules/magic-string'].version = '0.30.22';
+    await writeCanonicalJson(temporaryRepositoryRoot, 'package-lock.json', lock);
+    const before = await treeDigests(root);
+
+    for (const result of [runOfflineVerifier(root), runOfflineRegenerator(root)]) {
+      expect(result.status).not.toBe(0);
+      expect(verifierMessage(result)).toContain('Tailwind compiler dependency closure differs from provenance');
+      expect(await treeDigests(root)).toEqual(before);
+    }
+  });
+
   it('verifies the accepted production closure offline and rejects forced-peer policy drift', async () => {
     const real = runOfflineClosureVerifier(profileRoot);
     expect(verifierMessage(real)).not.toContain('attempted network access');

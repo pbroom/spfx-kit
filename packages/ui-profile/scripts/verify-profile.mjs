@@ -11,6 +11,7 @@ import {
   PROFILE_ID,
   PROFILE_SCHEMA_VERSION,
   REGISTRY_IDS,
+  assertTailwindCompilerClosure,
   canonicalJson,
   createRegistrySourceContext,
   externalImports,
@@ -141,7 +142,7 @@ assert(
   'profile.schema.json identity differs'
 );
 assert(
-  sha256(Buffer.from(canonicalJson(provenanceSchema))) === '37d3a15fc9bb824cb56452f4e05f17aecc45c5628997e70883c8e4d3d28fbccf',
+  sha256(Buffer.from(canonicalJson(provenanceSchema))) === 'e25645d36aff73603995e119dbf51bace513beb29ba98926541d42ef1d9d485e',
   'provenance.schema.json identity differs'
 );
 assert(validateProfile(profile), `profile.json schema errors: ${ajv.errorsText(validateProfile.errors)}`);
@@ -235,6 +236,7 @@ for (const [name, expected] of Object.entries(expectedCssToolchain)) {
   assert(locked?.version === expected.version, `${name}: lockfile version differs from CSS toolchain provenance`);
   assert(locked?.integrity === expected.integrity, `${name}: lockfile integrity differs from CSS toolchain provenance`);
 }
+assertTailwindCompilerClosure(packageLock, provenance);
 assertExact(
   provenance.dependencyResolutionPins,
   {

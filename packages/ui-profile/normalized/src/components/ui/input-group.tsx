@@ -37,9 +37,9 @@ const inputGroupAddonVariants = cva(
         "inline-end":
           "skui:order-last skui:pr-2 skui:has-[>button]:mr-[-0.3rem] skui:has-[>kbd]:mr-[-0.15rem]",
         "block-start":
-          "skui:order-first skui:w-full skui:justify-start skui:px-2.5 skui:pt-2 skui:group-has-[>input]/input-group:pt-2 skui:[.border-b]:pb-2",
+          "skui:order-first skui:w-full skui:justify-start skui:px-2.5 skui:pt-2 skui:group-has-[>input]/input-group:pt-2 skui:[.skui\\:border-b]:pb-2",
         "block-end":
-          "skui:order-last skui:w-full skui:justify-start skui:px-2.5 skui:pb-2 skui:group-has-[>input]/input-group:pb-2 skui:[.border-t]:pt-2",
+          "skui:order-last skui:w-full skui:justify-start skui:px-2.5 skui:pb-2 skui:group-has-[>input]/input-group:pb-2 skui:[.skui\\:border-t]:pt-2",
       },
     },
     defaultVariants: {

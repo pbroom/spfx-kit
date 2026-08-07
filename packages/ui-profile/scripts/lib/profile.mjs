@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import selectorParser from 'postcss-selector-parser';
 import ts from 'typescript';
 
 const require = createRequire(import.meta.url);
@@ -78,6 +79,76 @@ function sortJson(value) {
 
 export function canonicalJson(value) {
   return `${JSON.stringify(sortJson(value), null, 2)}\n`;
+}
+
+function lockedPackageDependencyPath(lock, fromPath, dependencyName) {
+  let current = fromPath;
+  while (current && current !== '.') {
+    const candidate = path.posix.join(current, 'node_modules', dependencyName);
+    if (Object.hasOwn(lock.packages ?? {}, candidate)) return candidate;
+    current = path.posix.dirname(current);
+  }
+  const rootCandidate = path.posix.join('node_modules', dependencyName);
+  return Object.hasOwn(lock.packages ?? {}, rootCandidate) ? rootCandidate : null;
+}
+
+export function tailwindCompilerClosureSha256(lock, rootPackageNames) {
+  if (!lock?.packages || !Array.isArray(rootPackageNames) || rootPackageNames.length === 0) {
+    throw new Error('Tailwind compiler dependency closure inputs are invalid');
+  }
+  const pending = [...new Set(rootPackageNames)].sort().map((name) => `node_modules/${name}`);
+  const visited = new Set();
+  const records = [];
+  while (pending.length > 0) {
+    const lockPath = pending.shift();
+    if (visited.has(lockPath)) continue;
+    visited.add(lockPath);
+    const lockedPackage = lock.packages[lockPath];
+    if (!lockedPackage) throw new Error(`Tailwind compiler dependency is absent from the lockfile: ${lockPath}`);
+
+    const dependencyKinds = new Map();
+    const addDependencies = (dependencies, kind) => {
+      for (const name of Object.keys(dependencies ?? {})) {
+        const kinds = dependencyKinds.get(name) ?? [];
+        if (!kinds.includes(kind)) kinds.push(kind);
+        dependencyKinds.set(name, kinds);
+      }
+    };
+    addDependencies(lockedPackage.dependencies, 'dependency');
+    addDependencies(lockedPackage.optionalDependencies, 'optional');
+    addDependencies(lockedPackage.peerDependencies, 'peer');
+
+    const dependencies = [];
+    for (const name of [...dependencyKinds.keys()].sort()) {
+      const kinds = dependencyKinds.get(name).sort();
+      const optional =
+        kinds.includes('optional') ||
+        (kinds.includes('peer') && lockedPackage.peerDependenciesMeta?.[name]?.optional === true);
+      const resolvedPath = lockedPackageDependencyPath(lock, lockPath, name);
+      if (!resolvedPath && !optional) {
+        throw new Error(`Tailwind compiler dependency is unresolved in the lockfile: ${lockPath} -> ${name}`);
+      }
+      dependencies.push({ name, kinds, path: resolvedPath });
+      if (resolvedPath && !visited.has(resolvedPath)) pending.push(resolvedPath);
+    }
+    pending.sort();
+    records.push({
+      path: lockPath,
+      version: lockedPackage.version ?? '',
+      resolved: lockedPackage.resolved ?? '',
+      integrity: lockedPackage.integrity ?? '',
+      dependencies
+    });
+  }
+  records.sort((left, right) => left.path.localeCompare(right.path, 'en'));
+  return sha256(Buffer.from(canonicalJson(records)));
+}
+
+export function assertTailwindCompilerClosure(lock, provenance) {
+  const actual = tailwindCompilerClosureSha256(lock, Object.keys(provenance.cssToolchain ?? {}));
+  if (actual !== provenance.tailwindCompilerClosureSha256) {
+    throw new Error('Tailwind compiler dependency closure differs from provenance');
+  }
 }
 
 export function outputPathForRegistrySource(registrySourcePath) {
@@ -1937,9 +2008,67 @@ function classCandidateTokens(value, label) {
     if (/^cn-[a-z0-9-]+$/u.test(candidate)) {
       throw new Error(`${label}: unsupported shadcn class marker ${candidate}`);
     }
-    normalized.push(candidate.startsWith(`${TAILWIND_PREFIX}:`) ? candidate : `${TAILWIND_PREFIX}:${candidate}`);
+    const withSelectorPrefixes = prefixArbitraryVariantClassSelectors(candidate);
+    normalized.push(
+      withSelectorPrefixes.startsWith(`${TAILWIND_PREFIX}:`)
+        ? withSelectorPrefixes
+        : `${TAILWIND_PREFIX}:${withSelectorPrefixes}`
+    );
   }
   return normalized.join(' ');
+}
+
+function prefixClassSelectors(selector) {
+  return selectorParser((root) => {
+    root.walkClasses((node) => {
+      if (!node.value.startsWith(`${TAILWIND_PREFIX}:`)) node.value = `${TAILWIND_PREFIX}:${node.value}`;
+    });
+  }).processSync(selector);
+}
+
+function arbitraryVariantEnd(candidate, start) {
+  let depth = 0;
+  let quote = null;
+  for (let index = start; index < candidate.length; index += 1) {
+    const character = candidate[index];
+    if (quote) {
+      if (character === '\\') index += 1;
+      else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") quote = character;
+    else if (character === '[') depth += 1;
+    else if (character === ']' && --depth === 0) return index;
+  }
+  return -1;
+}
+
+function prefixArbitraryVariantClassSelectors(candidate) {
+  let result = '';
+  for (let index = 0; index < candidate.length; ) {
+    if (candidate[index] !== '[') {
+      result += candidate[index];
+      index += 1;
+      continue;
+    }
+    const end = arbitraryVariantEnd(candidate, index);
+    if (end < 0) {
+      result += candidate.slice(index);
+      break;
+    }
+    const modifier = candidate.slice(end + 1).match(/^\/[A-Za-z0-9_-]+:/u)?.[0] ?? '';
+    const isVariant = candidate[end + 1] === ':' || modifier.length > 0;
+    const content = candidate.slice(index + 1, end);
+    const segmentStart = candidate.lastIndexOf(':', index - 1) + 1;
+    const variantKind = candidate.slice(segmentStart, index);
+    const selectorBearing =
+      isVariant &&
+      (variantKind === '' ||
+        ['group-', 'peer-', 'group-has-', 'peer-has-', 'has-', 'not-', 'in-'].includes(variantKind));
+    result += `[${selectorBearing ? prefixClassSelectors(content) : content}]`;
+    index = end + 1;
+  }
+  return result;
 }
 
 function propertyNameText(node, sourceFile) {
@@ -1947,7 +2076,15 @@ function propertyNameText(node, sourceFile) {
   return node.getText(sourceFile);
 }
 
-function collectStaticClassLiteral(node, literals, label) {
+function isPrototypeSetterProperty(property, sourceFile) {
+  return (
+    ts.isPropertyAssignment(property) &&
+    !ts.isComputedPropertyName(property.name) &&
+    propertyNameText(property.name, sourceFile) === '__proto__'
+  );
+}
+
+function collectStaticClassLiteral(node, literals, label, expressionBindings) {
   const unwrapped = unwrapExpression(node);
   if (ts.isStringLiteralLike(unwrapped) || ts.isNoSubstitutionTemplateLiteral(unwrapped)) {
     literals.add(unwrapped);
@@ -1960,28 +2097,91 @@ function collectStaticClassLiteral(node, literals, label) {
     throw new Error(`${label}: concatenated class names are not accepted`);
   }
   if (ts.isConditionalExpression(unwrapped)) {
-    collectStaticClassLiteral(unwrapped.whenTrue, literals, label);
-    collectStaticClassLiteral(unwrapped.whenFalse, literals, label);
+    collectStaticClassLiteral(unwrapped.whenTrue, literals, label, expressionBindings);
+    collectStaticClassLiteral(unwrapped.whenFalse, literals, label, expressionBindings);
+    return;
+  }
+  if (ts.isBinaryExpression(unwrapped) && unwrapped.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+    collectStaticClassLiteral(unwrapped.right, literals, label, expressionBindings);
     return;
   }
   if (
     ts.isBinaryExpression(unwrapped) &&
-    [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(
-      unwrapped.operatorToken.kind
-    )
+    [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(unwrapped.operatorToken.kind)
   ) {
-    collectStaticClassLiteral(unwrapped.left, literals, label);
-    collectStaticClassLiteral(unwrapped.right, literals, label);
+    collectStaticClassLiteral(unwrapped.left, literals, label, expressionBindings);
+    collectStaticClassLiteral(unwrapped.right, literals, label, expressionBindings);
+    return;
+  }
+  if (
+    unwrapped.kind === ts.SyntaxKind.NullKeyword ||
+    unwrapped.kind === ts.SyntaxKind.TrueKeyword ||
+    unwrapped.kind === ts.SyntaxKind.FalseKeyword
+  ) {
+    return;
+  }
+  if (ts.isIdentifier(unwrapped) && expressionBindings.isConsumerClassName(unwrapped)) {
+    const defaults = expressionBindings.consumerClassDefaults(unwrapped);
+    if (defaults.ambiguous) {
+      throw new Error(`${label}: consumer className default must be a static object or class value`);
+    }
+    for (const initializer of defaults.expressions) {
+      collectStaticClassLiteral(initializer, literals, label, expressionBindings);
+    }
+    return;
+  }
+  if (ts.isCallExpression(unwrapped) && expressionBindings.isCnCall(unwrapped)) {
+    collectCnClassLiterals(unwrapped, literals, label, expressionBindings);
+    return;
+  }
+  if (ts.isCallExpression(unwrapped) && expressionBindings.isCvaFactoryCall(unwrapped)) {
+    collectCvaFactoryPropsClassLiterals(unwrapped, literals, label, expressionBindings);
+    return;
+  }
+  throw new Error(`${label}: dynamic class expressions are not accepted`);
+}
+
+function collectCvaFactoryPropsClassLiterals(call, literals, label, expressionBindings) {
+  if (call.arguments.length === 0) return;
+  if (call.arguments.length !== 1) {
+    throw new Error(`${label}: cva factory props must be a single static object literal`);
+  }
+  const props = unwrapExpression(call.arguments[0]);
+  if (!ts.isObjectLiteralExpression(props)) {
+    throw new Error(`${label}: cva factory props must be a single static object literal`);
+  }
+  for (const property of props.properties) {
+    if (
+      ts.isSpreadAssignment(property) ||
+      ts.isMethodDeclaration(property) ||
+      ts.isGetAccessorDeclaration(property) ||
+      ts.isSetAccessorDeclaration(property) ||
+      property.name && ts.isComputedPropertyName(property.name) ||
+      isPrototypeSetterProperty(property, expressionBindings.sourceFile)
+    ) {
+      throw new Error(`${label}: cva factory props contain an ambiguous class source`);
+    }
+    if (ts.isShorthandPropertyAssignment(property)) {
+      if (property.name.text === 'class' || property.name.text === 'className') {
+        collectStaticClassLiteral(property.name, literals, label, expressionBindings);
+      }
+      continue;
+    }
+    if (!ts.isPropertyAssignment(property)) continue;
+    const name = propertyNameText(property.name, expressionBindings.sourceFile);
+    if (name === 'class' || name === 'className') {
+      collectStaticClassLiteral(property.initializer, literals, label, expressionBindings);
+    }
   }
 }
 
-function collectCnClassLiterals(call, literals, label) {
+function collectCnClassLiterals(call, literals, label, expressionBindings) {
   for (const argument of call.arguments) {
     const unwrapped = unwrapExpression(argument);
     if (ts.isObjectLiteralExpression(unwrapped) || ts.isArrayLiteralExpression(unwrapped)) {
       throw new Error(`${label}: cn object and array class maps are not accepted`);
     }
-    collectStaticClassLiteral(unwrapped, literals, label);
+    collectStaticClassLiteral(unwrapped, literals, label, expressionBindings);
   }
 }
 
@@ -2102,6 +2302,180 @@ function importedClassHelperBindings(sourceFile) {
   return { cn, cva };
 }
 
+function classExpressionBindings(sourceFile, helpers) {
+  const compilerHost = {
+    getSourceFile: (fileName) => (fileName === sourceFile.fileName ? sourceFile : undefined),
+    getDefaultLibFileName: () => 'lib.d.ts',
+    writeFile: () => {},
+    getCurrentDirectory: () => '',
+    getDirectories: () => [],
+    fileExists: (fileName) => fileName === sourceFile.fileName,
+    readFile: (fileName) => (fileName === sourceFile.fileName ? sourceFile.text : undefined),
+    getCanonicalFileName: (fileName) => fileName,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => '\n'
+  };
+  const checker = ts
+    .createProgram([sourceFile.fileName], { noLib: true, noResolve: true, jsx: ts.JsxEmit.Preserve }, compilerHost)
+    .getTypeChecker();
+  const consumerClassSymbols = new Set();
+  const cnSymbols = new Set();
+  const cvaSymbols = new Set();
+  const cvaFactorySymbols = new Set();
+  const writtenSymbols = new Set();
+  const consumerDefaults = new Map();
+  const collectedConsumerDefaults = new Set();
+  const symbolAt = (node) =>
+    ts.isIdentifier(node) && ts.isShorthandPropertyAssignment(node.parent) && node.parent.name === node
+      ? checker.getShorthandAssignmentValueSymbol(node.parent) ?? checker.getSymbolAtLocation(node)
+      : checker.getSymbolAtLocation(node);
+  const addSymbol = (collection, node) => {
+    const symbol = node && symbolAt(node);
+    if (symbol) collection.add(symbol);
+  };
+  const addConsumerDefault = (node, expression, ambiguous = false) => {
+    const symbol = node && symbolAt(node);
+    if (!symbol) return;
+    const current = consumerDefaults.get(symbol) ?? { expressions: [], ambiguous: false };
+    if (expression) current.expressions.push(expression);
+    current.ambiguous ||= ambiguous;
+    consumerDefaults.set(symbol, current);
+  };
+
+  function addParameterObjectDefault(parameter, bindingElement) {
+    if (!parameter.initializer) return;
+    const initializer = unwrapExpression(parameter.initializer);
+    if (!ts.isObjectLiteralExpression(initializer)) {
+      addConsumerDefault(bindingElement.name, undefined, true);
+      return;
+    }
+    for (const property of initializer.properties) {
+      if (
+        ts.isSpreadAssignment(property) ||
+        ts.isMethodDeclaration(property) ||
+        ts.isGetAccessorDeclaration(property) ||
+        ts.isSetAccessorDeclaration(property) ||
+        property.name && ts.isComputedPropertyName(property.name) ||
+        isPrototypeSetterProperty(property, sourceFile)
+      ) {
+        addConsumerDefault(bindingElement.name, undefined, true);
+        continue;
+      }
+      if (ts.isShorthandPropertyAssignment(property) && property.name.text === 'className') {
+        addConsumerDefault(bindingElement.name, property.name);
+      } else if (
+        ts.isPropertyAssignment(property) &&
+        propertyNameText(property.name, sourceFile) === 'className'
+      ) {
+        addConsumerDefault(bindingElement.name, property.initializer);
+      }
+    }
+  }
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteralLike(statement.moduleSpecifier)) {
+      const specifier = statement.moduleSpecifier.text;
+      if (statement.importClause?.namedBindings && ts.isNamedImports(statement.importClause.namedBindings)) {
+        for (const element of statement.importClause.namedBindings.elements) {
+          const importedName = element.propertyName?.text ?? element.name.text;
+          if (importedName === 'cn' && /(?:^|\/)lib\/utils$/u.test(specifier)) addSymbol(cnSymbols, element.name);
+          if (importedName === 'cva' && specifier === 'class-variance-authority') addSymbol(cvaSymbols, element.name);
+          if (
+            importedName === 'toggleVariants' &&
+            ['@/registry/base-nova/ui/toggle', './toggle'].includes(specifier)
+          )
+            addSymbol(cvaFactorySymbols, element.name);
+        }
+      }
+    }
+    if (!ts.isVariableStatement(statement) || (statement.declarationList.flags & ts.NodeFlags.Const) === 0) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      const initializer = declaration.initializer && unwrapExpression(declaration.initializer);
+      if (
+        ts.isIdentifier(declaration.name) &&
+        initializer &&
+        ts.isCallExpression(initializer) &&
+        ts.isIdentifier(initializer.expression) &&
+        cvaSymbols.has(symbolAt(initializer.expression))
+      ) {
+        addSymbol(cvaFactorySymbols, declaration.name);
+      }
+    }
+  }
+
+  function addWrittenTarget(node) {
+    const current = unwrapExpression(node);
+    if (ts.isIdentifier(current)) {
+      addSymbol(writtenSymbols, current);
+      return;
+    }
+    if (ts.isArrayLiteralExpression(current)) {
+      for (const element of current.elements) {
+        if (!ts.isOmittedExpression(element)) addWrittenTarget(element);
+      }
+      return;
+    }
+    if (ts.isObjectLiteralExpression(current)) {
+      for (const property of current.properties) {
+        if (ts.isShorthandPropertyAssignment(property)) addWrittenTarget(property.name);
+        else if (ts.isPropertyAssignment(property)) addWrittenTarget(property.initializer);
+        else if (ts.isSpreadAssignment(property)) addWrittenTarget(property.expression);
+      }
+    }
+  }
+
+  function visit(node) {
+    if (ts.isParameter(node) && ts.isObjectBindingPattern(node.name)) {
+      for (const element of node.name.elements) {
+        if (
+          !element.dotDotDotToken &&
+          ts.isIdentifier(element.name) &&
+          (element.propertyName?.getText(sourceFile) ?? element.name.text) === 'className'
+        ) {
+          addSymbol(consumerClassSymbols, element.name);
+          if (element.initializer) addConsumerDefault(element.name, element.initializer);
+          addParameterObjectDefault(node, element);
+        }
+      }
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+    ) {
+      addWrittenTarget(node.left);
+    } else if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)
+    ) {
+      addWrittenTarget(node.operand);
+    } else if ((ts.isForInStatement(node) || ts.isForOfStatement(node)) && !ts.isVariableDeclarationList(node.initializer)) {
+      addWrittenTarget(node.initializer);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  const isUnwrittenSymbol = (collection, identifier) => {
+    const symbol = symbolAt(identifier);
+    return Boolean(symbol && collection.has(symbol) && !writtenSymbols.has(symbol));
+  };
+  return {
+    ...helpers,
+    sourceFile,
+    isConsumerClassName: (identifier) => isUnwrittenSymbol(consumerClassSymbols, identifier),
+    consumerClassDefaults: (identifier) => {
+      const symbol = symbolAt(identifier);
+      if (!symbol || !consumerClassSymbols.has(symbol) || collectedConsumerDefaults.has(symbol)) {
+        return { expressions: [], ambiguous: false };
+      }
+      collectedConsumerDefaults.add(symbol);
+      return consumerDefaults.get(symbol) ?? { expressions: [], ambiguous: false };
+    },
+    isCnCall: (call) => ts.isIdentifier(call.expression) && isUnwrittenSymbol(cnSymbols, call.expression),
+    isCvaFactoryCall: (call) => ts.isIdentifier(call.expression) && isUnwrittenSymbol(cvaFactorySymbols, call.expression)
+  };
+}
+
 function assertClassHelperBindingsAreNotShadowed(sourceFile, bindings, label) {
   function visit(node) {
     const declaredNames = [];
@@ -2133,6 +2507,7 @@ export function prefixTailwindClassCandidates(source, label = 'profile-source.ts
   const literals = new Set();
   const helpers = importedClassHelperBindings(sourceFile);
   assertClassHelperBindingsAreNotShadowed(sourceFile, new Set([...helpers.cn, ...helpers.cva]), label);
+  const expressionBindings = classExpressionBindings(sourceFile, helpers);
 
   function visit(node) {
     if (ts.isJsxAttribute(node) && node.name.getText(sourceFile) === 'className' && node.initializer) {
@@ -2143,14 +2518,24 @@ export function prefixTailwindClassCandidates(source, label = 'profile-source.ts
         if (ts.isObjectLiteralExpression(expression) || ts.isArrayLiteralExpression(expression)) {
           throw new Error(`${label}: JSX object and array class maps are not accepted`);
         }
-        collectStaticClassLiteral(expression, literals, label);
+        if (
+          !(
+            ts.isCallExpression(expression) && expressionBindings.isCnCall(expression)
+          )
+        ) {
+          collectStaticClassLiteral(expression, literals, label, expressionBindings);
+        }
       }
     }
 
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && helpers.cn.has(node.expression.text)) {
-      collectCnClassLiterals(node, literals, label);
+    if (ts.isCallExpression(node) && expressionBindings.isCnCall(node)) {
+      collectCnClassLiterals(node, literals, label, expressionBindings);
     }
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && helpers.cva.has(node.expression.text)) {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      helpers.cva.has(node.expression.text)
+    ) {
       if (node.arguments.length === 0) throw new Error(`${label}: cva requires a static base class argument`);
       collectStaticCvaClassValue(node.arguments[0], literals, label);
       if (node.arguments[1]) collectCvaVariantLiterals(node.arguments[1], sourceFile, literals, label);
