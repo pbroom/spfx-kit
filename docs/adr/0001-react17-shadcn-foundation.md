@@ -65,7 +65,7 @@ The first proposed source profile is pinned as follows:
 #### 2026-08-06 compatibility amendment
 
 The owner-authorized Phase 1 compatibility correction recorded in
-[spfx-kit#82](https://github.com/pbroomfield/spfx-kit/issues/82) keeps the
+[spfx-kit#82](https://github.com/pbroom/spfx-kit/issues/82) keeps the
 repository, SPFx host, and private profile compiler on one declaration contract:
 `@types/react@17.0.45` and `@types/react-dom@17.0.17`. It separately pins the
 compatible `@types/scheduler@0.16.8` tracing declaration. Base UI 1.6.0
