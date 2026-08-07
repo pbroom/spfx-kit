@@ -6,7 +6,7 @@
   },
   "baseUiPopupLifecycleTransform": {
     "path": "compat/base-ui-1.6.0/popup-lifecycle/contract.json",
-    "sha256": "772b9777c7fed2b1a2672c99616aac31f7df3a4a30526d6d94115c9f6fb06deb"
+    "sha256": "6500f7475790853273cfbbb10c1c570c054acd883db4031988b0001978aacfef"
   },
   "compilerInputs": [
     {
@@ -14,24 +14,28 @@
       "sha256": "76f6e8a5b9ebc66c2289ba7aa9d16e200cbb116e27b3117d7de18c18cc23398e"
     },
     {
+      "path": "compat-consumers/select-value.tsx",
+      "sha256": "b53b21ce15ee5ddf3185aaac4d02d3ab7fe3f6bb32a5ae56a1fa818de3ebfcd3"
+    },
+    {
       "path": "scripts/typecheck.mjs",
       "sha256": "c45a8345efcc328850d6c518d6d3a677a648f3941c235e50aa774c72cdf51c28"
     },
     {
       "path": "scripts/lib/generate-profile.mjs",
-      "sha256": "3947750a4973ad4fe8bfc9efccc284d15ddacf3b5890280c4d4b3f0b06ea259b"
+      "sha256": "020db3ac970d4dad889bdb56c821ee5a2e54fe92ad7e390259f6d5e72566da37"
     },
     {
       "path": "scripts/lib/profile-update-intake.mjs",
-      "sha256": "8510abfcb90b8785f111b4ce988253f2ce570cd3ff9a5152018a651b67a40cb8"
+      "sha256": "fd3a9443b8972c5608e2b41bd008a5de21bebc9a9121f11a6517bab6556505e3"
     },
     {
       "path": "scripts/lib/typecheck-generated-profile.mjs",
-      "sha256": "27180ab6880abad3d132eb016b84a8f3ab19ab01061108a51654db2e500b1860"
+      "sha256": "fcbd168130fdc1abebb85ee8111ea78aa63edc67c9a05c0a3d46664509d2caae"
     },
     {
       "path": "scripts/lib/generate-validated-profile.mjs",
-      "sha256": "64c5f695f6366c8e412b7c0858cb5286f94c91290d0faf83f4feeaf5c1df6093"
+      "sha256": "91ec19316ff7d7c6d1f48c12731c3df8afdb28d17e5bf448ac7d38949d1a52ef"
     },
     {
       "path": "scripts/lib/generated-tree-closure.mjs",
@@ -667,8 +671,8 @@
       }
     }
   ],
-  "normalizationImplementationSha256": "3c0d71c3ce571fdd7448161c96eb26b84acb6e7ce31a6e31d8b476d07546573f",
+  "normalizationImplementationSha256": "b47e22f385089b46716dacbd207ff8a35b1de53b68e8f4a8db2908faa9011597",
   "profileId": "spfx-react17-base-nova-v1",
-  "provenanceSha256": "961a703093636efb1f5fe9d6d4d6e04e5bccbe90c16e62247fe0293b09fe553f",
+  "provenanceSha256": "bfb316235c96db90cb8772659f4e2c1e0a06624d6be0e3b2c76fde27bbd1616e",
   "schemaVersion": 1
 }

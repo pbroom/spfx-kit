@@ -10,6 +10,7 @@ import {
   assertProfileUpdateProvenance,
   bindVerifiedSnapshotsToProvenance,
   assertPinnedShadcnToolchain,
+  shadcnRuntimeClosureSha256,
   fetchPinnedRegistrySnapshots,
   fetchValidatedProfileUpdateSnapshots
 } from '../packages/ui-profile/scripts/lib/profile-update-intake.mjs';
@@ -36,6 +37,13 @@ const dependencyPolicy = {
 };
 const temporaryRoots: string[] = [];
 
+function installedToolchain() {
+  return {
+    packageRoot: path.resolve('packages/ui-profile'),
+    resolvedRegistryUrl: import.meta.resolve('shadcn/registry')
+  };
+}
+
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -50,19 +58,24 @@ async function toolchainFixture(): Promise<{
   const packageRoot = path.join(repositoryRoot, 'packages', 'ui-profile');
   const shadcnRoot = path.join(repositoryRoot, 'node_modules', 'shadcn');
   const registryModule = path.join(shadcnRoot, 'dist', 'registry', 'index.js');
-  await mkdir(path.dirname(registryModule), { recursive: true });
   await mkdir(packageRoot, { recursive: true });
   await writeFile(
     path.join(repositoryRoot, 'package-lock.json'),
     JSON.stringify({
       packages: {
         'packages/ui-profile': { devDependencies: { shadcn: '4.16.1' } },
-        'node_modules/shadcn': { version: '4.16.1', integrity: SHADCN_INTEGRITY }
+        'node_modules/shadcn': {
+          version: '4.16.1',
+          resolved: 'https://registry.npmjs.org/shadcn/-/shadcn-4.16.1.tgz',
+          integrity: SHADCN_INTEGRITY
+        }
       }
     })
   );
-  await writeFile(path.join(shadcnRoot, 'package.json'), JSON.stringify({ name: 'shadcn', version: '4.16.1' }));
-  await writeFile(registryModule, 'export const fixture = true;\n');
+  const installedShadcnRoot = path.resolve('node_modules/shadcn');
+  await cp(installedShadcnRoot, shadcnRoot, {
+    recursive: true
+  });
   return { repositoryRoot, packageRoot, resolvedRegistryUrl: pathToFileURL(registryModule).href };
 }
 
@@ -70,7 +83,17 @@ async function provenanceFixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'ui-profile-provenance-'));
   temporaryRoots.push(root);
   const packageRoot = path.join(root, 'ui-profile');
-  await cp(path.resolve('packages/ui-profile'), packageRoot, { recursive: true });
+  const sourceRoot = path.resolve('packages/ui-profile');
+  await cp(sourceRoot, packageRoot, {
+    recursive: true,
+    filter: (source) => {
+      const segments = path.relative(sourceRoot, source).split(path.sep);
+      return !segments.some(
+        (segment) =>
+          ['node_modules', '.prepared', '.tsbuildinfo', '.DS_Store'].includes(segment) || segment.startsWith('.profile-')
+      );
+    }
+  });
   return {
     packageRoot,
     provenance: JSON.parse(await readFile(path.join(packageRoot, 'provenance.json'), 'utf8'))
@@ -150,6 +173,55 @@ describe('committed UI profile provenance', () => {
 });
 
 describe('pinned shadcn network intake', () => {
+  it('binds the complete installed runtime dependency closure used by the pinned shadcn registry entry', async () => {
+    const packageRoot = path.resolve('packages/ui-profile');
+    const provenance = JSON.parse(await readFile(path.join(packageRoot, 'provenance.json'), 'utf8'));
+    await expect(
+      assertPinnedShadcnToolchain({
+        packageRoot,
+        registry: provenance.registry,
+        resolvedRegistryUrl: import.meta.resolve('shadcn/registry')
+      })
+    ).resolves.toBe(import.meta.resolve('shadcn/registry'));
+  });
+
+  it('changes the runtime closure identity when a hoisted dependency changes', async () => {
+    const repositoryRoot = await mkdtemp(path.join(tmpdir(), 'ui-profile-shadcn-runtime-'));
+    temporaryRoots.push(repositoryRoot);
+    const shadcnRoot = path.join(repositoryRoot, 'node_modules', 'shadcn');
+    const zodRoot = path.join(repositoryRoot, 'node_modules', 'zod');
+    await mkdir(shadcnRoot, { recursive: true });
+    await mkdir(zodRoot, { recursive: true });
+    await writeFile(path.join(shadcnRoot, 'package.json'), JSON.stringify({ name: 'shadcn', version: '4.16.1' }));
+    await writeFile(path.join(shadcnRoot, 'index.js'), 'import { z } from "zod"; export { z };\n');
+    await writeFile(path.join(zodRoot, 'package.json'), JSON.stringify({ name: 'zod', version: '3.24.1' }));
+    await writeFile(path.join(zodRoot, 'index.js'), 'export const z = {};\n');
+    const lock = {
+      packages: {
+        'node_modules/shadcn': {
+          version: '4.16.1',
+          resolved: 'https://registry.npmjs.org/shadcn/-/shadcn-4.16.1.tgz',
+          integrity: SHADCN_INTEGRITY,
+          dependencies: { zod: '^3.24.1' }
+        },
+        'node_modules/zod': {
+          version: '3.24.1',
+          resolved: 'https://registry.npmjs.org/zod/-/zod-3.24.1.tgz',
+          integrity: 'sha512-test-zod'
+        }
+      }
+    };
+    const before = await shadcnRuntimeClosureSha256(repositoryRoot, lock);
+    await writeFile(path.join(zodRoot, 'index.js'), 'export const z = { altered: true };\n');
+    await expect(shadcnRuntimeClosureSha256(repositoryRoot, lock)).resolves.not.toBe(before);
+    await writeFile(path.join(zodRoot, 'index.js'), 'export const z = {};\n');
+    const nestedOverride = path.join(zodRoot, 'node_modules', 'parse-json');
+    await mkdir(nestedOverride, { recursive: true });
+    await writeFile(path.join(nestedOverride, 'package.json'), JSON.stringify({ name: 'parse-json', version: 'test' }));
+    await writeFile(path.join(nestedOverride, 'index.js'), 'export const altered = true;\n');
+    await expect(shadcnRuntimeClosureSha256(repositoryRoot, lock)).resolves.not.toBe(before);
+  });
+
   it.each([
     ['endpointTemplate', 'http://127.0.0.1:9/private/{id}'],
     ['preset', 'unreviewed-style'],
@@ -173,7 +245,7 @@ describe('pinned shadcn network intake', () => {
   });
 
   it('preserves exact hosted bytes only when the pinned package API returns the same semantic item', async () => {
-    const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    const { packageRoot, resolvedRegistryUrl } = installedToolchain();
     const raw = '{\n  "name": "button",\n  "type": "registry:ui",\n  "files": []\n}\n';
     const cliItem = { name: 'button', type: 'registry:ui', files: [] };
     const fetchImpl = vi.fn(async () => new Response(raw, { status: 200 }));
@@ -197,7 +269,7 @@ describe('pinned shadcn network intake', () => {
   });
 
   it('accepts the complete committed dependency and fetched-source closure', async () => {
-    const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    const { packageRoot, resolvedRegistryUrl } = installedToolchain();
     const committedRoot = path.resolve('packages/ui-profile');
     const provenance = JSON.parse(await readFile(path.join(committedRoot, 'provenance.json'), 'utf8'));
     const cliItems = await Promise.all(
@@ -270,7 +342,7 @@ describe('pinned shadcn network intake', () => {
       'non-literal dynamic dependency is not accepted'
     ])
   ])('rejects a %s from semantically matching hosted and CLI items', async (_label, patch, expectedMessage) => {
-    const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    const { packageRoot, resolvedRegistryUrl } = installedToolchain();
     const cliItem = { name: 'button', type: 'registry:ui', ...patch };
     const raw = JSON.stringify(cliItem);
 
@@ -292,7 +364,7 @@ describe('pinned shadcn network intake', () => {
     ['missing identity', [], 'incomplete registry collection'],
     ['wrong identity', [{ name: 'input', type: 'registry:ui', files: [] }], 'did not return button']
   ])('rejects a %s', async (_label, cliItems, expectedMessage) => {
-    const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    const { packageRoot, resolvedRegistryUrl } = installedToolchain();
     const raw = JSON.stringify({ name: 'button', type: 'registry:ui', files: [] });
     await expect(
       fetchPinnedRegistrySnapshots({
@@ -308,7 +380,7 @@ describe('pinned shadcn network intake', () => {
   });
 
   it('rejects malformed hosted JSON before returning snapshots', async () => {
-    const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    const { packageRoot, resolvedRegistryUrl } = installedToolchain();
     await expect(
       fetchPinnedRegistrySnapshots({
         packageRoot,
@@ -328,7 +400,7 @@ describe('pinned shadcn network intake', () => {
   ])(
     'streams and rejects a registry response that exceeds the %s byte limit',
     async (_label, registryIds, itemLimit, aggregateLimit, message) => {
-      const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+      const { packageRoot, resolvedRegistryUrl } = installedToolchain();
 
       await expect(
         fetchPinnedRegistrySnapshots({
@@ -347,7 +419,7 @@ describe('pinned shadcn network intake', () => {
   );
 
   it('aborts a stalled hosted registry request at its deadline', async () => {
-    const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    const { packageRoot, resolvedRegistryUrl } = installedToolchain();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       const fetchImpl = vi.fn(
@@ -379,7 +451,7 @@ describe('pinned shadcn network intake', () => {
   });
 
   it('bounds the pinned CLI-backed registry intake with the same deadline', async () => {
-    const { packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    const { packageRoot, resolvedRegistryUrl } = installedToolchain();
     const cliItem = { name: 'button', type: 'registry:ui', files: [] };
     const getRegistryItemsImpl = vi.fn(async () => new Promise<never>(() => {}));
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -424,6 +496,49 @@ describe('pinned shadcn network intake', () => {
         resolvedRegistryUrl
       })
     ).rejects.toThrow('Locked shadcn integrity differs');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('rejects same-version drift in the installed shadcn package before any registry request', async () => {
+    const { repositoryRoot, packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    await writeFile(path.join(repositoryRoot, 'node_modules/shadcn/dist/registry/index.js'), '\n// altered intake\n', {
+      flag: 'a'
+    });
+    const fetchImpl = vi.fn();
+
+    await expect(
+      fetchPinnedRegistrySnapshots({
+        packageRoot,
+        registry,
+        registryIds: ['button'],
+        dependencyPolicy,
+        fetchImpl,
+        getRegistryItemsImpl: async () => [],
+        resolvedRegistryUrl
+      })
+    ).rejects.toThrow('Installed shadcn package tree differs from the pinned network-intake contract');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('rejects a package-local dependency override before any registry request', async () => {
+    const { repositoryRoot, packageRoot, resolvedRegistryUrl } = await toolchainFixture();
+    const overrideRoot = path.join(repositoryRoot, 'node_modules/shadcn/node_modules/zod');
+    await mkdir(overrideRoot, { recursive: true });
+    await writeFile(path.join(overrideRoot, 'package.json'), JSON.stringify({ name: 'zod', version: '3.24.1' }));
+    await writeFile(path.join(overrideRoot, 'index.js'), 'export const altered = true;\n');
+    const fetchImpl = vi.fn();
+
+    await expect(
+      fetchPinnedRegistrySnapshots({
+        packageRoot,
+        registry,
+        registryIds: ['button'],
+        dependencyPolicy,
+        fetchImpl,
+        getRegistryItemsImpl: async () => [],
+        resolvedRegistryUrl
+      })
+    ).rejects.toThrow('Installed shadcn package tree differs from the pinned network-intake contract');
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 

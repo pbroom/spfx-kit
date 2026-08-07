@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { canonicalJson } from './lib/profile.mjs';
+import { assertProductionDependencyRoots } from './lib/profile-update-intake.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -12,6 +13,7 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const repositoryRoot = path.resolve(packageRoot, '..', '..');
 const closure = JSON.parse(await readFile(path.join(packageRoot, 'dependency-closure.json'), 'utf8'));
 const manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
+const provenance = JSON.parse(await readFile(path.join(packageRoot, 'provenance.json'), 'utf8'));
 const rootManifest = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
 
 function assert(condition, message) {
@@ -28,6 +30,7 @@ assert(closure.policy.allowLegacyPeerDeps === false, 'Legacy peer resolution mus
 assert(!manifest.overrides && !manifest.resolutions, 'UI profile manifest contains forced dependency resolution');
 assert(!rootManifest.overrides && !rootManifest.resolutions, 'Repository root manifest contains forced dependency resolution');
 assert(manifest.dependencies === undefined, 'Tooling-only profile must not declare production dependencies');
+assertProductionDependencyRoots(closure.productionRoots, provenance.directProductionDependencies);
 assert(
   closure.productionRoots.every((dependency) => manifest.devDependencies[dependency]),
   'Closure roots must be development dependencies'
