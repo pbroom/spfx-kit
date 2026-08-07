@@ -12,6 +12,7 @@ const profileRoot = path.join(repositoryRoot, 'packages/ui-profile');
 const require = createRequire(import.meta.url);
 const vitestRoot = path.dirname(require.resolve('vitest/package.json'));
 const baseUiRoot = path.dirname(require.resolve('@base-ui/react/package.json'));
+const EXIT_HARNESS_OUTER_TIMEOUT_MS = 60_000;
 
 describe('normalized React 17 first-PR component exits', () => {
   it('derives unsupported named and namespace APIs from the pinned React 17 declaration surface', () => {
@@ -88,40 +89,46 @@ describe('normalized React 17 first-PR component exits', () => {
     }
   });
 
-  it('passes the prepared package-local exit and exact-scale DOM harness without mutating the installed package', async () => {
-    const installedPaths = [
-      'select/value/SelectValue.d.ts',
-      'select/value/SelectValue.d.mts',
-      'utils/popups/popupStoreUtils.mjs',
-      'utils/popups/popupStoreUtils.js'
-    ];
-    const installedBefore = await Promise.all(
-      installedPaths.map((relativePath) => readFile(path.join(baseUiRoot, relativePath)))
-    );
-    const preparation = spawnSync(process.execPath, [path.join(profileRoot, 'scripts/prepare-base-ui.mjs')], {
-      cwd: profileRoot,
-      encoding: 'utf8',
-      env: { ...process.env, CI: '1' }
-    });
-    const preparationMessage = `${preparation.stdout ?? ''}${preparation.stderr ?? ''}`;
-    expect(preparation.status, `Isolated Base UI preparation failed:\n${preparationMessage}`).toBe(0);
-    const installedAfter = await Promise.all(installedPaths.map((relativePath) => readFile(path.join(baseUiRoot, relativePath))));
-    for (const [index, before] of installedBefore.entries()) {
-      expect(installedAfter[index].equals(before), `${installedPaths[index]} changed in node_modules`).toBe(true);
-    }
+  it(
+    'passes the prepared package-local exit and exact-scale DOM harness without mutating the installed package',
+    async () => {
+      const installedPaths = [
+        'select/value/SelectValue.d.ts',
+        'select/value/SelectValue.d.mts',
+        'utils/popups/popupStoreUtils.mjs',
+        'utils/popups/popupStoreUtils.js'
+      ];
+      const installedBefore = await Promise.all(
+        installedPaths.map((relativePath) => readFile(path.join(baseUiRoot, relativePath)))
+      );
+      const preparation = spawnSync(process.execPath, [path.join(profileRoot, 'scripts/prepare-base-ui.mjs')], {
+        cwd: profileRoot,
+        encoding: 'utf8',
+        env: { ...process.env, CI: '1' }
+      });
+      const preparationMessage = `${preparation.stdout ?? ''}${preparation.stderr ?? ''}`;
+      expect(preparation.status, `Isolated Base UI preparation failed:\n${preparationMessage}`).toBe(0);
+      const installedAfter = await Promise.all(
+        installedPaths.map((relativePath) => readFile(path.join(baseUiRoot, relativePath)))
+      );
+      for (const [index, before] of installedBefore.entries()) {
+        expect(installedAfter[index].equals(before), `${installedPaths[index]} changed in node_modules`).toBe(true);
+      }
 
-    const result = spawnSync(
-      process.execPath,
-      [
-        path.join(vitestRoot, 'vitest.mjs'),
-        'run',
-        '--config',
-        path.join(repositoryRoot, 'tests/fixtures/ui-profile/vitest-react17-exits.config.mjs')
-      ],
-      { cwd: repositoryRoot, encoding: 'utf8', env: { ...process.env, CI: '1' } }
-    );
-    const message = `${result.stdout ?? ''}${result.stderr ?? ''}`;
-    expect(result.status, message).toBe(0);
-    expect(message).toMatch(/13 passed/);
-  });
+      const result = spawnSync(
+        process.execPath,
+        [
+          path.join(vitestRoot, 'vitest.mjs'),
+          'run',
+          '--config',
+          path.join(repositoryRoot, 'tests/fixtures/ui-profile/vitest-react17-exits.config.mjs')
+        ],
+        { cwd: repositoryRoot, encoding: 'utf8', env: { ...process.env, CI: '1' } }
+      );
+      const message = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+      expect(result.status, message).toBe(0);
+      expect(message).toMatch(/13 passed/);
+    },
+    EXIT_HARNESS_OUTER_TIMEOUT_MS
+  );
 });
