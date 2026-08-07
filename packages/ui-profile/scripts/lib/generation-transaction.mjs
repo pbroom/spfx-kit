@@ -1,6 +1,19 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { link, lstat as lstatNative, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises';
+import {
+  link,
+  lstat as lstatNative,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  rmdir,
+  unlink,
+  writeFile
+} from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -813,12 +826,26 @@ async function readLease(root, binding) {
   }
 }
 
-async function writeLease(root, lease) {
+async function writeLease(root, lease, onBoundary = async () => {}) {
   const pending = path.join(root, `.lease-${randomUUID()}.json`);
   let pendingOwned = true;
   try {
     await writeFile(pending, `${JSON.stringify(lease, null, 2)}\n`, { flag: 'wx' });
-    await rename(pending, path.join(root, LEASE_FILE));
+    await onBoundary('lease-publishing', { pending, lease });
+    try {
+      await rename(pending, path.join(root, LEASE_FILE));
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+      // A concurrent reader can recover this exact completed candidate before
+      // the publisher reaches rename.  Treat that as success only when the
+      // canonical lease is exactly the publication this writer completed;
+      // foreign or merely newer metadata must still fail closed.
+      const published = assertLease(
+        JSON.parse(await readFile(path.join(root, LEASE_FILE), 'utf8')),
+        lease
+      );
+      if (JSON.stringify(published) !== JSON.stringify(lease)) throw error;
+    }
     pendingOwned = false;
   } finally {
     if (pendingOwned) await rm(pending, { force: true });
@@ -1273,7 +1300,7 @@ async function refreshOwnerLease(session) {
       now: session.now,
       leaseMs: session.leaseMs
     });
-    await writeLease(session.lockRoot, lease);
+    await writeLease(session.lockRoot, lease, session.onBoundary);
     await renewMutationGateLease(session);
   });
 }
@@ -1291,7 +1318,20 @@ async function writeOwnerAtomically(context, owner) {
     let pendingOwned = true;
     try {
       await writeFile(pending, `${JSON.stringify(owner, null, 2)}\n`, { flag: 'wx' });
-      await rename(pending, path.join(context.lockRoot, OWNER_FILE));
+      await (context.onBoundary ?? context.onClaimBoundary ?? (async () => {}))('owner-publishing', {
+        pending,
+        owner
+      });
+      try {
+        await rename(pending, path.join(context.lockRoot, OWNER_FILE));
+      } catch (error) {
+        if (!isMissing(error)) throw error;
+        // Recovery may publish this exact completed candidate while the live
+        // writer is paused.  Accept that handoff only when the canonical owner
+        // is byte-for-byte the record this writer intended to publish.
+        const published = await readOwner(context.lockRoot, context.packageRoot);
+        if (JSON.stringify(published) !== JSON.stringify(owner)) throw error;
+      }
       pendingOwned = false;
     } finally {
       if (pendingOwned) await rm(pending, { force: true });
@@ -1729,7 +1769,7 @@ async function refreshClaimLease(context) {
       now: context.now,
       leaseMs: context.leaseMs
     });
-    await writeLease(path.join(context.lockRoot, CLAIM_NAME), lease);
+    await writeLease(path.join(context.lockRoot, CLAIM_NAME), lease, context.onClaimBoundary);
     await renewMutationGateLease(context);
   });
 }
@@ -2279,12 +2319,61 @@ async function readCleanupBinding(bindingRoot, transaction, kind) {
   }
 }
 
-async function publishCleanupBinding(bindingRoot, transaction, kind, directoryIdentity, descendantInventory) {
+async function reconcileCleanupBindingCandidates(bindingRoot, transaction, kind) {
+  const parent = path.dirname(bindingRoot);
+  const prefix = `${path.basename(bindingRoot)}.acquire-`;
+  let binding = (await pathExists(bindingRoot)) ? await readCleanupBinding(bindingRoot, transaction, kind) : undefined;
+  for (const entry of await readdir(parent, { withFileTypes: true })) {
+    if (!entry.name.startsWith(prefix) || !entry.isDirectory() || entry.isSymbolicLink()) continue;
+    const candidate = path.join(parent, entry.name);
+    try {
+      // The only state exposed immediately after mkdtemp is an empty
+      // transaction-specific directory. rmdir cannot consume a replacement
+      // containing foreign bytes, so this closes the earliest crash window
+      // without granting name-shaped paths recursive-cleanup authority.
+      await rmdir(candidate);
+      continue;
+    } catch (error) {
+      if (isMissing(error)) continue;
+      if (!isConflict(error)) throw error;
+    }
+    let candidateBinding;
+    try {
+      candidateBinding = await readCleanupBinding(candidate, transaction, kind);
+    } catch {
+      // Incomplete or replaced non-empty candidates remain visible so final
+      // detached-lock inventory preserves the lock instead of deleting data.
+      continue;
+    }
+    if (binding) continue;
+    try {
+      await rename(candidate, bindingRoot);
+    } catch (error) {
+      if (!isMissing(error) && !isConflict(error)) throw error;
+    }
+    binding = await readCleanupBinding(bindingRoot, transaction, kind);
+    if (JSON.stringify(binding) !== JSON.stringify(candidateBinding)) {
+      throw new Error(`Generated profile ${kind} cleanup binding changed during candidate recovery`);
+    }
+  }
+  return binding;
+}
+
+async function publishCleanupBinding(
+  bindingRoot,
+  transaction,
+  kind,
+  directoryIdentity,
+  descendantInventory,
+  onBoundary = async () => {}
+) {
   const temporary = await mkdtemp(`${bindingRoot}.acquire-`);
   let temporaryOwned = true;
   let candidateBinding;
+  let intendedBinding;
   let actionError;
   try {
+    await onBoundary(`cleanup-binding-created:${kind}`, transaction);
     candidateBinding = await captureGeneratedProfileTemporaryCandidate(
       temporary,
       undefined,
@@ -2299,7 +2388,7 @@ async function publishCleanupBinding(bindingRoot, transaction, kind, directoryId
       `${kind} cleanup binding candidate`
     );
     const bindingFileIdentity = await lstat(bindingFile);
-    const binding = assertCleanupBinding(
+    intendedBinding = assertCleanupBinding(
       {
         kind: CLEANUP_BINDING_KIND,
         cleanupKind: kind,
@@ -2314,17 +2403,24 @@ async function publishCleanupBinding(bindingRoot, transaction, kind, directoryId
       transaction,
       kind
     );
-    await writeFile(bindingFile, `${JSON.stringify(binding, null, 2)}\n`);
+    await writeFile(bindingFile, `${JSON.stringify(intendedBinding, null, 2)}\n`);
     candidateBinding = await captureGeneratedProfileTemporaryCandidate(
       temporary,
       candidateBinding,
       `${kind} cleanup binding candidate`
     );
+    await onBoundary(`cleanup-binding-publishing:${kind}`, { transaction, temporary, bindingRoot });
     try {
       await rename(temporary, bindingRoot);
       temporaryOwned = false;
     } catch (error) {
-      if (!isConflict(error)) throw error;
+      if (isMissing(error)) {
+        const published = await readCleanupBinding(bindingRoot, transaction, kind);
+        if (JSON.stringify(published) !== JSON.stringify(intendedBinding)) throw error;
+        temporaryOwned = false;
+      } else if (!isConflict(error)) {
+        throw error;
+      }
     }
   } catch (error) {
     actionError = error;
@@ -2394,9 +2490,7 @@ async function cleanupJournalOwnedDirectory({
     throw new Error(`Generated profile ${kind} cleanup has both journaled and quarantined directories`);
   }
   const externalBindingRoot = transactionCleanupBindingPath(lockRoot, transaction, kind);
-  let binding = (await pathExists(externalBindingRoot))
-    ? await readCleanupBinding(externalBindingRoot, transaction, kind)
-    : undefined;
+  let binding = await reconcileCleanupBindingCandidates(externalBindingRoot, transaction, kind);
   if (sourceExists) {
     const details = await realDirectoryIdentity(source, `transaction ${kind}`);
     if (kind === 'backup' || kind === 'staging') {
@@ -2417,7 +2511,8 @@ async function cleanupJournalOwnedDirectory({
       transaction,
       kind,
       details,
-      await inventoryOwnedTree(source, { ignoreRootMarker: true })
+      await inventoryOwnedTree(source, { ignoreRootMarker: true }),
+      onBoundary
     );
     await assertMutation();
     await rename(source, cleanup);

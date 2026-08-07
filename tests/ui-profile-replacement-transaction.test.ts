@@ -633,6 +633,68 @@ describe('generated profile full-command transaction', () => {
     );
   });
 
+  it('keeps a live lease publisher healthy when a reader publishes its completed candidate', async () => {
+    const { packageRoot } = await fixture();
+    const processIdentity = 'live-lease-publisher';
+    let renewOwner!: () => Promise<void>;
+    let raced = false;
+    await withGeneratedProfileSession(
+      {
+        packageRoot,
+        operation: 'update',
+        observeProcess: async () => ({ status: 'alive', identity: processIdentity }),
+        startHeartbeat: (refresh: () => Promise<void>) => {
+          renewOwner = refresh;
+          return { assertHealthy: async () => {}, stopAndDrain: async () => {} };
+        },
+        onBoundary: async (boundary: string) => {
+          if (boundary !== 'lease-publishing' || raced) return;
+          raced = true;
+          await expect(
+            recoverGeneratedReplacement({
+              packageRoot,
+              observeProcess: async () => ({ status: 'alive', identity: processIdentity })
+            })
+          ).rejects.toThrow('Another generated profile session is active');
+        }
+      },
+      async () => {
+        await renewOwner();
+        expect(raced).toBe(true);
+      }
+    );
+    expect((await readdir(packageRoot)).filter((name) => name.startsWith('.profile-generation-lock'))).toEqual([]);
+  });
+
+  it('keeps a live owner publisher healthy when a reader publishes its completed candidate', async () => {
+    const { packageRoot } = await fixture();
+    const processIdentity = 'live-owner-publisher';
+    let raced = false;
+    await withGeneratedProfileSession(
+      {
+        packageRoot,
+        operation: 'update',
+        observeProcess: async () => ({ status: 'alive', identity: processIdentity }),
+        startHeartbeat: () => ({ assertHealthy: async () => {}, stopAndDrain: async () => {} }),
+        onBoundary: async (boundary: string) => {
+          if (boundary !== 'owner-publishing' || raced) return;
+          raced = true;
+          await expect(
+            recoverGeneratedReplacement({
+              packageRoot,
+              observeProcess: async () => ({ status: 'alive', identity: processIdentity })
+            })
+          ).rejects.toThrow('Another generated profile session is active');
+        }
+      },
+      async (generationSession: unknown) => {
+        await createGeneratedProfileStaging(generationSession);
+        expect(raced).toBe(true);
+      }
+    );
+    expect((await readdir(packageRoot)).filter((name) => name.startsWith('.profile-generation-lock'))).toEqual([]);
+  });
+
   it('keeps an unverified recovery claim live by heartbeat during a long rollback', async () => {
     const { packageRoot, token } = await fixture();
     await killAtBoundary(packageRoot, token, 'installed:snapshots');
@@ -1142,6 +1204,46 @@ describe('generated profile full-command transaction', () => {
       await expect(recoverGeneratedReplacement({ packageRoot })).resolves.toBe(false);
       expect(await collectionVersion(packageRoot), kind).toEqual(['new', 'new', 'new', 'new']);
     }
+  });
+
+  it('reconciles an empty cleanup-binding acquisition candidate after a hard kill', async () => {
+    const { packageRoot, token } = await fixture();
+    const lockRoot = path.join(packageRoot, '.profile-generation-lock');
+    const candidatePrefix = `.transaction-cleanup-backup-${token}-binding.acquire-`;
+    await killAtBoundary(packageRoot, token, 'cleanup-binding-created:backup');
+    expect((await readdir(lockRoot)).filter((name) => name.startsWith(candidatePrefix))).toHaveLength(1);
+
+    await expect(recoverGeneratedReplacement({ packageRoot })).resolves.toMatchObject({
+      recovered: true,
+      state: 'committed'
+    });
+    expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new']);
+    await expect(realpath(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('keeps a live cleanup-binding publisher healthy when its completed candidate is promoted', async () => {
+    const { packageRoot } = await fixture();
+    let promoted = false;
+    await withGeneratedProfileSession({ packageRoot, operation: 'update' }, async (generationSession: unknown) => {
+      const stagingRoot = await createGeneratedProfileStaging(generationSession);
+      await makeCollection(stagingRoot, 'new');
+      await replaceGeneratedPaths({
+        packageRoot,
+        stagingRoot,
+        generatedPaths,
+        generationSession,
+        onBoundary: async (boundary: string, details: { temporary?: string; bindingRoot?: string }) => {
+          if (boundary !== 'cleanup-binding-publishing:backup') return;
+          expect(details.temporary).toBeDefined();
+          expect(details.bindingRoot).toBeDefined();
+          await rename(details.temporary!, details.bindingRoot!);
+          promoted = true;
+        }
+      });
+    });
+    expect(promoted).toBe(true);
+    expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new']);
+    expect((await readdir(packageRoot)).filter((name) => name.startsWith('.profile-generation-lock'))).toEqual([]);
   });
 
   it('rejects an unbound pre-existing cleanup quarantine without recursively removing it', async () => {
