@@ -4,10 +4,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
-import {
-  prefixTailwindClassCandidates,
-  tailwindCompilerClosureSha256
-} from '../packages/ui-profile/scripts/lib/profile.mjs';
+import { prefixTailwindClassCandidates, tailwindCompilerClosureSha256 } from '../packages/ui-profile/scripts/lib/profile.mjs';
 
 const require = createRequire(import.meta.url);
 const tailwindCli = path.join(path.dirname(require.resolve('@tailwindcss/cli/package.json')), 'dist', 'index.mjs');
@@ -60,8 +57,7 @@ describe('UI profile Tailwind prefix normalization', () => {
     expect(
       prefixTailwindClassCandidates(
         'import { cn } from "./lib/utils";\nfunction Probe({ className }) { return <div className={cn(active && "flex", className)} /> }'
-      )
-        .source
+      ).source
     ).toContain('cn(active && "skui:flex", className)');
   });
 
@@ -112,9 +108,7 @@ describe('UI profile Tailwind prefix normalization', () => {
 
   it('normalizes static consumer class defaults and rejects dynamic defaults', () => {
     expect(
-      prefixTailwindClassCandidates(
-        'function Probe({ className = "flex" }) { return <div className={className} /> }'
-      ).source
+      prefixTailwindClassCandidates('function Probe({ className = "flex" }) { return <div className={className} /> }').source
     ).toContain('className = "skui:flex"');
     expect(
       prefixTailwindClassCandidates(
@@ -122,9 +116,7 @@ describe('UI profile Tailwind prefix normalization', () => {
       ).source
     ).toContain('rootClass = "skui:hidden"');
     expect(() =>
-      prefixTailwindClassCandidates(
-        'function Probe({ className = getClass() }) { return <div className={className} /> }'
-      )
+      prefixTailwindClassCandidates('function Probe({ className = getClass() }) { return <div className={className} /> }')
     ).toThrow('dynamic class expressions are not accepted');
     expect(() =>
       prefixTailwindClassCandidates(
@@ -142,18 +134,16 @@ describe('UI profile Tailwind prefix normalization', () => {
       )
     ).toThrow('dynamic class expressions are not accepted');
     expect(() =>
-      prefixTailwindClassCandidates(
-        'function Probe({ className } = getProps()) { return <div className={className} /> }'
-      )
+      prefixTailwindClassCandidates('function Probe({ className } = getProps()) { return <div className={className} /> }')
     ).toThrow('consumer className default must be a static object or class value');
     expect(() =>
       prefixTailwindClassCandidates(
         'function Probe({ className } = { __proto__: { className: "flex" } }) { return <div className={className} /> }'
       )
     ).toThrow('consumer className default must be a static object or class value');
-    expect(
-      prefixTailwindClassCandidates('function helper({ className = getClass() }) { return null }').source
-    ).toBe('function helper({ className = getClass() }) { return null }');
+    expect(prefixTailwindClassCandidates('function helper({ className = getClass() }) { return null }').source).toBe(
+      'function helper({ className = getClass() }) { return null }'
+    );
   });
 
   it('does not trust bare parameters named className as consumer class strings', () => {
@@ -178,22 +168,20 @@ describe('UI profile Tailwind prefix normalization', () => {
     expect(prefixTailwindClassCandidates(`${prefix}<div className={styles({ class: "block" })} />`).source).toContain(
       'styles({ class: "skui:block" })'
     );
-    expect(() =>
-      prefixTailwindClassCandidates(`${prefix}<div className={styles({ className: getClass() })} />`)
-    ).toThrow('dynamic class expressions are not accepted');
+    expect(() => prefixTailwindClassCandidates(`${prefix}<div className={styles({ className: getClass() })} />`)).toThrow(
+      'dynamic class expressions are not accepted'
+    );
     expect(() => prefixTailwindClassCandidates(`${prefix}<div className={styles({ ...props })} />`)).toThrow(
       'cva factory props contain an ambiguous class source'
     );
     expect(() => prefixTailwindClassCandidates(`${prefix}<div className={styles(props)} />`)).toThrow(
       'cva factory props must be a single static object literal'
     );
+    expect(() => prefixTailwindClassCandidates(`${prefix}<div className={styles({ [key]: "hidden" })} />`)).toThrow(
+      'cva factory props contain an ambiguous class source'
+    );
     expect(() =>
-      prefixTailwindClassCandidates(`${prefix}<div className={styles({ [key]: "hidden" })} />`)
-    ).toThrow('cva factory props contain an ambiguous class source');
-    expect(() =>
-      prefixTailwindClassCandidates(
-        `${prefix}<div className={styles({ "__proto__": { className: "hidden" } })} />`
-      )
+      prefixTailwindClassCandidates(`${prefix}<div className={styles({ "__proto__": { className: "hidden" } })} />`)
     ).toThrow('cva factory props contain an ambiguous class source');
 
     expect(
@@ -254,9 +242,9 @@ describe('UI profile Tailwind prefix normalization', () => {
     expect(prefixTailwindClassCandidates('<div className="group-[.active]/card:block" />').source).toBe(
       '<div className="skui:group-[.skui\\:active]/card:block" />'
     );
-    expect(
-      prefixTailwindClassCandidates('<div className="supports-[background-image:url(icon.svg)]:block" />').source
-    ).toBe('<div className="skui:supports-[background-image:url(icon.svg)]:block" />');
+    expect(prefixTailwindClassCandidates('<div className="supports-[background-image:url(icon.svg)]:block" />').source).toBe(
+      '<div className="skui:supports-[background-image:url(icon.svg)]:block" />'
+    );
   });
 
   it('rejects computed or concatenated profile-owned class strings', () => {
