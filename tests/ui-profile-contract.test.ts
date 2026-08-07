@@ -809,6 +809,27 @@ describe('offline profile verifier', () => {
     expect(await treeDigests(root)).toEqual(before);
   });
 
+  it('compiles the SelectValue compatibility probe against staged normalized output', async () => {
+    const root = await copyProfile();
+    const profile = await readJson<ProfileManifest>(root, 'profile.json');
+    const item = profile.items.find((candidate) => candidate.id === 'select')!;
+    const raw = await readJson<RegistrySnapshot>(root, 'snapshots/raw/select.json');
+    const select = raw.files.find((file) => file.path.endsWith('/select.tsx'))!;
+    const original = '}: SelectPrimitive.Value.Props)';
+    expect(select.content).toContain(original);
+    select.content = select.content.replace(original, '}: Omit<SelectPrimitive.Value.Props, "placeholder">)');
+    await rewriteSnapshot(root, profile, item, raw);
+    const before = await treeDigests(root);
+
+    const result = runOfflineRegenerator(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).not.toContain('attempted network access');
+    expect(verifierMessage(result)).toContain('Staged profile failed semantic compilation with TypeScript 5.3.3');
+    expect(verifierMessage(result)).toContain('placeholder');
+    expect(await treeDigests(root)).toEqual(before);
+  });
+
   it('rejects a shadowed wrong-version compiler before replacement and preserves the installed tree', async () => {
     const root = await copyProfile();
     const shadowRoot = path.join(root, 'node_modules', 'typescript-5-8');

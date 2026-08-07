@@ -31,7 +31,7 @@
     },
     {
       "path": "scripts/lib/typecheck-generated-profile.mjs",
-      "sha256": "27180ab6880abad3d132eb016b84a8f3ab19ab01061108a51654db2e500b1860"
+      "sha256": "fcbd168130fdc1abebb85ee8111ea78aa63edc67c9a05c0a3d46664509d2caae"
     },
     {
       "path": "scripts/lib/generate-validated-profile.mjs",

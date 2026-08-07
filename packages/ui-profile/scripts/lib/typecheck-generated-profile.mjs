@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, realpath, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -39,10 +39,13 @@ export async function assertGeneratedProfileCompiles({ packageRoot, outputRoot }
 
   const projectRoot = path.join(realOutputRoot, '.profile-typecheck');
   await mkdir(projectRoot, { recursive: true });
+  const selectValueProbe = path.join(projectRoot, 'select-value.tsx');
+  await copyFile(path.join(realPackageRoot, 'compat-consumers', 'select-value.tsx'), selectValueProbe);
   const include = [
     configPath(projectRoot, path.join(realOutputRoot, 'normalized', 'src', '**', '*.ts')),
     configPath(projectRoot, path.join(realOutputRoot, 'normalized', 'src', '**', '*.tsx')),
-    configPath(projectRoot, path.join(realPackageRoot, 'compat-consumers', 'react17-base-ui-jsx.d.ts'))
+    configPath(projectRoot, path.join(realPackageRoot, 'compat-consumers', 'react17-base-ui-jsx.d.ts')),
+    configPath(projectRoot, selectValueProbe)
   ];
 
   for (const compiler of PINNED_PROFILE_COMPILERS) {
