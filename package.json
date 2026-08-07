@@ -30,6 +30,7 @@
     "bump:spfx": "node packages/spfx-tools/src/cli/bump-spfx-app.mjs",
     "audit:pr-reviews": "node scripts/codex-pr-review-audit.mjs audit",
     "audit:pr-reviews:verify": "node scripts/codex-pr-review-audit.mjs verify",
+    "audit:pr-reviews:append-event": "node scripts/codex-pr-review-audit-event.mjs append",
     "evidence:check": "node scripts/check-shadcn-evidence.mjs",
     "evidence:inventory:check": "node scripts/check-phase0-inventories.mjs",
     "guard:public": "node packages/spfx-tools/src/cli/guard-public-repo.mjs",
