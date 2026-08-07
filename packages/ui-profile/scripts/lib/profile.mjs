@@ -984,6 +984,230 @@ function contextualTypeTextsForExpression(expression, sourceFile) {
   }
 }
 
+function assignmentTargetContains(node, name) {
+  const target = unwrapExpression(node);
+  if (ts.isIdentifier(target)) return target.text === name;
+  if (ts.isBinaryExpression(target) && target.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    return assignmentTargetContains(target.left, name);
+  }
+  if (ts.isArrayLiteralExpression(target) || ts.isArrayBindingPattern(target)) {
+    return target.elements.some((element) => element && assignmentTargetContains(element, name));
+  }
+  if (ts.isObjectLiteralExpression(target)) {
+    return target.properties.some((property) => {
+      if (ts.isShorthandPropertyAssignment(property)) return property.name.text === name;
+      if (ts.isPropertyAssignment(property)) return assignmentTargetContains(property.initializer, name);
+      if (ts.isSpreadAssignment(property)) return assignmentTargetContains(property.expression, name);
+      return false;
+    });
+  }
+  if (ts.isObjectBindingPattern(target)) {
+    return target.elements.some((element) => assignmentTargetContains(element.name, name));
+  }
+  if (ts.isBindingElement(target)) return assignmentTargetContains(target.name, name);
+  if (ts.isSpreadElement(target)) return assignmentTargetContains(target.expression, name);
+  return false;
+}
+
+function assignmentPropertyName(node) {
+  if (ts.isIdentifier(node) || ts.isStringLiteralLike(node) || ts.isNumericLiteral(node)) return node.text;
+  return null;
+}
+
+function assignedExpressions(left, right, name) {
+  const target = unwrapExpression(left);
+  const value = unwrapExpression(right);
+  if (ts.isIdentifier(target)) return target.text === name ? [right] : [];
+  if (ts.isBinaryExpression(target) && target.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    if (!assignmentTargetContains(target.left, name)) return [];
+    const assigned = assignedExpressions(target.left, right, name);
+    return assigned === null ? null : [...assigned, target.right];
+  }
+  if (ts.isArrayLiteralExpression(target) || ts.isArrayBindingPattern(target)) {
+    if (!assignmentTargetContains(target, name)) return [];
+    if (!ts.isArrayLiteralExpression(value)) return null;
+    const expressions = [];
+    for (let index = 0; index < target.elements.length; index += 1) {
+      const element = target.elements[index];
+      if (!element || !assignmentTargetContains(element, name)) continue;
+      const assigned = value.elements[index] && assignedExpressions(element, value.elements[index], name);
+      if (assigned === null || !value.elements[index]) return null;
+      expressions.push(...assigned);
+    }
+    return expressions;
+  }
+  if (ts.isObjectLiteralExpression(target)) {
+    if (!assignmentTargetContains(target, name)) return [];
+    if (!ts.isObjectLiteralExpression(value)) return null;
+    const expressions = [];
+    for (const property of target.properties) {
+      const targetNode = ts.isShorthandPropertyAssignment(property)
+        ? property.name
+        : ts.isPropertyAssignment(property)
+          ? property.initializer
+          : ts.isSpreadAssignment(property)
+            ? property.expression
+            : null;
+      if (!targetNode || !assignmentTargetContains(targetNode, name)) continue;
+      if (ts.isSpreadAssignment(property)) return null;
+      const key = assignmentPropertyName(property.name);
+      if (key === null) return null;
+      const sourceProperty = value.properties.find(
+        (candidate) =>
+          (ts.isPropertyAssignment(candidate) || ts.isShorthandPropertyAssignment(candidate)) &&
+          assignmentPropertyName(candidate.name) === key
+      );
+      if (!sourceProperty) return null;
+      const sourceValue = ts.isPropertyAssignment(sourceProperty) ? sourceProperty.initializer : sourceProperty.name;
+      const assigned = assignedExpressions(targetNode, sourceValue, name);
+      if (assigned === null) return null;
+      expressions.push(...assigned);
+    }
+    return expressions;
+  }
+  return assignmentTargetContains(target, name) ? null : [];
+}
+
+function functionScopeHasVarBinding(node, name) {
+  let found = false;
+  function inspect(candidate) {
+    if (found || (candidate !== node && ts.isFunctionLike(candidate))) return;
+    if (
+      ts.isVariableDeclarationList(candidate) &&
+      !(candidate.flags & ts.NodeFlags.BlockScoped) &&
+      candidate.declarations.some((declaration) => bindingNameContains(declaration.name, name))
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(candidate, inspect);
+  }
+  if (node.body) inspect(node.body);
+  return found;
+}
+
+function writeScopeShadowsBinding(node, name) {
+  if (ts.isFunctionLike(node)) {
+    return (
+      node.parameters.some((parameter) => bindingNameContains(parameter.name, name)) ||
+      (node.name && ts.isIdentifier(node.name) && node.name.text === name) ||
+      functionScopeHasVarBinding(node, name)
+    );
+  }
+  const statements = ts.isBlock(node)
+    ? node.statements
+    : ts.isCaseBlock(node)
+      ? node.clauses.flatMap((clause) => clause.statements)
+      : null;
+  if (
+    statements?.some((statement) => {
+      if (ts.isVariableStatement(statement)) {
+        return (
+          Boolean(statement.declarationList.flags & ts.NodeFlags.BlockScoped) &&
+          statement.declarationList.declarations.some((declaration) => bindingNameContains(declaration.name, name))
+        );
+      }
+      return (
+        (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name?.text === name
+      );
+    })
+  ) {
+    return true;
+  }
+  if (ts.isCatchClause(node) && node.variableDeclaration) {
+    return bindingNameContains(node.variableDeclaration.name, name);
+  }
+  if (ts.isForStatement(node) && node.initializer && ts.isVariableDeclarationList(node.initializer)) {
+    return (
+      Boolean(node.initializer.flags & ts.NodeFlags.BlockScoped) &&
+      node.initializer.declarations.some((declaration) => bindingNameContains(declaration.name, name))
+    );
+  }
+  if ((ts.isForInStatement(node) || ts.isForOfStatement(node)) && ts.isVariableDeclarationList(node.initializer)) {
+    return (
+      Boolean(node.initializer.flags & ts.NodeFlags.BlockScoped) &&
+      node.initializer.declarations.some((declaration) => bindingNameContains(declaration.name, name))
+    );
+  }
+  return false;
+}
+
+function bindingWrites(sourceFile, name) {
+  const expressions = [];
+  let hasUnsupportedWrite = false;
+  const assignmentOperators = new Set([
+    ts.SyntaxKind.EqualsToken,
+    ts.SyntaxKind.PlusEqualsToken,
+    ts.SyntaxKind.MinusEqualsToken,
+    ts.SyntaxKind.AsteriskEqualsToken,
+    ts.SyntaxKind.AsteriskAsteriskEqualsToken,
+    ts.SyntaxKind.SlashEqualsToken,
+    ts.SyntaxKind.PercentEqualsToken,
+    ts.SyntaxKind.LessThanLessThanEqualsToken,
+    ts.SyntaxKind.GreaterThanGreaterThanEqualsToken,
+    ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
+    ts.SyntaxKind.AmpersandEqualsToken,
+    ts.SyntaxKind.BarEqualsToken,
+    ts.SyntaxKind.CaretEqualsToken,
+    ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+    ts.SyntaxKind.BarBarEqualsToken,
+    ts.SyntaxKind.QuestionQuestionEqualsToken
+  ]);
+  function visit(node, shadowed = false) {
+    if (node !== sourceFile && ts.isFunctionLike(node)) {
+      const parameterShadowsBinding =
+        shadowed ||
+        node.parameters.some((parameter) => bindingNameContains(parameter.name, name)) ||
+        Boolean(node.name && ts.isIdentifier(node.name) && node.name.text === name);
+      for (const parameter of node.parameters) {
+        if (parameter.initializer) visit(parameter.initializer, parameterShadowsBinding);
+      }
+      if (node.body) {
+        visit(node.body, parameterShadowsBinding || functionScopeHasVarBinding(node, name));
+      }
+      return;
+    }
+    const bindingIsShadowed =
+      shadowed ||
+      (node !== sourceFile && writeScopeShadowsBinding(node, name));
+    if (
+      !bindingIsShadowed &&
+      ts.isBinaryExpression(node) &&
+      assignmentOperators.has(node.operatorToken.kind) &&
+      assignmentTargetContains(node.left, name)
+    ) {
+      const assigned = assignedExpressions(node.left, node.right, name);
+      if (assigned === null) hasUnsupportedWrite = true;
+      else expressions.push(...assigned);
+    } else if (
+      !bindingIsShadowed &&
+      (ts.isForInStatement(node) || ts.isForOfStatement(node))
+    ) {
+      const loopTarget = ts.isVariableDeclarationList(node.initializer)
+        ? node.initializer.declarations.find(
+            (declaration) => !(node.initializer.flags & ts.NodeFlags.BlockScoped) && assignmentTargetContains(declaration.name, name)
+          )?.name
+        : node.initializer;
+      if (!loopTarget || !assignmentTargetContains(loopTarget, name)) {
+        ts.forEachChild(node, (child) => visit(child, bindingIsShadowed));
+        return;
+      }
+      if (ts.isForOfStatement(node) && ts.isArrayLiteralExpression(unwrapExpression(node.expression))) {
+        for (const element of unwrapExpression(node.expression).elements) {
+          const assigned = assignedExpressions(loopTarget, element, name);
+          if (assigned === null) hasUnsupportedWrite = true;
+          else expressions.push(...assigned);
+        }
+      } else {
+        hasUnsupportedWrite = true;
+      }
+    }
+    ts.forEachChild(node, (child) => visit(child, bindingIsShadowed));
+  }
+  visit(sourceFile);
+  return { expressions, hasUnsupportedWrite };
+}
+
 function callableFromExportExpression(
   expression,
   sourceFile,
@@ -996,6 +1220,33 @@ function callableFromExportExpression(
   else if (contextualType) contextualTypeTexts.push(contextualType.getText(sourceFile));
   contextualTypeTexts.push(...contextualTypeTextsForExpression(expression, sourceFile));
   const unwrapped = unwrapExpression(expression);
+  if (ts.isCommaListExpression(unwrapped)) {
+    return callableFromExportExpression(
+      unwrapped.elements[unwrapped.elements.length - 1],
+      sourceFile,
+      seen,
+      memoized,
+      contextualTypeTexts.join(' & ')
+    );
+  }
+  if (ts.isBinaryExpression(unwrapped) && unwrapped.operatorToken.kind === ts.SyntaxKind.CommaToken) {
+    return callableFromExportExpression(
+      unwrapped.right,
+      sourceFile,
+      seen,
+      memoized,
+      contextualTypeTexts.join(' & ')
+    );
+  }
+  if (ts.isBinaryExpression(unwrapped) && unwrapped.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    return callableFromExportExpression(
+      unwrapped.right,
+      sourceFile,
+      seen,
+      memoized,
+      contextualTypeTexts.join(' & ')
+    );
+  }
   if (ts.isArrowFunction(unwrapped) || ts.isFunctionExpression(unwrapped)) {
     const kind = ts.isArrowFunction(unwrapped) ? 'arrow' : 'function-expression';
     return {
@@ -1078,6 +1329,94 @@ function callableFromExportExpression(
   return wrapped;
 }
 
+function moduleVariableDeclarations(sourceFile, name) {
+  const declarations = [];
+  function visit(node) {
+    if (
+      node !== sourceFile &&
+      (ts.isFunctionLike(node) ||
+        ts.isClassDeclaration(node) ||
+        ts.isClassExpression(node) ||
+        ts.isModuleDeclaration(node))
+    ) {
+      return;
+    }
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === name &&
+      ts.isVariableDeclarationList(node.parent)
+    ) {
+      const blockScoped = Boolean(node.parent.flags & ts.NodeFlags.BlockScoped);
+      const directTopLevel = ts.isVariableStatement(node.parent.parent) && node.parent.parent.parent === sourceFile;
+      if (!blockScoped || directTopLevel) declarations.push(node);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return declarations;
+}
+
+function expressionIsDefinitelyNonCallable(expression, sourceFile, seen = new Set()) {
+  const unwrapped = unwrapExpression(expression);
+  if (
+    ts.isStringLiteralLike(unwrapped) ||
+    ts.isNumericLiteral(unwrapped) ||
+    ts.isBigIntLiteral(unwrapped) ||
+    ts.isNoSubstitutionTemplateLiteral(unwrapped) ||
+    unwrapped.kind === ts.SyntaxKind.TrueKeyword ||
+    unwrapped.kind === ts.SyntaxKind.FalseKeyword ||
+    unwrapped.kind === ts.SyntaxKind.NullKeyword
+  ) {
+    return true;
+  }
+  if (ts.isObjectLiteralExpression(unwrapped) || ts.isArrayLiteralExpression(unwrapped)) return true;
+  if (ts.isPrefixUnaryExpression(unwrapped) || ts.isPostfixUnaryExpression(unwrapped)) return true;
+  if (ts.isConditionalExpression(unwrapped)) {
+    return (
+      expressionIsDefinitelyNonCallable(unwrapped.whenTrue, sourceFile, new Set(seen)) &&
+      expressionIsDefinitelyNonCallable(unwrapped.whenFalse, sourceFile, new Set(seen))
+    );
+  }
+  if (ts.isCommaListExpression(unwrapped)) {
+    return expressionIsDefinitelyNonCallable(unwrapped.elements[unwrapped.elements.length - 1], sourceFile, seen);
+  }
+  if (ts.isBinaryExpression(unwrapped)) {
+    if (unwrapped.operatorToken.kind === ts.SyntaxKind.CommaToken) {
+      return expressionIsDefinitelyNonCallable(unwrapped.right, sourceFile, seen);
+    }
+    if (unwrapped.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      return expressionIsDefinitelyNonCallable(unwrapped.right, sourceFile, seen);
+    }
+    if (
+      unwrapped.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+      unwrapped.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+      unwrapped.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken ||
+      unwrapped.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandEqualsToken ||
+      unwrapped.operatorToken.kind === ts.SyntaxKind.BarBarEqualsToken ||
+      unwrapped.operatorToken.kind === ts.SyntaxKind.QuestionQuestionEqualsToken
+    ) {
+      return (
+        expressionIsDefinitelyNonCallable(unwrapped.left, sourceFile, new Set(seen)) &&
+        expressionIsDefinitelyNonCallable(unwrapped.right, sourceFile, new Set(seen))
+      );
+    }
+    return true;
+  }
+  if (ts.isIdentifier(unwrapped)) {
+    if (seen.has(unwrapped.text)) return false;
+    seen.add(unwrapped.text);
+    const declarations = moduleVariableDeclarations(sourceFile, unwrapped.text);
+    return (
+      declarations.length === 1 &&
+      isConstVariableDeclaration(declarations[0]) &&
+      Boolean(declarations[0].initializer) &&
+      expressionIsDefinitelyNonCallable(declarations[0].initializer, sourceFile, seen)
+    );
+  }
+  return false;
+}
+
 function anonymousDefaultFunctionContracts(source) {
   const sourceFile = parsedSource(source, 'normalized-anonymous-default-wrapper.tsx');
   const contracts = [];
@@ -1115,35 +1454,35 @@ function anonymousDefaultFunctionContracts(source) {
 function exportedVariableFunctionContracts(source, name) {
   const sourceFile = parsedSource(source, 'normalized-variable-wrapper.tsx');
   const contracts = [];
-  let exportedDeclaration = null;
-  for (const statement of sourceFile.statements) {
-    if (!ts.isVariableStatement(statement)) continue;
-    const declaration = statement.declarationList.declarations.find(
-      (candidate) => ts.isIdentifier(candidate.name) && candidate.name.text === name
-    );
-    if (declaration) {
-      exportedDeclaration = declaration;
-      break;
-    }
-  }
-  if (!exportedDeclaration) return contracts;
-  const declarationContext = exportedDeclaration.type?.getText(sourceFile) ?? '';
+  const exportedDeclarations = moduleVariableDeclarations(sourceFile, name);
+  if (exportedDeclarations.length === 0) return contracts;
+  const exportedDeclaration = exportedDeclarations[0];
+  const mutableBinding = exportedDeclarations.some((declaration) => !isConstVariableDeclaration(declaration));
+  const declarationContext = exportedDeclarations
+    .map((declaration) => declaration.type?.getText(sourceFile) ?? '')
+    .filter(Boolean)
+    .join(' & ');
   if (
-    !isConstVariableDeclaration(exportedDeclaration) &&
+    mutableBinding &&
     declarationContext &&
     isRefBearingPropsType(source, declarationContext)
   ) {
     throw new Error(`mutable exported callable binding ${name} is not accepted`);
   }
   const candidates = [];
-  if (exportedDeclaration.initializer) candidates.push(exportedDeclaration.initializer);
+  candidates.push(...exportedDeclarations.flatMap((declaration) => (declaration.initializer ? [declaration.initializer] : [])));
+  const writes = bindingWrites(sourceFile, name);
+  candidates.push(...writes.expressions);
+  if (mutableBinding && writes.hasUnsupportedWrite) {
+    throw new Error(`mutable exported callable binding ${name} is not accepted`);
+  }
   for (const candidate of candidates) {
     const callable = callableFromExportExpression(
       candidate,
       sourceFile,
       new Set(),
       false,
-      exportedDeclaration.type
+      declarationContext
     );
     const expressionContext = contextualTypeTextsForExpression(candidate, sourceFile).join(' & ');
     if (
@@ -1153,10 +1492,12 @@ function exportedVariableFunctionContracts(source, name) {
     ) {
       throw new Error(`unsupported contextually typed exported callable ${name} is not accepted`);
     }
-    if (!callable || callable.forwarded) continue;
-    if (!isConstVariableDeclaration(exportedDeclaration)) {
+    if (!callable && mutableBinding && !expressionIsDefinitelyNonCallable(candidate, sourceFile)) {
       throw new Error(`mutable exported callable binding ${name} is not accepted`);
     }
+    if (!callable) continue;
+    if (callable.forwarded) continue;
+    if (mutableBinding) throw new Error(`mutable exported callable binding ${name} is not accepted`);
     const parameter = callable.declaration.parameters.find(
       (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
     );
