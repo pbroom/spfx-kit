@@ -88,7 +88,7 @@ describe('normalized React 17 first-PR component exits', () => {
     }
   });
 
-  it('passes the isolated package-local DOM behavior harness without mutating the installed package', async () => {
+  it('passes the prepared package-local exit and exact-scale DOM harness without mutating the installed package', async () => {
     const installedPaths = [
       'select/value/SelectValue.d.ts',
       'select/value/SelectValue.d.mts',
@@ -122,6 +122,6 @@ describe('normalized React 17 first-PR component exits', () => {
     );
     const message = `${result.stdout ?? ''}${result.stderr ?? ''}`;
     expect(result.status, message).toBe(0);
-    expect(message).toMatch(/12 passed/);
+    expect(message).toMatch(/13 passed/);
   });
 });
