@@ -346,6 +346,22 @@ describe('React 17 UI profile normalization', () => {
     expect(() => assertReact17Source('const module = require(name)\n', 'require.ts')).toThrow('non-literal dynamic dependency');
   });
 
+  it('rejects indirect CommonJS loaders before they can bypass the React 17 guard or dependency inventory', () => {
+    const aliasedRequire = 'const load = require\nconst React = load("react")\nReact.useId()\n';
+    const moduleRequire = 'const React = module.require("react")\nReact.useId()\n';
+
+    for (const source of [aliasedRequire, moduleRequire]) {
+      expect(() => assertReact17Source(source, 'indirect-commonjs.ts')).toThrow();
+      expect(() => externalImports(source)).toThrow();
+    }
+    expect(() => assertReact17Source(aliasedRequire, 'aliased-require.ts')).toThrow(
+      'indirect or unsupported require binding use is not accepted'
+    );
+    expect(() => assertReact17Source(moduleRequire, 'module-require.ts')).toThrow(
+      'CommonJS global module is not accepted in generated ESM source'
+    );
+  });
+
   it('rejects literal React 18 entrypoints and CommonJS React 18 APIs', () => {
     for (const source of [
       'const client = import("react-dom/client")\n',

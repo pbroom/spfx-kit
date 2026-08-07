@@ -100,6 +100,7 @@ function parsedSource(source, label) {
 }
 
 function moduleSpecifierNodes(sourceFile) {
+  assertSupportedRequireBindings(sourceFile, sourceFile.fileName);
   const specifiers = [];
   function visit(node) {
     let specifier = null;
@@ -666,10 +667,18 @@ function unwrapExpression(node) {
   return current;
 }
 
+function unwrapDependencyExpression(node) {
+  let current = unwrapExpression(node);
+  while (ts.isBinaryExpression(current) && current.operatorToken.kind === ts.SyntaxKind.CommaToken) {
+    current = unwrapExpression(current.right);
+  }
+  return current;
+}
+
 function dependencyCall(node) {
-  const current = unwrapExpression(node);
+  const current = unwrapDependencyExpression(node);
   if (!ts.isCallExpression(current)) return null;
-  const expression = unwrapExpression(current.expression);
+  const expression = unwrapDependencyExpression(current.expression);
   const isDynamicImport = expression.kind === ts.SyntaxKind.ImportKeyword;
   const isRequire = ts.isIdentifier(expression) && expression.text === 'require';
   const isRequireResolve =
@@ -685,6 +694,112 @@ function dependencyCall(node) {
     kind: isDynamicImport ? 'dynamic-import' : isRequireResolve ? 'require-resolve' : 'require',
     moduleName: current.arguments[0].text
   };
+}
+
+const unsupportedCommonJsGlobals = new Set(['module', 'exports', '__dirname', '__filename']);
+
+function isDeclarationOrPropertyName(node) {
+  const parent = node.parent;
+  if (
+    ((ts.isVariableDeclaration(parent) ||
+      ts.isParameter(parent) ||
+      ts.isBindingElement(parent) ||
+      ts.isImportClause(parent) ||
+      ts.isImportEqualsDeclaration(parent) ||
+      ts.isNamespaceImport(parent) ||
+      ts.isImportSpecifier(parent) ||
+      ts.isExportSpecifier(parent) ||
+      ts.isTypeAliasDeclaration(parent) ||
+      ts.isInterfaceDeclaration(parent) ||
+      ts.isTypeParameterDeclaration(parent) ||
+      ts.isFunctionDeclaration(parent) ||
+      ts.isFunctionExpression(parent) ||
+      ts.isClassDeclaration(parent) ||
+      ts.isClassExpression(parent)) &&
+      parent.name === node) ||
+    ((ts.isPropertySignature(parent) ||
+      ts.isMethodSignature(parent) ||
+      ts.isPropertyDeclaration(parent) ||
+      ts.isMethodDeclaration(parent) ||
+      ts.isPropertyAssignment(parent)) &&
+      parent.name === node)
+  ) {
+    return true;
+  }
+  for (let current = parent; current; current = current.parent) {
+    if (ts.isTypeNode(current)) return true;
+    if (ts.isExpression(current) || ts.isStatement(current)) break;
+  }
+  return false;
+}
+
+function staticPropertyName(node) {
+  const current = unwrapExpression(node);
+  if (ts.isStringLiteralLike(current)) return current.text;
+  if (ts.isBinaryExpression(current) && current.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    const left = staticPropertyName(current.left);
+    const right = staticPropertyName(current.right);
+    if (left !== null && right !== null) return left + right;
+  }
+  return null;
+}
+
+function isSupportedRequireCallUse(node) {
+  let current = node;
+  while (current.parent) {
+    const parent = current.parent;
+    if (
+      (ts.isParenthesizedExpression(parent) ||
+        ts.isAsExpression(parent) ||
+        ts.isTypeAssertionExpression(parent) ||
+        ts.isNonNullExpression(parent) ||
+        ts.isSatisfiesExpression(parent)) &&
+      parent.expression === current
+    ) {
+      current = parent;
+      continue;
+    }
+    if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.CommaToken && parent.right === current) {
+      current = parent;
+      continue;
+    }
+    if (ts.isPropertyAccessExpression(parent) && parent.expression === current && parent.name.text === 'resolve') {
+      current = parent;
+      continue;
+    }
+    return ts.isCallExpression(parent) && parent.expression === current && dependencyCall(parent) !== null;
+  }
+  return false;
+}
+
+function assertSupportedRequireBindings(sourceFile, label) {
+  function visit(node) {
+    if (
+      ts.isElementAccessExpression(node) &&
+      node.argumentExpression &&
+      staticPropertyName(node.argumentExpression) === 'require'
+    ) {
+      throw new Error(`${label}: indirect or unsupported require binding use is not accepted`);
+    }
+    if (
+      ts.isIdentifier(node) &&
+      node.text === 'require' &&
+      !isDeclarationOrPropertyName(node) &&
+      !isSupportedRequireCallUse(node)
+    ) {
+      throw new Error(`${label}: indirect or unsupported require binding use is not accepted`);
+    }
+    if (
+      ts.isIdentifier(node) &&
+      unsupportedCommonJsGlobals.has(node.text) &&
+      !isDeclarationOrPropertyName(node) &&
+      !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)
+    ) {
+      throw new Error(`${label}: CommonJS global ${node.text} is not accepted in generated ESM source`);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
 }
 
 function bindingPropertyName(element) {
@@ -704,6 +819,7 @@ function assertReact17AstSource(source, label) {
   if (sourceFile.parseDiagnostics.length > 0) {
     throw new Error(`${label}: source could not be parsed for React 17 compatibility`);
   }
+  assertSupportedRequireBindings(sourceFile, label);
 
   const namespaceBindings = new Map();
   for (const statement of sourceFile.statements) {
