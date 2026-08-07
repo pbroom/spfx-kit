@@ -545,9 +545,89 @@ function scopeShadowsBinding(node, expected) {
   return false;
 }
 
+function expressionReferencesBindings(expression, bindings) {
+  let found = false;
+  function inspect(node) {
+    if (found) return;
+    if (ts.isIdentifier(node) && bindings.has(node.text)) {
+      const parent = node.parent;
+      const isNonReferenceName =
+        (ts.isPropertyAssignment(parent) && parent.name === node && !ts.isShorthandPropertyAssignment(parent)) ||
+        (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+        (ts.isBindingElement(parent) && parent.name === node) ||
+        (ts.isVariableDeclaration(parent) && parent.name === node);
+      if (!isNonReferenceName) found = true;
+    }
+    if (!found) ts.forEachChild(node, inspect);
+  }
+  inspect(expression);
+  return found;
+}
+
+function propsBindingAliases(declaration, propsBinding) {
+  const candidates = [];
+  const assignmentOperators = new Set([
+    ts.SyntaxKind.EqualsToken,
+    ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+    ts.SyntaxKind.BarBarEqualsToken,
+    ts.SyntaxKind.QuestionQuestionEqualsToken
+  ]);
+  function candidateNames(node) {
+    if (ts.isIdentifier(node)) return [node.text];
+    if (ts.isBindingElement(node)) return candidateNames(node.name);
+    if (ts.isObjectBindingPattern(node) || ts.isArrayBindingPattern(node)) {
+      return node.elements.flatMap((element) => (element ? candidateNames(element) : []));
+    }
+    if (ts.isArrayLiteralExpression(node)) {
+      return node.elements.flatMap((element) => candidateNames(element));
+    }
+    if (ts.isObjectLiteralExpression(node)) {
+      return node.properties.flatMap((property) => {
+        if (ts.isShorthandPropertyAssignment(property)) return [property.name.text];
+        if (ts.isPropertyAssignment(property)) return candidateNames(property.initializer);
+        if (ts.isSpreadAssignment(property)) return candidateNames(property.expression);
+        return [];
+      });
+    }
+    const unwrapped = unwrapExpression(node);
+    return unwrapped === node ? [] : candidateNames(unwrapped);
+  }
+  function visit(node) {
+    if (
+      node !== declaration.body &&
+      (ts.isFunctionLike(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node))
+    ) {
+      return;
+    }
+    if (ts.isVariableDeclaration(node) && node.initializer) {
+      for (const name of candidateNames(node.name)) candidates.push([name, node.initializer]);
+    } else if (
+      ts.isBinaryExpression(node) &&
+      assignmentOperators.has(node.operatorToken.kind)
+    ) {
+      for (const name of candidateNames(node.left)) candidates.push([name, node.right]);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(declaration.body);
+  const aliases = new Set([propsBinding]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [alias, expression] of candidates) {
+      if (!aliases.has(alias) && expressionReferencesBindings(expression, aliases)) {
+        aliases.add(alias);
+        changed = true;
+      }
+    }
+  }
+  return aliases;
+}
+
 function propsSpreadTargets(declaration, parameter, sourceFile) {
   const propsBinding = propsBindingName(parameter);
   if (!propsBinding || !declaration.body) return [];
+  const propsAliases = propsBindingAliases(declaration, propsBinding);
   const parameterBindsRef =
     ts.isObjectBindingPattern(parameter.name) &&
     parameter.name.elements.some(
@@ -567,12 +647,13 @@ function propsSpreadTargets(declaration, parameter, sourceFile) {
     const refIsShadowed =
       refBindingIsShadowed || (node !== declaration.body && scopeShadowsBinding(node, 'ref'));
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-      const spreadsBinding = node.attributes.properties.some((attribute) => {
+      const propsSpread = node.attributes.properties.find((attribute) => {
         if (!ts.isJsxSpreadAttribute(attribute)) return false;
         const expression = unwrapExpression(attribute.expression);
-        return ts.isIdentifier(expression) && expression.text === propsBinding;
+        return expressionReferencesBindings(expression, propsAliases);
       });
-      if (spreadsBinding) {
+      if (propsSpread) {
+        const spreadExpression = unwrapExpression(propsSpread.expression);
         const refAttributes = node.attributes.properties.filter(
           (attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(sourceFile) === 'ref'
         );
@@ -587,9 +668,13 @@ function propsSpreadTargets(declaration, parameter, sourceFile) {
           name: node.tagName.getText(sourceFile),
           startOffset: node.getStart(sourceFile) - bodyStart,
           insertionOffset: node.tagName.end - bodyStart,
+          bindingIsAliased: !(ts.isIdentifier(spreadExpression) && spreadExpression.text === propsBinding),
           bindingIsShadowed,
           forwardsRef,
-          hasConflictingRef: refAttributes.length > (forwardsRef ? 1 : 0)
+          hasConflictingRef: refAttributes.length > (forwardsRef ? 1 : 0),
+          hasConflictingSpread: node.attributes.properties.some(
+            (attribute) => ts.isJsxSpreadAttribute(attribute) && attribute !== propsSpread
+          )
         });
       }
     }
@@ -619,19 +704,28 @@ function isRefBearingPropsType(source, propsType) {
   if (!propsType.trim()) return false;
   const sourceFile = parsedSource(source, 'ref-bearing-props.tsx');
   const aliases = new Map();
+  const importedBaseUiPropsTypes = new Set();
   const importedReactPropsHelpers = new Set();
   const addAlias = (name, type) => aliases.set(name, [...(aliases.get(name) ?? []), type]);
   for (const statement of sourceFile.statements) {
     if (
       ts.isImportDeclaration(statement) &&
       ts.isStringLiteralLike(statement.moduleSpecifier) &&
-      statement.moduleSpecifier.text === 'react' &&
       statement.importClause?.namedBindings &&
       ts.isNamedImports(statement.importClause.namedBindings)
     ) {
       for (const element of statement.importClause.namedBindings.elements) {
         const importedName = element.propertyName?.text ?? element.name.text;
-        if (/^ComponentProps(?:WithRef|WithoutRef)?$/u.test(importedName)) importedReactPropsHelpers.add(element.name.text);
+        if (statement.moduleSpecifier.text === 'react' && /^ComponentProps(?:WithRef|WithoutRef)?$/u.test(importedName)) {
+          importedReactPropsHelpers.add(element.name.text);
+        }
+        if (
+          (statement.moduleSpecifier.text === '@base-ui/react' ||
+            statement.moduleSpecifier.text.startsWith('@base-ui/react/')) &&
+          /Props$/u.test(importedName)
+        ) {
+          importedBaseUiPropsTypes.add(element.name.text);
+        }
       }
     } else if (ts.isTypeAliasDeclaration(statement)) {
       addAlias(statement.name.text, statement.type);
@@ -651,6 +745,7 @@ function isRefBearingPropsType(source, propsType) {
     const nameText = name.getText(name.getSourceFile());
     return (
       (ts.isQualifiedName(name) && name.right.text === 'Props') ||
+      (ts.isIdentifier(name) && importedBaseUiPropsTypes.has(name.text)) ||
       (ts.isIdentifier(name) && importedReactPropsHelpers.has(name.text)) ||
       /^(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?$/u.test(nameText)
     );
@@ -665,6 +760,15 @@ function isRefBearingPropsType(source, propsType) {
       return (node.typeArguments ?? []).some(inspect);
     }
     if (ts.isImportTypeNode(node)) {
+      if (
+        ts.isLiteralTypeNode(node.argument) &&
+        ts.isStringLiteralLike(node.argument.literal) &&
+        (node.argument.literal.text === '@base-ui/react' || node.argument.literal.text.startsWith('@base-ui/react/')) &&
+        node.qualifier &&
+        /(?:^|\.)[^.]*Props$/u.test(node.qualifier.getText(node.getSourceFile()))
+      ) {
+        return true;
+      }
       if (node.qualifier && isDirectRefPropsName(node.qualifier)) return true;
       return (node.typeArguments ?? []).some(inspect);
     }
@@ -673,6 +777,7 @@ function isRefBearingPropsType(source, propsType) {
       const expressionName = expression.getText(node.getSourceFile());
       if (
         (ts.isPropertyAccessExpression(expression) && expression.name.text === 'Props') ||
+        (ts.isIdentifier(expression) && importedBaseUiPropsTypes.has(expression.text)) ||
         (ts.isIdentifier(expression) && importedReactPropsHelpers.has(expression.text)) ||
         /^(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?$/u.test(expressionName)
       ) {
@@ -742,7 +847,11 @@ function normalizePublicForwardRefs(source) {
     let body = normalized.slice(candidate.bodyOpen + 1, candidate.bodyClose);
     const publicSpreadTargets = candidate.spreadTargets.filter(targetAcceptsPublicRef);
     const safeSpreadTargets = publicSpreadTargets.filter(
-      (candidateTarget) => !candidateTarget.bindingIsShadowed && !candidateTarget.hasConflictingRef
+      (candidateTarget) =>
+        !candidateTarget.bindingIsAliased &&
+        !candidateTarget.bindingIsShadowed &&
+        !candidateTarget.hasConflictingRef &&
+        !candidateTarget.hasConflictingSpread
     );
     let target = publicSpreadTargets.length === 1 && safeSpreadTargets.length === 1 ? safeSpreadTargets[0] : null;
     const useRender = /return\s+useRender\(\{\s*/.exec(body);
