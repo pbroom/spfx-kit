@@ -116,7 +116,8 @@ async function copyProfile(): Promise<string> {
     filter: (source) => {
       const segments = path.relative(profileRoot, source).split(path.sep);
       return !segments.some(
-        (segment) => ['node_modules', '.prepared', '.tsbuildinfo'].includes(segment) || segment.startsWith('.profile-')
+        (segment) =>
+          ['node_modules', '.prepared', '.tsbuildinfo', '.DS_Store'].includes(segment) || segment.startsWith('.profile-')
       );
     }
   });
@@ -174,6 +175,7 @@ async function filesUnder(root: string): Promise<string[]> {
         entry.name === 'node_modules' ||
         entry.name === '.prepared' ||
         entry.name === '.tsbuildinfo' ||
+        entry.name === '.DS_Store' ||
         entry.name.startsWith('.profile-')
       )
         continue;
