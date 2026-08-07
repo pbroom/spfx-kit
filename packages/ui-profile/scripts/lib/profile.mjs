@@ -720,6 +720,39 @@ function exportedFunctionContract(source, name) {
   };
 }
 
+function anonymousDefaultFunctionContracts(source) {
+  const sourceFile = parsedSource(source, 'normalized-anonymous-default-wrapper.tsx');
+  const contracts = [];
+  const addContract = (declaration, kind) => {
+    const parameter = declaration.parameters.find(
+      (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
+    );
+    contracts.push({
+      kind,
+      propsType: parameter?.type?.getText(sourceFile) ?? '',
+      body: ts.isBlock(declaration.body)
+        ? declaration.body.getText(sourceFile).slice(1, -1)
+        : `return ${declaration.body.getText(sourceFile)}`
+    });
+  };
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      !statement.name &&
+      statement.body &&
+      statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) &&
+      statement.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)
+    ) {
+      addContract(statement, 'function');
+    } else if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+      const expression = unwrapExpression(statement.expression);
+      if (ts.isArrowFunction(expression)) addContract(expression, 'arrow');
+      else if (ts.isFunctionExpression(expression)) addContract(expression, 'function-expression');
+    }
+  }
+  return contracts;
+}
+
 function exportedVariableFunctionContract(source, name) {
   const sourceFile = parsedSource(source, 'normalized-variable-wrapper.tsx');
   for (const statement of sourceFile.statements) {
@@ -1374,6 +1407,15 @@ export function assertReact17Source(source, label) {
   }
   if (label.endsWith('.tsx') && hasJsx(source) && !hasReactBinding(source)) {
     throw new Error(`${label}: JSX source does not bind the React namespace`);
+  }
+  for (const anonymousDefault of anonymousDefaultFunctionContracts(source)) {
+    const refProps = isRefBearingPropsType(source, anonymousDefault.propsType);
+    const useRenderWrapper = /return\s+useRender\(\{/.test(anonymousDefault.body);
+    if (refProps && (targetAcceptsPublicRef(propsSpreadTarget(anonymousDefault.body)) || useRenderWrapper)) {
+      throw new Error(
+        `${label}: anonymous default-exported ref-bearing ${anonymousDefault.kind} wrapper is not normalized with React.forwardRef`
+      );
+    }
   }
   for (const name of exportedNames(source)) {
     const forwardRef = new RegExp(`\\bconst\\s+${name}\\s*=\\s*React\\.forwardRef\\b`);

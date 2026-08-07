@@ -462,6 +462,50 @@ describe('React 17 UI profile normalization', () => {
     }
   });
 
+  it('fails closed for anonymous default ref-bearing wrappers', () => {
+    for (const [declaration, kind] of [
+      ['export default function ({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }', 'function'],
+      [
+        'type ProbeProps = ButtonPrimitive.Props\nexport default async function ({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }',
+        'function'
+      ],
+      ['export default ({ ...props }: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />', 'arrow'],
+      [
+        'export default (function Internal({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> })',
+        'function-expression'
+      ],
+      [
+        'import { useRender } from "@base-ui/react/use-render"\nexport default function (props: useRender.ComponentProps<"button">) { return useRender({ props }) }',
+        'function'
+      ]
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source: `import { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+        })
+      ).toThrow(`anonymous default-exported ref-bearing ${kind} wrapper is not normalized with React.forwardRef`);
+    }
+
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export default function ({ ...props }: { disabled?: boolean }) { return <ButtonPrimitive {...props} /> }\n'
+      })
+    ).not.toThrow();
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export default React.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>(function Probe(props, ref) { return <ButtonPrimitive ref={ref} {...props} /> })\n'
+      })
+    ).not.toThrow();
+  });
+
   it('uses the Base UI 1.6 root DOM contract for Checkbox and Switch refs', () => {
     for (const [name, primitive] of [
       ['Checkbox', 'CheckboxPrimitive'],
