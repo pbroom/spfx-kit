@@ -5,6 +5,7 @@ import { existsSync, lstatSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { findingPriority } from './codex-review-priority.mjs';
 
 export const CODEX_REVIEW_ACTOR = 'chatgpt-codex-connector';
 export const MAX_FIX_ATTEMPTS = 3;
@@ -44,10 +45,7 @@ export function normalizeLogin(login) {
     .toLowerCase();
 }
 
-export function findingPriority(body) {
-  const match = String(body || '').match(/(?:badge[^\n]*|\[|\b)P([0-3])(?:\b|[-\]])/i);
-  return match ? `P${match[1]}` : undefined;
-}
+export { findingPriority } from './codex-review-priority.mjs';
 
 export function defaultLoopState() {
   return {
