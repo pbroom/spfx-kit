@@ -75,7 +75,8 @@ async function provenanceFixture() {
     filter: (source) => {
       const segments = path.relative(sourceRoot, source).split(path.sep);
       return !segments.some(
-        (segment) => ['node_modules', '.prepared', '.tsbuildinfo'].includes(segment) || segment.startsWith('.profile-')
+        (segment) =>
+          ['node_modules', '.prepared', '.tsbuildinfo', '.DS_Store'].includes(segment) || segment.startsWith('.profile-')
       );
     }
   });
