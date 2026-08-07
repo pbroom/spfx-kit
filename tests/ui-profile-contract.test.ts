@@ -3,8 +3,10 @@ import { createHash } from 'node:crypto';
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+// @ts-expect-error plain .mjs module without type declarations
+import { baseUiTreeSha256 } from '../packages/ui-profile/scripts/prepare-base-ui.mjs';
 // @ts-expect-error plain .mjs module without type declarations
 import { canonicalJson, normalizeRegistrySource, sha256 } from '../packages/ui-profile/scripts/lib/profile.mjs';
 
@@ -161,6 +163,23 @@ function runTypecheckContract(root: string): ReturnType<typeof spawnSync> {
   });
 }
 
+function runBaseUiPreparation(root: string): ReturnType<typeof spawnSync> {
+  return spawnSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '--eval',
+      'const implementation = await import(process.argv[1]); await implementation.prepareBaseUi();',
+      pathToFileURL(path.join(root, 'scripts/prepare-base-ui.mjs')).href
+    ],
+    {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, CI: '1' }
+    }
+  );
+}
+
 function verifierMessage(result: ReturnType<typeof spawnSync>): string {
   return `${result.stdout ?? ''}${result.stderr ?? ''}`;
 }
@@ -288,6 +307,23 @@ async function rewriteSnapshot(
 }
 
 describe('private offline React 17 UI profile artifacts', () => {
+  it('pins byte-hashed profile artifacts to LF working-tree bytes', async () => {
+    expect(await readFile(path.join(repositoryRoot, '.gitattributes'), 'utf8')).toContain('packages/ui-profile/** text eol=lf\n');
+
+    const tracked = spawnSync('git', ['ls-files', 'packages/ui-profile'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8'
+    });
+    expect(tracked.status).toBe(0);
+    const paths = tracked.stdout.trim().split('\n').filter(Boolean);
+    const attributes = spawnSync('git', ['check-attr', 'eol', '--', ...paths], {
+      cwd: repositoryRoot,
+      encoding: 'utf8'
+    });
+    expect(attributes.status).toBe(0);
+    expect(attributes.stdout.trim().split('\n')).toEqual(paths.map((file) => `${file}: eol: lf`));
+  });
+
   it('is a non-runtime package with the exact owner-corrected dependency pins', async () => {
     const manifest = await readJson<Record<string, unknown>>(profileRoot, 'package.json');
 
@@ -777,6 +813,55 @@ describe('offline profile verifier', () => {
     expect(verifierMessage(result)).toContain(
       `Resolved type package ${packageName}@99.0.0 instead of pinned ${packageName}@${pinnedVersion}`
     );
+    expect(await treeDigests(root)).toEqual(before);
+  });
+
+  it('rejects a same-version shadowed Base UI installation before staging', async () => {
+    const root = await copyProfile();
+    const shadowRoot = path.join(root, 'node_modules/@base-ui/react');
+    await mkdir(shadowRoot, { recursive: true });
+    await writeCanonicalJson(root, 'node_modules/@base-ui/react/package.json', {
+      name: '@base-ui/react',
+      version: '1.6.0',
+      exports: { './package.json': './package.json' }
+    });
+
+    const result = runBaseUiPreparation(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toContain('Resolved Base UI root differs from the lockfile package root');
+  });
+
+  it('hashes the complete Base UI file inventory', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'spfx-base-ui-tree-'));
+    temporaryRoots.push(root);
+    await mkdir(path.join(root, 'nested'), { recursive: true });
+    await writeFile(path.join(root, 'package.json'), '{}\n');
+    await writeFile(path.join(root, 'nested', 'declaration.d.ts'), 'export {};\n');
+    const baseline = await baseUiTreeSha256(root);
+
+    await writeFile(path.join(root, 'nested', 'declaration.d.ts'), 'export type Changed = true;\n');
+    expect(await baseUiTreeSha256(root)).not.toBe(baseline);
+    await writeFile(path.join(root, 'nested', 'declaration.d.ts'), 'export {};\n');
+    await writeFile(path.join(root, 'extra.txt'), 'extra\n');
+    expect(await baseUiTreeSha256(root)).not.toBe(baseline);
+    await unlink(path.join(root, 'extra.txt'));
+    await unlink(path.join(root, 'nested', 'declaration.d.ts'));
+    expect(await baseUiTreeSha256(root)).not.toBe(baseline);
+  });
+
+  it('rejects Base UI lock identity drift before staging', async () => {
+    const root = await copyProfile();
+    const temporaryRepositoryRoot = path.resolve(root, '..', '..');
+    const lock = await readJson<any>(temporaryRepositoryRoot, 'package-lock.json');
+    lock.packages['node_modules/@base-ui/react'].integrity = 'sha512-tampered';
+    await writeCanonicalJson(temporaryRepositoryRoot, 'package-lock.json', lock);
+    const before = await treeDigests(root);
+
+    const result = runBaseUiPreparation(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toContain('Base UI lockfile identity differs from the pinned preparation contract');
     expect(await treeDigests(root)).toEqual(before);
   });
 });

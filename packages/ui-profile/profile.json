@@ -39,7 +39,7 @@
     },
     {
       "path": "scripts/prepare-base-ui.mjs",
-      "sha256": "2a8fed68499785a07686516435d4fd58a4d1251034e080c4ff58d789e6dfccaa"
+      "sha256": "22f78ddd1aa9b98e7ee26e48fc32dac4feca05937f1687f0c80cf3d54001b149"
     },
     {
       "path": "scripts/transform-base-ui-select-value.mjs",
