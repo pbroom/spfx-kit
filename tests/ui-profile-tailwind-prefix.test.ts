@@ -207,6 +207,113 @@ describe('UI profile Tailwind prefix normalization', () => {
     expect(result).toContain('className: ["skui:hover:bg-primary", "skui:text-sm"]');
   });
 
+  it('rejects ambiguous cva option and compound-variant properties', () => {
+    const importedCva = 'import { cva } from "class-variance-authority"; ';
+
+    expect(() => prefixTailwindClassCandidates(`${importedCva}cva("block", { ...sharedOptions })`)).toThrow(
+      'cva options must use unique static properties'
+    );
+    expect(() =>
+      prefixTailwindClassCandidates(`${importedCva}cva("block", { variants: {}, variants: { size: { sm: "flex" } } })`)
+    ).toThrow('cva options must use unique static properties');
+    expect(() =>
+      prefixTailwindClassCandidates(`${importedCva}cva("block", { compoundVariants: [{ size: "sm", ...sharedVariant }] })`)
+    ).toThrow('cva compoundVariants contain an ambiguous class source');
+    expect(() => prefixTailwindClassCandidates(`${importedCva}cva("block", { [optionsKey]: sharedOptions })`)).toThrow(
+      'cva options must use unique static properties'
+    );
+  });
+
+  it('normalizes static JSX spread classes and rejects ambiguous spread sources', () => {
+    expect(prefixTailwindClassCandidates('<div {...{ className: "flex", role: "group" }} />').source).toBe(
+      '<div {...{ className: "skui:flex", role: "group" }} />'
+    );
+    expect(() => prefixTailwindClassCandidates('<div {...{ className: getClass() }} />')).toThrow(
+      'dynamic class expressions are not accepted'
+    );
+    expect(() => prefixTailwindClassCandidates('<div {...{ ...sharedProps }} />')).toThrow(
+      'JSX spread contains an ambiguous class source'
+    );
+    expect(() => prefixTailwindClassCandidates('<div {...sharedProps} />')).toThrow(
+      'JSX spread must be a consumer prop bag or static object literal'
+    );
+    expect(prefixTailwindClassCandidates('function Probe(props) { return <div {...props} /> }').source).toContain(
+      '<div {...props} />'
+    );
+    expect(prefixTailwindClassCandidates('function Probe({ className, ...rest }) { return <div {...rest} /> }').source).toContain(
+      '<div {...rest} />'
+    );
+    expect(
+      prefixTailwindClassCandidates('function Probe(props) { return <div data-id={props.id} {...props} /> }').source
+    ).toContain('data-id={props.id} {...props}');
+    expect(
+      prefixTailwindClassCandidates(
+        'function Probe(props) { const { id } = props; const [first] = props; return <div data-id={id ?? first} {...props} /> }'
+      ).source
+    ).toContain('data-id={id ?? first} {...props}');
+    expect(
+      prefixTailwindClassCandidates(
+        'function Probe(props) { let id, first; ({ id } = props); [first] = props; return <div data-id={id ?? first} {...props} /> }'
+      ).source
+    ).toContain('data-id={id ?? first} {...props}');
+    expect(
+      prefixTailwindClassCandidates(
+        'function Probe(props) { return <><div {...(props)} /><div {...(props as Props)} /><div {...(props satisfies Props)} /></> }'
+      ).source
+    ).toContain('<div {...(props satisfies Props)} />');
+    expect(
+      prefixTailwindClassCandidates('function Probe(props) { return <div {...{ ...(props as Props) }} /> }').source
+    ).toContain('<div {...{ ...(props as Props) }} />');
+    expect(() =>
+      prefixTailwindClassCandidates('function Probe(props) { props = getProps(); return <div {...props} /> }')
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() =>
+      prefixTailwindClassCandidates('function Probe(props = { className: "flex" }) { return <div {...props} /> }')
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() =>
+      prefixTailwindClassCandidates('function Probe(props) { props.className = "flex"; return <div {...props} /> }')
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() =>
+      prefixTailwindClassCandidates('function Probe(props) { delete props.className; return <div {...props} /> }')
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() => prefixTailwindClassCandidates('function Probe(props) { mutate(props); return <div {...props} /> }')).toThrow(
+      'JSX spread must be a consumer prop bag or static object literal'
+    );
+    expect(() =>
+      prefixTailwindClassCandidates('function Probe(props) { let alias; alias = props; return <div {...props} /> }')
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() => prefixTailwindClassCandidates('function Probe(props) { props.mutate(); return <div {...props} /> }')).toThrow(
+      'JSX spread must be a consumer prop bag or static object literal'
+    );
+    expect(() => prefixTailwindClassCandidates('function Probe(props) { props["mutate"](); return <div {...props} /> }')).toThrow(
+      'JSX spread must be a consumer prop bag or static object literal'
+    );
+    expect(() => prefixTailwindClassCandidates('function Probe(props) { props.mutate?.(); return <div {...props} /> }')).toThrow(
+      'JSX spread must be a consumer prop bag or static object literal'
+    );
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'function Probe(props) { const alias = props; alias.className = "flex"; return <div {...props} /> }'
+      )
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'function Probe(props) { Object.assign(props, { className: "flex" }); return <div {...props} /> }'
+      )
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() =>
+      prefixTailwindClassCandidates('function Probe(props) { arguments[0].className = "flex"; return <div {...props} /> }')
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() =>
+      prefixTailwindClassCandidates('const Probe = (props) => { eval("props.className = \'flex\'"); return <div {...props} /> }')
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'const Probe = (props) => { ((eval))("props.className = \'flex\'"); return <div {...props} /> }'
+      )
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+  });
+
   it('fails closed when a cva conditional or logical branch can produce a dynamic class', () => {
     const importedCva = 'import { cva } from "class-variance-authority"; ';
 

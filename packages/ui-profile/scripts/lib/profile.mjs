@@ -2238,13 +2238,29 @@ function collectCvaVariantLiterals(options, sourceFile, literals, label) {
   if (!ts.isObjectLiteralExpression(options)) {
     throw new Error(`${label}: cva options must be a static object literal`);
   }
-  const variants = options.properties.find(
-    (property) => ts.isPropertyAssignment(property) && propertyNameText(property.name, sourceFile) === 'variants'
-  );
-  if (variants && (!ts.isPropertyAssignment(variants) || !ts.isObjectLiteralExpression(variants.initializer))) {
+  let variants;
+  let compoundVariants;
+  const optionNames = new Set();
+  for (const property of options.properties) {
+    if (
+      !ts.isPropertyAssignment(property) ||
+      ts.isComputedPropertyName(property.name) ||
+      isPrototypeSetterProperty(property, sourceFile)
+    ) {
+      throw new Error(`${label}: cva options must use unique static properties`);
+    }
+    const name = propertyNameText(property.name, sourceFile);
+    if (optionNames.has(name)) {
+      throw new Error(`${label}: cva options must use unique static properties`);
+    }
+    optionNames.add(name);
+    if (name === 'variants') variants = property;
+    if (name === 'compoundVariants') compoundVariants = property;
+  }
+  if (variants && !ts.isObjectLiteralExpression(variants.initializer)) {
     throw new Error(`${label}: cva variants must be a static object literal`);
   }
-  if (variants && ts.isPropertyAssignment(variants)) {
+  if (variants) {
     for (const variant of variants.initializer.properties) {
       if (!ts.isPropertyAssignment(variant) || !ts.isObjectLiteralExpression(variant.initializer)) {
         throw new Error(`${label}: cva variant definitions must be static object literals`);
@@ -2258,11 +2274,8 @@ function collectCvaVariantLiterals(options, sourceFile, literals, label) {
     }
   }
 
-  const compoundVariants = options.properties.find(
-    (property) => ts.isPropertyAssignment(property) && propertyNameText(property.name, sourceFile) === 'compoundVariants'
-  );
   if (!compoundVariants) return;
-  if (!ts.isPropertyAssignment(compoundVariants) || !ts.isArrayLiteralExpression(compoundVariants.initializer)) {
+  if (!ts.isArrayLiteralExpression(compoundVariants.initializer)) {
     throw new Error(`${label}: cva compoundVariants must be a static array literal`);
   }
   for (const element of compoundVariants.initializer.elements) {
@@ -2270,6 +2283,22 @@ function collectCvaVariantLiterals(options, sourceFile, literals, label) {
       throw new Error(`${label}: cva compoundVariants entries must be static object literals`);
     }
     for (const property of element.properties) {
+      if (
+        ts.isSpreadAssignment(property) ||
+        ts.isMethodDeclaration(property) ||
+        ts.isGetAccessorDeclaration(property) ||
+        ts.isSetAccessorDeclaration(property) ||
+        (property.name && ts.isComputedPropertyName(property.name)) ||
+        isPrototypeSetterProperty(property, sourceFile)
+      ) {
+        throw new Error(`${label}: cva compoundVariants contain an ambiguous class source`);
+      }
+      if (ts.isShorthandPropertyAssignment(property)) {
+        if (['class', 'className'].includes(property.name.text)) {
+          collectStaticCvaClassValue(property.name, literals, label);
+        }
+        continue;
+      }
       if (
         ts.isPropertyAssignment(property) &&
         ['class', 'className'].includes(propertyNameText(property.name, sourceFile))
@@ -2319,10 +2348,13 @@ function classExpressionBindings(sourceFile, helpers) {
     .createProgram([sourceFile.fileName], { noLib: true, noResolve: true, jsx: ts.JsxEmit.Preserve }, compilerHost)
     .getTypeChecker();
   const consumerClassSymbols = new Set();
+  const consumerPropsSymbols = new Set();
   const cnSymbols = new Set();
   const cvaSymbols = new Set();
   const cvaFactorySymbols = new Set();
   const writtenSymbols = new Set();
+  const unsafeConsumerPropsSymbols = new Set();
+  const bareConsumerPropsByFunction = new Map();
   const consumerDefaults = new Map();
   const collectedConsumerDefaults = new Set();
   const symbolAt = (node) =>
@@ -2409,6 +2441,11 @@ function classExpressionBindings(sourceFile, helpers) {
       addSymbol(writtenSymbols, current);
       return;
     }
+    if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+      const receiver = unwrapExpression(current.expression);
+      if (ts.isIdentifier(receiver)) addSymbol(writtenSymbols, receiver);
+      return;
+    }
     if (ts.isArrayLiteralExpression(current)) {
       for (const element of current.elements) {
         if (!ts.isOmittedExpression(element)) addWrittenTarget(element);
@@ -2424,17 +2461,115 @@ function classExpressionBindings(sourceFile, helpers) {
     }
   }
 
+  function isApprovedConsumerPropsUse(identifier) {
+    function outerTransparentExpression(node) {
+      let current = node;
+      while (
+        current.parent &&
+        (ts.isParenthesizedExpression(current.parent) ||
+          ts.isAsExpression(current.parent) ||
+          ts.isTypeAssertionExpression(current.parent) ||
+          ts.isNonNullExpression(current.parent) ||
+          ts.isSatisfiesExpression(current.parent)) &&
+        current.parent.expression === current
+      ) {
+        current = current.parent;
+      }
+      return current;
+    }
+    let use = outerTransparentExpression(identifier);
+    const parent = use.parent;
+    if (ts.isParameter(parent) && parent.name === identifier) return true;
+    if (ts.isBindingElement(parent) && parent.name === identifier && parent.dotDotDotToken) return true;
+    if (ts.isJsxSpreadAttribute(parent) && parent.expression === use) return true;
+    if (
+      ts.isVariableDeclaration(parent) &&
+      parent.initializer === use &&
+      (ts.isObjectBindingPattern(parent.name) || ts.isArrayBindingPattern(parent.name))
+    ) {
+      return true;
+    }
+    if (
+      ts.isBinaryExpression(parent) &&
+      parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      parent.right === use &&
+      (ts.isObjectLiteralExpression(parent.left) || ts.isArrayLiteralExpression(parent.left))
+    ) {
+      return true;
+    }
+    if (
+      (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+      parent.expression === use
+    ) {
+      use = outerTransparentExpression(parent);
+      while (
+        use.parent &&
+        (ts.isPropertyAccessExpression(use.parent) || ts.isElementAccessExpression(use.parent)) &&
+        use.parent.expression === use
+      ) {
+        use = outerTransparentExpression(use.parent);
+      }
+      if (
+        ((ts.isCallExpression(use.parent) || ts.isNewExpression(use.parent)) && use.parent.expression === use) ||
+        (ts.isTaggedTemplateExpression(use.parent) && use.parent.tag === use)
+      ) {
+        return false;
+      }
+      return true;
+    }
+    return (
+      ts.isSpreadAssignment(parent) &&
+      parent.expression === use &&
+      ts.isObjectLiteralExpression(parent.parent) &&
+      ts.isJsxSpreadAttribute(parent.parent.parent)
+    );
+  }
+
+  function markBareConsumerPropsUnsafe(functionNode) {
+    const symbol = bareConsumerPropsByFunction.get(functionNode);
+    if (symbol) unsafeConsumerPropsSymbols.add(symbol);
+  }
+
+  function enclosingFunction(node, skipArrows) {
+    let current = node.parent;
+    while (current && current !== sourceFile) {
+      if (ts.isFunctionLike(current) && !(skipArrows && ts.isArrowFunction(current))) return current;
+      current = current.parent;
+    }
+    return undefined;
+  }
+
+  function markEnclosingBareConsumerPropsUnsafe(node) {
+    let current = node.parent;
+    while (current && current !== sourceFile) {
+      if (ts.isFunctionLike(current)) markBareConsumerPropsUnsafe(current);
+      current = current.parent;
+    }
+  }
+
   function visit(node) {
-    if (ts.isParameter(node) && ts.isObjectBindingPattern(node.name)) {
-      for (const element of node.name.elements) {
-        if (
-          !element.dotDotDotToken &&
-          ts.isIdentifier(element.name) &&
-          (element.propertyName?.getText(sourceFile) ?? element.name.text) === 'className'
-        ) {
-          addSymbol(consumerClassSymbols, element.name);
-          if (element.initializer) addConsumerDefault(element.name, element.initializer);
-          addParameterObjectDefault(node, element);
+    if (ts.isParameter(node)) {
+      if (!node.dotDotDotToken && !node.initializer && ts.isIdentifier(node.name) && node.name.text === 'props') {
+        const symbol = symbolAt(node.name);
+        if (symbol && ts.isFunctionLike(node.parent)) {
+          consumerPropsSymbols.add(symbol);
+          bareConsumerPropsByFunction.set(node.parent, symbol);
+        }
+      }
+      if (ts.isObjectBindingPattern(node.name)) {
+        for (const element of node.name.elements) {
+          if (!node.initializer && element.dotDotDotToken && ts.isIdentifier(element.name)) {
+            addSymbol(consumerPropsSymbols, element.name);
+          }
+          if (
+            !element.dotDotDotToken &&
+            ts.isIdentifier(element.name) &&
+            (element.propertyName?.getText(sourceFile) ?? element.name.text) === 'className'
+          ) {
+            addSymbol(consumerClassSymbols, element.name);
+            if (element.initializer) addConsumerDefault(element.name, element.initializer);
+            addParameterObjectDefault(node, element);
+          }
         }
       }
     }
@@ -2449,8 +2584,24 @@ function classExpressionBindings(sourceFile, helpers) {
       [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)
     ) {
       addWrittenTarget(node.operand);
+    } else if (ts.isDeleteExpression(node)) {
+      addWrittenTarget(node.expression);
     } else if ((ts.isForInStatement(node) || ts.isForOfStatement(node)) && !ts.isVariableDeclarationList(node.initializer)) {
       addWrittenTarget(node.initializer);
+    }
+    if (ts.isIdentifier(node)) {
+      const symbol = symbolAt(node);
+      if (symbol && consumerPropsSymbols.has(symbol) && !isApprovedConsumerPropsUse(node)) {
+        unsafeConsumerPropsSymbols.add(symbol);
+      }
+      if (node.text === 'arguments') {
+        const owner = enclosingFunction(node, true);
+        if (owner) markBareConsumerPropsUnsafe(owner);
+      }
+    }
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapExpression(node.expression);
+      if (ts.isIdentifier(callee) && callee.text === 'eval') markEnclosingBareConsumerPropsUnsafe(node);
     }
     ts.forEachChild(node, visit);
   }
@@ -2463,6 +2614,15 @@ function classExpressionBindings(sourceFile, helpers) {
     ...helpers,
     sourceFile,
     isConsumerClassName: (identifier) => isUnwrittenSymbol(consumerClassSymbols, identifier),
+    isConsumerProps: (identifier) => {
+      const symbol = symbolAt(identifier);
+      return Boolean(
+        symbol &&
+        consumerPropsSymbols.has(symbol) &&
+        !writtenSymbols.has(symbol) &&
+        !unsafeConsumerPropsSymbols.has(symbol)
+      );
+    },
     consumerClassDefaults: (identifier) => {
       const symbol = symbolAt(identifier);
       if (!symbol || !consumerClassSymbols.has(symbol) || collectedConsumerDefaults.has(symbol)) {
@@ -2474,6 +2634,47 @@ function classExpressionBindings(sourceFile, helpers) {
     isCnCall: (call) => ts.isIdentifier(call.expression) && isUnwrittenSymbol(cnSymbols, call.expression),
     isCvaFactoryCall: (call) => ts.isIdentifier(call.expression) && isUnwrittenSymbol(cvaFactorySymbols, call.expression)
   };
+}
+
+function collectJsxSpreadClassLiterals(attribute, literals, label, expressionBindings, deferAmbiguous) {
+  const expression = unwrapExpression(attribute.expression);
+  if (ts.isIdentifier(expression) && expressionBindings.isConsumerProps(expression)) return;
+  if (!ts.isObjectLiteralExpression(expression)) {
+    if (deferAmbiguous) return;
+    throw new Error(`${label}: JSX spread must be a consumer prop bag or static object literal`);
+  }
+  for (const property of expression.properties) {
+    if (
+      ts.isSpreadAssignment(property) &&
+      ts.isIdentifier(unwrapExpression(property.expression)) &&
+      expressionBindings.isConsumerProps(unwrapExpression(property.expression))
+    ) {
+      continue;
+    }
+    if (
+      ts.isSpreadAssignment(property) ||
+      ts.isMethodDeclaration(property) ||
+      ts.isGetAccessorDeclaration(property) ||
+      ts.isSetAccessorDeclaration(property) ||
+      (property.name && ts.isComputedPropertyName(property.name)) ||
+      isPrototypeSetterProperty(property, expressionBindings.sourceFile)
+    ) {
+      if (deferAmbiguous) continue;
+      throw new Error(`${label}: JSX spread contains an ambiguous class source`);
+    }
+    if (ts.isShorthandPropertyAssignment(property)) {
+      if (property.name.text === 'className') {
+        collectStaticClassLiteral(property.name, literals, label, expressionBindings);
+      }
+      continue;
+    }
+    if (
+      ts.isPropertyAssignment(property) &&
+      propertyNameText(property.name, expressionBindings.sourceFile) === 'className'
+    ) {
+      collectStaticClassLiteral(property.initializer, literals, label, expressionBindings);
+    }
+  }
 }
 
 function assertClassHelperBindingsAreNotShadowed(sourceFile, bindings, label) {
@@ -2502,7 +2703,11 @@ function assertClassHelperBindingsAreNotShadowed(sourceFile, bindings, label) {
   visit(sourceFile);
 }
 
-export function prefixTailwindClassCandidates(source, label = 'profile-source.tsx') {
+export function prefixTailwindClassCandidates(
+  source,
+  label = 'profile-source.tsx',
+  { deferAmbiguousJsxSpreads = false } = {}
+) {
   const sourceFile = parsedSource(source, label);
   const literals = new Set();
   const helpers = importedClassHelperBindings(sourceFile);
@@ -2510,6 +2715,9 @@ export function prefixTailwindClassCandidates(source, label = 'profile-source.ts
   const expressionBindings = classExpressionBindings(sourceFile, helpers);
 
   function visit(node) {
+    if (ts.isJsxSpreadAttribute(node)) {
+      collectJsxSpreadClassLiterals(node, literals, label, expressionBindings, deferAmbiguousJsxSpreads);
+    }
     if (ts.isJsxAttribute(node) && node.name.getText(sourceFile) === 'className' && node.initializer) {
       if (ts.isStringLiteralLike(node.initializer)) {
         literals.add(node.initializer);
@@ -2605,7 +2813,7 @@ export function normalizeRegistrySource({ source, registrySourcePath, sourceCont
   if (iconResult.transformed) transformations.push('resolve-lucide-icon-placeholders');
   normalized = iconResult.source;
 
-  const tailwindResult = prefixTailwindClassCandidates(normalized, outputPath);
+  const tailwindResult = prefixTailwindClassCandidates(normalized, outputPath, { deferAmbiguousJsxSpreads: true });
   if (tailwindResult.transformed) transformations.push('prefix-tailwind-utilities');
   normalized = tailwindResult.source;
 
@@ -2626,6 +2834,9 @@ export function normalizeRegistrySource({ source, registrySourcePath, sourceCont
 
   normalized = `${normalized.replace(/\s+$/u, '')}\n`;
   assertReact17Source(normalized, outputPath, { sourceContext, currentPath: outputPath });
+  const finalTailwindResult = prefixTailwindClassCandidates(normalized, outputPath);
+  if (finalTailwindResult.transformed) transformations.push('prefix-tailwind-utilities');
+  normalized = finalTailwindResult.source;
 
   return {
     outputPath,
