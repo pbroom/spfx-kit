@@ -794,7 +794,8 @@ describe('offline profile verifier', () => {
 
   it.each([
     ['@types/react', '17.0.45'],
-    ['@types/react-dom', '17.0.17']
+    ['@types/react-dom', '17.0.17'],
+    ['@types/scheduler', '0.16.8']
   ])('rejects a shadowed wrong-version %s declaration package', async (packageName, pinnedVersion) => {
     const root = await copyProfile();
     const shadowRoot = path.join(root, 'node_modules', packageName);
@@ -813,6 +814,55 @@ describe('offline profile verifier', () => {
     expect(verifierMessage(result)).toContain(
       `Resolved type package ${packageName}@99.0.0 instead of pinned ${packageName}@${pinnedVersion}`
     );
+    expect(await treeDigests(root)).toEqual(before);
+  });
+
+  it('rejects a same-version shadowed scheduler declaration root', async () => {
+    const root = await copyProfile();
+    const shadowRoot = path.join(root, 'node_modules/@types/scheduler');
+    await mkdir(shadowRoot, { recursive: true });
+    await writeCanonicalJson(root, 'node_modules/@types/scheduler/package.json', {
+      name: '@types/scheduler',
+      version: '0.16.8',
+      types: 'index.d.ts'
+    });
+    await writeFile(path.join(shadowRoot, 'index.d.ts'), 'export {}\n');
+    await writeFile(path.join(shadowRoot, 'tracing.d.ts'), 'export {}\n');
+
+    const result = runTypecheckContract(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toContain('@types/scheduler: resolved type root differs from the lockfile package root');
+  });
+
+  it('rejects a drifted profile schema before replacement and preserves the installed tree', async () => {
+    const root = await copyProfile();
+    const schema = await readJson<any>(root, 'profile.schema.json');
+    schema.title = `${schema.title} drift`;
+    await writeCanonicalJson(root, 'profile.schema.json', schema);
+    const before = await treeDigests(root);
+
+    const result = runOfflineRegenerator(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toContain('profile.schema.json identity differs');
+    expect(await treeDigests(root)).toEqual(before);
+  });
+
+  it('rejects an invalid staged profile manifest before replacement', async () => {
+    const root = await copyProfile();
+    const generatorPath = path.join(root, 'scripts/lib/generate-profile.mjs');
+    const generator = await readFile(generatorPath, 'utf8');
+    await writeFile(
+      generatorPath,
+      generator.replace("$schema: './profile.schema.json',", "$schema: './profile.schema.json', unexpected: true,")
+    );
+    const before = await treeDigests(root);
+
+    const result = runOfflineRegenerator(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toContain('profile.json schema errors');
     expect(await treeDigests(root)).toEqual(before);
   });
 

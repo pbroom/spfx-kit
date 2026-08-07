@@ -385,6 +385,20 @@ describe('React 17 UI profile normalization', () => {
     ).toThrow('public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef');
   });
 
+  it.each([
+    'export const Probe = ((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />) satisfies React.FC<ButtonPrimitive.Props>',
+    'export const Probe = ((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />) as React.FC<ButtonPrimitive.Props>',
+    'export const Probe = (function (props: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }) satisfies React.FC<ButtonPrimitive.Props>',
+    'const Probe = ((((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />) as unknown) as React.FC<ButtonPrimitive.Props>) satisfies React.FC<ButtonPrimitive.Props>; export default Probe'
+  ])('fails closed for wrapped exported variable ref wrappers: %s', (declaration) => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source: `import { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+      })
+    ).toThrow(/public ref-bearing (?:arrow|function-expression) wrapper Probe is not normalized with React\.forwardRef/u);
+  });
+
   it('tracks renamed props bindings through normalization and fail-closed guards', () => {
     const normalized = normalizeRegistrySource({
       registrySourcePath: 'registry/base-nova/ui/probe.tsx',

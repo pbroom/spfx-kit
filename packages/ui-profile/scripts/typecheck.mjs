@@ -66,6 +66,7 @@ function pinnedTypeRoot(packageName, pinnedVersion) {
 }
 const reactTypeRoot = pinnedTypeRoot('@types/react', '17.0.45');
 pinnedTypeRoot('@types/react-dom', '17.0.17');
+const schedulerTypeRoot = pinnedTypeRoot('@types/scheduler', '0.16.8');
 const compilerManifestPath = require.resolve(`${compilerPackage}/package.json`);
 const compilerManifest = JSON.parse(readFileSync(compilerManifestPath, 'utf8'));
 if (compilerManifest.name !== 'typescript' || compilerManifest.version !== expectedVersion) {
@@ -96,7 +97,6 @@ const listedFiles = (fileListing.stdout ?? '')
   .split(/\r?\n/u)
   .filter(Boolean)
   .map((file) => path.resolve(file));
-const schedulerTypeRoot = path.dirname(require.resolve('@types/scheduler/package.json'));
 const reactTypeFiles = listedFiles.filter((file) =>
   file.includes(`${path.sep}node_modules${path.sep}@types${path.sep}react${path.sep}`)
 );

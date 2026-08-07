@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
-import { generateValidatedProfile } from '../packages/ui-profile/scripts/lib/generate-validated-profile.mjs';
+import {
+  assertGeneratedProfileSchema,
+  generateValidatedProfile
+} from '../packages/ui-profile/scripts/lib/generate-validated-profile.mjs';
 // @ts-expect-error plain .mjs module without type declarations
 import { assertGeneratedTreeClosure } from '../packages/ui-profile/scripts/lib/generated-tree-closure.mjs';
 // @ts-expect-error plain .mjs module without type declarations
@@ -67,6 +70,13 @@ async function expectInvalidUpdateStagingBeforeReplacement(
 }
 
 describe('generated profile module closure', () => {
+  it('validates staged manifests against the pinned profile schema', async () => {
+    const profile = JSON.parse(await readFile(path.join(packageRoot, 'profile.json'), 'utf8'));
+    await expect(assertGeneratedProfileSchema({ packageRoot, profile })).resolves.toBeUndefined();
+    delete profile.$schema;
+    await expect(assertGeneratedProfileSchema({ packageRoot, profile })).rejects.toThrow('profile.json schema errors');
+  });
+
   it('rejects excluded snapshot metadata dependencies before replacement', async () => {
     await expectInvalidUpdateStagingBeforeReplacement(
       '',

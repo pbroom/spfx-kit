@@ -827,7 +827,7 @@ function exportedVariableFunctionContract(source, name) {
     const declaration = statement.declarationList.declarations.find(
       (candidate) => ts.isIdentifier(candidate.name) && candidate.name.text === name
     );
-    const initializer = declaration?.initializer;
+    const initializer = declaration?.initializer ? unwrapExpression(declaration.initializer) : null;
     if (!initializer || (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer))) continue;
     const parameter = initializer.parameters.find(
       (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
