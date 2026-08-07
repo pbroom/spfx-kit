@@ -22,14 +22,9 @@
     "baseUi": "1.6.0",
     "lucideReact": "1.25.0"
   },
-  "hostTypeContract": {
+  "reactTypeContract": {
     "@types/react": "17.0.45",
     "@types/react-dom": "17.0.17"
-  },
-  "isolatedCompilerTypeContract": {
-    "@types/react": "17.0.93",
-    "@types/react-dom": "17.0.17",
-    "@types/scheduler": "0.16.8"
   },
   "utilities": {
     "class-variance-authority": "0.7.1",
@@ -46,7 +41,7 @@
   "normalization": {
     "contractVersion": "react17-classic-jsx-v1",
     "implementation": "scripts/lib/profile.mjs",
-    "implementationSha256": "f6832a91dab4a334a61ee3e768861e6c73961aaca38b376a9a856a28b2634fef"
+    "implementationSha256": "3c0d71c3ce571fdd7448161c96eb26b84acb6e7ce31a6e31d8b476d07546573f"
   },
   "registryIds": [
     "button",

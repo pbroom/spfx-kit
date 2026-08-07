@@ -165,6 +165,31 @@ describe('React 17 UI profile normalization', () => {
     expect(wrapper.source).toContain('const DefaultButton = React.forwardRef<');
   });
 
+  it('preserves a semicolon-terminated use-client directive before inserted imports', () => {
+    const result = normalizeRegistrySource({
+      source: '"use client";\n\nexport const Empty = () => <>empty</>\n',
+      registrySourcePath: 'registry/base-nova/ui/empty.tsx'
+    });
+
+    expect(result.source).toMatch(/^"use client";\n\nimport \* as React from "react"\n/u);
+  });
+
+  it('preserves the complete directive prologue after triple-slash references', () => {
+    const result = normalizeRegistrySource({
+      source:
+        '/// <reference types="react" />\n' +
+        '"use strict";\n' +
+        "'use client'\n" +
+        '"custom profile directive";\n\n' +
+        'export const Empty = () => <>empty</>\n',
+      registrySourcePath: 'registry/base-nova/ui/empty.tsx'
+    });
+
+    expect(result.source).toMatch(
+      /^\/\/\/ <reference types="react" \/>\n"use strict";\n'use client'\n"custom profile directive";\n\nimport \* as React from "react"\n/u
+    );
+  });
+
   it('preserves an existing React namespace and accepts React 17 forwardRef plus pinned icons', () => {
     const source =
       'import * as React from "react"\n' +
@@ -204,6 +229,768 @@ describe('React 17 UI profile normalization', () => {
     expect(first.source).toContain('}, ref) {');
     expect(first.source).toContain('<ButtonPrimitive\n    ref={ref}');
     expect(rerun.source).toBe(first.source);
+  });
+
+  it('resolves chained local props aliases before normalizing ref-bearing wrappers', () => {
+    const result = normalizeRegistrySource({
+      source:
+        'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+        'type PrimitiveProps = ButtonPrimitive.Props\n' +
+        'type ProbeProps = PrimitiveProps\n' +
+        'function Probe({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }\n' +
+        'export { Probe }\n',
+      registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+    });
+
+    expect(result.source).toContain('const Probe = React.forwardRef<');
+    expect(result.source).toContain('React.PropsWithoutRef<ProbeProps>');
+  });
+
+  it('resolves merged interface heritage before normalizing ref-bearing wrappers', () => {
+    const result = normalizeRegistrySource({
+      source:
+        'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+        'interface ProbeProps extends ButtonPrimitive.Props {}\n' +
+        'interface ProbeProps { disabled?: boolean }\n' +
+        'function Probe({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }\n' +
+        'export { Probe }\n',
+      registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+    });
+
+    expect(result.source).toContain('const Probe = React.forwardRef<');
+    expect(result.source).toContain('React.PropsWithoutRef<ProbeProps>');
+  });
+
+  it('does not resolve qualified type names through same-named local aliases', () => {
+    const result = normalizeRegistrySource({
+      source:
+        'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+        'type PrimitiveProps = ButtonPrimitive.Props\n' +
+        'function Probe(props: Namespace.PrimitiveProps) { return <ButtonPrimitive {...props} /> }\n' +
+        'export { Probe }\n',
+      registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+    });
+
+    expect(result.source).toContain('function Probe(props: Namespace.PrimitiveProps)');
+    expect(result.source).not.toContain('React.forwardRef');
+  });
+
+  it('fails closed for identifier-parameter wrappers with direct or aliased ref-bearing props', () => {
+    for (const [alias, propsType] of [
+      ['', 'ButtonPrimitive.Props'],
+      ['type ProbeProps = ButtonPrimitive.Props\n', 'ProbeProps']
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            alias +
+            `function Probe(props: ${propsType}) { return <ButtonPrimitive {...props} /> }\n` +
+            'export { Probe }\n',
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+        })
+      ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+    }
+  });
+
+  it('fails closed for direct or aliased import-type ref-bearing props', () => {
+    for (const [alias, propsType] of [
+      ['', 'import("@base-ui/react/button").Button.Props'],
+      ['type ProbeProps = import("@base-ui/react/button").Button.Props\n', 'ProbeProps']
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            alias +
+            `function Probe(props: ${propsType}) { return <ButtonPrimitive {...props} /> }\n` +
+            'export { Probe }\n',
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+        })
+      ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+    }
+  });
+
+  it('fails closed for named React component-props helper imports and aliases', () => {
+    for (const [reactImport, propsType] of [
+      ['import type { ComponentProps } from "react"\n', 'ComponentProps<typeof ButtonPrimitive>'],
+      ['import type { ComponentProps as PrimitiveProps } from "react"\n', 'PrimitiveProps<typeof ButtonPrimitive>']
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            reactImport +
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            `function Probe(props: ${propsType}) { return <ButtonPrimitive {...props} /> }\n` +
+            'export { Probe }\n',
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+        })
+      ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+    }
+  });
+
+  it('fails closed instead of reconstructing unsupported function declaration shapes', () => {
+    for (const declaration of [
+      'async function Probe({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }',
+      'function* Probe({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }',
+      'function Probe<T>({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }',
+      'function Probe({ ...props }: ProbeProps, context: unknown) { return <ButtonPrimitive {...props} /> }',
+      'function Probe({ ...props }: ProbeProps = {} as ProbeProps) { return <ButtonPrimitive {...props} /> }',
+      'function Probe({ ...props }: ProbeProps): React.ReactElement\n' +
+        'function Probe({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }'
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            'type ProbeProps = ButtonPrimitive.Props\n' +
+            `${declaration}\nexport { Probe }\n`,
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+        })
+      ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+    }
+  });
+
+  it('ignores TypeScript this parameters when inspecting ref-bearing props', () => {
+    for (const [declaration, message] of [
+      [
+        'function Probe(this: void, props: ProbeProps) { return <ButtonPrimitive {...props} /> }; export { Probe }',
+        'public ref-bearing wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'export const Probe = function (this: void, props: ProbeProps) { return <ButtonPrimitive {...props} /> }',
+        'public ref-bearing function-expression wrapper Probe is not normalized with React.forwardRef'
+      ]
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            'type ProbeProps = ButtonPrimitive.Props\n' +
+            `${declaration}\n`,
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+        })
+      ).toThrow(message);
+    }
+  });
+
+  it('fails closed for exported arrow ref wrappers that the normalizer cannot safely rewrite', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export const Probe = ({ ...props }: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />\n'
+      })
+    ).toThrow('public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef');
+  });
+
+  it.each([
+    'export const Probe = ((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />) satisfies React.FC<ButtonPrimitive.Props>',
+    'export const Probe = ((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />) as React.FC<ButtonPrimitive.Props>',
+    'export const Probe = (function (props: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }) satisfies React.FC<ButtonPrimitive.Props>',
+    'const Probe = ((((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />) as unknown) as React.FC<ButtonPrimitive.Props>) satisfies React.FC<ButtonPrimitive.Props>; export default Probe'
+  ])('fails closed for wrapped exported variable ref wrappers: %s', (declaration) => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source: `import { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+      })
+    ).toThrow(/public ref-bearing (?:arrow|function-expression) wrapper Probe is not normalized with React\.forwardRef/u);
+  });
+
+  it('does not treat inert forwardRef text as a forwarded wrapper', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          '// const Probe = React.forwardRef\n' +
+          'export function Probe(props: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }\n'
+      })
+    ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+  });
+
+  it.each([
+    'const Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; export const Probe = Inner',
+    'const Inner = function (props: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }; export default Inner'
+  ])('fails closed for exported aliases to local ref-bearing wrappers: %s', (declaration) => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source: `import { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+      })
+    ).toThrow(/ref-bearing (?:arrow|function|function-expression) wrapper/u);
+  });
+
+  it('rejects function-declaration callable aliases', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'function Inner(props: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }\n' +
+          'export const Probe = Inner\n'
+      })
+    ).toThrow('function-declaration exported callable alias Inner is not accepted');
+  });
+
+  it.each([
+    'export const Probe: React.FC<ButtonPrimitive.Props> = props => <ButtonPrimitive {...props} />',
+    'const Inner: React.FunctionComponent<ButtonPrimitive.Props> = function (props) { return <ButtonPrimitive {...props} /> }; export const Probe = Inner',
+    'export const Probe = (props => <ButtonPrimitive {...props} />) satisfies React.FC<ButtonPrimitive.Props>',
+    'const Inner = props => <ButtonPrimitive {...props} />; export const Probe = Inner as React.FC<ButtonPrimitive.Props>'
+  ])('fails closed for contextually typed exported ref wrappers: %s', (declaration) => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          `${declaration}\n`
+      })
+    ).toThrow(/public ref-bearing (?:arrow|function-expression) wrapper Probe is not normalized with React\.forwardRef/u);
+  });
+
+  it('accepts an exported alias to a source-bound React.forwardRef wrapper', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'const Inner = React.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />)\n' +
+          'export const Probe = Inner\n'
+      })
+    ).not.toThrow();
+  });
+
+  it('accepts a mutable export when every write is a source-bound React.forwardRef wrapper', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export let Probe = React.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />)\n'
+      })
+    ).not.toThrow();
+  });
+
+  it('rejects mutable module-scope callable aliases', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'let Inner = () => null\n' +
+          'if (ready) Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />\n' +
+          'export const Probe = Inner\n'
+      })
+    ).toThrow('mutable exported callable alias Inner is not accepted');
+  });
+
+  it.each([
+    'let Probe; Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; export { Probe }',
+    'let Inner; Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; let Probe; Probe = Inner; export { Probe }',
+    'let Probe; Probe = (0, (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />); export { Probe }',
+    'let Inner; let Probe; Probe = (Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />); export { Probe }',
+    'let Inner; let Probe; Probe = (Inner ||= (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />); export { Probe }',
+    'let undefined; undefined = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; let Probe; Probe = undefined; export { Probe }',
+    'let Probe; function activate(undefined) { Probe = undefined } export { Probe }',
+    'let Probe; function activate() { let undefined = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; Probe = undefined } export { Probe }',
+    'let Probe; ({ Probe } = { Probe: (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} /> }); export { Probe }',
+    'let Probe; for (Probe of [(props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />]) {} export { Probe }',
+    'var Probe; { var Probe; Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} /> } export { Probe }',
+    'if (ready) { var Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} /> } export { Probe }',
+    'for (var Probe of [(props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />]) {} export { Probe }',
+    'let Probe; function activate(_ = (Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)) { var Probe } export { Probe }',
+    'let Probe: React.FC<ButtonPrimitive.Props>; Probe = props => <ButtonPrimitive {...props} />; export { Probe }',
+    'const Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; let Probe = () => null; Probe = Inner; export { Probe }',
+    'let Probe: React.FC<ButtonPrimitive.Props> = () => null; Probe &&= props => <ButtonPrimitive {...props} />; export { Probe }',
+    'let Probe: React.FC<ButtonPrimitive.Props>; Probe = ready ? (props => <ButtonPrimitive {...props} />) : (props => <ButtonPrimitive {...props} />); export { Probe }',
+    'let Probe: React.FC<ButtonPrimitive.Props> = () => null; export { Probe }; export function activate() { Probe = props => <ButtonPrimitive {...props} /> }'
+  ])('rejects writes to live exported callable bindings: %s', (declaration) => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          `${declaration}\n`
+      })
+    ).toThrow('mutable exported callable binding Probe is not accepted');
+  });
+
+  it('rejects conditional callable aliases even when their bindings are immutable', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'const Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />\n' +
+          'export const Probe: React.FC<ButtonPrimitive.Props> = ready ? Inner : Inner\n'
+      })
+    ).toThrow('conditional exported callable wrappers are not accepted');
+  });
+
+  it('does not confuse a nested shadow write with an immutable exported forwardRef binding', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'const Probe = React.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />)\n' +
+          'function demo() { let Probe = 0; Probe++ }\n' +
+          'export { Probe }\n'
+      })
+    ).not.toThrow();
+  });
+
+  it('does not confuse nested lexical or function-scoped shadow assignments with an exported binding', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'let Probe\n' +
+          'function demo() { let Probe; Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} /> }\n' +
+          'function demoVar() { if (ready) { var Probe }; Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} /> }\n' +
+          'export { Probe }\n'
+      })
+    ).not.toThrow();
+  });
+
+  it('accepts unrelated mutable and conditional scalar exports', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'export let count = 0\n' +
+          'export const mode = ready ? "a" : "b"\n' +
+          'let value; ({ value } = { value: 1 }); for (value of [2]) {} export { value }\n'
+      })
+    ).not.toThrow();
+  });
+
+  it('rejects unsupported call wrappers with a ref-bearing contextual type', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export const Probe = factory() satisfies React.FC<ButtonPrimitive.Props>\n'
+      })
+    ).toThrow('unsupported contextually typed exported callable Probe is not accepted');
+  });
+
+  it('rejects reassigned function-declaration callable aliases', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'function Inner(props: ButtonPrimitive.Props) { return null }\n' +
+          'Inner = props => <ButtonPrimitive {...props} />\n' +
+          'export const Probe = Inner\n'
+      })
+    ).toThrow('function-declaration exported callable alias Inner is not accepted');
+  });
+
+  it.each([
+    'export const Probe = React.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)',
+    'export const Probe = React.memo(function (props: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> })',
+    'import { memo as memoComponent } from "react"; export const Probe = memoComponent((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)',
+    'export default React.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)',
+    'const Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; export default React.memo(Inner)',
+    'const Inner = function (props: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }; export const Probe = React.memo(Inner)',
+    'export const Probe = React.memo(React.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />))',
+    'export const Probe = (React.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />) as React.FC<ButtonPrimitive.Props>)',
+    'export const Probe = React.memo<ButtonPrimitive.Props>(props => <ButtonPrimitive {...props} />)',
+    'export const Probe = React.memo(props => <ButtonPrimitive {...props} />) satisfies React.FC<ButtonPrimitive.Props>',
+    'const R = React; export const Probe = R.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)',
+    'let R; R = React; export const Probe = R.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)'
+  ])('fails closed for memoized ref-bearing wrappers: %s', (declaration) => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source: `import * as React from "react"\nimport { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+      })
+    ).toThrow(/ref-bearing memoized (?:arrow|function|function-expression) wrapper/u);
+  });
+
+  it.each([
+    'const identity = <T,>(value: T) => value; export const Probe = React.memo(identity((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />))',
+    'const library = { wrap: <T,>(value: T) => value }; export default React.memo(library.wrap((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />))'
+  ])('rejects unsupported call-wrapped React.memo arguments: %s', (declaration) => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source: `import * as React from "react"\nimport { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+      })
+    ).toThrow('unsupported React.memo wrapper argument is not accepted');
+  });
+
+  it('accepts safe and unrelated memo call shapes', () => {
+    for (const declaration of [
+      'export const Probe = React.memo(React.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />))',
+      'import { forwardRef as forward } from "react"; const Forwarded = forward<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />); export const Probe = React.memo(Forwarded)',
+      'const R = React; export const Probe = R.memo(R.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />))',
+      'type PlainProps = { disabled?: boolean }; export const Probe = React.memo((props: PlainProps) => <ButtonPrimitive {...props} />)',
+      'const library = { memo: <T,>(value: T) => value }; export const Probe = library.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)'
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source: `import * as React from "react"\nimport { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+        })
+      ).not.toThrow();
+    }
+  });
+
+  it('tracks renamed props bindings through normalization and fail-closed guards', () => {
+    const normalized = normalizeRegistrySource({
+      registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+      source:
+        'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+        'export function Probe({ className, ...rest }: ButtonPrimitive.Props) { return <ButtonPrimitive className={className} {...rest} /> }\n'
+    });
+    expect(normalized.source).toContain('const Probe = React.forwardRef<');
+    expect(normalized.source).toContain('ref={ref}');
+    expect(normalized.source).toContain('{...rest}');
+
+    const defaultNormalized = normalizeRegistrySource({
+      registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+      source:
+        'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+        'export default function DefaultProbe({ ...rest }: ButtonPrimitive.Props) { return <ButtonPrimitive {...rest} /> }\n'
+    });
+    expect(defaultNormalized.source).toContain('const DefaultProbe = React.forwardRef<');
+    expect(defaultNormalized.source).toContain('export default DefaultProbe');
+
+    const useRenderNormalized = normalizeRegistrySource({
+      registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+      source:
+        'import { useRender } from "@base-ui/react/use-render"\n' +
+        'export function Probe({ ...rest }: useRender.ComponentProps<"button">) { return useRender({ props: rest }) }\n'
+    });
+    expect(useRenderNormalized.source).toContain('const Probe = React.forwardRef<');
+    expect(useRenderNormalized.source).toContain('return useRender({ ref,');
+
+    for (const [declaration, message] of [
+      [
+        'function Probe(rest: ButtonPrimitive.Props) { return <ButtonPrimitive {...rest} /> }; export { Probe }',
+        'public ref-bearing wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'export const Probe = ({ ...rest }: ButtonPrimitive.Props) => <ButtonPrimitive {...rest} />',
+        'public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'export const Probe = function ({ ...rest }: ButtonPrimitive.Props) { return <ButtonPrimitive {...rest} /> }',
+        'public ref-bearing function-expression wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'export default function ({ ...rest }: ButtonPrimitive.Props) { return <ButtonPrimitive {...rest} /> }',
+        'anonymous default-exported ref-bearing function wrapper is not normalized with React.forwardRef'
+      ],
+      [
+        'export default ({ ...rest }: ButtonPrimitive.Props) => <ButtonPrimitive {...rest} />',
+        'anonymous default-exported ref-bearing arrow wrapper is not normalized with React.forwardRef'
+      ]
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source: `import { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+        })
+      ).toThrow(message);
+    }
+
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export function Probe({ ...rest }: ButtonPrimitive.Props) {\n' +
+          '  const example = "<ButtonPrimitive {...rest} />"\n' +
+          '  function nested() { return <ButtonPrimitive {...rest} /> }\n' +
+          '  return <div data-example={example} />\n' +
+          '}\n'
+      })
+    ).not.toThrow();
+
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export function Probe({ ...rest }: ButtonPrimitive.Props) {\n' +
+          '  return <><ButtonPrimitive {...rest} /><ButtonPrimitive {...rest} /></>\n' +
+          '}\n'
+      })
+    ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive, type ButtonProps as PrimitiveProps } from "@base-ui/react/button"\n' +
+          'type ProbeProps = PrimitiveProps\n' +
+          'export function Probe(props: ProbeProps) { return <ButtonPrimitive {...props} /> }\n'
+      })
+    ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+
+    for (const body of [
+      'if (fallback) { const rest = other; return <ButtonPrimitive {...rest} /> } return <div />',
+      'try { return <div /> } catch (rest) { return <ButtonPrimitive {...rest} /> }',
+      'for (const rest of [other]) { return <ButtonPrimitive {...rest} /> } return <div />',
+      'switch (kind) { case "other": const rest = other; return <ButtonPrimitive {...rest} />; default: return <div /> }',
+      'if (fallback) { const ref = internalRef; return <ButtonPrimitive ref={ref} {...rest} /> } return <div />',
+      'return <ButtonPrimitive ref={internalRef} {...rest} />'
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source:
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            'declare const fallback: boolean\n' +
+            'declare const kind: string\n' +
+            'declare const other: ButtonPrimitive.Props\n' +
+            'declare const internalRef: React.Ref<HTMLButtonElement>\n' +
+            `export function Probe({ ...rest }: ButtonPrimitive.Props) { ${body} }\n`
+        })
+      ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+    }
+
+    const alreadyForwarded = normalizeRegistrySource({
+      registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+      source:
+        'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+        'export function Probe({ ref, ...rest }: ButtonPrimitive.Props) { return <ButtonPrimitive ref={ref} {...rest} /> }\n'
+    });
+    expect(alreadyForwarded.source).toContain('function Probe({ ...rest }, ref)');
+    expect(alreadyForwarded.source).toContain('ref={ref}');
+  });
+
+  it.each([
+    'export function Probe(props: ButtonPrimitive.Props) { const forwarded = props; return <ButtonPrimitive {...forwarded} /> }',
+    'export function Probe({ ...props }: ButtonPrimitive.Props) { const forwarded = (props as ButtonPrimitive.Props); const chained = forwarded; return <ButtonPrimitive {...chained} /> }',
+    'export const Probe = (props: ButtonPrimitive.Props) => { let forwarded: ButtonPrimitive.Props; forwarded = props; return <ButtonPrimitive {...forwarded} /> }',
+    'export default function (props: ButtonPrimitive.Props) { const forwarded = props; return <ButtonPrimitive {...forwarded} /> }',
+    'export function Probe(props: ButtonPrimitive.Props) { const forwarded = { ...props }; return <ButtonPrimitive {...forwarded} /> }',
+    'export function Probe(props: ButtonPrimitive.Props) { const forwarded = props ?? fallback; return <ButtonPrimitive {...forwarded} /> }',
+    'export function Probe(props: ButtonPrimitive.Props) { const forwarded = condition ? props : fallback; return <ButtonPrimitive {...forwarded} /> }',
+    'export function Probe(props: ButtonPrimitive.Props) { return <ButtonPrimitive {...(props ?? fallback)} /> }',
+    'export function Probe(props: ButtonPrimitive.Props) { return <ButtonPrimitive {...(condition ? props : fallback)} /> }',
+    'export function Probe(props: ButtonPrimitive.Props) { return <ButtonPrimitive {...{ ...props }} /> }',
+    'export function Probe(props: ButtonPrimitive.Props) { let forwarded = fallback; forwarded ??= props; return <ButtonPrimitive {...forwarded} /> }',
+    'export function Probe(props: ButtonPrimitive.Props) { const [forwarded] = [props]; return <ButtonPrimitive {...forwarded} /> }',
+    'export function Probe(props: ButtonPrimitive.Props) { const { forwarded } = { forwarded: props }; return <ButtonPrimitive {...forwarded} /> }'
+  ])('fails closed for aliased props bindings: %s', (declaration) => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source: `import { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+      })
+    ).toThrow(
+      /ref-bearing (?:arrow |function |function-expression )?wrapper(?: Probe)? is not normalized with React\.forwardRef/u
+    );
+  });
+
+  it('recognizes unqualified Base UI props type imports', () => {
+    for (const [importDeclaration, propsType] of [
+      ['import { Button as ButtonPrimitive, type ButtonProps } from "@base-ui/react/button"', 'ButtonProps'],
+      ['import { Button as ButtonPrimitive, type ButtonProps as PrimitiveProps } from "@base-ui/react/button"', 'PrimitiveProps'],
+      ['import { Button as ButtonPrimitive, type Props as PrimitiveProps } from "@base-ui/react/button"', 'PrimitiveProps']
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source: `${importDeclaration}\nexport function Probe(props: ${propsType}) { return <ButtonPrimitive {...props} /> }\n`
+        })
+      ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+    }
+
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export function Probe(props: import("@base-ui/react/button").ButtonProps) { return <ButtonPrimitive {...props} /> }\n'
+      })
+    ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+
+    for (const importedType of ['ButtonProps', 'ButtonState']) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source:
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            `import type { ${importedType} } from "not-base-ui"\n` +
+            `export function Probe(props: ${importedType}) { return <ButtonPrimitive {...props} /> }\n`
+        })
+      ).not.toThrow();
+    }
+
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive, type ButtonState } from "@base-ui/react/button"\n' +
+          'export function Probe(props: ButtonState) { return <ButtonPrimitive {...props} /> }\n'
+      })
+    ).not.toThrow();
+  });
+
+  it('normalizes destructured unqualified Base UI props imports', () => {
+    const normalized = normalizeRegistrySource({
+      registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+      source:
+        'import { Button as ButtonPrimitive, type ButtonProps } from "@base-ui/react/button"\n' +
+        'export function Probe({ ...props }: ButtonProps) { return <ButtonPrimitive {...props} /> }\n'
+    });
+    expect(normalized.source).toContain('const Probe = React.forwardRef<');
+    expect(normalized.source).toContain('ref={ref}');
+  });
+
+  it('rejects JSX spreads that can override the forwarded ref', () => {
+    for (const attributes of ['{...props} {...override}', '{...override} {...props}']) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source:
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            'declare const override: ButtonPrimitive.Props\n' +
+            `export function Probe({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive ${attributes} /> }\n`
+        })
+      ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+    }
+  });
+
+  it('fails closed for exported variable wrappers with aliased ref-bearing props', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'type ProbeProps = ButtonPrimitive.Props\n' +
+          'export const Probe = ({ ...props }: ProbeProps) => <ButtonPrimitive {...props} />\n'
+      })
+    ).toThrow('public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef');
+  });
+
+  it('fails closed for exported function-expression ref wrappers', () => {
+    for (const declaration of [
+      'export const Probe = function ({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }',
+      'const Probe = function NamedProbe({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }; export { Probe }',
+      'const Probe = function Probe({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }; export { Probe }'
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source: `import { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+        })
+      ).toThrow('public ref-bearing function-expression wrapper Probe is not normalized with React.forwardRef');
+    }
+  });
+
+  it('fails closed for overloaded wrappers with aliased ref-bearing props', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'type ProbeProps = ButtonPrimitive.Props\n' +
+          'function Probe(props: ProbeProps): React.ReactElement\n' +
+          'function Probe(props: ProbeProps) { return <ButtonPrimitive {...props} /> }\n' +
+          'export { Probe }\n'
+      })
+    ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+  });
+
+  it('does not let nested shadow bindings mask exported variable wrappers', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'type ProbeProps = ButtonPrimitive.Props\n' +
+          'export const Probe = ({ ...props }: ProbeProps) => {\n' +
+          '  function helper() { const Probe = (value: string) => value; return Probe("nested") }\n' +
+          '  helper()\n' +
+          '  return <ButtonPrimitive {...props} />\n' +
+          '}\n'
+      })
+    ).toThrow('public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef');
+  });
+
+  it('fails closed for default-exported variable ref wrappers', () => {
+    for (const [declaration, message] of [
+      [
+        'const Probe = ({ ...props }: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />',
+        'public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'const Probe = function NamedProbe({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }',
+        'public ref-bearing function-expression wrapper Probe is not normalized with React.forwardRef'
+      ]
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source: 'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' + `${declaration}\nexport default Probe\n`
+        })
+      ).toThrow(message);
+    }
+  });
+
+  it('fails closed for anonymous default ref-bearing wrappers', () => {
+    for (const [declaration, kind] of [
+      ['export default function ({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }', 'function'],
+      [
+        'type ProbeProps = ButtonPrimitive.Props\nexport default async function ({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }',
+        'function'
+      ],
+      ['export default ({ ...props }: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />', 'arrow'],
+      [
+        'export default (function Internal({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> })',
+        'function-expression'
+      ],
+      [
+        'import { useRender } from "@base-ui/react/use-render"\nexport default function (props: useRender.ComponentProps<"button">) { return useRender({ props }) }',
+        'function'
+      ]
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source: `import { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+        })
+      ).toThrow(`anonymous default-exported ref-bearing ${kind} wrapper is not normalized with React.forwardRef`);
+    }
+
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export default function ({ ...props }: { disabled?: boolean }) { return <ButtonPrimitive {...props} /> }\n'
+      })
+    ).not.toThrow();
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export default React.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>(function Probe(props, ref) { return <ButtonPrimitive ref={ref} {...props} /> })\n'
+      })
+    ).not.toThrow();
   });
 
   it('uses the Base UI 1.6 root DOM contract for Checkbox and Switch refs', () => {
@@ -259,6 +1046,56 @@ describe('React 17 UI profile normalization', () => {
         registrySourcePath: 'registry/base-nova/ui/icon.tsx'
       })
     ).toThrow('does not declare a pinned Lucide icon');
+  });
+
+  it('rewrites only actual icon placeholder JSX and preserves placeholder-looking text', () => {
+    const placeholder = '<IconPlaceholder lucide="Search" />';
+    const source =
+      'import { IconPlaceholder } from "@/registry/base-nova/ui/icon-placeholder"\n' +
+      `const single = '${placeholder}'\n` +
+      `const double = "${placeholder.replaceAll('"', '\\"')}"\n` +
+      `const template = \`${placeholder}\`\n` +
+      `// ${placeholder}\n` +
+      `/* ${placeholder} */\n` +
+      'export const Icon = () => <IconPlaceholder lucide="Search" aria-label={single} />\n';
+
+    const result = normalizeRegistrySource({
+      source,
+      registrySourcePath: 'registry/base-nova/ui/icon.tsx'
+    });
+
+    expect(result.source).toContain('import { Search } from "lucide-react"');
+    expect(result.source).toContain(`const single = '${placeholder}'`);
+    expect(result.source).toContain(`const double = "${placeholder.replaceAll('"', '\\"')}"`);
+    expect(result.source).toContain(`const template = \`${placeholder}\``);
+    expect(result.source).toContain(`// ${placeholder}`);
+    expect(result.source).toContain(`/* ${placeholder} */`);
+    expect(result.source).toContain('<Search aria-label={single} />');
+  });
+
+  it('ignores import-looking comments and fails closed for unsupported actual placeholders', () => {
+    const commentOnly = normalizeRegistrySource({
+      source:
+        '// import { IconPlaceholder } from "@/registry/base-nova/ui/icon-placeholder"\n' +
+        'export const text = "<IconPlaceholder lucide=\\"Search\\" />"\n',
+      registrySourcePath: 'registry/base-nova/ui/icon.tsx'
+    });
+    expect(commentOnly.transformations).not.toContain('resolve-lucide-icon-placeholders');
+
+    for (const placeholder of [
+      '<IconPlaceholder lucide="Search"></IconPlaceholder>',
+      '<IconPlaceholder lucide={iconName} />',
+      '<IconPlaceholder lucide="Search" lucide="Check" />'
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            'import { IconPlaceholder } from "@/registry/base-nova/ui/icon-placeholder"\n' +
+            `export const Icon = () => ${placeholder}\n`,
+          registrySourcePath: 'registry/base-nova/ui/icon.tsx'
+        })
+      ).toThrow(/unresolved IconPlaceholder|does not declare a pinned Lucide icon/u);
+    }
   });
 
   it('rejects hostile aliases, icon placeholders, automatic JSX, and React 18/19 APIs', async () => {
@@ -399,6 +1236,34 @@ describe('React 17 UI profile normalization', () => {
       'const examples = ["require(name)", "React.useId()", "react-dom/client"]\n' +
       'export { examples }\n';
     expect(() => assertReact17Source(compatible, 'comments-and-strings.ts')).not.toThrow();
+  });
+
+  it('ignores legacy icon references in comments and literal text', () => {
+    const compatible =
+      '// migrate Icons.Search\n' +
+      '/* preserve Icons.Check */\n' +
+      "const single = 'Icons.Search'\n" +
+      'const note = "Icons.Search"\n' +
+      'const template = `Icons.Check`\n' +
+      'const keyed = { "Icons.Search": true }\n' +
+      'export { single, note, template, keyed }\n';
+    expect(() => assertReact17Source(compatible, 'legacy-icon-text.ts')).not.toThrow();
+  });
+
+  it('rejects actual legacy icon namespace accesses across supported syntax forms', () => {
+    for (const source of [
+      'export const Icon = Icons.Search\n',
+      'export const Icon = Icons?.Search\n',
+      'export const Icon = (Icons as any).Search\n',
+      'export const Icon = Icons["Search"]\n',
+      'export const Icon = () => <Icons.Search />\n',
+      'export const note = `icon: ${Icons.Search}`\n',
+      'export type Icon = Icons.Search\n'
+    ]) {
+      expect(() => assertReact17Source(source, 'legacy-icon-access.tsx')).toThrow(
+        'unresolved alias or icon placeholder remains after normalization'
+      );
+    }
   });
 });
 

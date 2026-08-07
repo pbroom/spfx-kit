@@ -1,0 +1,2 @@
+.gitattributes text eol=lf
+packages/ui-profile/** text eol=lf

@@ -38,6 +38,12 @@ export const REGISTRY_IDS = Object.freeze([
   'utils'
 ]);
 
+// These wrappers are intentionally not exported by their registry modules, but they
+// are still passed through as React components. React 17 therefore needs the same
+// ref normalization as the exported primitive wrappers when their props are
+// forwarded to Base UI.
+const INTERNAL_REF_WRAPPER_NAMES = new Set(['ComboboxClear', 'SheetOverlay']);
+
 export function assertRegistryIds(registryIds) {
   if (
     !Array.isArray(registryIds) ||
@@ -182,14 +188,14 @@ function hasAppOwnedAliasSpecifier(source, label) {
 function hasJsx(source) {
   const sourceFile = ts.createSourceFile('jsx-detection.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let found = false;
-  const inspect = (node) => {
+  function visit(node) {
     if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node)) {
       found = true;
       return;
     }
-    ts.forEachChild(node, inspect);
-  };
-  inspect(sourceFile);
+    if (!found) ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
   return found;
 }
 
@@ -198,6 +204,7 @@ function hasReactBinding(source) {
   return sourceFile.statements.some((statement) => {
     if (
       ts.isImportEqualsDeclaration(statement) &&
+      !statement.isTypeOnly &&
       statement.name.text === 'React' &&
       ts.isExternalModuleReference(statement.moduleReference) &&
       statement.moduleReference.expression &&
@@ -214,39 +221,193 @@ function hasReactBinding(source) {
     }
     const clause = statement.importClause;
     return Boolean(
-      clause?.name?.text === 'React' ||
-        (clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings) && clause.namedBindings.name.text === 'React')
+      clause &&
+        !clause.isTypeOnly &&
+        (clause.name?.text === 'React' ||
+          (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings) && clause.namedBindings.name.text === 'React'))
     );
   });
 }
 
+function hasTypeOnlyReactBinding(source) {
+  const sourceFile = ts.createSourceFile('react-type-binding.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  return sourceFile.statements.some((statement) => {
+    if (
+      ts.isImportEqualsDeclaration(statement) &&
+      statement.isTypeOnly &&
+      statement.name.text === 'React' &&
+      ts.isExternalModuleReference(statement.moduleReference) &&
+      statement.moduleReference.expression &&
+      ts.isStringLiteralLike(statement.moduleReference.expression)
+    ) {
+      return statement.moduleReference.expression.text === 'react';
+    }
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== 'react' ||
+      !statement.importClause
+    ) {
+      return false;
+    }
+    const clause = statement.importClause;
+    if (clause.isTypeOnly) {
+      return Boolean(
+        clause.name?.text === 'React' ||
+          (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings) && clause.namedBindings.name.text === 'React')
+      );
+    }
+    return Boolean(
+      clause.namedBindings &&
+        ts.isNamedImports(clause.namedBindings) &&
+        clause.namedBindings.elements.some((element) => element.isTypeOnly && element.name.text === 'React')
+    );
+  });
+}
+
+function hasReactRuntimeUse(source) {
+  const sourceFile = ts.createSourceFile('react-runtime-use.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let found = false;
+  function visit(node) {
+    if (ts.isIdentifier(node) && node.text === 'React' && !isDeclarationOrPropertyName(node)) {
+      found = true;
+      return;
+    }
+    if (!found) ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return found;
+}
+
 function insertImport(source, declaration) {
-  const directive = /^("use client"|'use client')\n\n/.exec(source);
-  const offset = directive ? directive[0].length : 0;
-  return `${source.slice(0, offset)}${declaration}\n${source.slice(offset)}`;
+  const preprocessed = ts.preProcessFile(source, true, true);
+  const references = [
+    ...preprocessed.referencedFiles,
+    ...preprocessed.typeReferenceDirectives,
+    ...preprocessed.libReferenceDirectives
+  ];
+  let offset = references.reduce((maximum, reference) => Math.max(maximum, reference.end), 0);
+  if (offset > 0) {
+    const lineEnd = source.indexOf('\n', offset);
+    offset = lineEnd === -1 ? source.length : lineEnd + 1;
+  }
+  const sourceFile = parsedSource(source, 'import-insertion.tsx');
+  const firstStatementIndex = sourceFile.statements.findIndex((statement) => statement.getStart(sourceFile) >= offset);
+  for (const statement of sourceFile.statements.slice(Math.max(0, firstStatementIndex))) {
+    if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) break;
+    offset = statement.getEnd();
+    const whitespace = /^(?:[\t ]*\r?\n)*/u.exec(source.slice(offset));
+    offset += whitespace?.[0].length ?? 0;
+  }
+  const separator = offset > 0 && !source.slice(0, offset).endsWith('\n') ? '\n' : '';
+  return `${source.slice(0, offset)}${separator}${declaration}\n${source.slice(offset)}`;
 }
 
 function resolveIconPlaceholders(source) {
-  const placeholderImport = /^import\s*{\s*IconPlaceholder\s*}\s*from\s*["'][^"']*icon-placeholder["']\n?/m;
-  if (!placeholderImport.test(source)) return { source, transformed: false };
+  const sourceFile = parsedSource(source, 'icon-placeholder-normalization.tsx');
+  const selectorNames = new Set(['lucide', 'tabler', 'hugeicons', 'phosphor', 'remixicon']);
+  const placeholderImport = sourceFile.statements.find(
+    (statement) =>
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteralLike(statement.moduleSpecifier) &&
+      /(?:^|\/)icon-placeholder$/u.test(statement.moduleSpecifier.text) &&
+      statement.importClause?.namedBindings &&
+      ts.isNamedImports(statement.importClause.namedBindings) &&
+      statement.importClause.namedBindings.elements.length === 1 &&
+      statement.importClause.namedBindings.elements.some(
+        (element) => element.name.text === 'IconPlaceholder' && (element.propertyName?.text ?? element.name.text) === 'IconPlaceholder'
+      )
+  );
+  if (!placeholderImport) return { source, transformed: false };
 
+  let importEnd = placeholderImport.getEnd();
+  const trailingLine = /^[\t ]*\r?\n/u.exec(source.slice(importEnd));
+  importEnd += trailingLine?.[0].length ?? 0;
+  const replacements = [{ start: placeholderImport.getStart(sourceFile), end: importEnd, replacement: '' }];
   const icons = new Set();
-  let normalized = source.replace(placeholderImport, '');
-  normalized = normalized.replace(/<IconPlaceholder([\s\S]*?)\/>/g, (_match, attributes) => {
-    const lucide = /\blucide=["']([A-Za-z][A-Za-z0-9]*)["']/.exec(attributes);
-    if (!lucide) throw new Error('IconPlaceholder does not declare a pinned Lucide icon');
-    icons.add(lucide[1]);
-    const preserved = attributes.replace(/\s+(?:lucide|tabler|hugeicons|phosphor|remixicon)=["'][^"']*["']/g, '');
-    if (/\b(?:lucide|tabler|hugeicons|phosphor|remixicon)\s*=/.test(preserved)) {
-      throw new Error('IconPlaceholder contains an unrecognized icon selector form');
+  function visit(node) {
+    if (ts.isJsxElement(node) && ts.isIdentifier(node.openingElement.tagName) && node.openingElement.tagName.text === 'IconPlaceholder') {
+      throw new Error('An unresolved IconPlaceholder remains');
     }
-    return preserved.trim() ? `<${lucide[1]}${preserved}/>` : `<${lucide[1]} />`;
-  });
-  if (/<IconPlaceholder\b/.test(normalized)) {
+    if (ts.isJsxSelfClosingElement(node) && ts.isIdentifier(node.tagName) && node.tagName.text === 'IconPlaceholder') {
+      const selectors = node.attributes.properties.filter(
+        (attribute) => ts.isJsxAttribute(attribute) && ts.isIdentifier(attribute.name) && selectorNames.has(attribute.name.text)
+      );
+      const lucideSelectors = selectors.filter((attribute) => attribute.name.text === 'lucide');
+      const lucide = lucideSelectors[0];
+      if (lucideSelectors.length !== 1 || !lucide.initializer || !ts.isStringLiteralLike(lucide.initializer)) {
+        throw new Error('IconPlaceholder does not declare a pinned Lucide icon');
+      }
+      const icon = lucide.initializer.text;
+      if (!/^[A-Za-z][A-Za-z0-9]*$/u.test(icon)) {
+        throw new Error('IconPlaceholder does not declare a pinned Lucide icon');
+      }
+      icons.add(icon);
+      if (selectors.length === node.attributes.properties.length) {
+        replacements.push({ start: node.getStart(sourceFile), end: node.getEnd(), replacement: `<${icon} />` });
+        return;
+      }
+      replacements.push({ start: node.tagName.getStart(sourceFile), end: node.tagName.getEnd(), replacement: icon });
+      for (const selector of selectors) {
+        if (!selector.initializer || !ts.isStringLiteralLike(selector.initializer)) {
+          throw new Error('IconPlaceholder contains an unrecognized icon selector form');
+        }
+        let start = selector.getStart(sourceFile);
+        while (start > node.tagName.getEnd() && /\s/u.test(source[start - 1])) start -= 1;
+        replacements.push({ start, end: selector.getEnd(), replacement: '' });
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  if (icons.size === 0) {
     throw new Error('An unresolved IconPlaceholder remains');
+  }
+
+  let normalized = source;
+  for (const replacement of replacements.sort((left, right) => right.start - left.start)) {
+    normalized = `${normalized.slice(0, replacement.start)}${replacement.replacement}${normalized.slice(replacement.end)}`;
   }
   const declaration = `import { ${[...icons].sort().join(', ')} } from "lucide-react"`;
   return { source: insertImport(normalized, declaration), transformed: true };
+}
+
+function hasActualIconPlaceholderJsx(source, label) {
+  const sourceFile = parsedSource(source, label);
+  let found = false;
+  function visit(node) {
+    if (
+      (ts.isJsxElement(node) && ts.isIdentifier(node.openingElement.tagName) && node.openingElement.tagName.text === 'IconPlaceholder') ||
+      (ts.isJsxSelfClosingElement(node) && ts.isIdentifier(node.tagName) && node.tagName.text === 'IconPlaceholder')
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return found;
+}
+
+function hasActualLegacyIconsReference(source, label) {
+  const sourceFile = parsedSource(source, label);
+  let found = false;
+  function visit(node) {
+    const receiver =
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && unwrapExpression(node.expression);
+    let qualifiedRoot = ts.isQualifiedName(node) ? node : null;
+    while (qualifiedRoot && ts.isQualifiedName(qualifiedRoot)) qualifiedRoot = qualifiedRoot.left;
+    if (
+      (receiver && ts.isIdentifier(receiver) && receiver.text === 'Icons') ||
+      (qualifiedRoot && ts.isIdentifier(qualifiedRoot) && qualifiedRoot.text === 'Icons')
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return found;
 }
 
 function findMatching(source, openIndex, openCharacter, closeCharacter) {
@@ -317,6 +478,10 @@ function exportedNames(source) {
         names.add((element.propertyName ?? element.name).text);
       }
     }
+    if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+      const expression = unwrapExpression(statement.expression);
+      if (ts.isIdentifier(expression)) names.add(expression.text);
+    }
   }
   return names;
 }
@@ -336,37 +501,187 @@ const NON_REF_STRUCTURAL_TARGETS = new Set([
   'TooltipPrimitive.Root'
 ]);
 
-function propsSpreadTarget(body) {
-  const spreads = [...body.matchAll(/{\s*\.\.\.props\s*}/g)];
-  const spread = spreads.at(-1);
-  if (!spread) return null;
-  const beforeSpread = body.slice(0, spread.index);
-  let target = null;
-  for (const match of beforeSpread.matchAll(/<([A-Za-z][\w.]*)\b/g)) {
-    let braces = 0;
-    let quote = null;
-    let closed = false;
-    for (let index = match.index; index < spread.index; index += 1) {
-      const character = body[index];
-      if (quote) {
-        if (character === '\\') index += 1;
-        else if (character === quote) quote = null;
-        continue;
+function propsBindingName(parameter) {
+  if (!parameter) return null;
+  if (ts.isIdentifier(parameter.name)) return parameter.name.text;
+  if (!ts.isObjectBindingPattern(parameter.name)) return null;
+  const rest = parameter.name.elements.find((element) => element.dotDotDotToken && ts.isIdentifier(element.name));
+  return rest?.name.text ?? null;
+}
+
+function bindingNameContains(name, expected) {
+  if (!name) return false;
+  if (ts.isIdentifier(name)) return name.text === expected;
+  return name.elements.some((element) => element && bindingNameContains(element.name, expected));
+}
+
+function scopeShadowsBinding(node, expected) {
+  const statements = ts.isBlock(node)
+    ? node.statements
+    : ts.isCaseBlock(node)
+      ? node.clauses.flatMap((clause) => clause.statements)
+      : null;
+  if (
+    statements?.some((statement) => {
+      if (ts.isVariableStatement(statement)) {
+        return statement.declarationList.declarations.some((declaration) => bindingNameContains(declaration.name, expected));
       }
-      if (character === '"' || character === "'" || character === '`') {
-        quote = character;
-        continue;
-      }
-      if (character === '{') braces += 1;
-      else if (character === '}') braces -= 1;
-      else if (character === '>' && braces === 0) {
-        closed = true;
-        break;
+      return (
+        (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name?.text === expected
+      );
+    })
+  ) {
+    return true;
+  }
+  if (ts.isCatchClause(node) && node.variableDeclaration) {
+    return bindingNameContains(node.variableDeclaration.name, expected);
+  }
+  if (ts.isForStatement(node) && node.initializer && ts.isVariableDeclarationList(node.initializer)) {
+    return node.initializer.declarations.some((declaration) => bindingNameContains(declaration.name, expected));
+  }
+  if ((ts.isForInStatement(node) || ts.isForOfStatement(node)) && ts.isVariableDeclarationList(node.initializer)) {
+    return node.initializer.declarations.some((declaration) => bindingNameContains(declaration.name, expected));
+  }
+  return false;
+}
+
+function expressionReferencesBindings(expression, bindings) {
+  let found = false;
+  function inspect(node) {
+    if (found) return;
+    if (ts.isIdentifier(node) && bindings.has(node.text)) {
+      const parent = node.parent;
+      const isNonReferenceName =
+        (ts.isPropertyAssignment(parent) && parent.name === node && !ts.isShorthandPropertyAssignment(parent)) ||
+        (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+        (ts.isBindingElement(parent) && parent.name === node) ||
+        (ts.isVariableDeclaration(parent) && parent.name === node);
+      if (!isNonReferenceName) found = true;
+    }
+    if (!found) ts.forEachChild(node, inspect);
+  }
+  inspect(expression);
+  return found;
+}
+
+function propsBindingAliases(declaration, propsBinding) {
+  const candidates = [];
+  const assignmentOperators = new Set([
+    ts.SyntaxKind.EqualsToken,
+    ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+    ts.SyntaxKind.BarBarEqualsToken,
+    ts.SyntaxKind.QuestionQuestionEqualsToken
+  ]);
+  function candidateNames(node) {
+    if (ts.isIdentifier(node)) return [node.text];
+    if (ts.isBindingElement(node)) return candidateNames(node.name);
+    if (ts.isObjectBindingPattern(node) || ts.isArrayBindingPattern(node)) {
+      return node.elements.flatMap((element) => (element ? candidateNames(element) : []));
+    }
+    if (ts.isArrayLiteralExpression(node)) {
+      return node.elements.flatMap((element) => candidateNames(element));
+    }
+    if (ts.isObjectLiteralExpression(node)) {
+      return node.properties.flatMap((property) => {
+        if (ts.isShorthandPropertyAssignment(property)) return [property.name.text];
+        if (ts.isPropertyAssignment(property)) return candidateNames(property.initializer);
+        if (ts.isSpreadAssignment(property)) return candidateNames(property.expression);
+        return [];
+      });
+    }
+    const unwrapped = unwrapExpression(node);
+    return unwrapped === node ? [] : candidateNames(unwrapped);
+  }
+  function visit(node) {
+    if (
+      node !== declaration.body &&
+      (ts.isFunctionLike(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node))
+    ) {
+      return;
+    }
+    if (ts.isVariableDeclaration(node) && node.initializer) {
+      for (const name of candidateNames(node.name)) candidates.push([name, node.initializer]);
+    } else if (
+      ts.isBinaryExpression(node) &&
+      assignmentOperators.has(node.operatorToken.kind)
+    ) {
+      for (const name of candidateNames(node.left)) candidates.push([name, node.right]);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(declaration.body);
+  const aliases = new Set([propsBinding]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [alias, expression] of candidates) {
+      if (!aliases.has(alias) && expressionReferencesBindings(expression, aliases)) {
+        aliases.add(alias);
+        changed = true;
       }
     }
-    if (!closed) target = { name: match[1], index: match.index };
   }
-  return target;
+  return aliases;
+}
+
+function propsSpreadTargets(declaration, parameter, sourceFile) {
+  const propsBinding = propsBindingName(parameter);
+  if (!propsBinding || !declaration.body) return [];
+  const propsAliases = propsBindingAliases(declaration, propsBinding);
+  const parameterBindsRef =
+    ts.isObjectBindingPattern(parameter.name) &&
+    parameter.name.elements.some(
+      (element) => !element.dotDotDotToken && !element.propertyName && ts.isIdentifier(element.name) && element.name.text === 'ref'
+    );
+  const bodyStart = ts.isBlock(declaration.body) ? declaration.body.getStart(sourceFile) + 1 : declaration.body.getStart(sourceFile);
+  const targets = [];
+  function visit(node, propsBindingIsShadowed = false, refBindingIsShadowed = false) {
+    if (
+      node !== declaration.body &&
+      (ts.isFunctionLike(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node))
+    ) {
+      return;
+    }
+    const bindingIsShadowed =
+      propsBindingIsShadowed || (node !== declaration.body && scopeShadowsBinding(node, propsBinding));
+    const refIsShadowed =
+      refBindingIsShadowed || (node !== declaration.body && scopeShadowsBinding(node, 'ref'));
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const propsSpread = node.attributes.properties.find((attribute) => {
+        if (!ts.isJsxSpreadAttribute(attribute)) return false;
+        const expression = unwrapExpression(attribute.expression);
+        return expressionReferencesBindings(expression, propsAliases);
+      });
+      if (propsSpread) {
+        const spreadExpression = unwrapExpression(propsSpread.expression);
+        const refAttributes = node.attributes.properties.filter(
+          (attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(sourceFile) === 'ref'
+        );
+        const forwardsRef = parameterBindsRef && !refIsShadowed && refAttributes.some((attribute) => {
+          if (!attribute.initializer || !ts.isJsxExpression(attribute.initializer) || !attribute.initializer.expression) {
+            return false;
+          }
+          const expression = unwrapExpression(attribute.initializer.expression);
+          return ts.isIdentifier(expression) && expression.text === 'ref';
+        });
+        targets.push({
+          name: node.tagName.getText(sourceFile),
+          startOffset: node.getStart(sourceFile) - bodyStart,
+          insertionOffset: node.tagName.end - bodyStart,
+          bindingIsAliased: !(ts.isIdentifier(spreadExpression) && spreadExpression.text === propsBinding),
+          bindingIsShadowed,
+          forwardsRef,
+          hasConflictingRef: refAttributes.length > (forwardsRef ? 1 : 0),
+          hasConflictingSpread: node.attributes.properties.some(
+            (attribute) => ts.isJsxSpreadAttribute(attribute) && attribute !== propsSpread
+          )
+        });
+      }
+    }
+    ts.forEachChild(node, (child) => visit(child, bindingIsShadowed, refIsShadowed));
+  }
+  visit(declaration.body);
+  return targets;
 }
 
 function targetAcceptsPublicRef(target) {
@@ -385,86 +700,827 @@ function refElementType(target, propsType) {
   return /^[a-z]/.test(target) ? `React.ElementRef<"${target}">` : `React.ElementRef<typeof ${target}>`;
 }
 
+function isRefBearingPropsType(source, propsType) {
+  if (!propsType.trim()) return false;
+  const sourceFile = parsedSource(source, 'ref-bearing-props.tsx');
+  const aliases = new Map();
+  const importedBaseUiPropsTypes = new Set();
+  const importedReactPropsHelpers = new Set();
+  const addAlias = (name, type) => aliases.set(name, [...(aliases.get(name) ?? []), type]);
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteralLike(statement.moduleSpecifier) &&
+      statement.importClause?.namedBindings &&
+      ts.isNamedImports(statement.importClause.namedBindings)
+    ) {
+      for (const element of statement.importClause.namedBindings.elements) {
+        const importedName = element.propertyName?.text ?? element.name.text;
+        if (statement.moduleSpecifier.text === 'react' && /^ComponentProps(?:WithRef|WithoutRef)?$/u.test(importedName)) {
+          importedReactPropsHelpers.add(element.name.text);
+        }
+        if (
+          (statement.moduleSpecifier.text === '@base-ui/react' ||
+            statement.moduleSpecifier.text.startsWith('@base-ui/react/')) &&
+          /Props$/u.test(importedName)
+        ) {
+          importedBaseUiPropsTypes.add(element.name.text);
+        }
+      }
+    } else if (ts.isTypeAliasDeclaration(statement)) {
+      addAlias(statement.name.text, statement.type);
+    } else if (ts.isInterfaceDeclaration(statement)) {
+      for (const type of (statement.heritageClauses ?? []).flatMap((clause) => clause.types)) {
+        addAlias(statement.name.text, type);
+      }
+    }
+  }
+
+  const syntheticFile = parsedSource(`type RefBearingProps = ${propsType}`, 'ref-bearing-props-input.tsx');
+  const input = syntheticFile.statements.find(ts.isTypeAliasDeclaration)?.type;
+  if (!input) return false;
+
+  const visitedAliases = new Set();
+  function isDirectRefPropsName(name) {
+    const nameText = name.getText(name.getSourceFile());
+    return (
+      (ts.isQualifiedName(name) && name.right.text === 'Props') ||
+      (ts.isIdentifier(name) && importedBaseUiPropsTypes.has(name.text)) ||
+      (ts.isIdentifier(name) && importedReactPropsHelpers.has(name.text)) ||
+      /^(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?$/u.test(nameText)
+    );
+  }
+  function inspect(node) {
+    if (ts.isTypeReferenceNode(node)) {
+      if (isDirectRefPropsName(node.typeName)) return true;
+      if (ts.isIdentifier(node.typeName) && aliases.has(node.typeName.text) && !visitedAliases.has(node.typeName.text)) {
+        visitedAliases.add(node.typeName.text);
+        if (aliases.get(node.typeName.text).some(inspect)) return true;
+      }
+      return (node.typeArguments ?? []).some(inspect);
+    }
+    if (ts.isImportTypeNode(node)) {
+      if (
+        ts.isLiteralTypeNode(node.argument) &&
+        ts.isStringLiteralLike(node.argument.literal) &&
+        (node.argument.literal.text === '@base-ui/react' || node.argument.literal.text.startsWith('@base-ui/react/')) &&
+        node.qualifier &&
+        /(?:^|\.)[^.]*Props$/u.test(node.qualifier.getText(node.getSourceFile()))
+      ) {
+        return true;
+      }
+      if (node.qualifier && isDirectRefPropsName(node.qualifier)) return true;
+      return (node.typeArguments ?? []).some(inspect);
+    }
+    if (ts.isExpressionWithTypeArguments(node)) {
+      const expression = node.expression;
+      const expressionName = expression.getText(node.getSourceFile());
+      if (
+        (ts.isPropertyAccessExpression(expression) && expression.name.text === 'Props') ||
+        (ts.isIdentifier(expression) && importedBaseUiPropsTypes.has(expression.text)) ||
+        (ts.isIdentifier(expression) && importedReactPropsHelpers.has(expression.text)) ||
+        /^(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?$/u.test(expressionName)
+      ) {
+        return true;
+      }
+      if (ts.isIdentifier(expression) && aliases.has(expression.text) && !visitedAliases.has(expression.text)) {
+        visitedAliases.add(expression.text);
+        if (aliases.get(expression.text).some(inspect)) return true;
+      }
+      return (node.typeArguments ?? []).some(inspect);
+    }
+    let found = false;
+    ts.forEachChild(node, (child) => {
+      if (!found && inspect(child)) found = true;
+    });
+    return found;
+  }
+  return inspect(input);
+}
+
 function normalizePublicForwardRefs(source) {
   const exports = exportedNames(source);
+  const sourceFile = parsedSource(source, 'public-forward-ref-wrappers.tsx');
   const candidates = [];
-  for (const match of source.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)) {
-    if (exports.has(match[1])) candidates.push({ name: match[1], start: match.index });
+  for (const statement of sourceFile.statements) {
+    if (!ts.isFunctionDeclaration(statement) || !statement.name || !statement.body) continue;
+    const name = statement.name.text;
+    if (!exports.has(name) && !INTERNAL_REF_WRAPPER_NAMES.has(name)) continue;
+    const modifiers = statement.modifiers ?? [];
+    const parameter = statement.parameters[0];
+    const hasOverloads = sourceFile.statements.filter(
+      (candidate) => ts.isFunctionDeclaration(candidate) && candidate.name?.text === name
+    ).length > 1;
+    const isSupportedShape =
+      !hasOverloads &&
+      !statement.asteriskToken &&
+      !statement.typeParameters?.length &&
+      !modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) &&
+      statement.parameters.length === 1 &&
+      parameter &&
+      ts.isObjectBindingPattern(parameter.name) &&
+      !parameter.dotDotDotToken &&
+      !parameter.initializer &&
+      !parameter.questionToken &&
+      parameter.type;
+    if (!isSupportedShape) continue;
+    candidates.push({
+      bodyClose: statement.body.end - 1,
+      bodyOpen: statement.body.getStart(sourceFile),
+      declarationStart: statement.getStart(sourceFile),
+      defaultExport: modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword),
+      namedExport: modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
+      name,
+      parameter,
+      spreadTargets: propsSpreadTargets(statement, parameter, sourceFile)
+    });
   }
 
   let normalized = source;
   let transformed = false;
   for (const candidate of candidates.reverse()) {
-    const functionStart = candidate.start;
-    const defaultExport = /export\s+default\s+$/.exec(normalized.slice(0, functionStart));
-    const declarationStart = defaultExport ? defaultExport.index : functionStart;
-    const parameterOpen = normalized.indexOf('(', functionStart);
-    const parameterClose = findMatching(normalized, parameterOpen, '(', ')');
-    if (parameterClose === -1) throw new Error(`Unable to parse ${candidate.name} parameters`);
-    const bodyOpen = normalized.indexOf('{', parameterClose);
-    const bodyClose = findMatching(normalized, bodyOpen, '{', '}');
-    if (bodyOpen === -1 || bodyClose === -1) throw new Error(`Unable to parse ${candidate.name} body`);
-
-    const parameters = normalized.slice(parameterOpen + 1, parameterClose);
-    const split = parameters.lastIndexOf('}:');
-    if (!parameters.trimStart().startsWith('{') || split === -1) continue;
-    let destructuring = parameters.slice(0, split + 1);
-    const propsType = parameters.slice(split + 2).trim();
-    if (!/\.Props\b|(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?\b/.test(propsType)) continue;
+    let destructuring = candidate.parameter.name.getText(sourceFile);
+    const propsType = candidate.parameter.type.getText(sourceFile);
+    if (!isRefBearingPropsType(normalized, propsType)) continue;
     destructuring = destructuring.replace(/(^|\n)(\s*)ref\s*,\s*(?=\n|})/m, '$1$2').replace(/{\s*ref\s*,/, '{');
 
-    let body = normalized.slice(bodyOpen + 1, bodyClose);
-    let target = propsSpreadTarget(body);
+    let body = normalized.slice(candidate.bodyOpen + 1, candidate.bodyClose);
+    const publicSpreadTargets = candidate.spreadTargets.filter(targetAcceptsPublicRef);
+    const safeSpreadTargets = publicSpreadTargets.filter(
+      (candidateTarget) =>
+        !candidateTarget.bindingIsAliased &&
+        !candidateTarget.bindingIsShadowed &&
+        !candidateTarget.hasConflictingRef &&
+        !candidateTarget.hasConflictingSpread
+    );
+    let target = publicSpreadTargets.length === 1 && safeSpreadTargets.length === 1 ? safeSpreadTargets[0] : null;
     const useRender = /return\s+useRender\(\{\s*/.exec(body);
-    if (!target && useRender) {
+    if (publicSpreadTargets.length === 0 && useRender) {
       const tag = /useRender\.ComponentProps<(["'])([a-z][a-z0-9-]*)\1>/.exec(propsType);
-      if (tag) target = { name: tag[2], index: useRender.index };
+      if (tag) target = { name: tag[2], useRender: true };
     }
     if (!targetAcceptsPublicRef(target)) continue;
     const targetName = target.name;
-    if (useRender && target.index === useRender.index) {
+    if (target.useRender) {
       const insertion = useRender.index + useRender[0].length;
       body = `${body.slice(0, insertion)}ref,\n    ${body.slice(insertion)}`;
-    } else {
-      const openingEnd = body.indexOf('{...props}', target.index);
-      const opening = openingEnd === -1 ? '' : body.slice(target.index, openingEnd);
-      if (!/\bref={ref}/.test(opening)) {
-        const targetOffset = target.index + targetName.length + 1;
-        const lineStart = body.lastIndexOf('\n', target.index) + 1;
-        const indentation = /^\s*/.exec(body.slice(lineStart, target.index))[0];
-        body = `${body.slice(0, targetOffset)}\n${indentation}  ref={ref}${body.slice(targetOffset)}`;
-      }
+    } else if (!target.forwardsRef) {
+      const lineStart = body.lastIndexOf('\n', target.startOffset) + 1;
+      const indentation = /^\s*/.exec(body.slice(lineStart, target.startOffset))[0];
+      body = `${body.slice(0, target.insertionOffset)}\n${indentation}  ref={ref}${body.slice(target.insertionOffset)}`;
     }
     const elementType = refElementType(targetName, propsType);
     const replacement =
-      `const ${candidate.name} = React.forwardRef<\n  ${elementType},\n  React.PropsWithoutRef<${propsType}>\n>(function ${candidate.name}(${destructuring}, ref) {${body}\n})` +
-      (defaultExport ? `\nexport default ${candidate.name}` : '');
-    normalized = `${normalized.slice(0, declarationStart)}${replacement}${normalized.slice(bodyClose + 1)}`;
+      `${candidate.namedExport && !candidate.defaultExport ? 'export ' : ''}const ${candidate.name} = React.forwardRef<\n  ${elementType},\n  React.PropsWithoutRef<${propsType}>\n>(function ${candidate.name}(${destructuring}, ref) {${body}\n})` +
+      (candidate.defaultExport ? `\nexport default ${candidate.name}` : '');
+    normalized = `${normalized.slice(0, candidate.declarationStart)}${replacement}${normalized.slice(candidate.bodyClose + 1)}`;
     transformed = true;
   }
   return { source: normalized, transformed };
 }
 
 function exportedFunctionContract(source, name) {
-  const match = new RegExp(`\\bfunction\\s+${name}\\s*\\(`).exec(source);
-  if (!match) return null;
-  const parameterOpen = source.indexOf('(', match.index);
-  const parameterClose = findMatching(source, parameterOpen, '(', ')');
-  const bodyOpen = source.indexOf('{', parameterClose);
-  const bodyClose = findMatching(source, bodyOpen, '{', '}');
-  if (parameterClose === -1 || bodyOpen === -1 || bodyClose === -1) return null;
-  const parameters = source.slice(parameterOpen + 1, parameterClose);
-  const split = parameters.lastIndexOf('}:');
+  const sourceFile = parsedSource(source, 'normalized-function-wrapper.tsx');
+  const declaration = sourceFile.statements.find(
+    (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === name && statement.body
+  );
+  if (!declaration) return null;
+  const parameter = declaration.parameters.find(
+    (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
+  );
   return {
-    propsType: split === -1 ? '' : parameters.slice(split + 2).trim(),
-    body: source.slice(bodyOpen + 1, bodyClose)
+    spreadTargets: propsSpreadTargets(declaration, parameter, sourceFile),
+    propsType: parameter?.type?.getText(sourceFile) ?? '',
+    body: declaration.body.getText(sourceFile).slice(1, -1)
   };
+}
+
+function reactWrapperBindings(sourceFile) {
+  const namespaces = new Set();
+  const namedMemo = new Set();
+  const namedForwardRef = new Set();
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isImportEqualsDeclaration(statement) &&
+      !statement.isTypeOnly &&
+      ts.isExternalModuleReference(statement.moduleReference) &&
+      statement.moduleReference.expression?.text === 'react'
+    ) {
+      namespaces.add(statement.name.text);
+      continue;
+    }
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== 'react' ||
+      !statement.importClause ||
+      statement.importClause.isTypeOnly
+    ) {
+      continue;
+    }
+    if (statement.importClause.name) namespaces.add(statement.importClause.name.text);
+    const bindings = statement.importClause.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) {
+      namespaces.add(bindings.name.text);
+    } else if (bindings) {
+      for (const specifier of bindings.elements) {
+        const importedName = (specifier.propertyName ?? specifier.name).text;
+        if (!specifier.isTypeOnly && importedName === 'memo') {
+          namedMemo.add(specifier.name.text);
+        } else if (!specifier.isTypeOnly && importedName === 'forwardRef') {
+          namedForwardRef.add(specifier.name.text);
+        }
+      }
+    }
+  }
+  let addedNamespace = true;
+  while (addedNamespace) {
+    addedNamespace = false;
+    function collectNamespaceAliases(node) {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+        const initializer = unwrapExpression(node.initializer);
+        if (ts.isIdentifier(initializer) && namespaces.has(initializer.text) && !namespaces.has(node.name.text)) {
+          namespaces.add(node.name.text);
+          addedNamespace = true;
+        }
+      } else if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        const left = unwrapExpression(node.left);
+        const right = unwrapExpression(node.right);
+        if (
+          ts.isIdentifier(left) &&
+          ts.isIdentifier(right) &&
+          namespaces.has(right.text) &&
+          !namespaces.has(left.text)
+        ) {
+          namespaces.add(left.text);
+          addedNamespace = true;
+        }
+      }
+      ts.forEachChild(node, collectNamespaceAliases);
+    }
+    collectNamespaceAliases(sourceFile);
+  }
+  return { namespaces, namedMemo, namedForwardRef };
+}
+
+function isConstVariableDeclaration(declaration) {
+  return (declaration.parent.flags & ts.NodeFlags.Const) !== 0;
+}
+
+function contextualTypeTextsForExpression(expression, sourceFile) {
+  const typeTexts = [];
+  let current = expression;
+  while (true) {
+    if (ts.isParenthesizedExpression(current) || ts.isNonNullExpression(current)) {
+      current = current.expression;
+      continue;
+    }
+    if (ts.isAsExpression(current) || ts.isTypeAssertionExpression(current) || ts.isSatisfiesExpression(current)) {
+      typeTexts.push(current.type.getText(sourceFile));
+      current = current.expression;
+      continue;
+    }
+    return typeTexts;
+  }
+}
+
+function assignmentTargetContains(node, name) {
+  const target = unwrapExpression(node);
+  if (ts.isIdentifier(target)) return target.text === name;
+  if (ts.isBinaryExpression(target) && target.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    return assignmentTargetContains(target.left, name);
+  }
+  if (ts.isArrayLiteralExpression(target) || ts.isArrayBindingPattern(target)) {
+    return target.elements.some((element) => element && assignmentTargetContains(element, name));
+  }
+  if (ts.isObjectLiteralExpression(target)) {
+    return target.properties.some((property) => {
+      if (ts.isShorthandPropertyAssignment(property)) return property.name.text === name;
+      if (ts.isPropertyAssignment(property)) return assignmentTargetContains(property.initializer, name);
+      if (ts.isSpreadAssignment(property)) return assignmentTargetContains(property.expression, name);
+      return false;
+    });
+  }
+  if (ts.isObjectBindingPattern(target)) {
+    return target.elements.some((element) => assignmentTargetContains(element.name, name));
+  }
+  if (ts.isBindingElement(target)) return assignmentTargetContains(target.name, name);
+  if (ts.isSpreadElement(target)) return assignmentTargetContains(target.expression, name);
+  return false;
+}
+
+function assignmentPropertyName(node) {
+  if (ts.isIdentifier(node) || ts.isStringLiteralLike(node) || ts.isNumericLiteral(node)) return node.text;
+  return null;
+}
+
+function assignedExpressions(left, right, name) {
+  const target = unwrapExpression(left);
+  const value = unwrapExpression(right);
+  if (ts.isIdentifier(target)) return target.text === name ? [right] : [];
+  if (ts.isBinaryExpression(target) && target.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    if (!assignmentTargetContains(target.left, name)) return [];
+    const assigned = assignedExpressions(target.left, right, name);
+    return assigned === null ? null : [...assigned, target.right];
+  }
+  if (ts.isArrayLiteralExpression(target) || ts.isArrayBindingPattern(target)) {
+    if (!assignmentTargetContains(target, name)) return [];
+    if (!ts.isArrayLiteralExpression(value)) return null;
+    const expressions = [];
+    for (let index = 0; index < target.elements.length; index += 1) {
+      const element = target.elements[index];
+      if (!element || !assignmentTargetContains(element, name)) continue;
+      const assigned = value.elements[index] && assignedExpressions(element, value.elements[index], name);
+      if (assigned === null || !value.elements[index]) return null;
+      expressions.push(...assigned);
+    }
+    return expressions;
+  }
+  if (ts.isObjectLiteralExpression(target)) {
+    if (!assignmentTargetContains(target, name)) return [];
+    if (!ts.isObjectLiteralExpression(value)) return null;
+    const expressions = [];
+    for (const property of target.properties) {
+      const targetNode = ts.isShorthandPropertyAssignment(property)
+        ? property.name
+        : ts.isPropertyAssignment(property)
+          ? property.initializer
+          : ts.isSpreadAssignment(property)
+            ? property.expression
+            : null;
+      if (!targetNode || !assignmentTargetContains(targetNode, name)) continue;
+      if (ts.isSpreadAssignment(property)) return null;
+      const key = assignmentPropertyName(property.name);
+      if (key === null) return null;
+      const sourceProperty = value.properties.find(
+        (candidate) =>
+          (ts.isPropertyAssignment(candidate) || ts.isShorthandPropertyAssignment(candidate)) &&
+          assignmentPropertyName(candidate.name) === key
+      );
+      if (!sourceProperty) return null;
+      const sourceValue = ts.isPropertyAssignment(sourceProperty) ? sourceProperty.initializer : sourceProperty.name;
+      const assigned = assignedExpressions(targetNode, sourceValue, name);
+      if (assigned === null) return null;
+      expressions.push(...assigned);
+    }
+    return expressions;
+  }
+  return assignmentTargetContains(target, name) ? null : [];
+}
+
+function functionScopeHasVarBinding(node, name) {
+  let found = false;
+  function inspect(candidate) {
+    if (found || (candidate !== node && ts.isFunctionLike(candidate))) return;
+    if (
+      ts.isVariableDeclarationList(candidate) &&
+      !(candidate.flags & ts.NodeFlags.BlockScoped) &&
+      candidate.declarations.some((declaration) => bindingNameContains(declaration.name, name))
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(candidate, inspect);
+  }
+  if (node.body) inspect(node.body);
+  return found;
+}
+
+function writeScopeShadowsBinding(node, name) {
+  if (ts.isFunctionLike(node)) {
+    return (
+      node.parameters.some((parameter) => bindingNameContains(parameter.name, name)) ||
+      (node.name && ts.isIdentifier(node.name) && node.name.text === name) ||
+      functionScopeHasVarBinding(node, name)
+    );
+  }
+  const statements = ts.isBlock(node)
+    ? node.statements
+    : ts.isCaseBlock(node)
+      ? node.clauses.flatMap((clause) => clause.statements)
+      : null;
+  if (
+    statements?.some((statement) => {
+      if (ts.isVariableStatement(statement)) {
+        return (
+          Boolean(statement.declarationList.flags & ts.NodeFlags.BlockScoped) &&
+          statement.declarationList.declarations.some((declaration) => bindingNameContains(declaration.name, name))
+        );
+      }
+      return (
+        (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name?.text === name
+      );
+    })
+  ) {
+    return true;
+  }
+  if (ts.isCatchClause(node) && node.variableDeclaration) {
+    return bindingNameContains(node.variableDeclaration.name, name);
+  }
+  if (ts.isForStatement(node) && node.initializer && ts.isVariableDeclarationList(node.initializer)) {
+    return (
+      Boolean(node.initializer.flags & ts.NodeFlags.BlockScoped) &&
+      node.initializer.declarations.some((declaration) => bindingNameContains(declaration.name, name))
+    );
+  }
+  if ((ts.isForInStatement(node) || ts.isForOfStatement(node)) && ts.isVariableDeclarationList(node.initializer)) {
+    return (
+      Boolean(node.initializer.flags & ts.NodeFlags.BlockScoped) &&
+      node.initializer.declarations.some((declaration) => bindingNameContains(declaration.name, name))
+    );
+  }
+  return false;
+}
+
+function bindingWrites(sourceFile, name) {
+  const expressions = [];
+  let hasUnsupportedWrite = false;
+  const assignmentOperators = new Set([
+    ts.SyntaxKind.EqualsToken,
+    ts.SyntaxKind.PlusEqualsToken,
+    ts.SyntaxKind.MinusEqualsToken,
+    ts.SyntaxKind.AsteriskEqualsToken,
+    ts.SyntaxKind.AsteriskAsteriskEqualsToken,
+    ts.SyntaxKind.SlashEqualsToken,
+    ts.SyntaxKind.PercentEqualsToken,
+    ts.SyntaxKind.LessThanLessThanEqualsToken,
+    ts.SyntaxKind.GreaterThanGreaterThanEqualsToken,
+    ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
+    ts.SyntaxKind.AmpersandEqualsToken,
+    ts.SyntaxKind.BarEqualsToken,
+    ts.SyntaxKind.CaretEqualsToken,
+    ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+    ts.SyntaxKind.BarBarEqualsToken,
+    ts.SyntaxKind.QuestionQuestionEqualsToken
+  ]);
+  function visit(node, shadowed = false) {
+    if (node !== sourceFile && ts.isFunctionLike(node)) {
+      const parameterShadowsBinding =
+        shadowed ||
+        node.parameters.some((parameter) => bindingNameContains(parameter.name, name)) ||
+        Boolean(node.name && ts.isIdentifier(node.name) && node.name.text === name);
+      for (const parameter of node.parameters) {
+        if (parameter.initializer) visit(parameter.initializer, parameterShadowsBinding);
+      }
+      if (node.body) {
+        visit(node.body, parameterShadowsBinding || functionScopeHasVarBinding(node, name));
+      }
+      return;
+    }
+    const bindingIsShadowed =
+      shadowed ||
+      (node !== sourceFile && writeScopeShadowsBinding(node, name));
+    if (
+      !bindingIsShadowed &&
+      ts.isBinaryExpression(node) &&
+      assignmentOperators.has(node.operatorToken.kind) &&
+      assignmentTargetContains(node.left, name)
+    ) {
+      const assigned = assignedExpressions(node.left, node.right, name);
+      if (assigned === null) hasUnsupportedWrite = true;
+      else expressions.push(...assigned);
+    } else if (
+      !bindingIsShadowed &&
+      (ts.isForInStatement(node) || ts.isForOfStatement(node))
+    ) {
+      const loopTarget = ts.isVariableDeclarationList(node.initializer)
+        ? node.initializer.declarations.find(
+            (declaration) => !(node.initializer.flags & ts.NodeFlags.BlockScoped) && assignmentTargetContains(declaration.name, name)
+          )?.name
+        : node.initializer;
+      if (!loopTarget || !assignmentTargetContains(loopTarget, name)) {
+        ts.forEachChild(node, (child) => visit(child, bindingIsShadowed));
+        return;
+      }
+      if (ts.isForOfStatement(node) && ts.isArrayLiteralExpression(unwrapExpression(node.expression))) {
+        for (const element of unwrapExpression(node.expression).elements) {
+          const assigned = assignedExpressions(loopTarget, element, name);
+          if (assigned === null) hasUnsupportedWrite = true;
+          else expressions.push(...assigned);
+        }
+      } else {
+        hasUnsupportedWrite = true;
+      }
+    }
+    ts.forEachChild(node, (child) => visit(child, bindingIsShadowed));
+  }
+  visit(sourceFile);
+  return { expressions, hasUnsupportedWrite };
+}
+
+function callableFromExportExpression(
+  expression,
+  sourceFile,
+  seen = new Set(),
+  memoized = false,
+  contextualType = null
+) {
+  const contextualTypeTexts = [];
+  if (typeof contextualType === 'string') contextualTypeTexts.push(contextualType);
+  else if (contextualType) contextualTypeTexts.push(contextualType.getText(sourceFile));
+  contextualTypeTexts.push(...contextualTypeTextsForExpression(expression, sourceFile));
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isCommaListExpression(unwrapped)) {
+    return callableFromExportExpression(
+      unwrapped.elements[unwrapped.elements.length - 1],
+      sourceFile,
+      seen,
+      memoized,
+      contextualTypeTexts.join(' & ')
+    );
+  }
+  if (ts.isBinaryExpression(unwrapped) && unwrapped.operatorToken.kind === ts.SyntaxKind.CommaToken) {
+    return callableFromExportExpression(
+      unwrapped.right,
+      sourceFile,
+      seen,
+      memoized,
+      contextualTypeTexts.join(' & ')
+    );
+  }
+  if (ts.isBinaryExpression(unwrapped) && unwrapped.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    return callableFromExportExpression(
+      unwrapped.right,
+      sourceFile,
+      seen,
+      memoized,
+      contextualTypeTexts.join(' & ')
+    );
+  }
+  if (ts.isArrowFunction(unwrapped) || ts.isFunctionExpression(unwrapped)) {
+    const kind = ts.isArrowFunction(unwrapped) ? 'arrow' : 'function-expression';
+    return {
+      declaration: unwrapped,
+      kind: memoized ? `memoized ${kind}` : kind,
+      contextualPropsType: contextualTypeTexts.join(' & ')
+    };
+  }
+  if (ts.isConditionalExpression(unwrapped)) {
+    const branches = [unwrapped.whenTrue, unwrapped.whenFalse]
+      .map((branch) => callableFromExportExpression(branch, sourceFile, new Set(seen), memoized, contextualTypeTexts.join(' & ')))
+      .filter(Boolean);
+    if (branches.length === 0) return null;
+    throw new Error('conditional exported callable wrappers are not accepted');
+  }
+  if (ts.isIdentifier(unwrapped)) {
+    if (seen.has(unwrapped.text)) return null;
+    seen.add(unwrapped.text);
+    const functionDeclaration = sourceFile.statements.find(
+      (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === unwrapped.text && statement.body
+    );
+    if (functionDeclaration) {
+      throw new Error(`function-declaration exported callable alias ${unwrapped.text} is not accepted`);
+    }
+    for (const statement of sourceFile.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      const declaration = statement.declarationList.declarations.find(
+        (candidate) => ts.isIdentifier(candidate.name) && candidate.name.text === unwrapped.text
+      );
+      if (declaration?.initializer) {
+        if (!isConstVariableDeclaration(declaration)) {
+          throw new Error(`mutable exported callable alias ${unwrapped.text} is not accepted`);
+        }
+        return callableFromExportExpression(
+          declaration.initializer,
+          sourceFile,
+          seen,
+          memoized,
+          declaration.type ?? contextualTypeTexts.join(' & ')
+        );
+      }
+    }
+    return null;
+  }
+  if (!ts.isCallExpression(unwrapped) || unwrapped.arguments.length === 0) return null;
+  const bindings = reactWrapperBindings(sourceFile);
+  const callee = unwrapExpression(unwrapped.expression);
+  const reactWrapperName = (() => {
+    if (ts.isIdentifier(callee)) {
+      if (bindings.namedMemo.has(callee.text)) return 'memo';
+      if (bindings.namedForwardRef.has(callee.text)) return 'forwardRef';
+      return null;
+    }
+    const receiver =
+      (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee)) &&
+      ts.isIdentifier(unwrapExpression(callee.expression))
+        ? unwrapExpression(callee.expression).text
+        : null;
+    if (!receiver || !bindings.namespaces.has(receiver)) return null;
+    if (ts.isPropertyAccessExpression(callee)) return callee.name.text;
+    return ts.isStringLiteralLike(callee.argumentExpression) ? callee.argumentExpression.text : null;
+  })();
+  if (reactWrapperName === 'forwardRef') return { forwarded: true };
+  if (reactWrapperName !== 'memo') {
+    if (memoized) throw new Error('unsupported React.memo wrapper argument is not accepted');
+    return null;
+  }
+  const memoContextualTypes = [
+    ...contextualTypeTexts,
+    ...(unwrapped.typeArguments ?? []).map((typeArgument) => typeArgument.getText(sourceFile))
+  ];
+  const wrapped = callableFromExportExpression(
+    unwrapped.arguments[0],
+    sourceFile,
+    seen,
+    true,
+    memoContextualTypes.join(' & ')
+  );
+  if (!wrapped) throw new Error('unsupported React.memo wrapper argument is not accepted');
+  return wrapped;
+}
+
+function moduleVariableDeclarations(sourceFile, name) {
+  const declarations = [];
+  function visit(node) {
+    if (
+      node !== sourceFile &&
+      (ts.isFunctionLike(node) ||
+        ts.isClassDeclaration(node) ||
+        ts.isClassExpression(node) ||
+        ts.isModuleDeclaration(node))
+    ) {
+      return;
+    }
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === name &&
+      ts.isVariableDeclarationList(node.parent)
+    ) {
+      const blockScoped = Boolean(node.parent.flags & ts.NodeFlags.BlockScoped);
+      const directTopLevel = ts.isVariableStatement(node.parent.parent) && node.parent.parent.parent === sourceFile;
+      if (!blockScoped || directTopLevel) declarations.push(node);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return declarations;
+}
+
+function expressionIsDefinitelyNonCallable(expression, sourceFile, seen = new Set()) {
+  const unwrapped = unwrapExpression(expression);
+  if (
+    ts.isStringLiteralLike(unwrapped) ||
+    ts.isNumericLiteral(unwrapped) ||
+    ts.isBigIntLiteral(unwrapped) ||
+    ts.isNoSubstitutionTemplateLiteral(unwrapped) ||
+    unwrapped.kind === ts.SyntaxKind.TrueKeyword ||
+    unwrapped.kind === ts.SyntaxKind.FalseKeyword ||
+    unwrapped.kind === ts.SyntaxKind.NullKeyword
+  ) {
+    return true;
+  }
+  if (ts.isObjectLiteralExpression(unwrapped) || ts.isArrayLiteralExpression(unwrapped)) return true;
+  if (ts.isPrefixUnaryExpression(unwrapped) || ts.isPostfixUnaryExpression(unwrapped)) return true;
+  if (ts.isConditionalExpression(unwrapped)) {
+    return (
+      expressionIsDefinitelyNonCallable(unwrapped.whenTrue, sourceFile, new Set(seen)) &&
+      expressionIsDefinitelyNonCallable(unwrapped.whenFalse, sourceFile, new Set(seen))
+    );
+  }
+  if (ts.isCommaListExpression(unwrapped)) {
+    return expressionIsDefinitelyNonCallable(unwrapped.elements[unwrapped.elements.length - 1], sourceFile, seen);
+  }
+  if (ts.isBinaryExpression(unwrapped)) {
+    if (unwrapped.operatorToken.kind === ts.SyntaxKind.CommaToken) {
+      return expressionIsDefinitelyNonCallable(unwrapped.right, sourceFile, seen);
+    }
+    if (unwrapped.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      return expressionIsDefinitelyNonCallable(unwrapped.right, sourceFile, seen);
+    }
+    if (
+      unwrapped.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+      unwrapped.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+      unwrapped.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken ||
+      unwrapped.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandEqualsToken ||
+      unwrapped.operatorToken.kind === ts.SyntaxKind.BarBarEqualsToken ||
+      unwrapped.operatorToken.kind === ts.SyntaxKind.QuestionQuestionEqualsToken
+    ) {
+      return (
+        expressionIsDefinitelyNonCallable(unwrapped.left, sourceFile, new Set(seen)) &&
+        expressionIsDefinitelyNonCallable(unwrapped.right, sourceFile, new Set(seen))
+      );
+    }
+    return true;
+  }
+  if (ts.isIdentifier(unwrapped)) {
+    if (seen.has(unwrapped.text)) return false;
+    seen.add(unwrapped.text);
+    const declarations = moduleVariableDeclarations(sourceFile, unwrapped.text);
+    return (
+      declarations.length === 1 &&
+      isConstVariableDeclaration(declarations[0]) &&
+      Boolean(declarations[0].initializer) &&
+      expressionIsDefinitelyNonCallable(declarations[0].initializer, sourceFile, seen)
+    );
+  }
+  return false;
+}
+
+function anonymousDefaultFunctionContracts(source) {
+  const sourceFile = parsedSource(source, 'normalized-anonymous-default-wrapper.tsx');
+  const contracts = [];
+  const addContract = (declaration, kind) => {
+    const parameter = declaration.parameters.find(
+      (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
+    );
+    contracts.push({
+      kind,
+      spreadTargets: propsSpreadTargets(declaration, parameter, sourceFile),
+      propsType: parameter?.type?.getText(sourceFile) ?? '',
+      body: ts.isBlock(declaration.body)
+        ? declaration.body.getText(sourceFile).slice(1, -1)
+        : `return ${declaration.body.getText(sourceFile)}`
+    });
+  };
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      !statement.name &&
+      statement.body &&
+      statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) &&
+      statement.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)
+    ) {
+      addContract(statement, 'function');
+    } else if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+      if (ts.isIdentifier(unwrapExpression(statement.expression))) continue;
+      const callable = callableFromExportExpression(statement.expression, sourceFile);
+      if (callable && !callable.forwarded) addContract(callable.declaration, callable.kind);
+    }
+  }
+  return contracts;
+}
+
+function exportedVariableFunctionContracts(source, name) {
+  const sourceFile = parsedSource(source, 'normalized-variable-wrapper.tsx');
+  const contracts = [];
+  const exportedDeclarations = moduleVariableDeclarations(sourceFile, name);
+  if (exportedDeclarations.length === 0) return contracts;
+  const exportedDeclaration = exportedDeclarations[0];
+  const mutableBinding = exportedDeclarations.some((declaration) => !isConstVariableDeclaration(declaration));
+  const declarationContext = exportedDeclarations
+    .map((declaration) => declaration.type?.getText(sourceFile) ?? '')
+    .filter(Boolean)
+    .join(' & ');
+  if (
+    mutableBinding &&
+    declarationContext &&
+    isRefBearingPropsType(source, declarationContext)
+  ) {
+    throw new Error(`mutable exported callable binding ${name} is not accepted`);
+  }
+  const candidates = [];
+  candidates.push(...exportedDeclarations.flatMap((declaration) => (declaration.initializer ? [declaration.initializer] : [])));
+  const writes = bindingWrites(sourceFile, name);
+  candidates.push(...writes.expressions);
+  if (mutableBinding && writes.hasUnsupportedWrite) {
+    throw new Error(`mutable exported callable binding ${name} is not accepted`);
+  }
+  for (const candidate of candidates) {
+    const callable = callableFromExportExpression(
+      candidate,
+      sourceFile,
+      new Set(),
+      false,
+      declarationContext
+    );
+    const expressionContext = contextualTypeTextsForExpression(candidate, sourceFile).join(' & ');
+    if (
+      !callable &&
+      (declarationContext || expressionContext) &&
+      isRefBearingPropsType(source, [declarationContext, expressionContext].filter(Boolean).join(' & '))
+    ) {
+      throw new Error(`unsupported contextually typed exported callable ${name} is not accepted`);
+    }
+    if (!callable && mutableBinding && !expressionIsDefinitelyNonCallable(candidate, sourceFile)) {
+      throw new Error(`mutable exported callable binding ${name} is not accepted`);
+    }
+    if (!callable) continue;
+    if (callable.forwarded) continue;
+    if (mutableBinding) throw new Error(`mutable exported callable binding ${name} is not accepted`);
+    const parameter = callable.declaration.parameters.find(
+      (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
+    );
+    if (!parameter) continue;
+    contracts.push({
+      kind: callable.kind,
+      spreadTargets: propsSpreadTargets(callable.declaration, parameter, sourceFile),
+      propsType: parameter.type?.getText(sourceFile) ?? callable.contextualPropsType ?? '',
+      body: ts.isBlock(callable.declaration.body)
+        ? callable.declaration.body.getText(sourceFile).slice(1, -1)
+        : `return ${callable.declaration.body.getText(sourceFile)}`
+    });
+  }
+  return contracts;
 }
 
 export function normalizeRegistrySource({ source, registrySourcePath }) {
   const outputPath = outputPathForRegistrySource(registrySourcePath);
   const transformations = ['normalize-line-endings'];
   let normalized = source.replace(/\r\n?/g, '\n');
+  const sourceFile = ts.createSourceFile(outputPath, normalized, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  assertSupportedJsxPragmas(sourceFile, outputPath);
+  assertSupportedNormalizationDirectives(sourceFile, outputPath);
 
   if (registrySourcePath.endsWith('/combobox.tsx')) {
     const comboboxResult = rewriteModuleSpecifiers(normalized, registrySourcePath, (specifier) =>
@@ -488,15 +1544,18 @@ export function normalizeRegistrySource({ source, registrySourcePath }) {
   if (iconResult.transformed) transformations.push('resolve-lucide-icon-placeholders');
   normalized = iconResult.source;
 
-  if (registrySourcePath.endsWith('.tsx') && hasJsx(normalized) && !hasReactBinding(normalized)) {
-    normalized = insertImport(normalized, 'import * as React from "react"');
-    transformations.push('bind-react-namespace');
-  }
-
   if (registrySourcePath.endsWith('.tsx')) {
+    const sourceRequiresReactRuntime = hasJsx(normalized) || hasReactRuntimeUse(normalized);
     const forwardRefResult = normalizePublicForwardRefs(normalized);
+    const requiresReactBinding =
+      (sourceRequiresReactRuntime || forwardRefResult.transformed) && !hasReactBinding(forwardRefResult.source);
+    if (requiresReactBinding && hasTypeOnlyReactBinding(forwardRefResult.source)) {
+      throw new Error(`${outputPath}: a type-only React binding cannot provide the classic React 17 runtime`);
+    }
+    if (requiresReactBinding) transformations.push('bind-react-namespace');
     if (forwardRefResult.transformed) transformations.push('react17-forward-ref-public-wrappers');
     normalized = forwardRefResult.source;
+    if (requiresReactBinding) normalized = insertImport(normalized, 'import * as React from "react"');
   }
 
   normalized = `${normalized.replace(/\s+$/u, '')}\n`;
@@ -693,7 +1752,7 @@ function unwrapDependencyExpression(node) {
   return current;
 }
 
-function dependencyCall(node) {
+export function dependencyCall(node) {
   const current = unwrapDependencyExpression(node);
   if (!ts.isCallExpression(current)) return null;
   const expression = unwrapDependencyExpression(current.expression);
@@ -794,7 +1853,7 @@ function isSupportedRequireCallUse(node) {
   return false;
 }
 
-function assertSupportedRequireBindings(sourceFile, label) {
+export function assertSupportedRequireBindings(sourceFile, label) {
   function visit(node) {
     if (
       ts.isElementAccessExpression(node) &&
@@ -824,6 +1883,32 @@ function assertSupportedRequireBindings(sourceFile, label) {
   visit(sourceFile);
 }
 
+export function assertSupportedJsxPragmas(sourceFile, label) {
+  if (sourceFile.pragmas.has('jsx') || sourceFile.pragmas.has('jsxfrag')) {
+    throw new Error(`${label}: custom JSX factory pragmas are not accepted in generated profile source`);
+  }
+  const jsxRuntimePragma = sourceFile.pragmas.get('jsxruntime');
+  for (const pragma of jsxRuntimePragma ? (Array.isArray(jsxRuntimePragma) ? jsxRuntimePragma : [jsxRuntimePragma]) : []) {
+    const runtime = pragma.arguments?.factory;
+    if (runtime !== 'classic') {
+      throw new Error(
+        `${label}: JSX runtime pragma ${JSON.stringify(runtime)} is not accepted; generated source must use the classic React 17 runtime`
+      );
+    }
+  }
+  if (sourceFile.pragmas.has('jsximportsource')) {
+    throw new Error(`${label}: JSX import source pragmas are not accepted in generated profile source`);
+  }
+}
+
+function assertSupportedNormalizationDirectives(sourceFile, label) {
+  if (sourceFile.amdDependencies.length > 0 || sourceFile.moduleName) {
+    throw new Error(`${label}: AMD directives are not accepted in generated profile source`);
+  }
+  if (ts.preProcessFile(sourceFile.text, true, true).isLibFile) {
+    throw new Error(`${label}: no-default-lib directives are not accepted in generated profile source`);
+  }
+}
 function bindingPropertyName(element) {
   const property = element.propertyName ?? element.name;
   if (ts.isIdentifier(property) || ts.isStringLiteralLike(property)) return property.text;
@@ -842,6 +1927,7 @@ function assertReact17AstSource(source, label) {
     throw new Error(`${label}: source could not be parsed for React 17 compatibility`);
   }
   assertSupportedRequireBindings(sourceFile, label);
+  assertSupportedJsxPragmas(sourceFile, label);
 
   const namespaceBindings = new Map();
   for (const statement of sourceFile.statements) {
@@ -1049,25 +2135,50 @@ function assertReact17AstSource(source, label) {
 
 export function assertReact17Source(source, label) {
   assertReact17AstSource(source, label);
-  if (hasAppOwnedAliasSpecifier(source, label) || /<IconPlaceholder\b|\bIcons\./.test(source)) {
+  if (
+    hasAppOwnedAliasSpecifier(source, label) ||
+    hasActualIconPlaceholderJsx(source, label) ||
+    hasActualLegacyIconsReference(source, label)
+  ) {
     throw new Error(`${label}: unresolved alias or icon placeholder remains after normalization`);
   }
   if (label.endsWith('.tsx') && hasJsx(source) && !hasReactBinding(source)) {
     throw new Error(`${label}: JSX source does not bind the React namespace`);
   }
+  for (const anonymousDefault of anonymousDefaultFunctionContracts(source)) {
+    const refProps = isRefBearingPropsType(source, anonymousDefault.propsType);
+    const useRenderWrapper = /return\s+useRender\(\{/.test(anonymousDefault.body);
+    if (
+      refProps &&
+      (anonymousDefault.spreadTargets.some(targetAcceptsPublicRef) || useRenderWrapper)
+    ) {
+      throw new Error(
+        `${label}: anonymous default-exported ref-bearing ${anonymousDefault.kind} wrapper is not normalized with React.forwardRef`
+      );
+    }
+  }
   for (const name of exportedNames(source)) {
-    const forwardRef = new RegExp(`\\bconst\\s+${name}\\s*=\\s*React\\.forwardRef\\b`);
     const ordinary = exportedFunctionContract(source, name);
-    const refProps =
-      ordinary && /\.Props\b|(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?\b/.test(ordinary.propsType);
+    const refProps = ordinary && isRefBearingPropsType(source, ordinary.propsType);
     const useRenderWrapper = ordinary && /return\s+useRender\(\{/.test(ordinary.body);
     if (
       ordinary &&
       refProps &&
-      (targetAcceptsPublicRef(propsSpreadTarget(ordinary.body)) || useRenderWrapper) &&
-      !forwardRef.test(source)
+      (ordinary.spreadTargets.some(targetAcceptsPublicRef) || useRenderWrapper)
     ) {
       throw new Error(`${label}: public ref-bearing wrapper ${name} is not normalized with React.forwardRef`);
+    }
+    for (const variableFunction of exportedVariableFunctionContracts(source, name)) {
+      const variableRefProps = isRefBearingPropsType(source, variableFunction.propsType);
+      const variableUseRenderWrapper = /return\s+useRender\(\{/.test(variableFunction.body);
+      if (
+        variableRefProps &&
+        (variableFunction.spreadTargets.some(targetAcceptsPublicRef) || variableUseRenderWrapper)
+      ) {
+        throw new Error(
+          `${label}: public ref-bearing ${variableFunction.kind} wrapper ${name} is not normalized with React.forwardRef`
+        );
+      }
     }
   }
 }

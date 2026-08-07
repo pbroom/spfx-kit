@@ -34,7 +34,7 @@ import {
 import { replaceGeneratedPaths } from '../packages/ui-profile/scripts/lib/replace-generated.mjs';
 
 const temporaryRoots: string[] = [];
-const generatedPaths = ['snapshots', 'normalized', 'profile.json'];
+const generatedPaths = ['snapshots', 'normalized', 'profile.json', 'provenance.json'];
 const transactionModuleUrl = pathToFileURL(path.resolve('packages/ui-profile/scripts/lib/generation-transaction.mjs')).href;
 const replacementModuleUrl = pathToFileURL(path.resolve('packages/ui-profile/scripts/lib/replace-generated.mjs')).href;
 
@@ -50,6 +50,7 @@ async function makeCollection(root: string, version: string): Promise<void> {
   await writeFile(path.join(root, 'snapshots', 'canonical', 'version.txt'), version);
   await writeFile(path.join(root, 'normalized', 'version.txt'), version);
   await writeFile(path.join(root, 'profile.json'), `${JSON.stringify({ version })}\n`);
+  await writeFile(path.join(root, 'provenance.json'), `${JSON.stringify({ version })}\n`);
 }
 
 async function fixture(): Promise<{ root: string; packageRoot: string; stagingRoot: string; token: string }> {
@@ -68,7 +69,8 @@ async function collectionVersion(packageRoot: string): Promise<string[]> {
     readFile(path.join(packageRoot, 'snapshots', 'raw', 'version.txt'), 'utf8'),
     readFile(path.join(packageRoot, 'snapshots', 'canonical', 'version.txt'), 'utf8'),
     readFile(path.join(packageRoot, 'normalized', 'version.txt'), 'utf8'),
-    readFile(path.join(packageRoot, 'profile.json'), 'utf8').then((bytes) => JSON.parse(bytes).version)
+    readFile(path.join(packageRoot, 'profile.json'), 'utf8').then((bytes) => JSON.parse(bytes).version),
+    readFile(path.join(packageRoot, 'provenance.json'), 'utf8').then((bytes) => JSON.parse(bytes).version)
   ]);
 }
 
@@ -97,10 +99,11 @@ function childSource(): string {
       await writeFile(path.join(stagingRoot, 'snapshots', 'canonical', 'version.txt'), 'new');
       await writeFile(path.join(stagingRoot, 'normalized', 'version.txt'), 'new');
       await writeFile(path.join(stagingRoot, 'profile.json'), JSON.stringify({ version: 'new' }) + '\\n');
+      await writeFile(path.join(stagingRoot, 'provenance.json'), JSON.stringify({ version: 'new' }) + '\\n');
       await replaceGeneratedPaths({
         packageRoot,
         stagingRoot,
-        generatedPaths: ['snapshots', 'normalized', 'profile.json'],
+        generatedPaths: ['snapshots', 'normalized', 'profile.json', 'provenance.json'],
         generationSession,
         onBoundary: async (boundary) => {
           if (boundary !== requestedBoundary) return;
@@ -476,7 +479,7 @@ describe('generated profile full-command transaction', () => {
     await expect(replaceGeneratedPaths({ packageRoot, stagingRoot, generatedPaths })).rejects.toThrow(
       'requires a full-command generation session'
     );
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
   });
 
   it('holds the generation lock before source reads and staging', async () => {
@@ -514,7 +517,7 @@ describe('generated profile full-command transaction', () => {
     await waitForClose(contender);
     holder.send('release');
     await waitForClose(holder);
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
   });
 
   it('publishes one complete collection and removes owned transaction state', async () => {
@@ -527,7 +530,7 @@ describe('generated profile full-command transaction', () => {
         await replaceGeneratedPaths({ packageRoot, stagingRoot, generatedPaths, generationSession });
       }
     );
-    expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new']);
+    expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new', 'new']);
     expect((await readdir(packageRoot)).filter((name) => name.startsWith('.profile-'))).toEqual([]);
   });
 
@@ -547,7 +550,7 @@ describe('generated profile full-command transaction', () => {
         });
       }
     );
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'new', 'new', 'new']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'new', 'new', 'new', 'old']);
   });
 
   it('rejects a symlinked owner-derived staging root before journaling or mutation', async () => {
@@ -569,8 +572,8 @@ describe('generated profile full-command transaction', () => {
     }
     expect(failure).toBeInstanceOf(AggregateError);
     expect((failure as AggregateError).errors.some((error) => String(error).includes('outside its owner lock'))).toBe(true);
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
-    expect(await collectionVersion(external)).toEqual(['external', 'external', 'external', 'external']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
+    expect(await collectionVersion(external)).toEqual(['external', 'external', 'external', 'external', 'external']);
   });
 
   it('removes lock-owned staging after a hard kill before transaction journaling', async () => {
@@ -578,7 +581,7 @@ describe('generated profile full-command transaction', () => {
     await killBeforeJournal(packageRoot, token);
 
     expect(await recoverGeneratedReplacement({ packageRoot })).toEqual({ recovered: true, state: 'no-transaction' });
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
     expect((await readdir(packageRoot)).filter((name) => name.startsWith('.profile-'))).toEqual([]);
   });
 
@@ -600,7 +603,7 @@ describe('generated profile full-command transaction', () => {
           pid === owner.pid ? { status: 'alive', identity: `${owner.processIdentity}:recycled` } : { status: 'unknown' }
       })
     ).resolves.toMatchObject({ recovered: true, state: 'rolled-back' });
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
   });
 
   it('renews an unverified live owner lease beyond the former five-minute limit', async () => {
@@ -870,7 +873,7 @@ describe('generated profile full-command transaction', () => {
         }
       })
     ).resolves.toMatchObject({ recovered: true, state: 'rolled-back' });
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
   });
 
   it('preserves a copied-metadata replacement when retiring a stale recovery claim', async () => {
@@ -959,7 +962,7 @@ describe('generated profile full-command transaction', () => {
     await expect(realpath(path.join(releaseRoot, path.basename(relocated)))).resolves.toBeTruthy();
     await expect(realpath(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(withGeneratedProfileSession({ packageRoot, operation: 'update' }, async () => {})).resolves.toBeUndefined();
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
   });
 
   it('preserves a copied-metadata replacement when releasing a failed recovery claim', async () => {
@@ -998,7 +1001,7 @@ describe('generated profile full-command transaction', () => {
       recovered: true,
       state: 'rolled-back'
     });
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
   });
 
   it('rejects a symlinked staging ancestor before a regenerate can move external content', async () => {
@@ -1028,7 +1031,7 @@ describe('generated profile full-command transaction', () => {
     expect(failure).toBeInstanceOf(AggregateError);
     expect((failure as AggregateError).errors.some((error) => String(error).includes('symlinked ancestor'))).toBe(true);
     expect(await readFile(path.join(external, 'snapshots', 'canonical', 'version.txt'), 'utf8')).toBe('external');
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
   });
 
   it('canonicalizes differently cased package roots on case-insensitive filesystems', async ({ skip }) => {
@@ -1064,9 +1067,11 @@ describe('generated profile full-command transaction', () => {
       'backed-up:snapshots',
       'backed-up:normalized',
       'backed-up:profile.json',
+      'backed-up:provenance.json',
       'installed:snapshots',
       'installed:normalized',
       'installed:profile.json',
+      'installed:provenance.json',
       'committed',
       'backup-cleaned',
       'staging-cleaned',
@@ -1079,7 +1084,7 @@ describe('generated profile full-command transaction', () => {
       const recovery = await recoverGeneratedReplacement({ packageRoot });
       expect(recovery).toMatchObject({ recovered: true });
       const expected = ['committed', 'backup-cleaned', 'staging-cleaned', 'journal-cleared'].includes(boundary) ? 'new' : 'old';
-      expect(await collectionVersion(packageRoot), boundary).toEqual([expected, expected, expected, expected]);
+      expect(await collectionVersion(packageRoot), boundary).toEqual([expected, expected, expected, expected, expected]);
       expect(
         (await readdir(packageRoot)).filter((name) => name.startsWith('.profile-')),
         boundary
@@ -1140,7 +1145,7 @@ describe('generated profile full-command transaction', () => {
 
     await expect(recoverGeneratedReplacement({ packageRoot })).resolves.toBe(false);
     await expect(withGeneratedProfileSession({ packageRoot, operation: 'update' }, async () => {})).resolves.toBeUndefined();
-    expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new']);
+    expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new', 'new']);
     await expect(realpath(path.join(packageRoot, '.profile-generation-lock'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
@@ -1185,7 +1190,7 @@ describe('generated profile full-command transaction', () => {
     const releasedLock = (await readdir(packageRoot)).find((name) => name.startsWith('.profile-generation-lock.release-'));
     expect(releasedLock).toBeDefined();
     await expect(realpath(path.join(packageRoot, releasedLock!, path.basename(candidate)))).resolves.toBeTruthy();
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
   });
 
   it('resumes markerless backup and staging quarantine cleanup after repeated restarts', async () => {
@@ -1202,7 +1207,7 @@ describe('generated profile full-command transaction', () => {
         state: 'committed'
       });
       await expect(recoverGeneratedReplacement({ packageRoot })).resolves.toBe(false);
-      expect(await collectionVersion(packageRoot), kind).toEqual(['new', 'new', 'new', 'new']);
+      expect(await collectionVersion(packageRoot), kind).toEqual(['new', 'new', 'new', 'new', 'new']);
     }
   });
 
@@ -1217,7 +1222,7 @@ describe('generated profile full-command transaction', () => {
       recovered: true,
       state: 'committed'
     });
-    expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new']);
+    expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new', 'new']);
     await expect(realpath(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
@@ -1242,7 +1247,7 @@ describe('generated profile full-command transaction', () => {
       });
     });
     expect(promoted).toBe(true);
-    expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new']);
+    expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new', 'new']);
     expect((await readdir(packageRoot)).filter((name) => name.startsWith('.profile-generation-lock'))).toEqual([]);
   });
 
@@ -1255,7 +1260,7 @@ describe('generated profile full-command transaction', () => {
 
     await expect(recoverGeneratedReplacement({ packageRoot })).rejects.toThrow('has no transaction binding');
     expect(await readdir(cleanupRoot)).toContain('.generation-owner.json');
-    expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new']);
+    expect(await collectionVersion(packageRoot)).toEqual(['new', 'new', 'new', 'new', 'new']);
   });
 
   it('revalidates a cleanup quarantine after the removal boundary and preserves its replacement', async () => {
@@ -1598,7 +1603,7 @@ describe('generated profile full-command transaction', () => {
     await expect(realpath(path.join(releaseRoot, '.relocated-owned-discard-child'))).resolves.toBeTruthy();
     await expect(realpath(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(withGeneratedProfileSession({ packageRoot, operation: 'update' }, async () => {})).resolves.toBeUndefined();
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
   });
 
   it('reconciles pre-link and post-link retained-binding publication residue', async () => {
@@ -1619,7 +1624,7 @@ describe('generated profile full-command transaction', () => {
       state: 'rolled-back'
     });
     expect((await readdir(packageRoot)).filter((name) => name.startsWith('.profile-'))).toEqual([]);
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
   });
 
   it('preserves a journaled transaction when recovery bytes are not an exact old or new collection', async () => {
@@ -1638,7 +1643,7 @@ describe('generated profile full-command transaction', () => {
       recovered: true,
       state: 'rolled-back'
     });
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
   });
 
   it('resumes after a hard kill during recovery discard cleanup', async () => {
@@ -1647,7 +1652,7 @@ describe('generated profile full-command transaction', () => {
     await killRecoveryAtBoundary(packageRoot, 'recovery-cleanup:snapshots');
 
     expect(await recoverGeneratedReplacement({ packageRoot })).toMatchObject({ recovered: true, state: 'rolled-back' });
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
     expect((await readdir(packageRoot)).filter((name) => name.startsWith('.profile-'))).toEqual([]);
   });
 
@@ -1663,7 +1668,7 @@ describe('generated profile full-command transaction', () => {
     await expect(recoverGeneratedReplacement({ packageRoot, isProcessAlive: () => false })).rejects.toThrow(
       'lock metadata is unreadable'
     );
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
     expect(await readFile(ownerPath, 'utf8')).toContain('.profile-injected-staging');
   });
 
@@ -1686,6 +1691,6 @@ describe('generated profile full-command transaction', () => {
       'lock metadata is unreadable'
     );
     expect(await readFile(sentinelPath, 'utf8')).toBe('{"private":true}\n');
-    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old']);
+    expect(await collectionVersion(packageRoot)).toEqual(['old', 'old', 'old', 'old', 'old']);
   });
 });

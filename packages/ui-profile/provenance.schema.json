@@ -11,8 +11,7 @@
     "profileId",
     "registry",
     "runtime",
-    "hostTypeContract",
-    "isolatedCompilerTypeContract",
+    "reactTypeContract",
     "utilities",
     "dependencyResolutionPins",
     "typescriptMatrix",
@@ -82,17 +81,10 @@
         "lucideReact": { "const": "1.25.0" }
       }
     },
-    "hostTypeContract": {
+    "reactTypeContract": {
       "const": {
         "@types/react": "17.0.45",
         "@types/react-dom": "17.0.17"
-      }
-    },
-    "isolatedCompilerTypeContract": {
-      "const": {
-        "@types/react": "17.0.93",
-        "@types/react-dom": "17.0.17",
-        "@types/scheduler": "0.16.8"
       }
     },
     "utilities": {

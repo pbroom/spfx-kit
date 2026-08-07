@@ -3,12 +3,20 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 
-import { canonicalJson, moduleSpecifiers, sha256 } from './profile.mjs';
+import {
+  GENERATOR_VERSION,
+  PROFILE_ID,
+  PROFILE_SCHEMA_VERSION,
+  assertRegistryIds,
+  canonicalJson,
+  moduleSpecifiers,
+  sha256
+} from './profile.mjs';
 
 const SHADCN_NAME = 'shadcn';
 const SHADCN_VERSION = '4.16.1';
 const SHADCN_INTEGRITY = 'sha512-XLFzfNNIUPlUlyheFEzj0H4Vnhi9nI0nl3Nfgg8HYXW1FkUVhVT1X+mgmOUW8aWL5SeG0A+yJIV5fm3Hr9MVkQ==';
-const PROVENANCE_SCHEMA_SHA256 = 'd402c9716a05eb39a73615c2ebca00f28dfc67bbbba1ea54cf7c859eef43128e';
+const PROVENANCE_SCHEMA_SHA256 = '64b48f281eb52c98d8698a22749b09953c86458a8418f00b227c3ac1059f32ef';
 const DEFAULT_REGISTRY_ITEM_MAX_BYTES = 256 * 1024;
 const DEFAULT_REGISTRY_AGGREGATE_MAX_BYTES = 4 * 1024 * 1024;
 const DEFAULT_REGISTRY_REQUEST_TIMEOUT_MS = 30_000;
@@ -109,6 +117,16 @@ function assertAllowedProductionDependency(specifier, label, policy) {
   }
 }
 
+export function assertRegistryMetadataDependencies(item, policy) {
+  for (const field of ['dependencies', 'devDependencies']) {
+    const dependencies = item[field] ?? [];
+    assert(Array.isArray(dependencies), `Pinned registry item ${item.name} has invalid ${field}`);
+    for (const dependency of dependencies) {
+      assertAllowedProductionDependency(dependency, `Pinned registry item ${item.name}`, policy);
+    }
+  }
+}
+
 function resolveRelativeSourcePath(sourcePath, specifier, sourcePaths) {
   const base = path.posix.normalize(path.posix.join(path.posix.dirname(sourcePath), specifier));
   const candidates = [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`].filter((candidate) =>
@@ -117,7 +135,7 @@ function resolveRelativeSourcePath(sourcePath, specifier, sourcePaths) {
   assert(candidates.length === 1, `${sourcePath} has an unresolved or ambiguous relative source import: ${specifier}`);
 }
 
-function assertFetchedRegistryClosure(items, registryIds, policy, expectedSourcePathsById = new Map()) {
+export function assertFetchedRegistryClosure(items, registryIds, policy, expectedSourcePathsById = new Map()) {
   const registryIdSet = new Set(registryIds);
   const sourcePaths = new Set();
   for (const item of items) {
@@ -141,13 +159,7 @@ function assertFetchedRegistryClosure(items, registryIds, policy, expectedSource
   }
 
   for (const item of items) {
-    for (const field of ['dependencies', 'devDependencies']) {
-      const dependencies = item[field] ?? [];
-      assert(Array.isArray(dependencies), `Pinned registry item ${item.name} has invalid ${field}`);
-      for (const dependency of dependencies) {
-        assertAllowedProductionDependency(dependency, `Pinned registry item ${item.name}`, policy);
-      }
-    }
+    assertRegistryMetadataDependencies(item, policy);
     const registryDependencies = item.registryDependencies ?? [];
     assert(Array.isArray(registryDependencies), `Pinned registry item ${item.name} has invalid registryDependencies`);
     for (const dependency of registryDependencies) {
@@ -184,6 +196,25 @@ function assertFetchedRegistryClosure(items, registryIds, policy, expectedSource
   }
 }
 
+export function bindVerifiedSnapshotsToProvenance(provenance, snapshots) {
+  const registrySnapshots = {};
+  for (const id of provenance.registryIds) {
+    const raw = snapshots.get(id);
+    assert(Buffer.isBuffer(raw), `Verified registry snapshot is missing for ${id}`);
+    let parsed;
+    try {
+      parsed = JSON.parse(raw.toString('utf8'));
+    } catch (error) {
+      throw new Error(`Verified registry snapshot is not JSON for ${id}`, { cause: error });
+    }
+    registrySnapshots[id] = {
+      rawSha256: sha256(raw),
+      canonicalSha256: sha256(Buffer.from(canonicalJson(parsed)))
+    };
+  }
+  return { ...provenance, registrySnapshots };
+}
+
 async function assertCommittedRegistrySnapshots(packageRoot, provenance) {
   const expectedSourcePathsById = new Map();
   for (const id of provenance.registryIds) {
@@ -204,15 +235,10 @@ async function assertCommittedRegistrySnapshots(packageRoot, provenance) {
       parsed.files.map((file) => file.path).sort()
     );
   }
-  const implementationBytes = await readFile(path.join(packageRoot, provenance.normalization.implementation));
-  assert(
-    sha256(implementationBytes) === provenance.normalization.implementationSha256,
-    'Normalization implementation digest differs'
-  );
   return expectedSourcePathsById;
 }
 
-export async function assertProfileUpdateProvenance({ packageRoot, provenance }) {
+export async function assertProfileGenerationProvenance({ packageRoot, provenance }) {
   const schema = await readJson(path.join(packageRoot, 'provenance.schema.json'));
   assert(
     sha256(Buffer.from(canonicalJson(schema))) === PROVENANCE_SCHEMA_SHA256,
@@ -221,7 +247,23 @@ export async function assertProfileUpdateProvenance({ packageRoot, provenance })
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   const validate = ajv.compile(schema);
   assert(validate(provenance), `Profile update provenance is invalid: ${ajv.errorsText(validate.errors)}`);
-  return assertCommittedRegistrySnapshots(packageRoot, provenance);
+  assert(
+    provenance.profileId === PROFILE_ID &&
+      provenance.schemaVersion === PROFILE_SCHEMA_VERSION &&
+      provenance.generatorVersion === GENERATOR_VERSION,
+    'Provenance identity does not match the profile generator'
+  );
+  assertRegistryIds(provenance.registryIds);
+  const implementationBytes = await readFile(path.join(packageRoot, provenance.normalization.implementation));
+  assert(
+    sha256(implementationBytes) === provenance.normalization.implementationSha256,
+    'Normalization implementation digest differs'
+  );
+}
+
+export async function assertProfileUpdateProvenance(options) {
+  await assertProfileGenerationProvenance(options);
+  return assertCommittedRegistrySnapshots(options.packageRoot, options.provenance);
 }
 
 export async function assertPinnedShadcnToolchain({
