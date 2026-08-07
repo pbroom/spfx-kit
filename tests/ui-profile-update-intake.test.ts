@@ -70,7 +70,16 @@ async function provenanceFixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'ui-profile-provenance-'));
   temporaryRoots.push(root);
   const packageRoot = path.join(root, 'ui-profile');
-  await cp(path.resolve('packages/ui-profile'), packageRoot, { recursive: true });
+  const sourceRoot = path.resolve('packages/ui-profile');
+  await cp(sourceRoot, packageRoot, {
+    recursive: true,
+    filter: (source) => {
+      const segments = path.relative(sourceRoot, source).split(path.sep);
+      return !segments.some(
+        (segment) => ['node_modules', '.prepared', '.tsbuildinfo'].includes(segment) || segment.startsWith('.profile-')
+      );
+    }
+  });
   return {
     packageRoot,
     provenance: JSON.parse(await readFile(path.join(packageRoot, 'provenance.json'), 'utf8'))
