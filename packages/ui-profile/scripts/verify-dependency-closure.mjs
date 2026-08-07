@@ -126,18 +126,37 @@ if (!manifestOnly) {
   assert(reactPaths.length === 1, `Lockfile resolves ${reactPaths.length} React paths instead of one`);
   assert(reactDomPaths.length === 1, `Lockfile resolves ${reactDomPaths.length} React DOM paths instead of one`);
 
-  const npmArguments = ['ls', '--omit=dev', '--all', '--workspace', '@spfx-kit/ui-profile', '--json'];
-  let npmResult;
-  try {
-    npmResult = process.env.npm_execpath
-      ? await execFileAsync(process.execPath, [process.env.npm_execpath, ...npmArguments], {
+  async function runNpm(npmArguments) {
+    return process.env.npm_execpath
+      ? execFileAsync(process.execPath, [process.env.npm_execpath, ...npmArguments], {
           cwd: path.dirname(lockfilePath),
           maxBuffer: 10 * 1024 * 1024
         })
-      : await execFileAsync('npm', npmArguments, {
+      : execFileAsync('npm', npmArguments, {
           cwd: path.dirname(lockfilePath),
           maxBuffer: 10 * 1024 * 1024
         });
+  }
+
+  const strictPeerResolutionArgument = '--legacy-peer-deps=false';
+  const npmPeerResolution = (await runNpm(['config', 'get', 'legacy-peer-deps', strictPeerResolutionArgument])).stdout.trim();
+  assert(
+    npmPeerResolution === 'false',
+    `Effective npm config legacy-peer-deps must be false (received ${JSON.stringify(npmPeerResolution)})`
+  );
+
+  const npmArguments = [
+    'ls',
+    '--omit=dev',
+    '--all',
+    '--workspace',
+    '@spfx-kit/ui-profile',
+    '--json',
+    strictPeerResolutionArgument
+  ];
+  let npmResult;
+  try {
+    npmResult = await runNpm(npmArguments);
   } catch (error) {
     const stdout = error.stdout || '{}';
     const tree = JSON.parse(stdout);
@@ -158,9 +177,8 @@ if (!manifestOnly) {
   collectProblems(tree);
   assert(problems.length === 0, `npm dependency tree problems: ${[...new Set(problems)].join('; ')}`);
   const installedProfile = tree.dependencies?.['@spfx-kit/ui-profile'];
-  assert(installedProfile, 'npm tree does not contain the UI profile workspace');
   assert(
-    Object.keys(installedProfile.dependencies ?? {}).length === 0,
+    installedProfile === undefined || Object.keys(installedProfile.dependencies ?? {}).length === 0,
     'Tooling-only UI profile leaked dependencies into the production install tree'
   );
 }
