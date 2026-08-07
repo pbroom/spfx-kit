@@ -18,16 +18,40 @@
       "sha256": "b53b21ce15ee5ddf3185aaac4d02d3ab7fe3f6bb32a5ae56a1fa818de3ebfcd3"
     },
     {
+      "path": "tailwind-profile.css",
+      "sha256": "693a203fa49f599fedf8eb069b94fd8e11e833c7a9414d51f78c281105a185c6"
+    },
+    {
+      "path": "scripts/build-tailwind-css.mjs",
+      "sha256": "c1cbe33a809c5e2c9227ade2017bb0211783478323bc03db38ecaffb8ac3af18"
+    },
+    {
+      "path": "scripts/verify-tailwind-css.mjs",
+      "sha256": "5c5a1b42ab87046b7b4bf9cafaf1694f01fe8fdc717f87b582cc7082b4a076db"
+    },
+    {
+      "path": "scripts/lib/compile-tailwind-css.mjs",
+      "sha256": "85eb5680b59e2b1b0721e1ad21b6d04d16a5c90587abfc39a046672d23fbdf5d"
+    },
+    {
+      "path": "scripts/lib/scope-tailwind-css.mjs",
+      "sha256": "0fa68a7fb45f214b17bd149c05aab73028fe158e15339052fb01261e6360a308"
+    },
+    {
+      "path": "scripts/lib/block-network.mjs",
+      "sha256": "c978753f8abc21cb1e4c022d72e1b0ab6c668e8b468c00a1443723b86490872f"
+    },
+    {
       "path": "scripts/typecheck.mjs",
       "sha256": "c45a8345efcc328850d6c518d6d3a677a648f3941c235e50aa774c72cdf51c28"
     },
     {
       "path": "scripts/lib/generate-profile.mjs",
-      "sha256": "12ae253ca649b2f88d0575fe2e60e54d9dd50f67b75645b3fbcb9f3c077bb8d6"
+      "sha256": "1529e56adfbd52c2b716dfa987d16faea45b9043db3b60706664807f2827f220"
     },
     {
       "path": "scripts/lib/profile-update-intake.mjs",
-      "sha256": "09d9c7d3b8bd1bc7dddcf958129772b1f2be0480f255d890203a7d19ef0faded"
+      "sha256": "3ab2f43f3719326a419bc53d27ee17fc7ec8250f0a2656bc666e7b71b6603dc7"
     },
     {
       "path": "scripts/lib/typecheck-generated-profile.mjs",
@@ -35,7 +59,15 @@
     },
     {
       "path": "scripts/lib/generate-validated-profile.mjs",
-      "sha256": "aa226f17c419df67561e960af9f46460a2c181586df23b45e6e3ee5c437701de"
+      "sha256": "adf40bef2870dac4d62cb4083b71bfd4f981c2e8e432fa00fde4896c80a43094"
+    },
+    {
+      "path": "scripts/lib/generation-transaction.mjs",
+      "sha256": "040e899e0be45dd226e8142edfca79678a067be6da3e594e111871466a4fe02e"
+    },
+    {
+      "path": "scripts/lib/replace-generated.mjs",
+      "sha256": "f393bb1ff5ec8632d0690c8f30e790e4411e76e5a8a55f5d6a8c57b001ba2ecc"
     },
     {
       "path": "scripts/lib/generated-tree-closure.mjs",
@@ -74,11 +106,74 @@
       "sha256": "b72ba1a07871816fbb0e5fe3130d9f7319637e99a238222c08640badbf9d8e3c"
     }
   ],
+  "css": {
+    "animationSource": {
+      "package": "tw-animate-css",
+      "path": "dist/tw-animate.css",
+      "sha256": "6035b41301945cd65eb233b4653965e3c235338faae51b0f55676d591daaef23",
+      "version": "1.4.0"
+    },
+    "artifact": {
+      "path": "generated/tailwind-profile.css",
+      "sha256": "cc5ed5745180583005f60b650bdff79c560de825a6cf1046bf362bb27085400c"
+    },
+    "candidateCount": 609,
+    "compiler": {
+      "path": "scripts/lib/compile-tailwind-css.mjs",
+      "sha256": "85eb5680b59e2b1b0721e1ad21b6d04d16a5c90587abfc39a046672d23fbdf5d"
+    },
+    "conditionalClasses": [
+      "skui:border-b",
+      "skui:border-t",
+      "skui:group",
+      "skui:peer",
+      "skui:sr-only"
+    ],
+    "containerCount": 1,
+    "entry": {
+      "path": "tailwind-profile.css",
+      "sha256": "693a203fa49f599fedf8eb069b94fd8e11e833c7a9414d51f78c281105a185c6"
+    },
+    "fallbackPropertyCount": 51,
+    "keyframeCount": 5,
+    "networkBlocker": {
+      "path": "scripts/lib/block-network.mjs",
+      "sha256": "c978753f8abc21cb1e4c022d72e1b0ab6c668e8b468c00a1443723b86490872f"
+    },
+    "scoper": {
+      "path": "scripts/lib/scope-tailwind-css.mjs",
+      "sha256": "0fa68a7fb45f214b17bd149c05aab73028fe158e15339052fb01261e6360a308"
+    },
+    "scopeSeedSha256": "1b71e5f9b22a62328620a72bb6f76b6238771333d4a596e214f6ccd024603208",
+    "scopeSelector": "[data-spfx-ui-scope=\"skui-1b71e5f9b22a6232\"]",
+    "scopeValue": "skui-1b71e5f9b22a6232",
+    "structuralMarkers": [
+      "skui:group/accordion-trigger",
+      "skui:group/alert",
+      "skui:group/badge",
+      "skui:group/button",
+      "skui:group/combobox-content",
+      "skui:group/dropdown-menu-item",
+      "skui:group/field",
+      "skui:group/field-content",
+      "skui:group/field-group",
+      "skui:group/field-label",
+      "skui:group/input-group",
+      "skui:group/switch",
+      "skui:group/tabs",
+      "skui:group/tabs-list",
+      "skui:group/toggle",
+      "skui:group/toggle-group",
+      "skui:peer",
+      "skui:peer/field-label"
+    ],
+    "toolchainSha256": "15068020a22bf2d3822143f7b80da1b8ccfc3e74726f9f16b33876dccb05adfb"
+  },
   "dependencyClosure": {
     "path": "dependency-closure.json",
     "sha256": "071df6ff0af2debfd0cbbdbdbd372ad6d94230242e6a3cb0f4f9e70c347ef736"
   },
-  "generatorVersion": "1.1.0",
+  "generatorVersion": "1.2.0",
   "items": [
     {
       "canonical": {
@@ -698,8 +793,8 @@
       }
     }
   ],
-  "normalizationImplementationSha256": "4cb0cc83118b3de63f20d95de88bebcba1ddf07ce8959ceb505088bf041ed827",
+  "normalizationImplementationSha256": "daac81c193053273c2df03a30dd05dbe0488ad3b7063d607afddfa07b5352b94",
   "profileId": "spfx-react17-base-nova-v1",
-  "provenanceSha256": "105808f9edf183c4594181d4fdb8b0af3492defe986eed12a26e4d157d0035dc",
+  "provenanceSha256": "a8383ddfdac62bc57492a77b9d27472cc4390226147e3137b015f3f638550f94",
   "schemaVersion": 1
 }

@@ -10,7 +10,7 @@ const profileManifest = require('../../package.json');
 
 export const PROFILE_ID = 'spfx-react17-base-nova-v1';
 export const PROFILE_SCHEMA_VERSION = 1;
-export const GENERATOR_VERSION = '1.1.0';
+export const GENERATOR_VERSION = '1.2.0';
 export const NORMALIZATION_CONTRACT_VERSION = 'react17-classic-jsx-skui-v2';
 export const TAILWIND_PREFIX = 'skui';
 export const REGISTRY_IDS = Object.freeze([

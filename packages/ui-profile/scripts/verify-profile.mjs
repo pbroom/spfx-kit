@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 
 import { assertGeneratedTreeClosure, pinnedTypeDirectiveNames } from './lib/generated-tree-closure.mjs';
+import { verifyTailwindCss } from './lib/compile-tailwind-css.mjs';
 import { assertFetchedRegistryClosure } from './lib/profile-update-intake.mjs';
 import {
   GENERATOR_VERSION,
@@ -37,11 +38,19 @@ const expectedIds = [...REGISTRY_IDS];
 const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'compat-consumers/select-value.tsx',
+  'tailwind-profile.css',
+  'scripts/build-tailwind-css.mjs',
+  'scripts/verify-tailwind-css.mjs',
+  'scripts/lib/compile-tailwind-css.mjs',
+  'scripts/lib/scope-tailwind-css.mjs',
+  'scripts/lib/block-network.mjs',
   'scripts/typecheck.mjs',
   'scripts/lib/generate-profile.mjs',
   'scripts/lib/profile-update-intake.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
+  'scripts/lib/generation-transaction.mjs',
+  'scripts/lib/replace-generated.mjs',
   'scripts/lib/generated-tree-closure.mjs',
   'scripts/verify-dependency-closure.mjs',
   'scripts/prepare-base-ui.mjs',
@@ -112,6 +121,8 @@ const expectedCssToolchain = {
 };
 
 const expectedScripts = {
+  'css:build': 'node ./scripts/build-tailwind-css.mjs',
+  'css:verify': 'node ./scripts/verify-tailwind-css.mjs',
   'profile:update:network': 'node ./scripts/update-profile.mjs --allow-network',
   'profile:regenerate': 'node ./scripts/regenerate-profile.mjs',
   'profile:verify': 'node ./scripts/verify-profile.mjs',
@@ -138,11 +149,11 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === 'bfd2a20c1ba2c1f567a7a1e8fa905f3f3286a1c0535a4fa98daa36dbae0cc4b7',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === '1db7992670e1c8cd71d021976f4e83d2fb39c853ce9b12dfdc9c5dbc71267138',
   'profile.schema.json identity differs'
 );
 assert(
-  sha256(Buffer.from(canonicalJson(provenanceSchema))) === 'e25645d36aff73603995e119dbf51bace513beb29ba98926541d42ef1d9d485e',
+  sha256(Buffer.from(canonicalJson(provenanceSchema))) === 'f0eae4e9c3185b9bdec559c51ab814bc7145ae0df3f4bd748254f72872596d9d',
   'provenance.schema.json identity differs'
 );
 assert(validateProfile(profile), `profile.json schema errors: ${ajv.errorsText(validateProfile.errors)}`);
@@ -347,6 +358,8 @@ assertExact(await filesUnder('snapshots/canonical'), [...expectedCanonicalPaths]
 assertExact(await filesUnder('normalized'), [...expectedNormalizedPaths].sort(), 'Normalized source inventory');
 
 assertExact(manifest.scripts, expectedScripts, 'Package scripts');
+
+await verifyTailwindCss({ packageRoot, profile, provenance });
 
 console.log(
   `Verified ${PROFILE_ID}: ${profile.items.length} registry payloads, ${expectedNormalizedPaths.size} normalized files`

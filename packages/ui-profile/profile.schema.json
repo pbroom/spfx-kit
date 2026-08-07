@@ -12,6 +12,7 @@
     "provenanceSha256",
     "normalizationImplementationSha256",
     "compilerInputs",
+    "css",
     "dependencyClosure",
     "baseUiDeclarationTransform",
     "baseUiPopupLifecycleTransform",
@@ -26,16 +27,24 @@
     "normalizationImplementationSha256": { "$ref": "#/$defs/sha256" },
     "compilerInputs": {
       "type": "array",
-      "minItems": 16,
-      "maxItems": 16,
+      "minItems": 24,
+      "maxItems": 24,
       "prefixItems": [
         { "$ref": "#/$defs/compilerBridge" },
         { "$ref": "#/$defs/selectValueCompatibilityProbe" },
+        { "$ref": "#/$defs/tailwindCssEntry" },
+        { "$ref": "#/$defs/tailwindCssBuildImplementation" },
+        { "$ref": "#/$defs/tailwindCssVerificationImplementation" },
+        { "$ref": "#/$defs/tailwindCssCompilerImplementation" },
+        { "$ref": "#/$defs/tailwindCssScoperImplementation" },
+        { "$ref": "#/$defs/tailwindCssNetworkBlockerImplementation" },
         { "$ref": "#/$defs/typecheckImplementation" },
         { "$ref": "#/$defs/profileGenerationImplementation" },
         { "$ref": "#/$defs/profileUpdateIntakeImplementation" },
         { "$ref": "#/$defs/generatedProfileTypecheckImplementation" },
         { "$ref": "#/$defs/validatedProfileGenerationImplementation" },
+        { "$ref": "#/$defs/generationTransactionImplementation" },
+        { "$ref": "#/$defs/generatedReplacementImplementation" },
         { "$ref": "#/$defs/generatedTreeClosureImplementation" },
         { "$ref": "#/$defs/dependencyClosureVerificationImplementation" },
         { "$ref": "#/$defs/baseUiPreparationImplementation" },
@@ -48,6 +57,7 @@
       ],
       "items": false
     },
+    "css": { "$ref": "#/$defs/cssContract" },
     "dependencyClosure": { "$ref": "#/$defs/snapshot" },
     "baseUiDeclarationTransform": { "$ref": "#/$defs/snapshot" },
     "baseUiPopupLifecycleTransform": { "$ref": "#/$defs/snapshot" },
@@ -80,6 +90,45 @@
       "allOf": [
         { "$ref": "#/$defs/snapshot" },
         { "type": "object", "properties": { "path": { "const": "compat-consumers/select-value.tsx" } } }
+      ]
+    },
+    "tailwindCssEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "tailwind-profile.css" } } }
+      ]
+    },
+    "tailwindCssBuildImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/build-tailwind-css.mjs" } } }
+      ]
+    },
+    "tailwindCssVerificationImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/verify-tailwind-css.mjs" } } }
+      ]
+    },
+    "tailwindCssCompilerImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        {
+          "type": "object",
+          "properties": { "path": { "const": "scripts/lib/compile-tailwind-css.mjs" } }
+        }
+      ]
+    },
+    "tailwindCssScoperImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/lib/scope-tailwind-css.mjs" } } }
+      ]
+    },
+    "tailwindCssNetworkBlockerImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/lib/block-network.mjs" } } }
       ]
     },
     "typecheckImplementation": {
@@ -119,6 +168,18 @@
           "type": "object",
           "properties": { "path": { "const": "scripts/lib/generate-validated-profile.mjs" } }
         }
+      ]
+    },
+    "generationTransactionImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/lib/generation-transaction.mjs" } } }
+      ]
+    },
+    "generatedReplacementImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/lib/replace-generated.mjs" } } }
       ]
     },
     "generatedTreeClosureImplementation": {
@@ -174,6 +235,96 @@
     },
     "tsconfigTs58": {
       "allOf": [{ "$ref": "#/$defs/snapshot" }, { "type": "object", "properties": { "path": { "const": "tsconfig.ts58.json" } } }]
+    },
+    "cssContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry",
+        "animationSource",
+        "compiler",
+        "scoper",
+        "networkBlocker",
+        "toolchainSha256",
+        "scopeSeedSha256",
+        "scopeValue",
+        "scopeSelector",
+        "artifact",
+        "candidateCount",
+        "structuralMarkers",
+        "conditionalClasses",
+        "keyframeCount",
+        "containerCount",
+        "fallbackPropertyCount"
+      ],
+      "properties": {
+        "entry": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            { "type": "object", "properties": { "path": { "const": "tailwind-profile.css" } } }
+          ]
+        },
+        "animationSource": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["package", "version", "path", "sha256"],
+          "properties": {
+            "package": { "const": "tw-animate-css" },
+            "version": { "const": "1.4.0" },
+            "path": { "const": "dist/tw-animate.css" },
+            "sha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "compiler": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            {
+              "type": "object",
+              "properties": { "path": { "const": "scripts/lib/compile-tailwind-css.mjs" } }
+            }
+          ]
+        },
+        "scoper": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            { "type": "object", "properties": { "path": { "const": "scripts/lib/scope-tailwind-css.mjs" } } }
+          ]
+        },
+        "networkBlocker": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            { "type": "object", "properties": { "path": { "const": "scripts/lib/block-network.mjs" } } }
+          ]
+        },
+        "toolchainSha256": { "$ref": "#/$defs/sha256" },
+        "scopeSeedSha256": { "$ref": "#/$defs/sha256" },
+        "scopeValue": { "type": "string", "pattern": "^skui-[a-f0-9]{16}$" },
+        "scopeSelector": {
+          "type": "string",
+          "pattern": "^\\[data-spfx-ui-scope=\"skui-[a-f0-9]{16}\"\\]$"
+        },
+        "artifact": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            { "type": "object", "properties": { "path": { "const": "generated/tailwind-profile.css" } } }
+          ]
+        },
+        "candidateCount": { "type": "integer", "minimum": 1 },
+        "structuralMarkers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^skui:(?:group|peer)(?:/[a-z0-9-]+)?$" }
+        },
+        "conditionalClasses": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "keyframeCount": { "type": "integer", "minimum": 1 },
+        "containerCount": { "type": "integer", "minimum": 0 },
+        "fallbackPropertyCount": { "type": "integer", "minimum": 1 }
+      }
     },
     "output": {
       "type": "object",

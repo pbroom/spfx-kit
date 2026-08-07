@@ -48,11 +48,19 @@ const expectedNormalizedPaths = expectedRegistryIds
 const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'compat-consumers/select-value.tsx',
+  'tailwind-profile.css',
+  'scripts/build-tailwind-css.mjs',
+  'scripts/verify-tailwind-css.mjs',
+  'scripts/lib/compile-tailwind-css.mjs',
+  'scripts/lib/scope-tailwind-css.mjs',
+  'scripts/lib/block-network.mjs',
   'scripts/typecheck.mjs',
   'scripts/lib/generate-profile.mjs',
   'scripts/lib/profile-update-intake.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
+  'scripts/lib/generation-transaction.mjs',
+  'scripts/lib/replace-generated.mjs',
   'scripts/lib/generated-tree-closure.mjs',
   'scripts/verify-dependency-closure.mjs',
   'scripts/prepare-base-ui.mjs',
@@ -251,6 +259,17 @@ interface ProfileManifest {
   provenanceSha256: string;
   normalizationImplementationSha256: string;
   compilerInputs: SnapshotReference[];
+  css: {
+    artifact: SnapshotReference;
+    scopeValue: string;
+    scopeSelector: string;
+    candidateCount: number;
+    structuralMarkers: string[];
+    conditionalClasses: string[];
+    keyframeCount: number;
+    containerCount: number;
+    fallbackPropertyCount: number;
+  };
   dependencyClosure: SnapshotReference;
   baseUiDeclarationTransform: SnapshotReference;
   baseUiPopupLifecycleTransform: SnapshotReference;
@@ -387,7 +406,7 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(profileSchema.required).toContain('$schema');
     expect(profileSchema.properties.profileId.const).toBe('spfx-react17-base-nova-v1');
     expect(profileSchema.properties.items).toMatchObject({ minItems: 24, maxItems: 24 });
-    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 16, maxItems: 16, items: false });
+    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 24, maxItems: 24, items: false });
     expect(profileSchema.properties.items.uniqueItems).toBe(true);
     expect(profileSchema.$defs.sha256.pattern).toBe('^[a-f0-9]{64}$');
     expect(profileSchema.$defs.item.additionalProperties).toBe(false);

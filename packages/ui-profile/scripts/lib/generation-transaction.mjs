@@ -19,7 +19,8 @@ import { promisify } from 'node:util';
 
 const LOCK_NAME = '.profile-generation-lock';
 const CLAIM_NAME = 'recovery-claim';
-const TRANSACTION_KIND = 'ui-profile-generation-v1';
+const TRANSACTION_KIND = 'ui-profile-generation-v2';
+const LEGACY_TRANSACTION_KIND = 'ui-profile-generation-v1';
 const OWNER_FILE = 'owner.json';
 const CLAIM_FILE = 'claim.json';
 const LEASE_FILE = 'lease.json';
@@ -36,9 +37,21 @@ const RETAINED_BINDING_KIND = 'ui-profile-retained-payload-v1';
 const SESSION = Symbol('ui-profile-generation-session');
 const execFileAsync = promisify(execFile);
 const OPERATION_PATHS = Object.freeze({
+  update: Object.freeze(['snapshots', 'normalized', 'generated', 'profile.json', 'provenance.json']),
+  regenerate: Object.freeze(['snapshots/canonical', 'normalized', 'generated', 'profile.json'])
+});
+const LEGACY_OPERATION_PATHS = Object.freeze({
   update: Object.freeze(['snapshots', 'normalized', 'profile.json', 'provenance.json']),
   regenerate: Object.freeze(['snapshots/canonical', 'normalized', 'profile.json'])
 });
+
+function pathsMatch(actual, expected) {
+  return actual.length === expected.length && actual.every((relativePath, index) => relativePath === expected[index]);
+}
+
+function recoveryOperationPaths(operation) {
+  return [OPERATION_PATHS[operation], LEGACY_OPERATION_PATHS[operation]].filter(Boolean);
+}
 
 // Filesystem device and inode numbers are uint64 values on supported Node
 // platforms.  The default Stats representation is Number, which can silently
@@ -205,7 +218,7 @@ function assertRetainedBinding(binding, lockIdentity, ownerToken, ownerOperation
       binding.disposition !== 'discarded' ||
       !Number.isSafeInteger(binding.index) ||
       binding.index !== index ||
-      binding.generatedPath !== OPERATION_PATHS[ownerOperation]?.[index]
+      !recoveryOperationPaths(ownerOperation).some((paths) => binding.generatedPath === paths[index])
     ) {
       throw new Error('Generated profile retained discard binding is invalid');
     }
@@ -492,7 +505,11 @@ function assertStagingRoot(lockRoot, stagingRoot) {
 }
 
 function assertTransaction(transaction, { packageRoot, lockRoot, ownerToken, ownerOperation }) {
-  if (!isObject(transaction) || transaction.kind !== TRANSACTION_KIND || transaction.token !== ownerToken) {
+  if (
+    !isObject(transaction) ||
+    ![TRANSACTION_KIND, LEGACY_TRANSACTION_KIND].includes(transaction.kind) ||
+    transaction.token !== ownerToken
+  ) {
     throw new Error('Generated profile transaction metadata is invalid');
   }
   if (
@@ -510,11 +527,9 @@ function assertTransaction(transaction, { packageRoot, lockRoot, ownerToken, own
     throw new Error('Generated profile transaction backup path is not bound to its owner lock');
   }
   const generatedPaths = assertSafeRelativePaths(transaction.generatedPaths);
-  const expectedPaths = OPERATION_PATHS[ownerOperation];
-  if (
-    generatedPaths.length !== expectedPaths.length ||
-    generatedPaths.some((relativePath, index) => relativePath !== expectedPaths[index])
-  ) {
+  const allowedLayouts =
+    transaction.kind === TRANSACTION_KIND ? [OPERATION_PATHS[ownerOperation]] : recoveryOperationPaths(ownerOperation);
+  if (!allowedLayouts.some((expectedPaths) => expectedPaths && pathsMatch(generatedPaths, expectedPaths))) {
     throw new Error(`Generated profile transaction targets do not match the ${ownerOperation} operation`);
   }
   if (
@@ -2896,10 +2911,7 @@ async function beginTransaction(session, { stagingRoot, generatedPaths, onBounda
   assertStagingRoot(session.lockRoot, stagingRoot);
   generatedPaths = assertSafeRelativePaths(generatedPaths);
   const expectedPaths = OPERATION_PATHS[session.operation];
-  if (
-    generatedPaths.length !== expectedPaths.length ||
-    generatedPaths.some((relativePath, index) => relativePath !== expectedPaths[index])
-  ) {
+  if (!pathsMatch(generatedPaths, expectedPaths)) {
     throw new Error(`Generated replacement paths do not match the ${session.operation} session`);
   }
   await realDirectoryIdentity(stagingRoot, 'staging root');
