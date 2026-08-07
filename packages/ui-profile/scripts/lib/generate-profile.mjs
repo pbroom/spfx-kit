@@ -39,6 +39,10 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
 
   for (const id of provenance.registryIds) {
     const rawBytes = await readFile(path.join(rawRoot, `${id}.json`));
+    const expected = provenance.registrySnapshots[id];
+    if (sha256(rawBytes) !== expected.rawSha256) {
+      throw new Error(`Raw registry snapshot digest differs for ${id}`);
+    }
     const parsed = JSON.parse(rawBytes.toString('utf8'));
     if (parsed.name !== id || !Array.isArray(parsed.files) || parsed.files.length === 0) {
       throw new Error(`Registry snapshot for ${id} has an unexpected identity or no files`);
@@ -58,6 +62,9 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
     const rawRelative = `snapshots/raw/${id}.json`;
     const canonicalRelative = `snapshots/canonical/${id}.json`;
     const canonicalBytes = Buffer.from(canonicalJson(parsed));
+    if (sha256(canonicalBytes) !== provenance.registrySnapshots[id].canonicalSha256) {
+      throw new Error(`Canonical registry snapshot digest differs for ${id}`);
+    }
     await writeFile(path.join(outputRoot, canonicalRelative), canonicalBytes);
 
     const normalized = [];

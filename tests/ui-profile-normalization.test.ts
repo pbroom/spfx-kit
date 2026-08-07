@@ -399,6 +399,55 @@ describe('React 17 UI profile normalization', () => {
     ).toThrow(/public ref-bearing (?:arrow|function-expression) wrapper Probe is not normalized with React\.forwardRef/u);
   });
 
+  it.each([
+    'export const Probe = React.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)',
+    'export const Probe = React.memo(function (props: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> })',
+    'import { memo as memoComponent } from "react"; export const Probe = memoComponent((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)',
+    'export default React.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)',
+    'const Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; export default React.memo(Inner)',
+    'const Inner = function (props: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }; export const Probe = React.memo(Inner)',
+    'export const Probe = React.memo(React.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />))',
+    'export const Probe = (React.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />) as React.FC<ButtonPrimitive.Props>)',
+    'const R = React; export const Probe = R.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)',
+    'let R; R = React; export const Probe = R.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)'
+  ])('fails closed for memoized ref-bearing wrappers: %s', (declaration) => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source: `import * as React from "react"\nimport { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+      })
+    ).toThrow(/ref-bearing memoized (?:arrow|function|function-expression) wrapper/u);
+  });
+
+  it.each([
+    'const identity = <T,>(value: T) => value; export const Probe = React.memo(identity((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />))',
+    'const library = { wrap: <T,>(value: T) => value }; export default React.memo(library.wrap((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />))'
+  ])('rejects unsupported call-wrapped React.memo arguments: %s', (declaration) => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source: `import * as React from "react"\nimport { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+      })
+    ).toThrow('unsupported React.memo wrapper argument is not accepted');
+  });
+
+  it('accepts safe and unrelated memo call shapes', () => {
+    for (const declaration of [
+      'export const Probe = React.memo(React.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />))',
+      'import { forwardRef as forward } from "react"; const Forwarded = forward<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />); export const Probe = React.memo(Forwarded)',
+      'const R = React; export const Probe = R.memo(R.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />))',
+      'type PlainProps = { disabled?: boolean }; export const Probe = React.memo((props: PlainProps) => <ButtonPrimitive {...props} />)',
+      'const library = { memo: <T,>(value: T) => value }; export const Probe = library.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)'
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source: `import * as React from "react"\nimport { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+        })
+      ).not.toThrow();
+    }
+  });
+
   it('tracks renamed props bindings through normalization and fail-closed guards', () => {
     const normalized = normalizeRegistrySource({
       registrySourcePath: 'registry/base-nova/ui/probe.tsx',

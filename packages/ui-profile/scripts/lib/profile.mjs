@@ -895,6 +895,129 @@ function exportedFunctionContract(source, name) {
   };
 }
 
+function reactWrapperBindings(sourceFile) {
+  const namespaces = new Set();
+  const namedMemo = new Set();
+  const namedForwardRef = new Set();
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isImportEqualsDeclaration(statement) &&
+      !statement.isTypeOnly &&
+      ts.isExternalModuleReference(statement.moduleReference) &&
+      statement.moduleReference.expression?.text === 'react'
+    ) {
+      namespaces.add(statement.name.text);
+      continue;
+    }
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== 'react' ||
+      !statement.importClause ||
+      statement.importClause.isTypeOnly
+    ) {
+      continue;
+    }
+    if (statement.importClause.name) namespaces.add(statement.importClause.name.text);
+    const bindings = statement.importClause.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) {
+      namespaces.add(bindings.name.text);
+    } else if (bindings) {
+      for (const specifier of bindings.elements) {
+        const importedName = (specifier.propertyName ?? specifier.name).text;
+        if (!specifier.isTypeOnly && importedName === 'memo') {
+          namedMemo.add(specifier.name.text);
+        } else if (!specifier.isTypeOnly && importedName === 'forwardRef') {
+          namedForwardRef.add(specifier.name.text);
+        }
+      }
+    }
+  }
+  let addedNamespace = true;
+  while (addedNamespace) {
+    addedNamespace = false;
+    function collectNamespaceAliases(node) {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+        const initializer = unwrapExpression(node.initializer);
+        if (ts.isIdentifier(initializer) && namespaces.has(initializer.text) && !namespaces.has(node.name.text)) {
+          namespaces.add(node.name.text);
+          addedNamespace = true;
+        }
+      } else if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        const left = unwrapExpression(node.left);
+        const right = unwrapExpression(node.right);
+        if (
+          ts.isIdentifier(left) &&
+          ts.isIdentifier(right) &&
+          namespaces.has(right.text) &&
+          !namespaces.has(left.text)
+        ) {
+          namespaces.add(left.text);
+          addedNamespace = true;
+        }
+      }
+      ts.forEachChild(node, collectNamespaceAliases);
+    }
+    collectNamespaceAliases(sourceFile);
+  }
+  return { namespaces, namedMemo, namedForwardRef };
+}
+
+function callableFromExportExpression(expression, sourceFile, seen = new Set(), memoized = false) {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isArrowFunction(unwrapped) || ts.isFunctionExpression(unwrapped)) {
+    const kind = ts.isArrowFunction(unwrapped) ? 'arrow' : 'function-expression';
+    return { declaration: unwrapped, kind: memoized ? `memoized ${kind}` : kind };
+  }
+  if (ts.isIdentifier(unwrapped)) {
+    if (!memoized) return null;
+    if (seen.has(unwrapped.text)) return null;
+    seen.add(unwrapped.text);
+    const functionDeclaration = sourceFile.statements.find(
+      (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === unwrapped.text && statement.body
+    );
+    if (functionDeclaration) {
+      return { declaration: functionDeclaration, kind: memoized ? 'memoized function' : 'function' };
+    }
+    for (const statement of sourceFile.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      const declaration = statement.declarationList.declarations.find(
+        (candidate) => ts.isIdentifier(candidate.name) && candidate.name.text === unwrapped.text
+      );
+      if (declaration?.initializer) {
+        return callableFromExportExpression(declaration.initializer, sourceFile, seen, memoized);
+      }
+    }
+    return null;
+  }
+  if (!ts.isCallExpression(unwrapped) || unwrapped.arguments.length === 0) return null;
+  const bindings = reactWrapperBindings(sourceFile);
+  const callee = unwrapExpression(unwrapped.expression);
+  const reactWrapperName = (() => {
+    if (ts.isIdentifier(callee)) {
+      if (bindings.namedMemo.has(callee.text)) return 'memo';
+      if (bindings.namedForwardRef.has(callee.text)) return 'forwardRef';
+      return null;
+    }
+    const receiver =
+      (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee)) &&
+      ts.isIdentifier(unwrapExpression(callee.expression))
+        ? unwrapExpression(callee.expression).text
+        : null;
+    if (!receiver || !bindings.namespaces.has(receiver)) return null;
+    if (ts.isPropertyAccessExpression(callee)) return callee.name.text;
+    return ts.isStringLiteralLike(callee.argumentExpression) ? callee.argumentExpression.text : null;
+  })();
+  if (reactWrapperName === 'forwardRef') return { forwarded: true };
+  if (reactWrapperName !== 'memo') {
+    if (memoized) throw new Error('unsupported React.memo wrapper argument is not accepted');
+    return null;
+  }
+  const wrapped = callableFromExportExpression(unwrapped.arguments[0], sourceFile, seen, true);
+  if (!wrapped) throw new Error('unsupported React.memo wrapper argument is not accepted');
+  return wrapped;
+}
+
 function anonymousDefaultFunctionContracts(source) {
   const sourceFile = parsedSource(source, 'normalized-anonymous-default-wrapper.tsx');
   const contracts = [];
@@ -921,9 +1044,8 @@ function anonymousDefaultFunctionContracts(source) {
     ) {
       addContract(statement, 'function');
     } else if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
-      const expression = unwrapExpression(statement.expression);
-      if (ts.isArrowFunction(expression)) addContract(expression, 'arrow');
-      else if (ts.isFunctionExpression(expression)) addContract(expression, 'function-expression');
+      const callable = callableFromExportExpression(statement.expression, sourceFile);
+      if (callable && !callable.forwarded) addContract(callable.declaration, callable.kind);
     }
   }
   return contracts;
@@ -936,19 +1058,21 @@ function exportedVariableFunctionContract(source, name) {
     const declaration = statement.declarationList.declarations.find(
       (candidate) => ts.isIdentifier(candidate.name) && candidate.name.text === name
     );
-    const initializer = declaration?.initializer ? unwrapExpression(declaration.initializer) : null;
-    if (!initializer || (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer))) continue;
-    const parameter = initializer.parameters.find(
+    const callable = declaration?.initializer
+      ? callableFromExportExpression(declaration.initializer, sourceFile)
+      : null;
+    if (!callable || callable.forwarded) continue;
+    const parameter = callable.declaration.parameters.find(
       (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
     );
     if (!parameter) return null;
     return {
-      kind: ts.isArrowFunction(initializer) ? 'arrow' : 'function-expression',
-      spreadTargets: propsSpreadTargets(initializer, parameter, sourceFile),
+      kind: callable.kind,
+      spreadTargets: propsSpreadTargets(callable.declaration, parameter, sourceFile),
       propsType: parameter.type?.getText(sourceFile) ?? '',
-      body: ts.isBlock(initializer.body)
-        ? initializer.body.getText(sourceFile).slice(1, -1)
-        : `return ${initializer.body.getText(sourceFile)}`
+      body: ts.isBlock(callable.declaration.body)
+        ? callable.declaration.body.getText(sourceFile).slice(1, -1)
+        : `return ${callable.declaration.body.getText(sourceFile)}`
     };
   }
   return null;
