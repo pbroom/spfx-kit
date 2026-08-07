@@ -466,6 +466,18 @@ describe('React 17 UI profile normalization', () => {
     ).not.toThrow();
   });
 
+  it('accepts a mutable export when every write is a source-bound React.forwardRef wrapper', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export let Probe = React.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />)\n'
+      })
+    ).not.toThrow();
+  });
+
   it('rejects mutable module-scope callable aliases', () => {
     expect(() =>
       normalizeRegistrySource({
@@ -480,6 +492,20 @@ describe('React 17 UI profile normalization', () => {
   });
 
   it.each([
+    'let Probe; Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; export { Probe }',
+    'let Inner; Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; let Probe; Probe = Inner; export { Probe }',
+    'let Probe; Probe = (0, (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />); export { Probe }',
+    'let Inner; let Probe; Probe = (Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />); export { Probe }',
+    'let Inner; let Probe; Probe = (Inner ||= (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />); export { Probe }',
+    'let undefined; undefined = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; let Probe; Probe = undefined; export { Probe }',
+    'let Probe; function activate(undefined) { Probe = undefined } export { Probe }',
+    'let Probe; function activate() { let undefined = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; Probe = undefined } export { Probe }',
+    'let Probe; ({ Probe } = { Probe: (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} /> }); export { Probe }',
+    'let Probe; for (Probe of [(props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />]) {} export { Probe }',
+    'var Probe; { var Probe; Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} /> } export { Probe }',
+    'if (ready) { var Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} /> } export { Probe }',
+    'for (var Probe of [(props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />]) {} export { Probe }',
+    'let Probe; function activate(_ = (Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)) { var Probe } export { Probe }',
     'let Probe: React.FC<ButtonPrimitive.Props>; Probe = props => <ButtonPrimitive {...props} />; export { Probe }',
     'const Inner = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />; let Probe = () => null; Probe = Inner; export { Probe }',
     'let Probe: React.FC<ButtonPrimitive.Props> = () => null; Probe &&= props => <ButtonPrimitive {...props} />; export { Probe }',
@@ -524,11 +550,28 @@ describe('React 17 UI profile normalization', () => {
     ).not.toThrow();
   });
 
+  it('does not confuse nested lexical or function-scoped shadow assignments with an exported binding', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'let Probe\n' +
+          'function demo() { let Probe; Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} /> }\n' +
+          'function demoVar() { if (ready) { var Probe }; Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} /> }\n' +
+          'export { Probe }\n'
+      })
+    ).not.toThrow();
+  });
+
   it('accepts unrelated mutable and conditional scalar exports', () => {
     expect(() =>
       normalizeRegistrySource({
         registrySourcePath: 'registry/base-nova/ui/probe.tsx',
-        source: 'export let count = 0\nexport const mode = ready ? "a" : "b"\n'
+        source:
+          'export let count = 0\n' +
+          'export const mode = ready ? "a" : "b"\n' +
+          'let value; ({ value } = { value: 1 }); for (value of [2]) {} export { value }\n'
       })
     ).not.toThrow();
   });
