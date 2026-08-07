@@ -501,37 +501,102 @@ const NON_REF_STRUCTURAL_TARGETS = new Set([
   'TooltipPrimitive.Root'
 ]);
 
-function propsSpreadTarget(body) {
-  const spreads = [...body.matchAll(/{\s*\.\.\.props\s*}/g)];
-  const spread = spreads.at(-1);
-  if (!spread) return null;
-  const beforeSpread = body.slice(0, spread.index);
-  let target = null;
-  for (const match of beforeSpread.matchAll(/<([A-Za-z][\w.]*)\b/g)) {
-    let braces = 0;
-    let quote = null;
-    let closed = false;
-    for (let index = match.index; index < spread.index; index += 1) {
-      const character = body[index];
-      if (quote) {
-        if (character === '\\') index += 1;
-        else if (character === quote) quote = null;
-        continue;
+function propsBindingName(parameter) {
+  if (!parameter) return null;
+  if (ts.isIdentifier(parameter.name)) return parameter.name.text;
+  if (!ts.isObjectBindingPattern(parameter.name)) return null;
+  const rest = parameter.name.elements.find((element) => element.dotDotDotToken && ts.isIdentifier(element.name));
+  return rest?.name.text ?? null;
+}
+
+function bindingNameContains(name, expected) {
+  if (!name) return false;
+  if (ts.isIdentifier(name)) return name.text === expected;
+  return name.elements.some((element) => element && bindingNameContains(element.name, expected));
+}
+
+function scopeShadowsBinding(node, expected) {
+  const statements = ts.isBlock(node)
+    ? node.statements
+    : ts.isCaseBlock(node)
+      ? node.clauses.flatMap((clause) => clause.statements)
+      : null;
+  if (
+    statements?.some((statement) => {
+      if (ts.isVariableStatement(statement)) {
+        return statement.declarationList.declarations.some((declaration) => bindingNameContains(declaration.name, expected));
       }
-      if (character === '"' || character === "'" || character === '`') {
-        quote = character;
-        continue;
-      }
-      if (character === '{') braces += 1;
-      else if (character === '}') braces -= 1;
-      else if (character === '>' && braces === 0) {
-        closed = true;
-        break;
+      return (
+        (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name?.text === expected
+      );
+    })
+  ) {
+    return true;
+  }
+  if (ts.isCatchClause(node) && node.variableDeclaration) {
+    return bindingNameContains(node.variableDeclaration.name, expected);
+  }
+  if (ts.isForStatement(node) && node.initializer && ts.isVariableDeclarationList(node.initializer)) {
+    return node.initializer.declarations.some((declaration) => bindingNameContains(declaration.name, expected));
+  }
+  if ((ts.isForInStatement(node) || ts.isForOfStatement(node)) && ts.isVariableDeclarationList(node.initializer)) {
+    return node.initializer.declarations.some((declaration) => bindingNameContains(declaration.name, expected));
+  }
+  return false;
+}
+
+function propsSpreadTargets(declaration, parameter, sourceFile) {
+  const propsBinding = propsBindingName(parameter);
+  if (!propsBinding || !declaration.body) return [];
+  const parameterBindsRef =
+    ts.isObjectBindingPattern(parameter.name) &&
+    parameter.name.elements.some(
+      (element) => !element.dotDotDotToken && !element.propertyName && ts.isIdentifier(element.name) && element.name.text === 'ref'
+    );
+  const bodyStart = ts.isBlock(declaration.body) ? declaration.body.getStart(sourceFile) + 1 : declaration.body.getStart(sourceFile);
+  const targets = [];
+  function visit(node, propsBindingIsShadowed = false, refBindingIsShadowed = false) {
+    if (
+      node !== declaration.body &&
+      (ts.isFunctionLike(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node))
+    ) {
+      return;
+    }
+    const bindingIsShadowed =
+      propsBindingIsShadowed || (node !== declaration.body && scopeShadowsBinding(node, propsBinding));
+    const refIsShadowed =
+      refBindingIsShadowed || (node !== declaration.body && scopeShadowsBinding(node, 'ref'));
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const spreadsBinding = node.attributes.properties.some((attribute) => {
+        if (!ts.isJsxSpreadAttribute(attribute)) return false;
+        const expression = unwrapExpression(attribute.expression);
+        return ts.isIdentifier(expression) && expression.text === propsBinding;
+      });
+      if (spreadsBinding) {
+        const refAttributes = node.attributes.properties.filter(
+          (attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(sourceFile) === 'ref'
+        );
+        const forwardsRef = parameterBindsRef && !refIsShadowed && refAttributes.some((attribute) => {
+          if (!attribute.initializer || !ts.isJsxExpression(attribute.initializer) || !attribute.initializer.expression) {
+            return false;
+          }
+          const expression = unwrapExpression(attribute.initializer.expression);
+          return ts.isIdentifier(expression) && expression.text === 'ref';
+        });
+        targets.push({
+          name: node.tagName.getText(sourceFile),
+          startOffset: node.getStart(sourceFile) - bodyStart,
+          insertionOffset: node.tagName.end - bodyStart,
+          bindingIsShadowed,
+          forwardsRef,
+          hasConflictingRef: refAttributes.length > (forwardsRef ? 1 : 0)
+        });
       }
     }
-    if (!closed) target = { name: match[1], index: match.index };
+    ts.forEachChild(node, (child) => visit(child, bindingIsShadowed, refIsShadowed));
   }
-  return target;
+  visit(declaration.body);
+  return targets;
 }
 
 function targetAcceptsPublicRef(target) {
@@ -661,7 +726,8 @@ function normalizePublicForwardRefs(source) {
       defaultExport: modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword),
       namedExport: modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
       name,
-      parameter
+      parameter,
+      spreadTargets: propsSpreadTargets(statement, parameter, sourceFile)
     });
   }
 
@@ -674,26 +740,25 @@ function normalizePublicForwardRefs(source) {
     destructuring = destructuring.replace(/(^|\n)(\s*)ref\s*,\s*(?=\n|})/m, '$1$2').replace(/{\s*ref\s*,/, '{');
 
     let body = normalized.slice(candidate.bodyOpen + 1, candidate.bodyClose);
-    let target = propsSpreadTarget(body);
+    const publicSpreadTargets = candidate.spreadTargets.filter(targetAcceptsPublicRef);
+    const safeSpreadTargets = publicSpreadTargets.filter(
+      (candidateTarget) => !candidateTarget.bindingIsShadowed && !candidateTarget.hasConflictingRef
+    );
+    let target = publicSpreadTargets.length === 1 && safeSpreadTargets.length === 1 ? safeSpreadTargets[0] : null;
     const useRender = /return\s+useRender\(\{\s*/.exec(body);
-    if (!target && useRender) {
+    if (publicSpreadTargets.length === 0 && useRender) {
       const tag = /useRender\.ComponentProps<(["'])([a-z][a-z0-9-]*)\1>/.exec(propsType);
-      if (tag) target = { name: tag[2], index: useRender.index };
+      if (tag) target = { name: tag[2], useRender: true };
     }
     if (!targetAcceptsPublicRef(target)) continue;
     const targetName = target.name;
-    if (useRender && target.index === useRender.index) {
+    if (target.useRender) {
       const insertion = useRender.index + useRender[0].length;
       body = `${body.slice(0, insertion)}ref,\n    ${body.slice(insertion)}`;
-    } else {
-      const openingEnd = body.indexOf('{...props}', target.index);
-      const opening = openingEnd === -1 ? '' : body.slice(target.index, openingEnd);
-      if (!/\bref={ref}/.test(opening)) {
-        const targetOffset = target.index + targetName.length + 1;
-        const lineStart = body.lastIndexOf('\n', target.index) + 1;
-        const indentation = /^\s*/.exec(body.slice(lineStart, target.index))[0];
-        body = `${body.slice(0, targetOffset)}\n${indentation}  ref={ref}${body.slice(targetOffset)}`;
-      }
+    } else if (!target.forwardsRef) {
+      const lineStart = body.lastIndexOf('\n', target.startOffset) + 1;
+      const indentation = /^\s*/.exec(body.slice(lineStart, target.startOffset))[0];
+      body = `${body.slice(0, target.insertionOffset)}\n${indentation}  ref={ref}${body.slice(target.insertionOffset)}`;
     }
     const elementType = refElementType(targetName, propsType);
     const replacement =
@@ -715,6 +780,7 @@ function exportedFunctionContract(source, name) {
     (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
   );
   return {
+    spreadTargets: propsSpreadTargets(declaration, parameter, sourceFile),
     propsType: parameter?.type?.getText(sourceFile) ?? '',
     body: declaration.body.getText(sourceFile).slice(1, -1)
   };
@@ -729,6 +795,7 @@ function anonymousDefaultFunctionContracts(source) {
     );
     contracts.push({
       kind,
+      spreadTargets: propsSpreadTargets(declaration, parameter, sourceFile),
       propsType: parameter?.type?.getText(sourceFile) ?? '',
       body: ts.isBlock(declaration.body)
         ? declaration.body.getText(sourceFile).slice(1, -1)
@@ -768,6 +835,7 @@ function exportedVariableFunctionContract(source, name) {
     if (!parameter) return null;
     return {
       kind: ts.isArrowFunction(initializer) ? 'arrow' : 'function-expression',
+      spreadTargets: propsSpreadTargets(initializer, parameter, sourceFile),
       propsType: parameter.type?.getText(sourceFile) ?? '',
       body: ts.isBlock(initializer.body)
         ? initializer.body.getText(sourceFile).slice(1, -1)
@@ -1411,7 +1479,10 @@ export function assertReact17Source(source, label) {
   for (const anonymousDefault of anonymousDefaultFunctionContracts(source)) {
     const refProps = isRefBearingPropsType(source, anonymousDefault.propsType);
     const useRenderWrapper = /return\s+useRender\(\{/.test(anonymousDefault.body);
-    if (refProps && (targetAcceptsPublicRef(propsSpreadTarget(anonymousDefault.body)) || useRenderWrapper)) {
+    if (
+      refProps &&
+      (anonymousDefault.spreadTargets.some(targetAcceptsPublicRef) || useRenderWrapper)
+    ) {
       throw new Error(
         `${label}: anonymous default-exported ref-bearing ${anonymousDefault.kind} wrapper is not normalized with React.forwardRef`
       );
@@ -1425,7 +1496,7 @@ export function assertReact17Source(source, label) {
     if (
       ordinary &&
       refProps &&
-      (targetAcceptsPublicRef(propsSpreadTarget(ordinary.body)) || useRenderWrapper) &&
+      (ordinary.spreadTargets.some(targetAcceptsPublicRef) || useRenderWrapper) &&
       !forwardRef.test(source)
     ) {
       throw new Error(`${label}: public ref-bearing wrapper ${name} is not normalized with React.forwardRef`);
@@ -1436,7 +1507,7 @@ export function assertReact17Source(source, label) {
     if (
       variableFunction &&
       variableRefProps &&
-      (targetAcceptsPublicRef(propsSpreadTarget(variableFunction.body)) || variableUseRenderWrapper) &&
+      (variableFunction.spreadTargets.some(targetAcceptsPublicRef) || variableUseRenderWrapper) &&
       !forwardRef.test(source)
     ) {
       throw new Error(
