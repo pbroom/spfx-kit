@@ -6,7 +6,7 @@
   },
   "baseUiPopupLifecycleTransform": {
     "path": "compat/base-ui-1.6.0/popup-lifecycle/contract.json",
-    "sha256": "772b9777c7fed2b1a2672c99616aac31f7df3a4a30526d6d94115c9f6fb06deb"
+    "sha256": "6500f7475790853273cfbbb10c1c570c054acd883db4031988b0001978aacfef"
   },
   "compilerInputs": [
     {
@@ -14,12 +14,16 @@
       "sha256": "76f6e8a5b9ebc66c2289ba7aa9d16e200cbb116e27b3117d7de18c18cc23398e"
     },
     {
+      "path": "compat-consumers/select-value.tsx",
+      "sha256": "b53b21ce15ee5ddf3185aaac4d02d3ab7fe3f6bb32a5ae56a1fa818de3ebfcd3"
+    },
+    {
       "path": "scripts/typecheck.mjs",
       "sha256": "c45a8345efcc328850d6c518d6d3a677a648f3941c235e50aa774c72cdf51c28"
     },
     {
       "path": "scripts/lib/generate-profile.mjs",
-      "sha256": "147e053f7ad168b6b9fbeef596d37f6e3afce2115358576f24e8735b6be04001"
+      "sha256": "a1df9d0fa5dadcc9a4d46406e112c1131a74dd654b62fe3afc937a30d6db2aa9"
     },
     {
       "path": "scripts/lib/profile-update-intake.mjs",
