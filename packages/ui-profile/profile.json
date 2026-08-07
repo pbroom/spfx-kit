@@ -35,7 +35,7 @@
     },
     {
       "path": "scripts/lib/generate-validated-profile.mjs",
-      "sha256": "64c5f695f6366c8e412b7c0858cb5286f94c91290d0faf83f4feeaf5c1df6093"
+      "sha256": "91ec19316ff7d7c6d1f48c12731c3df8afdb28d17e5bf448ac7d38949d1a52ef"
     },
     {
       "path": "scripts/lib/generated-tree-closure.mjs",
