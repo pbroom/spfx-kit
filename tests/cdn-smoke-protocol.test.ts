@@ -67,6 +67,48 @@ describe('actual staged CDN smoke-check worker', () => {
     ]);
   });
 
+  it('accepts a separately forwarded HTTPS CDN origin with the same immutable-release rules', () => {
+    const publicOrigin = 'https://cdn-preview.example.test';
+    const publicReleaseBaseUrl = `${publicOrigin}/apps/hello-card-spfx/versions/1.0.0-20260804T120000000Z-browser01/`;
+    const harness = createWorkerHarness((_url, worker) => {
+      worker.define?.('hello-card-web-part', [], () => undefined);
+    });
+
+    harness.dispatch({
+      requestId: 'request-forwarded',
+      deliveryOrigin: publicOrigin,
+      releaseBaseUrl: publicReleaseBaseUrl,
+      assets: [{ path: 'assets/hello-card.js', url: `${publicReleaseBaseUrl}assets/hello-card.js` }]
+    });
+
+    expect(harness.loadedUrls).toEqual([`${publicReleaseBaseUrl}assets/hello-card.js`]);
+    expect(harness.messages.at(-1)).toEqual(expect.objectContaining({ requestId: 'request-forwarded', status: 'ready' }));
+  });
+
+  it.each(['https://[::]', 'https://[::1]', 'https://[::ffff:0.0.0.0]', 'https://127.0.0.2', 'https://[::ffff:127.0.0.1]'])(
+    'rejects loopback CDN origin %s before importScripts runs',
+    (loopbackOrigin) => {
+      const harness = createWorkerHarness();
+
+      harness.dispatch({
+        requestId: 'request-ipv6-loopback',
+        deliveryOrigin: loopbackOrigin,
+        releaseBaseUrl: `${loopbackOrigin}/apps/hello-card-spfx/versions/1.0.0-20260804T120000000Z-browser01/`,
+        assets: [
+          {
+            path: 'entry.js',
+            url: `${loopbackOrigin}/apps/hello-card-spfx/versions/1.0.0-20260804T120000000Z-browser01/entry.js`
+          }
+        ]
+      });
+
+      expect(harness.loadedUrls).toEqual([]);
+      expect(harness.messages.at(-1)).toEqual(
+        expect.objectContaining({ status: 'error', message: expect.stringContaining('loopback HTTP or forwarded HTTPS') })
+      );
+    }
+  );
+
   it.each([
     ['wrong origin URL', 'http://127.0.0.1:4199/apps/hello-card-spfx/versions/1.0.0/entry.js'],
     ['Lab-origin URL', `${origin}/apps/hello-card-spfx/versions/1.0.0/entry.js`],

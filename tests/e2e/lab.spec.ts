@@ -724,6 +724,7 @@ test('shows a clear CDN error without falling back to the standalone package', a
   const alert = page.getByRole('alert');
   await expect(alert).toContainText('CDN resources unavailable');
   await expect(alert).toContainText('No validated staging CDN export exists for hello-card-spfx.');
+  await expect(page.locator('.preview-frame > .package-runtime-state--error > span')).toHaveCSS('text-align', 'left');
   await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.preview-frame')).toHaveAttribute('data-package-mode', 'cdn');
   await expect(page.locator('.preview-frame').getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
@@ -789,7 +790,7 @@ test('rejects a same-origin mock CDN descriptor without requesting assets or fal
 
   const alert = page.getByRole('alert');
   await expect(alert).toContainText('CDN resources unavailable');
-  await expect(alert).toContainText('separate credential-free http://127.0.0.1 origin');
+  await expect(alert).toContainText('separate credential-free loopback HTTP or forwarded HTTPS origin');
   await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.preview-frame').getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
   expect(assetRequestCount).toBe(0);

@@ -139,11 +139,15 @@
       throw new Error('The staged CDN smoke-check delivery origin is invalid.');
     }
     const url = tryParseUrl(value);
+    const loopback = url?.protocol === 'http:' && isCanonicalLoopbackHostname(url.hostname) && Boolean(url.port);
+    const forwarded =
+      url?.protocol === 'https:' &&
+      Boolean(url.hostname) &&
+      !isUnspecifiedHostname(url.hostname) &&
+      !isLoopbackHostname(url.hostname);
     if (
       !url ||
-      url.protocol !== 'http:' ||
-      url.hostname !== '127.0.0.1' ||
-      !url.port ||
+      (!loopback && !forwarded) ||
       url.origin === self.location.origin ||
       url.href !== `${url.origin}/` ||
       url.username ||
@@ -151,9 +155,44 @@
       url.search ||
       url.hash
     ) {
-      throw new Error('The staged CDN smoke-check requires a separate explicit loopback mock-CDN origin.');
+      throw new Error('The staged CDN smoke-check requires a separate loopback HTTP or forwarded HTTPS mock-CDN origin.');
     }
     return url.origin;
+  }
+
+  function isCanonicalLoopbackHostname(value) {
+    return String(value).trim().toLowerCase() === '127.0.0.1';
+  }
+
+  function isLoopbackHostname(value) {
+    const hostname = String(value)
+      .trim()
+      .toLowerCase()
+      .replace(/^\[|\]$/g, '')
+      .replace(/\.+$/, '');
+    return (
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      /^127(?:\.\d{1,3}){3}$/.test(hostname) ||
+      hostname === '::1' ||
+      /^::(?:ffff:)?7f[\da-f]{2}:[\da-f]{1,4}$/.test(hostname)
+    );
+  }
+
+  function isUnspecifiedHostname(value) {
+    const hostname = String(value)
+      .trim()
+      .toLowerCase()
+      .replace(/^\[|\]$/g, '');
+    return (
+      hostname === '0.0.0.0' ||
+      hostname === '::' ||
+      hostname === '::ffff:0:0' ||
+      hostname === '::ffff:0.0.0.0' ||
+      hostname === '255.255.255.255' ||
+      /^(?:22[4-9]|23\d)\./.test(hostname) ||
+      /^ff[0-9a-f]{2}:/i.test(hostname)
+    );
   }
 
   function validateReleaseBaseUrl(value, deliveryOrigin) {

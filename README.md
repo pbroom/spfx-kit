@@ -15,20 +15,30 @@ npm ci
 npm run dev
 ```
 
-Open the URL printed by Vite. By default the lab runs on:
+The normal development command starts both local services:
 
 ```text
-http://127.0.0.1:5173/
+Lab:       http://127.0.0.1:5173/
+Local CDN: http://127.0.0.1:5174/
 ```
 
-If that port is busy, choose another port without editing source:
+Both ports are strict so a second launch cannot silently start duplicate or
+misrouted services. If the Lab port is busy, choose another port without
+editing source; the launcher automatically gives the local CDN the matching
+Lab origin for CORS:
 
 ```sh
-SPFX_LAB_PORT=5174 npm run dev
+SPFX_LAB_PORT=5175 npm run dev
 ```
 
-`npm run dev` first runs `npm run sync:lab`, then starts `apps/lab`. The
-sync step rebuilds the local, ignored
+Override the CDN origin separately with `SPFX_KIT_MOCK_CDN_ORIGIN` when its
+default port is unavailable. `npm run dev:lab` and `npm run dev:cdn` remain
+available for deliberate single-service diagnostics.
+
+`npm run dev` first runs `npm run sync:lab`, then starts `apps/lab` and the
+separate-origin local mock CDN as one coordinated process. If either service
+stops, the launcher stops the other rather than leaving a partial environment.
+The sync step rebuilds the local, ignored
 `apps/lab/src/generated/lab-registry.ts` file from every managed app under
 `.spfx-kit/apps` that has a lab adapter at `.spfx-kit/lab/register.tsx` or the
 legacy `src/lab/register.tsx` path.
@@ -54,8 +64,9 @@ The lab is for fast local authoring and visual QA. Before deployment, still run 
 
 The Lab previews the selected app in **Standalone** mode by default. CDN mode
 uses SPFx Kit's separate-origin local mock CDN. Export a `staging-cdn` artifact
-for that exact mock origin, publish and select it in the local bucket, and run
-the mock-CDN service before switching modes. The Lab resolves only the selected
+for that exact mock origin, then publish and select it in the local bucket.
+The normal `npm run dev` command already runs the mock-CDN service. The Lab
+resolves only the selected
 checksum-pinned release; it does not scan exports, choose a latest build, or
 fall back to Lab-served or Standalone assets. The scripts load from the mock
 origin in an isolated worker that executes their top-level code and records AMD
@@ -143,10 +154,11 @@ reserved namespace is not evidence that npm packages or shared resources are
 already CDN-hosted.
 
 The Lab administration API is development-only and fail-closed: requests must
-arrive over the local Lab origin from loopback, and writes also require the
-Lab's explicit same-origin intent header. Invalid, missing, ambiguous,
-symbolic-link, traversal, immutable-conflict, or checksum-mismatched sources are
-rejected without disclosing arbitrary local paths.
+arrive from the loopback Lab connection with the configured browser-facing
+`Host` preserved, and writes also require the Lab's explicit same-origin intent
+header. Invalid, missing, ambiguous, symbolic-link, traversal,
+immutable-conflict, or checksum-mismatched sources are rejected without
+disclosing arbitrary local paths.
 
 #### GitHub staging-source intake
 
@@ -540,7 +552,8 @@ through `nvm use`, install dependencies only if needed, run `npm run dev`, and
 report the exact localhost URL Vite prints.
 
 If port 5173 is busy, inspect the listener first. If it is not this lab,
-restart with `SPFX_LAB_PORT=5174 npm run dev`.
+restart with `SPFX_LAB_PORT=5175 npm run dev`; port 5174 belongs to the local
+CDN started by the same command.
 
 Verify the URL with an HTTP request before saying it is ready.
 ```

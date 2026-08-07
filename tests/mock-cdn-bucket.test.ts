@@ -12,6 +12,7 @@ import {
   mockCdnAppReleaseBaseUrl,
   mockCdnSharedReleaseBaseUrl,
   normalizeMockCdnOrigin,
+  normalizeMockCdnPublicOrigin,
   publishMockCdnAppStage,
   readMockCdnReleaseAsset,
   readMockCdnReleaseManifest,
@@ -47,6 +48,21 @@ describe('local mock CDN bucket contract', () => {
     expect(mockCdnSharedReleaseBaseUrl(origin, 'fluent-icons', releaseId)).toBe(
       `${origin}/shared/fluent-icons/versions/${releaseId}/`
     );
+  });
+
+  it('rejects every loopback form from browser-facing forwarded CDN origins', () => {
+    expect(normalizeMockCdnPublicOrigin('https://cdn-preview.example.test')).toBe('https://cdn-preview.example.test');
+    for (const loopback of [
+      'https://localhost.',
+      'https://preview.localhost',
+      'https://127.0.0.2',
+      'https://[::]',
+      'https://[::ffff:0.0.0.0]',
+      'https://[::1]',
+      'https://[::ffff:127.0.0.1]'
+    ]) {
+      expect(() => normalizeMockCdnPublicOrigin(loopback)).toThrow('credential-free HTTPS origin');
+    }
   });
 
   it('requires workspace-contained bucket roots', async () => {

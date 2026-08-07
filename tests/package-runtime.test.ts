@@ -104,19 +104,7 @@ describe('loadCdnPackageDescriptor', () => {
         ...descriptor,
         delivery: { ...descriptor.delivery, origin: 'http://lab.local', bucketBaseUrl: 'http://lab.local/' }
       },
-      'http://127.0.0.1 origin with an explicit port'
-    ],
-    [
-      'a non-loopback delivery origin',
-      {
-        ...descriptor,
-        delivery: {
-          ...descriptor.delivery,
-          origin: 'https://cdn.example.test',
-          bucketBaseUrl: 'https://cdn.example.test/'
-        }
-      },
-      'http://127.0.0.1 origin with an explicit port'
+      'loopback HTTP or forwarded HTTPS origin'
     ],
     [
       'localhost instead of the canonical loopback host',
@@ -124,7 +112,7 @@ describe('loadCdnPackageDescriptor', () => {
         ...descriptor,
         delivery: { ...descriptor.delivery, origin: 'http://localhost:4400', bucketBaseUrl: 'http://localhost:4400/' }
       },
-      'http://127.0.0.1 origin with an explicit port'
+      'loopback HTTP or forwarded HTTPS origin'
     ],
     [
       'loopback HTTPS instead of local HTTP',
@@ -132,7 +120,55 @@ describe('loadCdnPackageDescriptor', () => {
         ...descriptor,
         delivery: { ...descriptor.delivery, origin: 'https://127.0.0.1:4400', bucketBaseUrl: 'https://127.0.0.1:4400/' }
       },
-      'http://127.0.0.1 origin with an explicit port'
+      'loopback HTTP or forwarded HTTPS origin'
+    ],
+    [
+      'a bracketed IPv6 loopback forwarded origin',
+      {
+        ...descriptor,
+        delivery: { ...descriptor.delivery, origin: 'https://[::1]', bucketBaseUrl: 'https://[::1]/' }
+      },
+      'loopback HTTP or forwarded HTTPS origin'
+    ],
+    [
+      'an IPv6 unspecified forwarded origin',
+      {
+        ...descriptor,
+        delivery: { ...descriptor.delivery, origin: 'https://[::]', bucketBaseUrl: 'https://[::]/' }
+      },
+      'loopback HTTP or forwarded HTTPS origin'
+    ],
+    [
+      'an IPv4-mapped IPv6 unspecified forwarded origin',
+      {
+        ...descriptor,
+        delivery: {
+          ...descriptor.delivery,
+          origin: 'https://[::ffff:0.0.0.0]',
+          bucketBaseUrl: 'https://[::ffff:0.0.0.0]/'
+        }
+      },
+      'loopback HTTP or forwarded HTTPS origin'
+    ],
+    [
+      'an alternative IPv4 loopback forwarded origin',
+      {
+        ...descriptor,
+        delivery: { ...descriptor.delivery, origin: 'https://127.0.0.2', bucketBaseUrl: 'https://127.0.0.2/' }
+      },
+      'loopback HTTP or forwarded HTTPS origin'
+    ],
+    [
+      'an IPv4-mapped IPv6 loopback forwarded origin',
+      {
+        ...descriptor,
+        delivery: {
+          ...descriptor.delivery,
+          origin: 'https://[::ffff:127.0.0.1]',
+          bucketBaseUrl: 'https://[::ffff:127.0.0.1]/'
+        }
+      },
+      'loopback HTTP or forwarded HTTPS origin'
     ],
     [
       'a loopback origin without an explicit port',
@@ -140,7 +176,7 @@ describe('loadCdnPackageDescriptor', () => {
         ...descriptor,
         delivery: { ...descriptor.delivery, origin: 'http://127.0.0.1', bucketBaseUrl: 'http://127.0.0.1/' }
       },
-      'http://127.0.0.1 origin with an explicit port'
+      'loopback HTTP or forwarded HTTPS origin'
     ],
     [
       'a mismatched app namespace',
@@ -196,7 +232,33 @@ describe('loadCdnPackageDescriptor', () => {
     stubBrowser(fetchMock, mockOrigin);
 
     await expect(loadCdnPackageDescriptor('hello-card-spfx', undefined, new AbortController().signal)).rejects.toThrow(
-      'separate credential-free http://127.0.0.1 origin'
+      'separate credential-free loopback HTTP or forwarded HTTPS origin'
+    );
+  });
+
+  it('accepts an immutable descriptor served through a separately forwarded HTTPS CDN', async () => {
+    const publicOrigin = 'https://cdn-preview.example.test';
+    const publicReleaseBaseUrl = `${publicOrigin}/${namespacePath}`;
+    const forwardedDescriptor: CdnPackageDescriptor = {
+      ...descriptor,
+      cdnBasePath: publicReleaseBaseUrl,
+      delivery: {
+        ...descriptor.delivery,
+        origin: publicOrigin,
+        bucketBaseUrl: `${publicOrigin}/`,
+        releaseBaseUrl: publicReleaseBaseUrl,
+        releaseManifestUrl: `${publicReleaseBaseUrl}deployment-manifest.json`
+      },
+      assets: descriptor.assets.map((asset) => ({
+        ...asset,
+        assetUrl: `${publicReleaseBaseUrl}${asset.assetPath}`
+      }))
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(forwardedDescriptor));
+    stubBrowser(fetchMock, 'https://lab-preview.example.test');
+
+    await expect(loadCdnPackageDescriptor('hello-card-spfx', undefined, new AbortController().signal)).resolves.toEqual(
+      forwardedDescriptor
     );
   });
 

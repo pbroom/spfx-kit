@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, request, type Server } from 'node:http';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -153,10 +153,26 @@ describe('local CDN bucket administration API', () => {
     });
     expect(nonLoopbackHost.status).toBe(403);
   });
+
+  it('admits a forwarded Lab only when its proxy preserves the configured browser host', async () => {
+    const workspaceRoot = await temporaryDirectory();
+    const forwardedLabOrigin = 'https://lab-preview.example.test';
+    const api = await startAdminApi(workspaceRoot, { labOrigin: forwardedLabOrigin });
+    const forwardedHost = 'lab-preview.example.test';
+
+    const accepted = await getRaw(api, { Host: forwardedHost, Origin: forwardedLabOrigin });
+    expect(accepted.status).toBe(200);
+
+    const rewrittenHost = await getRaw(api, { Host: `127.0.0.1:${new URL(api).port}`, Origin: forwardedLabOrigin });
+    expect(rewrittenHost.status).toBe(403);
+  });
 });
 
-async function startAdminApi(workspaceRoot: string): Promise<string> {
-  const handler = createLocalCdnAdminRequestHandler(workspaceRoot, { mockCdnOrigin });
+async function startAdminApi(
+  workspaceRoot: string,
+  options: Parameters<typeof createLocalCdnAdminRequestHandler>[1] = {}
+): Promise<string> {
+  const handler = createLocalCdnAdminRequestHandler(workspaceRoot, { mockCdnOrigin, ...options });
   const server = createServer((req, res) => {
     void handler(req, res, () => {
       res.statusCode = 404;
@@ -197,6 +213,18 @@ async function postRaw(api: string, pathname: string, body: string) {
     body
   });
   return { response, body: await response.json() };
+}
+
+async function getRaw(api: string, headers: Record<string, string>): Promise<{ status: number }> {
+  const url = new URL(api);
+  return new Promise((resolve, reject) => {
+    const requestToApi = request({ hostname: url.hostname, port: url.port, path: '/', headers }, (response) => {
+      response.resume();
+      response.once('end', () => resolve({ status: response.statusCode || 0 }));
+    });
+    requestToApi.once('error', reject);
+    requestToApi.end();
+  });
 }
 
 async function createExportStage(
