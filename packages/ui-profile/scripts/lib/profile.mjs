@@ -2003,11 +2003,22 @@ function classCandidateTokens(value, label) {
   const tokens = value.split(/\s+/u).filter(Boolean);
   const normalized = [];
   for (const token of tokens) {
-    if (REMOVED_SHADCN_CLASS_MARKERS.has(token)) continue;
-    const candidate = REPLACED_SHADCN_CLASS_MARKERS.get(token) ?? token;
-    if (/^cn-[a-z0-9-]+$/u.test(candidate)) {
-      throw new Error(`${label}: unsupported shadcn class marker ${candidate}`);
+    const { variants, utility } = splitTailwindCandidateVariants(token);
+    const marker = splitShadcnClassMarker(utility);
+    if (marker && REMOVED_SHADCN_CLASS_MARKERS.has(marker.base)) continue;
+    if (marker?.modifier) {
+      if (REPLACED_SHADCN_CLASS_MARKERS.has(marker.base)) {
+        throw new Error(`${label}: shadcn class marker modifiers are not accepted for ${marker.base}`);
+      }
+      throw new Error(`${label}: unsupported shadcn class marker ${marker.base}`);
     }
+    const normalizedUtility = marker
+      ? `${REPLACED_SHADCN_CLASS_MARKERS.get(marker.base) ?? marker.base}${marker.important ? '!' : ''}`
+      : utility;
+    if (marker && !REPLACED_SHADCN_CLASS_MARKERS.has(marker.base)) {
+      throw new Error(`${label}: unsupported shadcn class marker ${marker.base}`);
+    }
+    const candidate = `${variants}${normalizedUtility}`;
     const withSelectorPrefixes = prefixArbitraryVariantClassSelectors(candidate);
     normalized.push(
       withSelectorPrefixes.startsWith(`${TAILWIND_PREFIX}:`)
@@ -2018,10 +2029,62 @@ function classCandidateTokens(value, label) {
   return normalized.join(' ');
 }
 
+function splitShadcnClassMarker(utility) {
+  const important = utility.endsWith('!');
+  const withoutImportant = important ? utility.slice(0, -1) : utility;
+  const modifierStart = withoutImportant.indexOf('/');
+  const base = modifierStart === -1 ? withoutImportant : withoutImportant.slice(0, modifierStart);
+  if (!/^cn-[a-z0-9-]+$/u.test(base)) return undefined;
+  return {
+    base,
+    important,
+    modifier: modifierStart === -1 ? '' : withoutImportant.slice(modifierStart)
+  };
+}
+
+function splitTailwindCandidateVariants(candidate) {
+  let bracketDepth = 0;
+  let quote = null;
+  let utilityStart = 0;
+  for (let index = 0; index < candidate.length; index += 1) {
+    const character = candidate[index];
+    if (character === '\\') {
+      index += 1;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === '[') bracketDepth += 1;
+    else if (character === ']' && bracketDepth > 0) bracketDepth -= 1;
+    else if (character === ':' && bracketDepth === 0) utilityStart = index + 1;
+  }
+  return {
+    variants: candidate.slice(0, utilityStart),
+    utility: candidate.slice(utilityStart)
+  };
+}
+
 function prefixClassSelectors(selector) {
   return selectorParser((root) => {
     root.walkClasses((node) => {
       if (!node.value.startsWith(`${TAILWIND_PREFIX}:`)) node.value = `${TAILWIND_PREFIX}:${node.value}`;
+    });
+    root.walkAttributes((node) => {
+      if (node.attribute.toLowerCase() !== 'class' || !['=', '~='].includes(node.operator)) return;
+      const value = node.value
+        .split(/\s+/u)
+        .filter(Boolean)
+        .map((className) =>
+          className.startsWith(`${TAILWIND_PREFIX}:`) ? className : `${TAILWIND_PREFIX}:${className}`
+        )
+        .join(' ');
+      node.setValue(value, { quoteMark: node.quoteMark ?? '"' });
     });
   }).processSync(selector);
 }
@@ -2064,7 +2127,9 @@ function prefixArbitraryVariantClassSelectors(candidate) {
     const selectorBearing =
       isVariant &&
       (variantKind === '' ||
-        ['group-', 'peer-', 'group-has-', 'peer-has-', 'has-', 'not-', 'in-'].includes(variantKind));
+        ['group-', 'peer-', 'group-has-', 'peer-has-', 'has-', 'not-', 'in-', 'nth-', 'nth-last-'].includes(
+          variantKind
+        ));
     result += `[${selectorBearing ? prefixClassSelectors(content) : content}]`;
     index = end + 1;
   }
@@ -2312,23 +2377,30 @@ function collectCvaVariantLiterals(options, sourceFile, literals, label) {
 function importedClassHelperBindings(sourceFile) {
   const cn = new Set();
   const cva = new Set();
+  let unsupportedCvaImport = false;
   for (const statement of sourceFile.statements) {
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteralLike(statement.moduleSpecifier) ||
-      !statement.importClause?.namedBindings ||
-      !ts.isNamedImports(statement.importClause.namedBindings)
+      !statement.importClause
     ) {
       continue;
     }
     const specifier = statement.moduleSpecifier.text;
+    if (specifier === 'class-variance-authority' && !statement.importClause.isTypeOnly) {
+      if (statement.importClause.name || ts.isNamespaceImport(statement.importClause.namedBindings)) {
+        unsupportedCvaImport = true;
+      }
+    }
+    if (!statement.importClause.namedBindings || !ts.isNamedImports(statement.importClause.namedBindings)) continue;
     for (const element of statement.importClause.namedBindings.elements) {
+      if (statement.importClause.isTypeOnly || element.isTypeOnly) continue;
       const importedName = element.propertyName?.text ?? element.name.text;
       if (importedName === 'cva' && specifier === 'class-variance-authority') cva.add(element.name.text);
       if (importedName === 'cn' && /(?:^|\/)lib\/utils$/u.test(specifier)) cn.add(element.name.text);
     }
   }
-  return { cn, cva };
+  return { cn, cva, unsupportedCvaImport };
 }
 
 function classExpressionBindings(sourceFile, helpers) {
@@ -2352,6 +2424,8 @@ function classExpressionBindings(sourceFile, helpers) {
   const cnSymbols = new Set();
   const cvaSymbols = new Set();
   const cvaFactorySymbols = new Set();
+  const mergePropsSymbols = new Set();
+  const useRenderSymbols = new Set();
   const writtenSymbols = new Set();
   const unsafeConsumerPropsSymbols = new Set();
   const bareConsumerPropsByFunction = new Map();
@@ -2373,6 +2447,33 @@ function classExpressionBindings(sourceFile, helpers) {
     current.ambiguous ||= ambiguous;
     consumerDefaults.set(symbol, current);
   };
+
+  function parameterBelongsToPublicComponent(parameter) {
+    const owner = parameter.parent;
+    if (ts.isFunctionDeclaration(owner)) {
+      if (owner.parent !== sourceFile) return false;
+      if (owner.name) return /^[A-Z]/u.test(owner.name.text);
+      return owner.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ?? false;
+    }
+    if (
+      ts.isFunctionExpression(owner) &&
+      owner.name &&
+      /^[A-Z]/u.test(owner.name.text) &&
+      ts.isCallExpression(owner.parent) &&
+      owner.parent.arguments.includes(owner)
+    ) {
+      const callee = unwrapExpression(owner.parent.expression);
+      if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'forwardRef') return true;
+    }
+    if (!ts.isArrowFunction(owner) && !ts.isFunctionExpression(owner)) return false;
+    const declaration = owner.parent;
+    return (
+      ts.isVariableDeclaration(declaration) &&
+      ts.isIdentifier(declaration.name) &&
+      /^[A-Z]/u.test(declaration.name.text) &&
+      declaration.parent.parent.parent === sourceFile
+    );
+  }
 
   function addParameterObjectDefault(parameter, bindingElement) {
     if (!parameter.initializer) return;
@@ -2409,9 +2510,16 @@ function classExpressionBindings(sourceFile, helpers) {
       const specifier = statement.moduleSpecifier.text;
       if (statement.importClause?.namedBindings && ts.isNamedImports(statement.importClause.namedBindings)) {
         for (const element of statement.importClause.namedBindings.elements) {
+          if (statement.importClause.isTypeOnly || element.isTypeOnly) continue;
           const importedName = element.propertyName?.text ?? element.name.text;
           if (importedName === 'cn' && /(?:^|\/)lib\/utils$/u.test(specifier)) addSymbol(cnSymbols, element.name);
           if (importedName === 'cva' && specifier === 'class-variance-authority') addSymbol(cvaSymbols, element.name);
+          if (importedName === 'mergeProps' && specifier === '@base-ui/react/merge-props') {
+            addSymbol(mergePropsSymbols, element.name);
+          }
+          if (importedName === 'useRender' && specifier === '@base-ui/react/use-render') {
+            addSymbol(useRenderSymbols, element.name);
+          }
           if (
             importedName === 'toggleVariants' &&
             ['@/registry/base-nova/ui/toggle', './toggle'].includes(specifier)
@@ -2420,6 +2528,16 @@ function classExpressionBindings(sourceFile, helpers) {
         }
       }
     }
+  }
+  const isDirectCvaCall = (call) => {
+    const callee = unwrapExpression(call.expression);
+    return ts.isIdentifier(callee) && cvaSymbols.has(symbolAt(callee));
+  };
+  const isImportedHelperCall = (call, symbols) => {
+    const callee = unwrapExpression(call.expression);
+    return ts.isIdentifier(callee) && symbols.has(symbolAt(callee));
+  };
+  for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement) || (statement.declarationList.flags & ts.NodeFlags.Const) === 0) continue;
     for (const declaration of statement.declarationList.declarations) {
       const initializer = declaration.initializer && unwrapExpression(declaration.initializer);
@@ -2427,8 +2545,7 @@ function classExpressionBindings(sourceFile, helpers) {
         ts.isIdentifier(declaration.name) &&
         initializer &&
         ts.isCallExpression(initializer) &&
-        ts.isIdentifier(initializer.expression) &&
-        cvaSymbols.has(symbolAt(initializer.expression))
+        isDirectCvaCall(initializer)
       ) {
         addSymbol(cvaFactorySymbols, declaration.name);
       }
@@ -2461,27 +2578,46 @@ function classExpressionBindings(sourceFile, helpers) {
     }
   }
 
-  function isApprovedConsumerPropsUse(identifier) {
-    function outerTransparentExpression(node) {
-      let current = node;
-      while (
-        current.parent &&
-        (ts.isParenthesizedExpression(current.parent) ||
-          ts.isAsExpression(current.parent) ||
-          ts.isTypeAssertionExpression(current.parent) ||
-          ts.isNonNullExpression(current.parent) ||
-          ts.isSatisfiesExpression(current.parent)) &&
-        current.parent.expression === current
-      ) {
-        current = current.parent;
-      }
-      return current;
+  function outerTransparentExpression(node) {
+    let current = node;
+    while (
+      current.parent &&
+      (ts.isParenthesizedExpression(current.parent) ||
+        ts.isAsExpression(current.parent) ||
+        ts.isTypeAssertionExpression(current.parent) ||
+        ts.isNonNullExpression(current.parent) ||
+        ts.isSatisfiesExpression(current.parent)) &&
+      current.parent.expression === current
+    ) {
+      current = current.parent;
     }
+    return current;
+  }
+
+  function isApprovedConsumerPropsUse(identifier) {
     let use = outerTransparentExpression(identifier);
     const parent = use.parent;
     if (ts.isParameter(parent) && parent.name === identifier) return true;
     if (ts.isBindingElement(parent) && parent.name === identifier && parent.dotDotDotToken) return true;
     if (ts.isJsxSpreadAttribute(parent) && parent.expression === use) return true;
+    if (
+      ts.isCallExpression(parent) &&
+      parent.arguments.includes(use) &&
+      isImportedHelperCall(parent, mergePropsSymbols)
+    ) {
+      return true;
+    }
+    if (
+      ((ts.isPropertyAssignment(parent) && parent.initializer === use) ||
+        (ts.isShorthandPropertyAssignment(parent) && parent.name === identifier)) &&
+      propertyNameText(parent.name, sourceFile) === 'props' &&
+      ts.isObjectLiteralExpression(parent.parent) &&
+      ts.isCallExpression(parent.parent.parent) &&
+      parent.parent.parent.arguments.includes(parent.parent) &&
+      isImportedHelperCall(parent.parent.parent, useRenderSymbols)
+    ) {
+      return true;
+    }
     if (
       ts.isVariableDeclaration(parent) &&
       parent.initializer === use &&
@@ -2556,7 +2692,7 @@ function classExpressionBindings(sourceFile, helpers) {
           bareConsumerPropsByFunction.set(node.parent, symbol);
         }
       }
-      if (ts.isObjectBindingPattern(node.name)) {
+      if (ts.isObjectBindingPattern(node.name) && parameterBelongsToPublicComponent(node)) {
         for (const element of node.name.elements) {
           if (!node.initializer && element.dotDotDotToken && ts.isIdentifier(element.name)) {
             addSymbol(consumerPropsSymbols, element.name);
@@ -2591,6 +2727,14 @@ function classExpressionBindings(sourceFile, helpers) {
     }
     if (ts.isIdentifier(node)) {
       const symbol = symbolAt(node);
+      if (symbol && cvaSymbols.has(symbol)) {
+        const use = outerTransparentExpression(node);
+        const isImportBinding = ts.isImportSpecifier(node.parent) && node.parent.name === node;
+        const isDirectCall = ts.isCallExpression(use.parent) && use.parent.expression === use;
+        if (!isImportBinding && !isDirectCall) {
+          throw new Error(`${sourceFile.fileName}: imported cva binding is used through an unsupported access path`);
+        }
+      }
       if (symbol && consumerPropsSymbols.has(symbol) && !isApprovedConsumerPropsUse(node)) {
         unsafeConsumerPropsSymbols.add(symbol);
       }
@@ -2632,8 +2776,141 @@ function classExpressionBindings(sourceFile, helpers) {
       return consumerDefaults.get(symbol) ?? { expressions: [], ambiguous: false };
     },
     isCnCall: (call) => ts.isIdentifier(call.expression) && isUnwrittenSymbol(cnSymbols, call.expression),
-    isCvaFactoryCall: (call) => ts.isIdentifier(call.expression) && isUnwrittenSymbol(cvaFactorySymbols, call.expression)
+    isCvaCall: (call) => isDirectCvaCall(call),
+    isCvaFactoryCall: (call) => ts.isIdentifier(call.expression) && isUnwrittenSymbol(cvaFactorySymbols, call.expression),
+    isMergePropsCall: (call) => isImportedHelperCall(call, mergePropsSymbols),
+    isUseRenderCall: (call) => isImportedHelperCall(call, useRenderSymbols)
   };
+}
+
+function collectObjectPropertyClassValue(node, literals, label, expressionBindings) {
+  const value = unwrapExpression(node);
+  if (ts.isArrayLiteralExpression(value)) {
+    for (const element of value.elements) {
+      if (ts.isOmittedExpression(element)) continue;
+      collectObjectPropertyClassValue(element, literals, label, expressionBindings);
+    }
+    return;
+  }
+  collectStaticClassLiteral(value, literals, label, expressionBindings);
+}
+
+function collectObjectLiteralClassProperties(object, literals, label, expressionBindings) {
+  const classProperties = [];
+  let containsClassMember = false;
+  for (const property of object.properties) {
+    if (ts.isShorthandPropertyAssignment(property) && property.name.text === 'className') {
+      containsClassMember = true;
+      classProperties.push(property.name);
+      continue;
+    }
+    if (property.name && ts.isComputedPropertyName(property.name)) {
+      const expression = unwrapExpression(property.name.expression);
+      if (ts.isStringLiteralLike(expression) && expression.text === 'className') containsClassMember = true;
+      continue;
+    }
+    if (property.name && propertyNameText(property.name, expressionBindings.sourceFile) === 'className') {
+      containsClassMember = true;
+      if (ts.isPropertyAssignment(property)) classProperties.push(property.initializer);
+    }
+  }
+  if (!containsClassMember) return;
+  for (const property of object.properties) {
+    const computedName = property.name && ts.isComputedPropertyName(property.name) ? unwrapExpression(property.name.expression) : undefined;
+    const computedNameIsSafe = computedName && ts.isStringLiteralLike(computedName) && computedName.text !== 'className';
+    const classMethod =
+      (ts.isMethodDeclaration(property) ||
+        ts.isGetAccessorDeclaration(property) ||
+        ts.isSetAccessorDeclaration(property)) &&
+      property.name &&
+      propertyNameText(property.name, expressionBindings.sourceFile) === 'className';
+    if (
+      ts.isSpreadAssignment(property) ||
+      classMethod ||
+      (computedName && !computedNameIsSafe) ||
+      isPrototypeSetterProperty(property, expressionBindings.sourceFile)
+    ) {
+      throw new Error(`${label}: className object contains an ambiguous class source`);
+    }
+  }
+  for (const value of classProperties) {
+    collectObjectPropertyClassValue(value, literals, label, expressionBindings);
+  }
+}
+
+function collectClassBagExpression(node, literals, label, expressionBindings) {
+  const expression = unwrapExpression(node);
+  if (ts.isIdentifier(expression) && expressionBindings.isConsumerProps(expression)) return;
+  if (ts.isCallExpression(expression) && expressionBindings.isMergePropsCall(expression)) return;
+  if (!ts.isObjectLiteralExpression(expression)) {
+    throw new Error(`${label}: class-bearing prop bag must be a static object literal or consumer props`);
+  }
+  for (const property of expression.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      const spread = unwrapExpression(property.expression);
+      if (ts.isIdentifier(spread) && expressionBindings.isConsumerProps(spread)) continue;
+      if (ts.isObjectLiteralExpression(spread)) {
+        collectClassBagExpression(spread, literals, label, expressionBindings);
+        continue;
+      }
+      throw new Error(`${label}: class-bearing prop bag contains an ambiguous spread`);
+    }
+    if (isPrototypeSetterProperty(property, expressionBindings.sourceFile)) {
+      throw new Error(`${label}: class-bearing prop bag contains an ambiguous class source`);
+    }
+    if (property.name && ts.isComputedPropertyName(property.name)) {
+      const name = unwrapExpression(property.name.expression);
+      if (!ts.isStringLiteralLike(name) || name.text === 'className') {
+        throw new Error(`${label}: class-bearing prop bag contains an ambiguous computed property`);
+      }
+      continue;
+    }
+    const name = property.name && propertyNameText(property.name, expressionBindings.sourceFile);
+    if (
+      name === 'className' &&
+      (ts.isMethodDeclaration(property) ||
+        ts.isGetAccessorDeclaration(property) ||
+        ts.isSetAccessorDeclaration(property))
+    ) {
+      throw new Error(`${label}: class-bearing prop bag contains an ambiguous class source`);
+    }
+    if (ts.isShorthandPropertyAssignment(property) && property.name.text === 'className') {
+      collectObjectPropertyClassValue(property.name, literals, label, expressionBindings);
+    } else if (ts.isPropertyAssignment(property) && name === 'className') {
+      collectObjectPropertyClassValue(property.initializer, literals, label, expressionBindings);
+    }
+  }
+}
+
+function collectUseRenderClassBag(call, literals, label, expressionBindings) {
+  if (call.arguments.length !== 1) {
+    throw new Error(`${label}: useRender options must be a single static object literal`);
+  }
+  const options = unwrapExpression(call.arguments[0]);
+  if (!ts.isObjectLiteralExpression(options)) {
+    throw new Error(`${label}: useRender options must be a single static object literal`);
+  }
+  for (const property of options.properties) {
+    if (ts.isSpreadAssignment(property) || isPrototypeSetterProperty(property, expressionBindings.sourceFile)) {
+      throw new Error(`${label}: useRender options contain an ambiguous props source`);
+    }
+    if (property.name && ts.isComputedPropertyName(property.name)) {
+      const name = unwrapExpression(property.name.expression);
+      if (!ts.isStringLiteralLike(name) || name.text === 'props') {
+        throw new Error(`${label}: useRender options contain an ambiguous props source`);
+      }
+      continue;
+    }
+    const name = property.name && propertyNameText(property.name, expressionBindings.sourceFile);
+    if (name !== 'props') continue;
+    if (ts.isShorthandPropertyAssignment(property) && expressionBindings.isConsumerProps(property.name)) {
+      continue;
+    }
+    if (!ts.isPropertyAssignment(property)) {
+      throw new Error(`${label}: useRender props must be an explicit static property`);
+    }
+    collectClassBagExpression(property.initializer, literals, label, expressionBindings);
+  }
 }
 
 function collectJsxSpreadClassLiterals(attribute, literals, label, expressionBindings, deferAmbiguous) {
@@ -2703,6 +2980,42 @@ function assertClassHelperBindingsAreNotShadowed(sourceFile, bindings, label) {
   visit(sourceFile);
 }
 
+function assertNoCvaValueReexports(sourceFile, helpers, label) {
+  for (const statement of sourceFile.statements) {
+    if (ts.isExportDeclaration(statement)) {
+      if (
+        statement.moduleSpecifier &&
+        ts.isStringLiteralLike(statement.moduleSpecifier) &&
+        statement.moduleSpecifier.text === 'class-variance-authority' &&
+        !statement.isTypeOnly
+      ) {
+        const hasValueExport =
+          !statement.exportClause ||
+          ts.isNamespaceExport(statement.exportClause) ||
+          statement.exportClause.elements.some((element) => !element.isTypeOnly);
+        if (hasValueExport) {
+          throw new Error(`${label}: class-variance-authority value re-exports are not accepted`);
+        }
+      }
+      if (!statement.moduleSpecifier && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+        for (const element of statement.exportClause.elements) {
+          if (statement.isTypeOnly || element.isTypeOnly) continue;
+          const localName = element.propertyName?.text ?? element.name.text;
+          if (helpers.cva.has(localName)) {
+            throw new Error(`${label}: imported cva binding cannot be re-exported`);
+          }
+        }
+      }
+    }
+    if (ts.isExportAssignment(statement)) {
+      const expression = unwrapExpression(statement.expression);
+      if (ts.isIdentifier(expression) && helpers.cva.has(expression.text)) {
+        throw new Error(`${label}: imported cva binding cannot be re-exported`);
+      }
+    }
+  }
+}
+
 export function prefixTailwindClassCandidates(
   source,
   label = 'profile-source.tsx',
@@ -2711,10 +3024,17 @@ export function prefixTailwindClassCandidates(
   const sourceFile = parsedSource(source, label);
   const literals = new Set();
   const helpers = importedClassHelperBindings(sourceFile);
+  if (helpers.unsupportedCvaImport) {
+    throw new Error(`${label}: class-variance-authority namespace and default imports are not accepted`);
+  }
+  assertNoCvaValueReexports(sourceFile, helpers, label);
   assertClassHelperBindingsAreNotShadowed(sourceFile, new Set([...helpers.cn, ...helpers.cva]), label);
   const expressionBindings = classExpressionBindings(sourceFile, helpers);
 
   function visit(node) {
+    if (ts.isObjectLiteralExpression(node)) {
+      collectObjectLiteralClassProperties(node, literals, label, expressionBindings);
+    }
     if (ts.isJsxSpreadAttribute(node)) {
       collectJsxSpreadClassLiterals(node, literals, label, expressionBindings, deferAmbiguousJsxSpreads);
     }
@@ -2739,11 +3059,15 @@ export function prefixTailwindClassCandidates(
     if (ts.isCallExpression(node) && expressionBindings.isCnCall(node)) {
       collectCnClassLiterals(node, literals, label, expressionBindings);
     }
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      helpers.cva.has(node.expression.text)
-    ) {
+    if (ts.isCallExpression(node) && expressionBindings.isMergePropsCall(node)) {
+      for (const argument of node.arguments) {
+        collectClassBagExpression(argument, literals, label, expressionBindings);
+      }
+    }
+    if (ts.isCallExpression(node) && expressionBindings.isUseRenderCall(node)) {
+      collectUseRenderClassBag(node, literals, label, expressionBindings);
+    }
+    if (ts.isCallExpression(node) && expressionBindings.isCvaCall(node)) {
       if (node.arguments.length === 0) throw new Error(`${label}: cva requires a static base class argument`);
       collectStaticCvaClassValue(node.arguments[0], literals, label);
       if (node.arguments[1]) collectCvaVariantLiterals(node.arguments[1], sourceFile, literals, label);

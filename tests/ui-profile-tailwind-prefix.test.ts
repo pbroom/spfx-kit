@@ -42,6 +42,32 @@ describe('UI profile Tailwind prefix normalization', () => {
     );
   });
 
+  it('applies shadcn marker policy to the utility after Tailwind variants', () => {
+    expect(
+      prefixTailwindClassCandidates(
+        '<div className="dark:cn-font-heading sm:cn-menu-target hover:font-medium [&:focus]:cn-font-heading" />'
+      ).source
+    ).toBe('<div className="skui:dark:font-heading skui:hover:font-medium skui:[&:focus]:font-heading" />');
+    expect(() => prefixTailwindClassCandidates('<div className="hover:cn-future-marker" />')).toThrow(
+      'unsupported shadcn class marker cn-future-marker'
+    );
+    expect(prefixTailwindClassCandidates('<div className="dark:cn-font-heading! sm:cn-menu-target!" />').source).toBe(
+      '<div className="skui:dark:font-heading!" />'
+    );
+    expect(() => prefixTailwindClassCandidates('<div className="hover:cn-future-marker!" />')).toThrow(
+      'unsupported shadcn class marker cn-future-marker'
+    );
+    expect(() => prefixTailwindClassCandidates('<div className="dark:cn-font-heading/50" />')).toThrow(
+      'shadcn class marker modifiers are not accepted for cn-font-heading'
+    );
+    expect(() => prefixTailwindClassCandidates('<div className="dark:cn-future-marker/50" />')).toThrow(
+      'unsupported shadcn class marker cn-future-marker'
+    );
+    const once = prefixTailwindClassCandidates('<div className="skui:dark:cn-font-heading" />').source;
+    expect(once).toBe('<div className="skui:dark:font-heading" />');
+    expect(prefixTailwindClassCandidates(once)).toEqual({ source: once, transformed: false });
+  });
+
   it('is idempotent for already-prefixed generated source', () => {
     const once = prefixTailwindClassCandidates('<div className="flex data-open:animate-in" />').source;
     const twice = prefixTailwindClassCandidates(once);
@@ -189,6 +215,108 @@ describe('UI profile Tailwind prefix normalization', () => {
         `${prefix}function Probe({ className, variant, size }) { return <div className={styles({ variant, size, className })} /> }`
       ).source
     ).toContain('styles({ variant, size, className })');
+  });
+
+  it('rejects unsupported imported cva access paths', () => {
+    expect(() =>
+      prefixTailwindClassCandidates('import * as CVA from "class-variance-authority"; export const styles = CVA.cva("flex")')
+    ).toThrow('class-variance-authority namespace and default imports are not accepted');
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'import { cva } from "class-variance-authority"; const make = cva; export const styles = make("flex")'
+      )
+    ).toThrow('imported cva binding is used through an unsupported access path');
+    expect(
+      prefixTailwindClassCandidates(
+        'import { cva as make } from "class-variance-authority"; export const styles = (make)("flex")'
+      ).source
+    ).toContain('(make)("skui:flex")');
+    expect(
+      prefixTailwindClassCandidates(
+        'import type * as CVA from "class-variance-authority"; export type Props = CVA.VariantProps<() => string>'
+      ).source
+    ).toContain('import type * as CVA');
+    expect(() =>
+      prefixTailwindClassCandidates('import { cva } from "class-variance-authority"; export const bound = cva.bind(null)')
+    ).toThrow('imported cva binding is used through an unsupported access path');
+    expect(() => prefixTailwindClassCandidates('import { cva } from "class-variance-authority"; export { cva }')).toThrow(
+      'imported cva binding cannot be re-exported'
+    );
+    expect(() => prefixTailwindClassCandidates('export { cva } from "class-variance-authority"')).toThrow(
+      'class-variance-authority value re-exports are not accepted'
+    );
+    expect(() => prefixTailwindClassCandidates('export * as CVA from "class-variance-authority"')).toThrow(
+      'class-variance-authority value re-exports are not accepted'
+    );
+    expect(
+      prefixTailwindClassCandidates(
+        'export type { VariantProps } from "class-variance-authority"; export type Props = { value: string }'
+      ).source
+    ).toContain('export type { VariantProps }');
+  });
+
+  it('normalizes explicit className values in object APIs', () => {
+    expect(prefixTailwindClassCandidates('useRender({ props: { className: "flex" } })').source).toContain(
+      'className: "skui:flex"'
+    );
+    expect(
+      prefixTailwindClassCandidates(
+        'import { cn } from "./lib/utils"; function Probe({ className }) { return mergeProps({ className: cn("flex", className) }, props) }'
+      ).source
+    ).toContain('className: cn("skui:flex", className)');
+    expect(() => prefixTailwindClassCandidates('mergeProps({ className: getClass() }, props)')).toThrow(
+      'dynamic class expressions are not accepted'
+    );
+    expect(() => prefixTailwindClassCandidates('mergeProps({ className: "flex", ...shared }, props)')).toThrow(
+      'className object contains an ambiguous class source'
+    );
+    expect(() => prefixTailwindClassCandidates('mergeProps({ ["className"]: "flex" }, props)')).toThrow(
+      'className object contains an ambiguous class source'
+    );
+    expect(() => prefixTailwindClassCandidates('mergeProps({ className() { return "flex" } }, props)')).toThrow(
+      'className object contains an ambiguous class source'
+    );
+    expect(
+      prefixTailwindClassCandidates('mergeProps({ className: "flex", onClick() {}, ["role"]: "button" }, props)').source
+    ).toContain('className: "skui:flex"');
+    expect(
+      prefixTailwindClassCandidates('function Probe({ className }) { return mergeProps({ className }, props) }').source
+    ).toContain('mergeProps({ className }, props)');
+  });
+
+  it('fails closed for hidden class sources in imported Base UI prop APIs', () => {
+    const mergeImport = 'import { mergeProps } from "@base-ui/react/merge-props"; ';
+    const renderImport = 'import { useRender } from "@base-ui/react/use-render"; ';
+
+    expect(() =>
+      prefixTailwindClassCandidates(`${mergeImport}const key = "className"; mergeProps({ [key]: "flex" }, props)`)
+    ).toThrow('class-bearing prop bag contains an ambiguous computed property');
+    expect(() => prefixTailwindClassCandidates(`${mergeImport}mergeProps({ ...shared }, props)`)).toThrow(
+      'class-bearing prop bag contains an ambiguous spread'
+    );
+    expect(() => prefixTailwindClassCandidates(`${renderImport}useRender({ props: { ...shared } })`)).toThrow(
+      'class-bearing prop bag contains an ambiguous spread'
+    );
+    expect(() => prefixTailwindClassCandidates(`${renderImport}useRender({ ...options })`)).toThrow(
+      'useRender options contain an ambiguous props source'
+    );
+    expect(
+      prefixTailwindClassCandidates(
+        `${mergeImport}function Probe({ ...props }) { return mergeProps({ ...{ className: "flex" } }, props) }`
+      ).source
+    ).toContain('className: "skui:flex"');
+
+    const badgeShape = `
+      import { mergeProps } from "@base-ui/react/merge-props"
+      import { useRender } from "@base-ui/react/use-render"
+      import { cn } from "./lib/utils"
+      function Badge({ className, ...props }) {
+        return useRender({
+          props: mergeProps({ className: cn("flex", className) }, props),
+        })
+      }
+    `;
+    expect(prefixTailwindClassCandidates(badgeShape).source).toContain('className: cn("skui:flex", className)');
   });
 
   it('prefixes imported cn calls outside JSX and cva compound variants', () => {
@@ -352,6 +480,32 @@ describe('UI profile Tailwind prefix normalization', () => {
     expect(prefixTailwindClassCandidates('<div className="supports-[background-image:url(icon.svg)]:block" />').source).toBe(
       '<div className="skui:supports-[background-image:url(icon.svg)]:block" />'
     );
+    expect(
+      prefixTailwindClassCandidates(
+        `<div className="sr-only flex nth-[2n+1_of_.flex]:block [&>[class~='sr-only']]:w-auto [&>[class='flex']]:grid" />`
+      ).source
+    ).toBe(
+      `<div className="skui:sr-only skui:flex skui:nth-[2n+1_of_.skui\\:flex]:block skui:[&>[class~='skui:sr-only']]:w-auto skui:[&>[class='skui:flex']]:grid" />`
+    );
+    expect(prefixTailwindClassCandidates('<div className="nth-last-[3_of_.flex]:hidden" />').source).toBe(
+      '<div className="skui:nth-last-[3_of_.skui\\:flex]:hidden" />'
+    );
+  });
+
+  it('does not trust callback destructuring as public component props', () => {
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'const entries = getEntries(); export function Probe() { return entries.map(({ className }) => <div className={className} />) }'
+      )
+    ).toThrow('dynamic class expressions are not accepted');
+    expect(
+      prefixTailwindClassCandidates('export function Probe({ className }) { return <div className={className} /> }').source
+    ).toContain('className={className}');
+    expect(
+      prefixTailwindClassCandidates(
+        'export const Probe = React.forwardRef(function Probe({ className }, ref) { return <div ref={ref} className={className} /> })'
+      ).source
+    ).toContain('className={className}');
   });
 
   it('rejects computed or concatenated profile-owned class strings', () => {

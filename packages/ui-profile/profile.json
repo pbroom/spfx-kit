@@ -698,8 +698,8 @@
       }
     }
   ],
-  "normalizationImplementationSha256": "38810e6de9368af0f9a320e558416e2faf00384ae315f2e55b8566e4843e215d",
+  "normalizationImplementationSha256": "4cb0cc83118b3de63f20d95de88bebcba1ddf07ce8959ceb505088bf041ed827",
   "profileId": "spfx-react17-base-nova-v1",
-  "provenanceSha256": "80df072feda475b1ea5a21c5e012d919a72743e163a8e790ce42b94f55901901",
+  "provenanceSha256": "105808f9edf183c4594181d4fdb8b0af3492defe986eed12a26e4d157d0035dc",
   "schemaVersion": 1
 }
