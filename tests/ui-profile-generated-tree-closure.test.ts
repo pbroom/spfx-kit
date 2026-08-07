@@ -10,7 +10,9 @@ import {
 // @ts-expect-error plain .mjs module without type declarations
 import { assertGeneratedTreeClosure } from '../packages/ui-profile/scripts/lib/generated-tree-closure.mjs';
 // @ts-expect-error plain .mjs module without type declarations
-import { normalizeRegistrySource } from '../packages/ui-profile/scripts/lib/profile.mjs';
+import { canonicalJson, normalizeRegistrySource } from '../packages/ui-profile/scripts/lib/profile.mjs';
+// @ts-expect-error plain .mjs module without type declarations
+import { bindVerifiedSnapshotsToProvenance } from '../packages/ui-profile/scripts/lib/profile-update-intake.mjs';
 
 const temporaryRoots: string[] = [];
 const packageRoot = path.resolve('packages/ui-profile');
@@ -51,8 +53,14 @@ async function expectInvalidUpdateStagingBeforeReplacement(
   snapshot.files[0].content = `${sourcePrefix}\n${snapshot.files[0].content}`;
   mutateSnapshot?.(snapshot);
   await writeFile(snapshotPath, JSON.stringify(snapshot));
-  const provenanceBytes = await readFile(path.join(packageRoot, 'provenance.json'));
-  const provenance = JSON.parse(provenanceBytes.toString('utf8'));
+  const committedProvenance = JSON.parse(await readFile(path.join(packageRoot, 'provenance.json'), 'utf8'));
+  const snapshots = new Map(
+    await Promise.all(
+      committedProvenance.registryIds.map(async (id: string) => [id, await readFile(path.join(rawRoot, `${id}.json`))])
+    )
+  );
+  const provenance = bindVerifiedSnapshotsToProvenance(committedProvenance, snapshots);
+  const provenanceBytes = Buffer.from(canonicalJson(provenance));
   const replaceGenerated = vi.fn();
 
   await expect(
