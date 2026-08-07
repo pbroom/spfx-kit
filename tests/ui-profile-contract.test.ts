@@ -501,6 +501,23 @@ describe('offline profile verifier', () => {
     expect(verifierMessage(result)).not.toContain('attempted network access');
   });
 
+  it('rejects direct and transitive updater aliases outside the pinned script contract', async () => {
+    for (const scripts of [
+      { audit: 'npm run profile:update:network' },
+      { audit: 'npm run profile:update:alias', 'profile:update:alias': 'npm run profile:update:network' },
+      { audit: 'node ./scripts/update-profile.mjs --allow-network' }
+    ]) {
+      const root = await copyProfile();
+      const manifest = await readJson<any>(root, 'package.json');
+      Object.assign(manifest.scripts, scripts);
+      await writeCanonicalJson(root, 'package.json', manifest);
+
+      const result = runOfflineVerifier(root);
+      expect(result.status).not.toBe(0);
+      expect(verifierMessage(result)).toContain('Package scripts differs from the pinned profile');
+    }
+  });
+
   it('fails closed when a committed snapshot disappears or normalized bytes drift', async () => {
     const missingRoot = await copyProfile();
     const missingProfile = await readJson<ProfileManifest>(missingRoot, 'profile.json');

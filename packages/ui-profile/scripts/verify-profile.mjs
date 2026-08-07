@@ -71,6 +71,20 @@ const expectedDevDependencies = {
   'typescript-5-8': 'npm:typescript@5.8.3'
 };
 
+const expectedScripts = {
+  'profile:update:network': 'node ./scripts/update-profile.mjs --allow-network',
+  'profile:regenerate': 'node ./scripts/regenerate-profile.mjs',
+  'profile:verify': 'node ./scripts/verify-profile.mjs',
+  'profile:verify:closure': 'node ./scripts/verify-dependency-closure.mjs',
+  'profile:verify:base-ui':
+    'node ./scripts/transform-base-ui-select-value.mjs --verify-fixtures && node ./scripts/transform-base-ui-popup-lifecycle.mjs --verify-fixtures',
+  'profile:prepare:base-ui': 'node ./scripts/prepare-base-ui.mjs',
+  'typecheck:ts53': 'node ./scripts/typecheck.mjs typescript 5.3.3 ./tsconfig.ts53.json',
+  'typecheck:ts58': 'node ./scripts/typecheck.mjs typescript-5-8 5.8.3 ./tsconfig.ts58.json',
+  typecheck: 'npm run profile:prepare:base-ui && npm run typecheck:ts53 && npm run typecheck:ts58',
+  verify: 'npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure'
+};
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -257,10 +271,7 @@ assertExact(await filesUnder('snapshots/raw'), [...expectedRawPaths].sort(), 'Ra
 assertExact(await filesUnder('snapshots/canonical'), [...expectedCanonicalPaths].sort(), 'Canonical snapshot inventory');
 assertExact(await filesUnder('normalized'), [...expectedNormalizedPaths].sort(), 'Normalized source inventory');
 
-for (const [scriptName, command] of Object.entries(manifest.scripts)) {
-  if (scriptName === 'profile:update:network') continue;
-  assert(!/https?:|\b(?:curl|wget|npx)\b/.test(command), `${scriptName}: normal profile command may not access the network`);
-}
+assertExact(manifest.scripts, expectedScripts, 'Package scripts');
 
 console.log(
   `Verified ${PROFILE_ID}: ${profile.items.length} registry payloads, ${expectedNormalizedPaths.size} normalized files`

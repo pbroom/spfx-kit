@@ -174,6 +174,22 @@ describe('React 17 UI profile normalization', () => {
     expect(result.source).toMatch(/^"use client";\n\nimport \* as React from "react"\n/u);
   });
 
+  it('preserves the complete directive prologue after triple-slash references', () => {
+    const result = normalizeRegistrySource({
+      source:
+        '/// <reference types="react" />\n' +
+        '"use strict";\n' +
+        "'use client'\n" +
+        '"custom profile directive";\n\n' +
+        'export const Empty = () => <>empty</>\n',
+      registrySourcePath: 'registry/base-nova/ui/empty.tsx'
+    });
+
+    expect(result.source).toMatch(
+      /^\/\/\/ <reference types="react" \/>\n"use strict";\n'use client'\n"custom profile directive";\n\nimport \* as React from "react"\n/u
+    );
+  });
+
   it('preserves an existing React namespace and accepts React 17 forwardRef plus pinned icons', () => {
     const source =
       'import * as React from "react"\n' +
@@ -224,6 +240,20 @@ describe('React 17 UI profile normalization', () => {
           'export const Probe = ({ ...props }: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />\n'
       })
     ).toThrow('public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef');
+  });
+
+  it('fails closed for exported function-expression ref wrappers', () => {
+    for (const declaration of [
+      'export const Probe = function ({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }',
+      'const Probe = function NamedProbe({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }; export { Probe }'
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source: `import { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
+        })
+      ).toThrow('public ref-bearing function-expression wrapper Probe is not normalized with React.forwardRef');
+    }
   });
 
   it('uses the Base UI 1.6 root DOM contract for Checkbox and Switch refs', () => {

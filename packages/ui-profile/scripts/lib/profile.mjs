@@ -292,14 +292,10 @@ function insertImport(source, declaration) {
     offset = lineEnd === -1 ? source.length : lineEnd + 1;
   }
   const sourceFile = parsedSource(source, 'import-insertion.tsx');
-  const firstStatement = sourceFile.statements.find((statement) => statement.getStart(sourceFile) >= offset);
-  if (
-    firstStatement &&
-    ts.isExpressionStatement(firstStatement) &&
-    ts.isStringLiteral(firstStatement.expression) &&
-    firstStatement.expression.text === 'use client'
-  ) {
-    offset = firstStatement.getEnd();
+  const firstStatementIndex = sourceFile.statements.findIndex((statement) => statement.getStart(sourceFile) >= offset);
+  for (const statement of sourceFile.statements.slice(Math.max(0, firstStatementIndex))) {
+    if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) break;
+    offset = statement.getEnd();
     const whitespace = /^(?:[\t ]*\r?\n)*/u.exec(source.slice(offset));
     offset += whitespace?.[0].length ?? 0;
   }
@@ -544,8 +540,8 @@ function exportedFunctionContract(source, name) {
   };
 }
 
-function exportedArrowFunctionContract(source, name) {
-  const sourceFile = parsedSource(source, 'normalized-arrow-wrapper.tsx');
+function exportedVariableFunctionContract(source, name) {
+  const sourceFile = parsedSource(source, 'normalized-variable-wrapper.tsx');
   let contract = null;
   function visit(node) {
     if (
@@ -553,11 +549,12 @@ function exportedArrowFunctionContract(source, name) {
       ts.isIdentifier(node.name) &&
       node.name.text === name &&
       node.initializer &&
-      ts.isArrowFunction(node.initializer)
+      (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
     ) {
       const parameter = node.initializer.parameters[0];
       if (!parameter) return;
       contract = {
+        kind: ts.isArrowFunction(node.initializer) ? 'arrow' : 'function-expression',
         propsType: parameter.type?.getText(sourceFile) ?? '',
         body: ts.isBlock(node.initializer.body)
           ? node.initializer.body.getText(sourceFile).slice(1, -1)
@@ -1211,16 +1208,20 @@ export function assertReact17Source(source, label) {
     ) {
       throw new Error(`${label}: public ref-bearing wrapper ${name} is not normalized with React.forwardRef`);
     }
-    const arrow = exportedArrowFunctionContract(source, name);
-    const arrowRefProps = arrow && /\.Props\b|(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?\b/.test(arrow.propsType);
-    const arrowUseRenderWrapper = arrow && /return\s+useRender\(\{/.test(arrow.body);
+    const variableFunction = exportedVariableFunctionContract(source, name);
+    const variableRefProps =
+      variableFunction &&
+      /\.Props\b|(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?\b/.test(variableFunction.propsType);
+    const variableUseRenderWrapper = variableFunction && /return\s+useRender\(\{/.test(variableFunction.body);
     if (
-      arrow &&
-      arrowRefProps &&
-      (targetAcceptsPublicRef(propsSpreadTarget(arrow.body)) || arrowUseRenderWrapper) &&
+      variableFunction &&
+      variableRefProps &&
+      (targetAcceptsPublicRef(propsSpreadTarget(variableFunction.body)) || variableUseRenderWrapper) &&
       !forwardRef.test(source)
     ) {
-      throw new Error(`${label}: public ref-bearing arrow wrapper ${name} is not normalized with React.forwardRef`);
+      throw new Error(
+        `${label}: public ref-bearing ${variableFunction.kind} wrapper ${name} is not normalized with React.forwardRef`
+      );
     }
   }
 }
