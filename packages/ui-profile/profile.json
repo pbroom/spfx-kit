@@ -23,11 +23,11 @@
     },
     {
       "path": "scripts/lib/generate-profile.mjs",
-      "sha256": "69215650b97da1333a63bda4f498b14dc511fb43bbc5108067af471183fc87c3"
+      "sha256": "020db3ac970d4dad889bdb56c821ee5a2e54fe92ad7e390259f6d5e72566da37"
     },
     {
       "path": "scripts/lib/profile-update-intake.mjs",
-      "sha256": "8510abfcb90b8785f111b4ce988253f2ce570cd3ff9a5152018a651b67a40cb8"
+      "sha256": "fd3a9443b8972c5608e2b41bd008a5de21bebc9a9121f11a6517bab6556505e3"
     },
     {
       "path": "scripts/lib/typecheck-generated-profile.mjs",
@@ -671,8 +671,8 @@
       }
     }
   ],
-  "normalizationImplementationSha256": "3c0d71c3ce571fdd7448161c96eb26b84acb6e7ce31a6e31d8b476d07546573f",
+  "normalizationImplementationSha256": "b47e22f385089b46716dacbd207ff8a35b1de53b68e8f4a8db2908faa9011597",
   "profileId": "spfx-react17-base-nova-v1",
-  "provenanceSha256": "961a703093636efb1f5fe9d6d4d6e04e5bccbe90c16e62247fe0293b09fe553f",
+  "provenanceSha256": "bfb316235c96db90cb8772659f4e2c1e0a06624d6be0e3b2c76fde27bbd1616e",
   "schemaVersion": 1
 }

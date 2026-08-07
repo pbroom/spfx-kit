@@ -12,6 +12,7 @@ import {
   PROFILE_SCHEMA_VERSION,
   REGISTRY_IDS,
   canonicalJson,
+  createRegistrySourceContext,
   externalImports,
   normalizeRegistrySource,
   sha256
@@ -217,6 +218,18 @@ assertExact(
 const expectedRawPaths = new Set();
 const expectedCanonicalPaths = new Set();
 const rawSnapshots = [];
+const sourceContext = createRegistrySourceContext(
+  (
+    await Promise.all(
+      profile.items.map(async (item) => {
+        const raw = JSON.parse(await readFile(path.join(packageRoot, item.raw.path)));
+        return raw.files;
+      })
+    )
+  )
+    .flat()
+    .map((file) => ({ path: file.path, source: file.content }))
+);
 const allowedImports = new Set(Object.keys(expectedDirectDependencies));
 const { emittedPaths: expectedNormalizedPaths } = await assertGeneratedTreeClosure({
   outputRoot: packageRoot,
@@ -262,7 +275,8 @@ for (const item of profile.items) {
     );
     const rerun = normalizeRegistrySource({
       source: registryFile.content,
-      registrySourcePath: registryFile.path
+      registrySourcePath: registryFile.path,
+      sourceContext
     });
     assert(rerun.outputPath === output.path, `${item.id}: normalized output path differs`);
     assertExact(rerun.transformations, output.transformations, `${item.id}: transformations for ${output.path}`);

@@ -7,10 +7,11 @@ import {
   PROFILE_SCHEMA_VERSION,
   assertRegistryIds,
   canonicalJson,
+  createRegistrySourceContext,
   normalizeRegistrySource,
   sha256
 } from './profile.mjs';
-import { assertFetchedRegistryClosure } from './profile-update-intake.mjs';
+import { assertFetchedRegistryClosure, assertProductionDependencyRoots } from './profile-update-intake.mjs';
 
 const compilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
@@ -32,6 +33,9 @@ const compilerInputPaths = [
 
 export async function generateProfile({ packageRoot, rawRoot, outputRoot, provenance, provenanceBytes }) {
   assertRegistryIds(provenance.registryIds);
+  const dependencyClosureBytes = await readFile(path.join(packageRoot, 'dependency-closure.json'));
+  const dependencyClosure = JSON.parse(dependencyClosureBytes.toString('utf8'));
+  assertProductionDependencyRoots(dependencyClosure.productionRoots, provenance.directProductionDependencies);
   await mkdir(path.join(outputRoot, 'snapshots', 'canonical'), { recursive: true });
   const implementationPath = path.join(packageRoot, 'scripts', 'lib', 'profile.mjs');
   const items = [];
@@ -58,6 +62,9 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
       directProductionDependencies: provenance.directProductionDependencies
     }
   );
+  const sourceContext = createRegistrySourceContext(
+    snapshots.flatMap(({ parsed }) => parsed.files.map((file) => ({ path: file.path, source: file.content })))
+  );
 
   for (const { id, rawBytes, parsed } of snapshots) {
     const rawRelative = `snapshots/raw/${id}.json`;
@@ -73,7 +80,11 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
       if (typeof file.path !== 'string' || typeof file.content !== 'string') {
         throw new Error(`${id}: every accepted registry file must contain a path and source bytes`);
       }
-      const result = normalizeRegistrySource({ source: file.content, registrySourcePath: file.path });
+      const result = normalizeRegistrySource({
+        source: file.content,
+        registrySourcePath: file.path,
+        sourceContext
+      });
       if (outputPaths.has(result.outputPath)) throw new Error(`${id}: duplicate normalized output ${result.outputPath}`);
       outputPaths.add(result.outputPath);
       const outputAbsolute = path.join(outputRoot, result.outputPath);
@@ -111,7 +122,7 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
     ),
     dependencyClosure: {
       path: 'dependency-closure.json',
-      sha256: sha256(await readFile(path.join(packageRoot, 'dependency-closure.json')))
+      sha256: sha256(dependencyClosureBytes)
     },
     baseUiDeclarationTransform: {
       path: 'compat/base-ui-1.6.0/select-value/contract.json',

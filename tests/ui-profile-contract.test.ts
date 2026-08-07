@@ -528,6 +528,24 @@ describe('offline profile verifier', () => {
     expect(verifierMessage(mutated)).toContain('Forced peer resolution must remain disabled');
   });
 
+  it('rejects an incomplete production-root inventory in verification and generation', async () => {
+    const root = await copyProfile();
+    const closure = await readJson<DependencyClosure>(root, 'dependency-closure.json');
+    closure.productionRoots = closure.productionRoots.filter((dependency) => dependency !== 'lucide-react');
+    closure.packages = closure.packages.filter((entry) => entry.name !== 'lucide-react');
+    await writeCanonicalJson(root, 'dependency-closure.json', closure);
+    const before = await treeDigests(root);
+
+    const verified = runOfflineClosureVerifier(root, '--manifest-only');
+    expect(verified.status).not.toBe(0);
+    expect(verifierMessage(verified)).toContain('Production dependency roots differ from provenance');
+
+    const regenerated = runOfflineRegenerator(root);
+    expect(regenerated.status).not.toBe(0);
+    expect(verifierMessage(regenerated)).toContain('Production dependency roots differ from provenance');
+    expect(await treeDigests(root)).toEqual(before);
+  });
+
   it('rejects forced dependency resolution in both the profile and repository manifests', async () => {
     for (const [scope, relativePath, expectedMessage] of [
       ['profile', 'package.json', 'UI profile manifest contains forced dependency resolution'],

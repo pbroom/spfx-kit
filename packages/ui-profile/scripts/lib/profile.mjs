@@ -700,31 +700,146 @@ function refElementType(target, propsType) {
   return /^[a-z]/.test(target) ? `React.ElementRef<"${target}">` : `React.ElementRef<typeof ${target}>`;
 }
 
-function isRefBearingPropsType(source, propsType) {
+export function createRegistrySourceContext(files) {
+  const modules = new Map();
+  for (const file of files) {
+    const outputPath = outputPathForRegistrySource(file.path);
+    if (modules.has(outputPath)) throw new Error(`Duplicate registry source context path: ${outputPath}`);
+    modules.set(outputPath, {
+      path: outputPath,
+      source: file.source,
+      sourceFile: parsedSource(file.source, outputPath)
+    });
+  }
+  return { modules };
+}
+
+function sourceContextModule(sourceContext, currentPath, specifier) {
+  if (!sourceContext || !currentPath) return null;
+  let target;
+  if (specifier === '@/registry/base-nova/lib/utils') {
+    target = 'normalized/src/lib/utils.ts';
+  } else {
+    const component = /^@\/registry\/base-nova\/ui\/([a-z0-9-]+)$/u.exec(specifier)?.[1];
+    if (component) target = `normalized/src/components/ui/${component}.tsx`;
+  }
+  if (!target && specifier.startsWith('.')) {
+    target = path.posix.normalize(path.posix.join(path.posix.dirname(currentPath), specifier));
+  }
+  if (!target) return null;
+  const candidates = /\.(?:ts|tsx)$/u.test(target)
+    ? [target]
+    : [`${target}.ts`, `${target}.tsx`, `${target}/index.ts`, `${target}/index.tsx`];
+  const matches = candidates.map((candidate) => sourceContext.modules.get(candidate)).filter(Boolean);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function isRegistrySourceTypeSpecifier(specifier) {
+  return (
+    specifier.startsWith('.') ||
+    specifier === '@/registry/base-nova/lib/utils' ||
+    /^@\/registry\/base-nova\/ui\/[a-z0-9-]+$/u.test(specifier)
+  );
+}
+
+function hasExportModifier(declaration) {
+  return declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword);
+}
+
+function resolveSourceContextType(sourceContext, currentPath, specifier, exportName, seen) {
+  const module = sourceContextModule(sourceContext, currentPath, specifier);
+  if (!module) return undefined;
+  const key = `${module.path}#${exportName}`;
+  if (seen.has(key)) return undefined;
+  const nextSeen = new Set(seen).add(key);
+  for (const statement of module.sourceFile.statements) {
+    if (
+      (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) &&
+      ((statement.name.text === exportName && hasExportModifier(statement)) ||
+        (exportName === 'default' &&
+          hasExportModifier(statement) &&
+          statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)))
+    ) {
+      return classifyRefBearingPropsType(module.source, statement.name.text, {
+        sourceContext,
+        currentPath: module.path,
+        seen: nextSeen
+      });
+    }
+    if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+      const exported = statement.exportClause.elements.find((element) => element.name.text === exportName);
+      if (exported) {
+        const localName = (exported.propertyName ?? exported.name).text;
+        if (statement.moduleSpecifier && ts.isStringLiteralLike(statement.moduleSpecifier)) {
+          return resolveSourceContextType(
+            sourceContext,
+            module.path,
+            statement.moduleSpecifier.text,
+            localName,
+            nextSeen
+          );
+        }
+        return classifyRefBearingPropsType(module.source, localName, {
+          sourceContext,
+          currentPath: module.path,
+          seen: nextSeen
+        });
+      }
+    }
+  }
+  return undefined;
+}
+
+function classifyRefBearingPropsType(source, propsType, options = {}) {
   if (!propsType.trim()) return false;
   const sourceFile = parsedSource(source, 'ref-bearing-props.tsx');
   const aliases = new Map();
   const importedBaseUiPropsTypes = new Set();
   const importedReactPropsHelpers = new Set();
+  const importedReactPropsNamespaces = new Set();
+  const importedRelativeTypes = new Map();
+  const importedRelativeNamespaces = new Map();
   const addAlias = (name, type) => aliases.set(name, [...(aliases.get(name) ?? []), type]);
   for (const statement of sourceFile.statements) {
     if (
+      ts.isImportEqualsDeclaration(statement) &&
+      ts.isExternalModuleReference(statement.moduleReference) &&
+      statement.moduleReference.expression?.text === 'react'
+    ) {
+      importedReactPropsNamespaces.add(statement.name.text);
+      continue;
+    }
+    if (
       ts.isImportDeclaration(statement) &&
       ts.isStringLiteralLike(statement.moduleSpecifier) &&
-      statement.importClause?.namedBindings &&
-      ts.isNamedImports(statement.importClause.namedBindings)
+      statement.importClause
     ) {
-      for (const element of statement.importClause.namedBindings.elements) {
-        const importedName = element.propertyName?.text ?? element.name.text;
-        if (statement.moduleSpecifier.text === 'react' && /^ComponentProps(?:WithRef|WithoutRef)?$/u.test(importedName)) {
-          importedReactPropsHelpers.add(element.name.text);
+      const specifier = statement.moduleSpecifier.text;
+      const clause = statement.importClause;
+      if (specifier === 'react') {
+        if (clause.name) importedReactPropsNamespaces.add(clause.name.text);
+        if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+          importedReactPropsNamespaces.add(clause.namedBindings.name.text);
         }
-        if (
-          (statement.moduleSpecifier.text === '@base-ui/react' ||
-            statement.moduleSpecifier.text.startsWith('@base-ui/react/')) &&
-          /Props$/u.test(importedName)
-        ) {
-          importedBaseUiPropsTypes.add(element.name.text);
+      }
+      if (isRegistrySourceTypeSpecifier(specifier)) {
+        if (clause.name) importedRelativeTypes.set(clause.name.text, { specifier, importedName: 'default' });
+        if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+          importedRelativeNamespaces.set(clause.namedBindings.name.text, specifier);
+        }
+      }
+      if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+        for (const element of clause.namedBindings.elements) {
+          const importedName = element.propertyName?.text ?? element.name.text;
+          if (specifier === 'react' && /^ComponentProps(?:WithRef|WithoutRef)?$/u.test(importedName)) {
+            importedReactPropsHelpers.add(element.name.text);
+          }
+          if ((specifier === '@base-ui/react' || specifier.startsWith('@base-ui/react/')) && /Props$/u.test(importedName)) {
+            importedBaseUiPropsTypes.add(element.name.text);
+          }
+          if (isRegistrySourceTypeSpecifier(specifier)) {
+            importedRelativeTypes.set(element.name.text, { specifier, importedName });
+          }
         }
       }
     } else if (ts.isTypeAliasDeclaration(statement)) {
@@ -741,18 +856,55 @@ function isRefBearingPropsType(source, propsType) {
   if (!input) return false;
 
   const visitedAliases = new Set();
+  let unresolved = false;
+  const sourceContextSeen = options.seen ?? new Set();
+  function qualifiedRootName(name) {
+    let current = name;
+    while (ts.isQualifiedName(current)) current = current.left;
+    return ts.isIdentifier(current) ? current.text : null;
+  }
+  function expressionRootName(expression) {
+    let current = expression;
+    while (ts.isPropertyAccessExpression(current)) current = current.expression;
+    return ts.isIdentifier(current) ? current.text : null;
+  }
   function isDirectRefPropsName(name) {
     const nameText = name.getText(name.getSourceFile());
     return (
       (ts.isQualifiedName(name) && name.right.text === 'Props') ||
       (ts.isIdentifier(name) && importedBaseUiPropsTypes.has(name.text)) ||
       (ts.isIdentifier(name) && importedReactPropsHelpers.has(name.text)) ||
+      (ts.isQualifiedName(name) &&
+        /^ComponentProps(?:WithRef|WithoutRef)?$/u.test(name.right.text) &&
+        importedReactPropsNamespaces.has(qualifiedRootName(name))) ||
       /^(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?$/u.test(nameText)
     );
+  }
+  function inspectImportedRelativeType(name, exportName = null) {
+    let binding;
+    if (ts.isIdentifier(name)) binding = importedRelativeTypes.get(name.text);
+    else if (ts.isQualifiedName(name)) {
+      const root = qualifiedRootName(name);
+      const specifier = root && importedRelativeNamespaces.get(root);
+      if (specifier) binding = { specifier, importedName: exportName ?? name.right.text };
+    }
+    if (!binding) return false;
+    const result = options.sourceContext
+      ? resolveSourceContextType(
+          options.sourceContext,
+          options.currentPath,
+          binding.specifier,
+          binding.importedName,
+          sourceContextSeen
+        )
+      : undefined;
+    if (result === undefined) unresolved = true;
+    return result === true;
   }
   function inspect(node) {
     if (ts.isTypeReferenceNode(node)) {
       if (isDirectRefPropsName(node.typeName)) return true;
+      if (inspectImportedRelativeType(node.typeName)) return true;
       if (ts.isIdentifier(node.typeName) && aliases.has(node.typeName.text) && !visitedAliases.has(node.typeName.text)) {
         visitedAliases.add(node.typeName.text);
         if (aliases.get(node.typeName.text).some(inspect)) return true;
@@ -760,6 +912,24 @@ function isRefBearingPropsType(source, propsType) {
       return (node.typeArguments ?? []).some(inspect);
     }
     if (ts.isImportTypeNode(node)) {
+      if (
+        ts.isLiteralTypeNode(node.argument) &&
+        ts.isStringLiteralLike(node.argument.literal) &&
+        isRegistrySourceTypeSpecifier(node.argument.literal.text) &&
+        node.qualifier
+      ) {
+        const result = options.sourceContext
+          ? resolveSourceContextType(
+              options.sourceContext,
+              options.currentPath,
+              node.argument.literal.text,
+              node.qualifier.getText(node.getSourceFile()),
+              sourceContextSeen
+            )
+          : undefined;
+        if (result === undefined) unresolved = true;
+        if (result === true) return true;
+      }
       if (
         ts.isLiteralTypeNode(node.argument) &&
         ts.isStringLiteralLike(node.argument.literal) &&
@@ -779,10 +949,14 @@ function isRefBearingPropsType(source, propsType) {
         (ts.isPropertyAccessExpression(expression) && expression.name.text === 'Props') ||
         (ts.isIdentifier(expression) && importedBaseUiPropsTypes.has(expression.text)) ||
         (ts.isIdentifier(expression) && importedReactPropsHelpers.has(expression.text)) ||
+        (ts.isPropertyAccessExpression(expression) &&
+          /^ComponentProps(?:WithRef|WithoutRef)?$/u.test(expression.name.text) &&
+          importedReactPropsNamespaces.has(expressionRootName(expression))) ||
         /^(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?$/u.test(expressionName)
       ) {
         return true;
       }
+      if (ts.isIdentifier(expression) && inspectImportedRelativeType(expression)) return true;
       if (ts.isIdentifier(expression) && aliases.has(expression.text) && !visitedAliases.has(expression.text)) {
         visitedAliases.add(expression.text);
         if (aliases.get(expression.text).some(inspect)) return true;
@@ -795,10 +969,15 @@ function isRefBearingPropsType(source, propsType) {
     });
     return found;
   }
-  return inspect(input);
+  const result = inspect(input);
+  return result ? true : unresolved ? undefined : false;
 }
 
-function normalizePublicForwardRefs(source) {
+function isRefBearingPropsType(source, propsType, options) {
+  return classifyRefBearingPropsType(source, propsType, options) !== false;
+}
+
+function normalizePublicForwardRefs(source, analysisOptions) {
   const exports = exportedNames(source);
   const sourceFile = parsedSource(source, 'public-forward-ref-wrappers.tsx');
   const candidates = [];
@@ -841,7 +1020,7 @@ function normalizePublicForwardRefs(source) {
   for (const candidate of candidates.reverse()) {
     let destructuring = candidate.parameter.name.getText(sourceFile);
     const propsType = candidate.parameter.type.getText(sourceFile);
-    if (!isRefBearingPropsType(normalized, propsType)) continue;
+    if (!isRefBearingPropsType(normalized, propsType, analysisOptions)) continue;
     destructuring = destructuring.replace(/(^|\n)(\s*)ref\s*,\s*(?=\n|})/m, '$1$2').replace(/{\s*ref\s*,/, '{');
 
     let body = normalized.slice(candidate.bodyOpen + 1, candidate.bodyClose);
@@ -1451,7 +1630,237 @@ function anonymousDefaultFunctionContracts(source) {
   return contracts;
 }
 
-function exportedVariableFunctionContracts(source, name) {
+function callableContract(callable, sourceFile, name) {
+  const parameter = callable.declaration.parameters.find(
+    (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
+  );
+  if (!parameter) return null;
+  return {
+    name,
+    kind: callable.kind,
+    spreadTargets: propsSpreadTargets(callable.declaration, parameter, sourceFile),
+    propsType: [parameter.type?.getText(sourceFile), callable.contextualPropsType]
+      .filter(Boolean)
+      .map((type) => `(${type})`)
+      .join(' & '),
+    body: ts.isBlock(callable.declaration.body)
+      ? callable.declaration.body.getText(sourceFile).slice(1, -1)
+      : `return ${callable.declaration.body.getText(sourceFile)}`
+  };
+}
+
+function staticObjectPropertyName(name, sourceFile) {
+  if (!name) return null;
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) return name.text;
+  if (ts.isComputedPropertyName(name)) {
+    const expression = unwrapExpression(name.expression);
+    if (ts.isStringLiteralLike(expression) || ts.isNumericLiteral(expression)) return expression.text;
+  }
+  return null;
+}
+
+function objectPropertyContextualType(contextualType, propertyName, sourceFile) {
+  if (!contextualType?.trim()) return '';
+  const synthetic = parsedSource(`type ObjectContext = ${contextualType}`, 'exported-object-context.ts');
+  const root = synthetic.statements.find(ts.isTypeAliasDeclaration)?.type;
+  if (!root) return '';
+  function inspectMembers(members, owner) {
+    for (const member of members) {
+      if (!ts.isPropertySignature(member) && !ts.isMethodSignature(member)) continue;
+      if (staticObjectPropertyName(member.name, owner) !== propertyName) continue;
+      if (ts.isMethodSignature(member)) {
+        const parameter = member.parameters.find(
+          (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
+        );
+        return parameter?.type?.getText(owner) ?? '';
+      }
+      return member.type?.getText(owner) ?? '';
+    }
+    return '';
+  }
+  function inspect(node, owner, seen = new Set()) {
+    if (ts.isParenthesizedTypeNode(node)) return inspect(node.type, owner, seen);
+    if (ts.isIntersectionTypeNode(node) || ts.isUnionTypeNode(node)) {
+      return node.types.map((type) => inspect(type, owner, new Set(seen))).filter(Boolean).join(' & ');
+    }
+    if (ts.isTypeLiteralNode(node)) return inspectMembers(node.members, owner);
+    if (ts.isTypeReferenceNode(node) && ts.isIdentifier(node.typeName) && !seen.has(node.typeName.text)) {
+      const nextSeen = new Set(seen).add(node.typeName.text);
+      const declarations = sourceFile.statements.filter(
+        (statement) =>
+          (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) &&
+          statement.name.text === node.typeName.text
+      );
+      for (const declaration of declarations) {
+        if (declaration.typeParameters?.length) return '';
+        const result = ts.isTypeAliasDeclaration(declaration)
+          ? inspect(declaration.type, sourceFile, nextSeen)
+          : inspectMembers(declaration.members, sourceFile) ||
+            (declaration.heritageClauses ?? [])
+              .flatMap((clause) => clause.types)
+              .map((type) => inspect(type, sourceFile, new Set(nextSeen)))
+              .filter(Boolean)
+              .join(' & ');
+        if (result) return result;
+      }
+    }
+    return '';
+  }
+  return inspect(root, synthetic);
+}
+
+function topLevelConstInitializer(sourceFile, name) {
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    const declaration = statement.declarationList.declarations.find(
+      (candidate) => ts.isIdentifier(candidate.name) && candidate.name.text === name
+    );
+    if (declaration?.initializer && isConstVariableDeclaration(declaration)) return declaration.initializer;
+  }
+  return null;
+}
+
+function constExpressionResolvesToObject(expression, sourceFile, seen = new Set()) {
+  const target = unwrapExpression(expression);
+  if (ts.isObjectLiteralExpression(target)) return true;
+  if (!ts.isIdentifier(target) || seen.has(target.text)) return false;
+  const initializer = topLevelConstInitializer(sourceFile, target.text);
+  return Boolean(initializer) && constExpressionResolvesToObject(initializer, sourceFile, new Set(seen).add(target.text));
+}
+
+function exportedCompositeFunctionContracts(expression, sourceFile, exportPath, contextualType = '', seen = new Set()) {
+  const target = unwrapExpression(expression);
+  if (ts.isIdentifier(target)) {
+    if (seen.has(target.text)) throw new Error(`cyclic exported object alias ${exportPath} is not accepted`);
+    const initializer = topLevelConstInitializer(sourceFile, target.text);
+    if (!initializer) return [];
+    return exportedCompositeFunctionContracts(
+      initializer,
+      sourceFile,
+      exportPath,
+      contextualType,
+      new Set(seen).add(target.text)
+    );
+  }
+  if (!ts.isObjectLiteralExpression(target)) return [];
+
+  const contracts = [];
+  for (const property of target.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      const spread = unwrapExpression(property.expression);
+      if (!ts.isIdentifier(spread)) {
+        throw new Error(`unsupported exported object spread ${exportPath} is not accepted`);
+      }
+      if (seen.has(spread.text)) throw new Error(`cyclic exported object alias ${exportPath} is not accepted`);
+      const initializer = topLevelConstInitializer(sourceFile, spread.text);
+      if (!initializer) throw new Error(`unsupported exported object spread ${exportPath} is not accepted`);
+      contracts.push(
+        ...exportedCompositeFunctionContracts(
+          initializer,
+          sourceFile,
+          exportPath,
+          contextualType,
+          new Set(seen).add(spread.text)
+        )
+      );
+      continue;
+    }
+
+    const propertyName = staticObjectPropertyName(property.name, sourceFile);
+    if (!propertyName) {
+      throw new Error(`computed exported object property ${exportPath} is not accepted`);
+    }
+    const propertyPath = `${exportPath}.${propertyName}`;
+    const propertyContext = objectPropertyContextualType(contextualType, propertyName, sourceFile);
+    if (ts.isMethodDeclaration(property) && property.body) {
+      const contract = callableContract(
+        { declaration: property, kind: 'method', contextualPropsType: propertyContext },
+        sourceFile,
+        propertyPath
+      );
+      if (contract && !contract.propsType && contextualType && !propertyContext) {
+        throw new Error(`unsupported contextual exported object property ${propertyPath} is not accepted`);
+      }
+      if (contract) contracts.push(contract);
+      continue;
+    }
+    if (ts.isGetAccessorDeclaration(property) || ts.isSetAccessorDeclaration(property)) {
+      throw new Error(`accessor exported object property ${propertyPath} is not accepted`);
+    }
+
+    const value = ts.isPropertyAssignment(property)
+      ? property.initializer
+      : ts.isShorthandPropertyAssignment(property)
+        ? property.name
+        : null;
+    if (!value) continue;
+    const unwrappedValue = unwrapExpression(value);
+    if (ts.isObjectLiteralExpression(unwrappedValue)) {
+      contracts.push(
+        ...exportedCompositeFunctionContracts(
+          unwrappedValue,
+          sourceFile,
+          propertyPath,
+          propertyContext || contextualType,
+          seen
+        )
+      );
+      continue;
+    }
+    if (ts.isIdentifier(unwrappedValue) && constExpressionResolvesToObject(unwrappedValue, sourceFile)) {
+      if (seen.has(unwrappedValue.text)) throw new Error(`cyclic exported object alias ${propertyPath} is not accepted`);
+      contracts.push(
+        ...exportedCompositeFunctionContracts(
+          unwrappedValue,
+          sourceFile,
+          propertyPath,
+          propertyContext || contextualType,
+          new Set(seen)
+        )
+      );
+      continue;
+    }
+    const callable = callableFromExportExpression(value, sourceFile, new Set(), false, propertyContext);
+    if (callable?.forwarded) continue;
+    if (callable) {
+      const contract = callableContract(callable, sourceFile, propertyPath);
+      if (contract && !contract.propsType && contextualType && !propertyContext) {
+        throw new Error(`unsupported contextual exported object property ${propertyPath} is not accepted`);
+      }
+      if (contract) contracts.push(contract);
+      continue;
+    }
+    if (
+      !expressionIsDefinitelyNonCallable(value, sourceFile) &&
+      propertyContext &&
+      isRefBearingPropsType(sourceFile.text, propertyContext)
+    ) {
+      throw new Error(`unsupported exported object property ${propertyPath} is not accepted`);
+    }
+  }
+  return contracts;
+}
+
+function anonymousDefaultCompositeFunctionContracts(source) {
+  const sourceFile = parsedSource(source, 'normalized-anonymous-default-object.tsx');
+  const contracts = [];
+  for (const statement of sourceFile.statements) {
+    if (!ts.isExportAssignment(statement) || statement.isExportEquals) continue;
+    const expression = unwrapExpression(statement.expression);
+    if (!ts.isObjectLiteralExpression(expression)) continue;
+    contracts.push(
+      ...exportedCompositeFunctionContracts(
+        statement.expression,
+        sourceFile,
+        'default',
+        contextualTypeTextsForExpression(statement.expression, sourceFile).join(' & ')
+      )
+    );
+  }
+  return contracts;
+}
+
+function exportedVariableFunctionContracts(source, name, analysisOptions) {
   const sourceFile = parsedSource(source, 'normalized-variable-wrapper.tsx');
   const contracts = [];
   const exportedDeclarations = moduleVariableDeclarations(sourceFile, name);
@@ -1465,7 +1874,7 @@ function exportedVariableFunctionContracts(source, name) {
   if (
     mutableBinding &&
     declarationContext &&
-    isRefBearingPropsType(source, declarationContext)
+    isRefBearingPropsType(source, declarationContext, analysisOptions)
   ) {
     throw new Error(`mutable exported callable binding ${name} is not accepted`);
   }
@@ -1477,6 +1886,18 @@ function exportedVariableFunctionContracts(source, name) {
     throw new Error(`mutable exported callable binding ${name} is not accepted`);
   }
   for (const candidate of candidates) {
+    const expressionContext = contextualTypeTextsForExpression(candidate, sourceFile).join(' & ');
+    const compositeContracts = exportedCompositeFunctionContracts(
+      candidate,
+      sourceFile,
+      name,
+      [declarationContext, expressionContext].filter(Boolean).join(' & ')
+    );
+    if (compositeContracts.length > 0) {
+      if (mutableBinding) throw new Error(`mutable exported callable binding ${name} is not accepted`);
+      contracts.push(...compositeContracts);
+      continue;
+    }
     const callable = callableFromExportExpression(
       candidate,
       sourceFile,
@@ -1484,11 +1905,10 @@ function exportedVariableFunctionContracts(source, name) {
       false,
       declarationContext
     );
-    const expressionContext = contextualTypeTextsForExpression(candidate, sourceFile).join(' & ');
     if (
       !callable &&
       (declarationContext || expressionContext) &&
-      isRefBearingPropsType(source, [declarationContext, expressionContext].filter(Boolean).join(' & '))
+      isRefBearingPropsType(source, [declarationContext, expressionContext].filter(Boolean).join(' & '), analysisOptions)
     ) {
       throw new Error(`unsupported contextually typed exported callable ${name} is not accepted`);
     }
@@ -1498,23 +1918,13 @@ function exportedVariableFunctionContracts(source, name) {
     if (!callable) continue;
     if (callable.forwarded) continue;
     if (mutableBinding) throw new Error(`mutable exported callable binding ${name} is not accepted`);
-    const parameter = callable.declaration.parameters.find(
-      (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
-    );
-    if (!parameter) continue;
-    contracts.push({
-      kind: callable.kind,
-      spreadTargets: propsSpreadTargets(callable.declaration, parameter, sourceFile),
-      propsType: parameter.type?.getText(sourceFile) ?? callable.contextualPropsType ?? '',
-      body: ts.isBlock(callable.declaration.body)
-        ? callable.declaration.body.getText(sourceFile).slice(1, -1)
-        : `return ${callable.declaration.body.getText(sourceFile)}`
-    });
+    const contract = callableContract(callable, sourceFile, name);
+    if (contract) contracts.push(contract);
   }
   return contracts;
 }
 
-export function normalizeRegistrySource({ source, registrySourcePath }) {
+export function normalizeRegistrySource({ source, registrySourcePath, sourceContext }) {
   const outputPath = outputPathForRegistrySource(registrySourcePath);
   const transformations = ['normalize-line-endings'];
   let normalized = source.replace(/\r\n?/g, '\n');
@@ -1546,7 +1956,8 @@ export function normalizeRegistrySource({ source, registrySourcePath }) {
 
   if (registrySourcePath.endsWith('.tsx')) {
     const sourceRequiresReactRuntime = hasJsx(normalized) || hasReactRuntimeUse(normalized);
-    const forwardRefResult = normalizePublicForwardRefs(normalized);
+    const analysisOptions = { sourceContext, currentPath: outputPath };
+    const forwardRefResult = normalizePublicForwardRefs(normalized, analysisOptions);
     const requiresReactBinding =
       (sourceRequiresReactRuntime || forwardRefResult.transformed) && !hasReactBinding(forwardRefResult.source);
     if (requiresReactBinding && hasTypeOnlyReactBinding(forwardRefResult.source)) {
@@ -1559,7 +1970,7 @@ export function normalizeRegistrySource({ source, registrySourcePath }) {
   }
 
   normalized = `${normalized.replace(/\s+$/u, '')}\n`;
-  assertReact17Source(normalized, outputPath);
+  assertReact17Source(normalized, outputPath, { sourceContext, currentPath: outputPath });
 
   return {
     outputPath,
@@ -2133,7 +2544,7 @@ function assertReact17AstSource(source, label) {
   inspect(sourceFile);
 }
 
-export function assertReact17Source(source, label) {
+export function assertReact17Source(source, label, analysisOptions) {
   assertReact17AstSource(source, label);
   if (
     hasAppOwnedAliasSpecifier(source, label) ||
@@ -2146,7 +2557,7 @@ export function assertReact17Source(source, label) {
     throw new Error(`${label}: JSX source does not bind the React namespace`);
   }
   for (const anonymousDefault of anonymousDefaultFunctionContracts(source)) {
-    const refProps = isRefBearingPropsType(source, anonymousDefault.propsType);
+    const refProps = isRefBearingPropsType(source, anonymousDefault.propsType, analysisOptions);
     const useRenderWrapper = /return\s+useRender\(\{/.test(anonymousDefault.body);
     if (
       refProps &&
@@ -2157,9 +2568,18 @@ export function assertReact17Source(source, label) {
       );
     }
   }
+  for (const compositeFunction of anonymousDefaultCompositeFunctionContracts(source)) {
+    const refProps = isRefBearingPropsType(source, compositeFunction.propsType, analysisOptions);
+    const useRenderWrapper = /return\s+useRender\(\{/.test(compositeFunction.body);
+    if (refProps && (compositeFunction.spreadTargets.some(targetAcceptsPublicRef) || useRenderWrapper)) {
+      throw new Error(
+        `${label}: public ref-bearing ${compositeFunction.kind} wrapper ${compositeFunction.name} is not normalized with React.forwardRef`
+      );
+    }
+  }
   for (const name of exportedNames(source)) {
     const ordinary = exportedFunctionContract(source, name);
-    const refProps = ordinary && isRefBearingPropsType(source, ordinary.propsType);
+    const refProps = ordinary && isRefBearingPropsType(source, ordinary.propsType, analysisOptions);
     const useRenderWrapper = ordinary && /return\s+useRender\(\{/.test(ordinary.body);
     if (
       ordinary &&
@@ -2168,15 +2588,15 @@ export function assertReact17Source(source, label) {
     ) {
       throw new Error(`${label}: public ref-bearing wrapper ${name} is not normalized with React.forwardRef`);
     }
-    for (const variableFunction of exportedVariableFunctionContracts(source, name)) {
-      const variableRefProps = isRefBearingPropsType(source, variableFunction.propsType);
+    for (const variableFunction of exportedVariableFunctionContracts(source, name, analysisOptions)) {
+      const variableRefProps = isRefBearingPropsType(source, variableFunction.propsType, analysisOptions);
       const variableUseRenderWrapper = /return\s+useRender\(\{/.test(variableFunction.body);
       if (
         variableRefProps &&
         (variableFunction.spreadTargets.some(targetAcceptsPublicRef) || variableUseRenderWrapper)
       ) {
         throw new Error(
-          `${label}: public ref-bearing ${variableFunction.kind} wrapper ${name} is not normalized with React.forwardRef`
+          `${label}: public ref-bearing ${variableFunction.kind} wrapper ${variableFunction.name ?? name} is not normalized with React.forwardRef`
         );
       }
     }

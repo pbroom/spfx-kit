@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
@@ -15,7 +16,12 @@ import {
 
 const SHADCN_NAME = 'shadcn';
 const SHADCN_VERSION = '4.16.1';
+const SHADCN_RESOLVED = 'https://registry.npmjs.org/shadcn/-/shadcn-4.16.1.tgz';
 const SHADCN_INTEGRITY = 'sha512-XLFzfNNIUPlUlyheFEzj0H4Vnhi9nI0nl3Nfgg8HYXW1FkUVhVT1X+mgmOUW8aWL5SeG0A+yJIV5fm3Hr9MVkQ==';
+// Derived from a clean npm 10.9.x install of the locked graph rooted at the independently verified
+// SHADCN_RESOLVED/SHADCN_INTEGRITY artifact. This includes package-local dependency overrides.
+const SHADCN_TREE_SHA256 = 'd2c030d535d89f866050bd40d843b34802bb9a0ba35acca50508c64a883457ea';
+const SHADCN_RUNTIME_CLOSURE_SHA256 = 'dcc48e3a01af816d9733b3b0491d2206b6612381017d65699bdeb892ff190bb8';
 const PROVENANCE_SCHEMA_SHA256 = '64b48f281eb52c98d8698a22749b09953c86458a8418f00b227c3ac1059f32ef';
 const DEFAULT_REGISTRY_ITEM_MAX_BYTES = 256 * 1024;
 const DEFAULT_REGISTRY_AGGREGATE_MAX_BYTES = 4 * 1024 * 1024;
@@ -24,6 +30,97 @@ const ICON_PLACEHOLDER_SPECIFIER = '@/app/(create)/components/icon-placeholder';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+export function assertProductionDependencyRoots(productionRoots, directProductionDependencies) {
+  assert(Array.isArray(productionRoots), 'Production dependency roots must be an array');
+  assert(
+    directProductionDependencies && typeof directProductionDependencies === 'object',
+    'Direct production dependency policy is missing'
+  );
+  assert(new Set(productionRoots).size === productionRoots.length, 'Production dependency roots contain duplicates');
+  const actual = [...productionRoots].sort();
+  const expected = Object.keys(directProductionDependencies).sort();
+  assert(canonicalJson(actual) === canonicalJson(expected), 'Production dependency roots differ from provenance');
+}
+
+async function packageTreeSha256(root, { excludeNodeModules = false } = {}) {
+  const files = [];
+  async function visit(directory) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
+    for (const entry of entries) {
+      if (excludeNodeModules && entry.isDirectory() && entry.name === 'node_modules') continue;
+      if (path.basename(directory) === 'node_modules' && entry.isDirectory() && entry.name === '.bin') continue;
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) await visit(absolute);
+      else if (entry.isFile()) {
+        files.push([
+          path.relative(root, absolute).replaceAll(path.sep, '/'),
+          createHash('sha256')
+            .update(await readFile(absolute))
+            .digest('hex')
+        ]);
+      } else {
+        throw new Error(`Installed shadcn package contains a non-file entry: ${path.relative(root, absolute)}`);
+      }
+    }
+  }
+  await visit(root);
+  return createHash('sha256').update(JSON.stringify(files)).digest('hex');
+}
+
+export async function shadcnPackageTreeSha256(root) {
+  return packageTreeSha256(root);
+}
+
+function lockedDependencyPath(lock, fromPath, dependencyName) {
+  let current = fromPath;
+  while (current && current !== '.') {
+    const candidate = path.posix.join(current, 'node_modules', dependencyName);
+    if (lock.packages?.[candidate]) return candidate;
+    current = path.posix.dirname(current);
+  }
+  const rootCandidate = path.posix.join('node_modules', dependencyName);
+  return lock.packages?.[rootCandidate] ? rootCandidate : null;
+}
+
+export async function shadcnRuntimeClosureSha256(repositoryRoot, lock) {
+  const pending = ['node_modules/shadcn'];
+  const visited = new Set();
+  const records = [];
+  while (pending.length > 0) {
+    const lockPath = pending.shift();
+    if (visited.has(lockPath)) continue;
+    visited.add(lockPath);
+    const lockedPackage = lock.packages?.[lockPath];
+    assert(lockedPackage, `Locked shadcn runtime package is missing: ${lockPath}`);
+    const installedRoot = path.resolve(repositoryRoot, lockPath);
+    const installedRootStats = await lstat(installedRoot);
+    assert(
+      installedRootStats.isDirectory() && !installedRootStats.isSymbolicLink(),
+      `Installed shadcn runtime package root is shadowed: ${lockPath}`
+    );
+    const resolvedRoot = await realpath(installedRoot);
+    records.push([
+      lockPath,
+      lockedPackage.version ?? '',
+      lockedPackage.resolved ?? '',
+      lockedPackage.integrity ?? '',
+      await packageTreeSha256(resolvedRoot)
+    ]);
+    const requiredPeers = Object.keys(lockedPackage.peerDependencies ?? {}).filter(
+      (name) => !lockedPackage.peerDependenciesMeta?.[name]?.optional
+    );
+    const requiredDependencies = [...Object.keys(lockedPackage.dependencies ?? {}), ...requiredPeers].sort();
+    for (const dependencyName of requiredDependencies) {
+      const dependencyPath = lockedDependencyPath(lock, lockPath, dependencyName);
+      assert(dependencyPath, `Locked shadcn runtime dependency is missing: ${lockPath} -> ${dependencyName}`);
+      if (!visited.has(dependencyPath)) pending.push(dependencyPath);
+    }
+  }
+  records.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+  return createHash('sha256').update(JSON.stringify(records)).digest('hex');
 }
 
 async function readJson(target) {
@@ -284,10 +381,22 @@ export async function assertPinnedShadcnToolchain({
   assert(registry.cli.integrity === SHADCN_INTEGRITY, 'Profile update shadcn CLI integrity differs');
   assert(workspace?.devDependencies?.shadcn === SHADCN_VERSION, 'UI profile workspace does not pin shadcn exactly');
   assert(lockedPackage?.version === SHADCN_VERSION, 'Locked shadcn version differs');
+  assert(lockedPackage.resolved === SHADCN_RESOLVED, 'Locked shadcn resolved artifact differs');
   assert(lockedPackage.integrity === SHADCN_INTEGRITY, 'Locked shadcn integrity differs');
   assert(fileURLToPath(resolvedRegistryUrl) === expectedRegistryModule, 'Resolved shadcn registry module is shadowed');
   assert(installedPackage.name === SHADCN_NAME, 'Installed shadcn package identity differs');
   assert(installedPackage.version === SHADCN_VERSION, 'Installed shadcn version differs');
+  const resolvedRoot = await realpath(path.dirname(path.dirname(path.dirname(fileURLToPath(resolvedRegistryUrl)))));
+  const lockedRoot = await realpath(installedRoot);
+  assert(resolvedRoot === lockedRoot, 'Resolved shadcn package root differs from the lockfile package root');
+  assert(
+    (await shadcnPackageTreeSha256(lockedRoot)) === SHADCN_TREE_SHA256,
+    'Installed shadcn package tree differs from the pinned network-intake contract'
+  );
+  assert(
+    (await shadcnRuntimeClosureSha256(repositoryRoot, lock)) === SHADCN_RUNTIME_CLOSURE_SHA256,
+    'Installed shadcn runtime dependency closure differs from the pinned network-intake contract'
+  );
   return resolvedRegistryUrl;
 }
 
