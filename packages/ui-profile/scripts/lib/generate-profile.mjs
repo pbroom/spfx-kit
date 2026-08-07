@@ -22,6 +22,7 @@ const compilerInputPaths = [
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
   'scripts/lib/generated-tree-closure.mjs',
+  'scripts/verify-dependency-closure.mjs',
   'scripts/prepare-base-ui.mjs',
   'scripts/transform-base-ui-select-value.mjs',
   'scripts/transform-base-ui-popup-lifecycle.mjs',

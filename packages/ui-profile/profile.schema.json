@@ -26,8 +26,8 @@
     "normalizationImplementationSha256": { "$ref": "#/$defs/sha256" },
     "compilerInputs": {
       "type": "array",
-      "minItems": 15,
-      "maxItems": 15,
+      "minItems": 16,
+      "maxItems": 16,
       "prefixItems": [
         { "$ref": "#/$defs/compilerBridge" },
         { "$ref": "#/$defs/selectValueCompatibilityProbe" },
@@ -37,6 +37,7 @@
         { "$ref": "#/$defs/generatedProfileTypecheckImplementation" },
         { "$ref": "#/$defs/validatedProfileGenerationImplementation" },
         { "$ref": "#/$defs/generatedTreeClosureImplementation" },
+        { "$ref": "#/$defs/dependencyClosureVerificationImplementation" },
         { "$ref": "#/$defs/baseUiPreparationImplementation" },
         { "$ref": "#/$defs/selectValueTransformImplementation" },
         { "$ref": "#/$defs/popupLifecycleTransformImplementation" },
@@ -124,6 +125,15 @@
       "allOf": [
         { "$ref": "#/$defs/snapshot" },
         { "type": "object", "properties": { "path": { "const": "scripts/lib/generated-tree-closure.mjs" } } }
+      ]
+    },
+    "dependencyClosureVerificationImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        {
+          "type": "object",
+          "properties": { "path": { "const": "scripts/verify-dependency-closure.mjs" } }
+        }
       ]
     },
     "baseUiPreparationImplementation": {

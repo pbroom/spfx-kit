@@ -8,7 +8,7 @@ import { canonicalJson, sha256 } from './profile.mjs';
 import { replaceGeneratedPaths } from './replace-generated.mjs';
 import { assertGeneratedProfileCompiles } from './typecheck-generated-profile.mjs';
 
-const PROFILE_SCHEMA_SHA256 = '5bc6b7437cf0a200faf413f0498deccb3f2d871f212e8528f97ce0cc5bf7d7d1';
+const PROFILE_SCHEMA_SHA256 = 'bfd2a20c1ba2c1f567a7a1e8fa905f3f3286a1c0535a4fa98daa36dbae0cc4b7';
 
 export async function assertGeneratedProfileSchema({ packageRoot, profile }) {
   const schema = JSON.parse(await readFile(path.join(packageRoot, 'profile.schema.json'), 'utf8'));

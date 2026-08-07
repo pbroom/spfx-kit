@@ -12,7 +12,7 @@ const Spinner = React.forwardRef<
       data-slot="spinner"
       role="status"
       aria-label="Loading"
-      className={cn("size-4 animate-spin", className)}
+      className={cn("skui:size-4 skui:animate-spin", className)}
       {...props}
     />
   )

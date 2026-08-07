@@ -4,13 +4,13 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "../../lib/utils"
 
 const alertVariants = cva(
-  "group/alert relative grid w-full gap-0.5 rounded-lg border px-2.5 py-2 text-left text-sm has-data-[slot=alert-action]:relative has-data-[slot=alert-action]:pr-18 has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-2 *:[svg]:row-span-2 *:[svg]:translate-y-0.5 *:[svg]:text-current *:[svg:not([class*='size-'])]:size-4",
+  "skui:group/alert skui:relative skui:grid skui:w-full skui:gap-0.5 skui:rounded-lg skui:border skui:px-2.5 skui:py-2 skui:text-left skui:text-sm skui:has-data-[slot=alert-action]:relative skui:has-data-[slot=alert-action]:pr-18 skui:has-[>svg]:grid-cols-[auto_1fr] skui:has-[>svg]:gap-x-2 skui:*:[svg]:row-span-2 skui:*:[svg]:translate-y-0.5 skui:*:[svg]:text-current skui:*:[svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-card text-card-foreground",
+        default: "skui:bg-card skui:text-card-foreground",
         destructive:
-          "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+          "skui:bg-card skui:text-destructive skui:*:data-[slot=alert-description]:text-destructive/90 skui:*:[svg]:text-current",
       },
     },
     defaultVariants: {
@@ -48,7 +48,7 @@ const AlertTitle = React.forwardRef<
       ref={ref}
       data-slot="alert-title"
       className={cn(
-        "font-medium group-has-[>svg]/alert:col-start-2 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground",
+        "skui:font-medium skui:group-has-[>svg]/alert:col-start-2 skui:[&_a]:underline skui:[&_a]:underline-offset-3 skui:[&_a]:hover:text-foreground",
         className
       )}
       {...props}
@@ -69,7 +69,7 @@ const AlertDescription = React.forwardRef<
       ref={ref}
       data-slot="alert-description"
       className={cn(
-        "text-sm text-balance text-muted-foreground md:text-pretty [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
+        "skui:text-sm skui:text-balance skui:text-muted-foreground skui:md:text-pretty skui:[&_a]:underline skui:[&_a]:underline-offset-3 skui:[&_a]:hover:text-foreground skui:[&_p:not(:last-child)]:mb-4",
         className
       )}
       {...props}
@@ -86,7 +86,7 @@ const AlertAction = React.forwardRef<
     <div
       ref={ref}
       data-slot="alert-action"
-      className={cn("absolute top-2 right-2", className)}
+      className={cn("skui:absolute skui:top-2 skui:right-2", className)}
       {...props}
     />
   )

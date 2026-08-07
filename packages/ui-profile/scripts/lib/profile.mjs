@@ -9,8 +9,9 @@ const profileManifest = require('../../package.json');
 
 export const PROFILE_ID = 'spfx-react17-base-nova-v1';
 export const PROFILE_SCHEMA_VERSION = 1;
-export const GENERATOR_VERSION = '1.0.0';
-export const NORMALIZATION_CONTRACT_VERSION = 'react17-classic-jsx-v1';
+export const GENERATOR_VERSION = '1.1.0';
+export const NORMALIZATION_CONTRACT_VERSION = 'react17-classic-jsx-skui-v2';
+export const TAILWIND_PREFIX = 'skui';
 export const REGISTRY_IDS = Object.freeze([
   'button',
   'input',
@@ -43,6 +44,9 @@ export const REGISTRY_IDS = Object.freeze([
 // ref normalization as the exported primitive wrappers when their props are
 // forwarded to Base UI.
 const INTERNAL_REF_WRAPPER_NAMES = new Set(['ComboboxClear', 'SheetOverlay']);
+
+const REMOVED_SHADCN_CLASS_MARKERS = new Set(['cn-menu-target', 'cn-menu-translucent', 'cn-rtl-flip']);
+const REPLACED_SHADCN_CLASS_MARKERS = new Map([['cn-font-heading', 'font-heading']]);
 
 export function assertRegistryIds(registryIds) {
   if (
@@ -1924,6 +1928,268 @@ function exportedVariableFunctionContracts(source, name, analysisOptions) {
   return contracts;
 }
 
+function classCandidateTokens(value, label) {
+  const tokens = value.split(/\s+/u).filter(Boolean);
+  const normalized = [];
+  for (const token of tokens) {
+    if (REMOVED_SHADCN_CLASS_MARKERS.has(token)) continue;
+    const candidate = REPLACED_SHADCN_CLASS_MARKERS.get(token) ?? token;
+    if (/^cn-[a-z0-9-]+$/u.test(candidate)) {
+      throw new Error(`${label}: unsupported shadcn class marker ${candidate}`);
+    }
+    normalized.push(candidate.startsWith(`${TAILWIND_PREFIX}:`) ? candidate : `${TAILWIND_PREFIX}:${candidate}`);
+  }
+  return normalized.join(' ');
+}
+
+function propertyNameText(node, sourceFile) {
+  if (ts.isIdentifier(node) || ts.isStringLiteralLike(node) || ts.isNumericLiteral(node)) return node.text;
+  return node.getText(sourceFile);
+}
+
+function collectStaticClassLiteral(node, literals, label) {
+  const unwrapped = unwrapExpression(node);
+  if (ts.isStringLiteralLike(unwrapped) || ts.isNoSubstitutionTemplateLiteral(unwrapped)) {
+    literals.add(unwrapped);
+    return;
+  }
+  if (ts.isTemplateExpression(unwrapped)) {
+    throw new Error(`${label}: computed template class names are not accepted`);
+  }
+  if (ts.isBinaryExpression(unwrapped) && unwrapped.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    throw new Error(`${label}: concatenated class names are not accepted`);
+  }
+  if (ts.isConditionalExpression(unwrapped)) {
+    collectStaticClassLiteral(unwrapped.whenTrue, literals, label);
+    collectStaticClassLiteral(unwrapped.whenFalse, literals, label);
+    return;
+  }
+  if (
+    ts.isBinaryExpression(unwrapped) &&
+    [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(
+      unwrapped.operatorToken.kind
+    )
+  ) {
+    collectStaticClassLiteral(unwrapped.left, literals, label);
+    collectStaticClassLiteral(unwrapped.right, literals, label);
+  }
+}
+
+function collectCnClassLiterals(call, literals, label) {
+  for (const argument of call.arguments) {
+    const unwrapped = unwrapExpression(argument);
+    if (ts.isObjectLiteralExpression(unwrapped) || ts.isArrayLiteralExpression(unwrapped)) {
+      throw new Error(`${label}: cn object and array class maps are not accepted`);
+    }
+    collectStaticClassLiteral(unwrapped, literals, label);
+  }
+}
+
+function collectStaticCvaClassValue(node, literals, label) {
+  const unwrapped = unwrapExpression(node);
+  if (ts.isStringLiteralLike(unwrapped) || ts.isNoSubstitutionTemplateLiteral(unwrapped)) {
+    literals.add(unwrapped);
+    return;
+  }
+  if (ts.isArrayLiteralExpression(unwrapped)) {
+    for (const element of unwrapped.elements) collectStaticCvaClassValue(element, literals, label);
+    return;
+  }
+  if (
+    unwrapped.kind === ts.SyntaxKind.NullKeyword ||
+    unwrapped.kind === ts.SyntaxKind.TrueKeyword ||
+    unwrapped.kind === ts.SyntaxKind.FalseKeyword
+  ) {
+    return;
+  }
+  if (ts.isObjectLiteralExpression(unwrapped)) {
+    throw new Error(`${label}: cva object class maps are not accepted`);
+  }
+  if (ts.isTemplateExpression(unwrapped)) {
+    throw new Error(`${label}: computed template class names are not accepted`);
+  }
+  if (ts.isConditionalExpression(unwrapped)) {
+    collectStaticCvaClassValue(unwrapped.whenTrue, literals, label);
+    collectStaticCvaClassValue(unwrapped.whenFalse, literals, label);
+    return;
+  }
+  if (ts.isBinaryExpression(unwrapped)) {
+    if (unwrapped.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+      collectStaticCvaClassValue(unwrapped.right, literals, label);
+      return;
+    }
+    if (
+      [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(
+        unwrapped.operatorToken.kind
+      )
+    ) {
+      collectStaticCvaClassValue(unwrapped.left, literals, label);
+      collectStaticCvaClassValue(unwrapped.right, literals, label);
+      return;
+    }
+    if (unwrapped.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      throw new Error(`${label}: concatenated class names are not accepted`);
+    }
+  }
+  throw new Error(`${label}: cva class values must be static strings or arrays`);
+}
+
+function collectCvaVariantLiterals(options, sourceFile, literals, label) {
+  if (!ts.isObjectLiteralExpression(options)) {
+    throw new Error(`${label}: cva options must be a static object literal`);
+  }
+  const variants = options.properties.find(
+    (property) => ts.isPropertyAssignment(property) && propertyNameText(property.name, sourceFile) === 'variants'
+  );
+  if (variants && (!ts.isPropertyAssignment(variants) || !ts.isObjectLiteralExpression(variants.initializer))) {
+    throw new Error(`${label}: cva variants must be a static object literal`);
+  }
+  if (variants && ts.isPropertyAssignment(variants)) {
+    for (const variant of variants.initializer.properties) {
+      if (!ts.isPropertyAssignment(variant) || !ts.isObjectLiteralExpression(variant.initializer)) {
+        throw new Error(`${label}: cva variant definitions must be static object literals`);
+      }
+      for (const choice of variant.initializer.properties) {
+        if (!ts.isPropertyAssignment(choice)) {
+          throw new Error(`${label}: cva variant choices must be static properties`);
+        }
+        collectStaticCvaClassValue(choice.initializer, literals, label);
+      }
+    }
+  }
+
+  const compoundVariants = options.properties.find(
+    (property) => ts.isPropertyAssignment(property) && propertyNameText(property.name, sourceFile) === 'compoundVariants'
+  );
+  if (!compoundVariants) return;
+  if (!ts.isPropertyAssignment(compoundVariants) || !ts.isArrayLiteralExpression(compoundVariants.initializer)) {
+    throw new Error(`${label}: cva compoundVariants must be a static array literal`);
+  }
+  for (const element of compoundVariants.initializer.elements) {
+    if (!ts.isObjectLiteralExpression(element)) {
+      throw new Error(`${label}: cva compoundVariants entries must be static object literals`);
+    }
+    for (const property of element.properties) {
+      if (
+        ts.isPropertyAssignment(property) &&
+        ['class', 'className'].includes(propertyNameText(property.name, sourceFile))
+      ) {
+        collectStaticCvaClassValue(property.initializer, literals, label);
+      }
+    }
+  }
+}
+
+function importedClassHelperBindings(sourceFile) {
+  const cn = new Set();
+  const cva = new Set();
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      !statement.importClause?.namedBindings ||
+      !ts.isNamedImports(statement.importClause.namedBindings)
+    ) {
+      continue;
+    }
+    const specifier = statement.moduleSpecifier.text;
+    for (const element of statement.importClause.namedBindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text;
+      if (importedName === 'cva' && specifier === 'class-variance-authority') cva.add(element.name.text);
+      if (importedName === 'cn' && /(?:^|\/)lib\/utils$/u.test(specifier)) cn.add(element.name.text);
+    }
+  }
+  return { cn, cva };
+}
+
+function assertClassHelperBindingsAreNotShadowed(sourceFile, bindings, label) {
+  function visit(node) {
+    const declaredNames = [];
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) {
+      for (const binding of bindings) {
+        if (bindingNameContains(node.name, binding)) declaredNames.push(binding);
+      }
+    } else if (
+      (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isFunctionExpression(node) || ts.isClassExpression(node)) &&
+      node.name &&
+      bindings.has(node.name.text)
+    ) {
+      declaredNames.push(node.name.text);
+    } else if (ts.isCatchClause(node) && node.variableDeclaration) {
+      for (const binding of bindings) {
+        if (bindingNameContains(node.variableDeclaration.name, binding)) declaredNames.push(binding);
+      }
+    }
+    if (declaredNames.length > 0) {
+      throw new Error(`${label}: imported class helper binding is shadowed: ${declaredNames[0]}`);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+}
+
+export function prefixTailwindClassCandidates(source, label = 'profile-source.tsx') {
+  const sourceFile = parsedSource(source, label);
+  const literals = new Set();
+  const helpers = importedClassHelperBindings(sourceFile);
+  assertClassHelperBindingsAreNotShadowed(sourceFile, new Set([...helpers.cn, ...helpers.cva]), label);
+
+  function visit(node) {
+    if (ts.isJsxAttribute(node) && node.name.getText(sourceFile) === 'className' && node.initializer) {
+      if (ts.isStringLiteralLike(node.initializer)) {
+        literals.add(node.initializer);
+      } else if (ts.isJsxExpression(node.initializer) && node.initializer.expression) {
+        const expression = unwrapExpression(node.initializer.expression);
+        if (ts.isObjectLiteralExpression(expression) || ts.isArrayLiteralExpression(expression)) {
+          throw new Error(`${label}: JSX object and array class maps are not accepted`);
+        }
+        collectStaticClassLiteral(expression, literals, label);
+      }
+    }
+
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && helpers.cn.has(node.expression.text)) {
+      collectCnClassLiterals(node, literals, label);
+    }
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && helpers.cva.has(node.expression.text)) {
+      if (node.arguments.length === 0) throw new Error(`${label}: cva requires a static base class argument`);
+      collectStaticCvaClassValue(node.arguments[0], literals, label);
+      if (node.arguments[1]) collectCvaVariantLiterals(node.arguments[1], sourceFile, literals, label);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+
+  function serializeReplacement(literal, replacement) {
+    const raw = source.slice(literal.getStart(sourceFile), literal.getEnd());
+    if (ts.isJsxAttribute(literal.parent)) {
+      const originalQuote = raw[0] === "'" ? "'" : '"';
+      if (!replacement.includes(originalQuote)) return `${originalQuote}${replacement}${originalQuote}`;
+      const alternateQuote = originalQuote === '"' ? "'" : '"';
+      if (!replacement.includes(alternateQuote)) return `${alternateQuote}${replacement}${alternateQuote}`;
+      return `{${JSON.stringify(replacement)}}`;
+    }
+    if (ts.isNoSubstitutionTemplateLiteral(literal) && !replacement.includes('`') && !replacement.includes('${')) {
+      return `\`${replacement}\``;
+    }
+    return JSON.stringify(replacement);
+  }
+
+  const replacements = [...literals].map((literal) => {
+    const replacement = classCandidateTokens(literal.text, label);
+    return {
+      start: literal.getStart(sourceFile),
+      end: literal.getEnd(),
+      replacement: serializeReplacement(literal, replacement),
+      changed: replacement !== literal.text
+    };
+  });
+  let normalized = source;
+  for (const replacement of replacements.sort((left, right) => right.start - left.start)) {
+    normalized = `${normalized.slice(0, replacement.start)}${replacement.replacement}${normalized.slice(replacement.end)}`;
+  }
+  return { source: normalized, transformed: replacements.some((replacement) => replacement.changed) };
+}
+
 export function normalizeRegistrySource({ source, registrySourcePath, sourceContext }) {
   const outputPath = outputPathForRegistrySource(registrySourcePath);
   const transformations = ['normalize-line-endings'];
@@ -1953,6 +2219,10 @@ export function normalizeRegistrySource({ source, registrySourcePath, sourceCont
   const iconResult = resolveIconPlaceholders(normalized);
   if (iconResult.transformed) transformations.push('resolve-lucide-icon-placeholders');
   normalized = iconResult.source;
+
+  const tailwindResult = prefixTailwindClassCandidates(normalized, outputPath);
+  if (tailwindResult.transformed) transformations.push('prefix-tailwind-utilities');
+  normalized = tailwindResult.source;
 
   if (registrySourcePath.endsWith('.tsx')) {
     const sourceRequiresReactRuntime = hasJsx(normalized) || hasReactRuntimeUse(normalized);

@@ -91,10 +91,15 @@ describe('React 17 UI profile normalization', () => {
         'import { cn } from "../../lib/utils"\n' +
         'import { Input } from "./input"\n\n' +
         'export function Button() {\n' +
-        '  return <button className={cn("button")}><Input /></button>\n' +
+        '  return <button className={cn("skui:button")}><Input /></button>\n' +
         '}\n'
     );
-    expect(first.transformations).toEqual(['normalize-line-endings', 'rewrite-app-owned-aliases', 'bind-react-namespace']);
+    expect(first.transformations).toEqual([
+      'normalize-line-endings',
+      'rewrite-app-owned-aliases',
+      'prefix-tailwind-utilities',
+      'bind-react-namespace'
+    ]);
   });
 
   it('rewrites app-owned aliases only in parsed module specifiers', () => {

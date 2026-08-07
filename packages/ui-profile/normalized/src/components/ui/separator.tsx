@@ -19,7 +19,7 @@ const Separator = React.forwardRef<
       data-slot="separator"
       orientation={orientation}
       className={cn(
-        "shrink-0 bg-border data-horizontal:h-px data-horizontal:w-full data-vertical:w-px data-vertical:self-stretch",
+        "skui:shrink-0 skui:bg-border skui:data-horizontal:h-px skui:data-horizontal:w-full skui:data-vertical:w-px skui:data-vertical:self-stretch",
         className
       )}
       {...props}

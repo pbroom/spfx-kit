@@ -1,0 +1,7 @@
+@import 'tailwindcss' source(none) prefix(skui);
+
+@source inline("flex skui:flex skui:hover:bg-primary skui:data-[state=open]:bg-primary skui:[&_svg]:size-4 skui:group/menu skui:group-data-[state=open]/menu:bg-primary skui:@container/pane skui:@md/pane:flex-row");
+
+@theme inline {
+  --color-primary: var(--spfx-ui-primary);
+}

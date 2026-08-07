@@ -30,6 +30,7 @@ const provenance = JSON.parse(provenanceBytes);
 const profileSchema = JSON.parse(profileSchemaBytes);
 const provenanceSchema = JSON.parse(provenanceSchemaBytes);
 const manifest = await readJson('package.json');
+const packageLock = JSON.parse(await readFile(path.resolve(packageRoot, '..', '..', 'package-lock.json'), 'utf8'));
 
 const expectedIds = [...REGISTRY_IDS];
 const expectedCompilerInputPaths = [
@@ -41,6 +42,7 @@ const expectedCompilerInputPaths = [
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
   'scripts/lib/generated-tree-closure.mjs',
+  'scripts/verify-dependency-closure.mjs',
   'scripts/prepare-base-ui.mjs',
   'scripts/transform-base-ui-select-value.mjs',
   'scripts/transform-base-ui-popup-lifecycle.mjs',
@@ -66,13 +68,46 @@ const expectedDevDependencies = {
   '@floating-ui/dom': '1.7.6',
   '@floating-ui/react-dom': '2.1.8',
   '@floating-ui/utils': '0.2.11',
+  '@tailwindcss/cli': '4.3.3',
   '@types/react': '17.0.45',
   '@types/react-dom': '17.0.17',
   '@types/scheduler': '0.16.8',
   ajv: '8.20.0',
+  postcss: '8.5.19',
+  'postcss-selector-parser': '7.1.4',
+  'postcss-value-parser': '4.2.0',
   shadcn: '4.16.1',
+  tailwindcss: '4.3.3',
+  'tw-animate-css': '1.4.0',
   typescript: '5.3.3',
   'typescript-5-8': 'npm:typescript@5.8.3'
+};
+
+const expectedCssToolchain = {
+  tailwindcss: {
+    version: '4.3.3',
+    integrity: 'sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ=='
+  },
+  '@tailwindcss/cli': {
+    version: '4.3.3',
+    integrity: 'sha512-ZvS/n1ZHOBKcVlhkt8l5NNr1EDXk1NboYO5CYDOs6NUmvT9z6bzkwsosaJftY57T/3gWNzWMJzIXLodZC8ssdw=='
+  },
+  postcss: {
+    version: '8.5.19',
+    integrity: 'sha512-Mz8SaolMd8nB+G13WkORcxQKHZ/NE4xXevtkJHVuG+guo9/wYKlIMTKAqGdEmYOXR2ijPjTYNHssizdaVSUNdQ=='
+  },
+  'postcss-selector-parser': {
+    version: '7.1.4',
+    integrity: 'sha512-HeP7D2wyhkR+XaK6v4W8oRF62Dsz4flyuczALJp61GckGm42u1saSSJ/0auvcBqxs3jMRFEcPK34At/0JBKdOg=='
+  },
+  'postcss-value-parser': {
+    version: '4.2.0',
+    integrity: 'sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ=='
+  },
+  'tw-animate-css': {
+    version: '1.4.0',
+    integrity: 'sha512-7bziOlRqH0hJx80h/3mbicLW7o8qLsH5+RaLR2t+OHM3D0JlWGODQKQ4cxbK7WlvmUxpcj6Kgu6EKqjrGFe3QQ=='
+  }
 };
 
 const expectedScripts = {
@@ -102,11 +137,11 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === '5bc6b7437cf0a200faf413f0498deccb3f2d871f212e8528f97ce0cc5bf7d7d1',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === 'bfd2a20c1ba2c1f567a7a1e8fa905f3f3286a1c0535a4fa98daa36dbae0cc4b7',
   'profile.schema.json identity differs'
 );
 assert(
-  sha256(Buffer.from(canonicalJson(provenanceSchema))) === '64b48f281eb52c98d8698a22749b09953c86458a8418f00b227c3ac1059f32ef',
+  sha256(Buffer.from(canonicalJson(provenanceSchema))) === '37d3a15fc9bb824cb56452f4e05f17aecc45c5628997e70883c8e4d3d28fbccf',
   'provenance.schema.json identity differs'
 );
 assert(validateProfile(profile), `profile.json schema errors: ${ajv.errorsText(validateProfile.errors)}`);
@@ -189,6 +224,17 @@ assert(provenance.registry.mutableHostedResponses === true, 'Hosted registry mut
 assert(provenance.registry.hostedResponsesRevisionBound === false, 'Hosted registry responses must not claim revision binding');
 assertExact(provenance.reactTypeContract, { '@types/react': '17.0.45', '@types/react-dom': '17.0.17' }, 'React type contract');
 assert(provenance.normalization.contractVersion === NORMALIZATION_CONTRACT_VERSION, 'Normalization contract differs');
+assertExact(
+  provenance.normalization.configuration,
+  { tailwindPrefix: 'skui', rtl: false, menuColor: null, fontHeadingMarker: 'font-heading' },
+  'Normalization configuration'
+);
+assertExact(provenance.cssToolchain, expectedCssToolchain, 'CSS toolchain');
+for (const [name, expected] of Object.entries(expectedCssToolchain)) {
+  const locked = packageLock.packages?.[`node_modules/${name}`];
+  assert(locked?.version === expected.version, `${name}: lockfile version differs from CSS toolchain provenance`);
+  assert(locked?.integrity === expected.integrity, `${name}: lockfile integrity differs from CSS toolchain provenance`);
+}
 assertExact(
   provenance.dependencyResolutionPins,
   {

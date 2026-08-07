@@ -17,7 +17,7 @@ const FieldSet = React.forwardRef<
       ref={ref}
       data-slot="field-set"
       className={cn(
-        "flex flex-col gap-4 has-[>[data-slot=checkbox-group]]:gap-3 has-[>[data-slot=radio-group]]:gap-3",
+        "skui:flex skui:flex-col skui:gap-4 skui:has-[>[data-slot=checkbox-group]]:gap-3 skui:has-[>[data-slot=radio-group]]:gap-3",
         className
       )}
       {...props}
@@ -40,7 +40,7 @@ const FieldLegend = React.forwardRef<
       data-slot="field-legend"
       data-variant={variant}
       className={cn(
-        "mb-1.5 font-medium data-[variant=label]:text-sm data-[variant=legend]:text-base",
+        "skui:mb-1.5 skui:font-medium skui:data-[variant=label]:text-sm skui:data-[variant=legend]:text-base",
         className
       )}
       {...props}
@@ -58,7 +58,7 @@ const FieldGroup = React.forwardRef<
       ref={ref}
       data-slot="field-group"
       className={cn(
-        "group/field-group @container/field-group flex w-full flex-col gap-5 data-[slot=checkbox-group]:gap-3 *:data-[slot=field-group]:gap-4",
+        "skui:group/field-group skui:@container/field-group skui:flex skui:w-full skui:flex-col skui:gap-5 skui:data-[slot=checkbox-group]:gap-3 skui:*:data-[slot=field-group]:gap-4",
         className
       )}
       {...props}
@@ -68,15 +68,15 @@ const FieldGroup = React.forwardRef<
 })
 
 const fieldVariants = cva(
-  "group/field flex w-full gap-2 data-[invalid=true]:text-destructive",
+  "skui:group/field skui:flex skui:w-full skui:gap-2 skui:data-[invalid=true]:text-destructive",
   {
     variants: {
       orientation: {
-        vertical: "flex-col *:w-full [&>.sr-only]:w-auto",
+        vertical: "skui:flex-col skui:*:w-full skui:[&>.sr-only]:w-auto",
         horizontal:
-          "flex-row items-center has-[>[data-slot=field-content]]:items-start *:data-[slot=field-label]:flex-auto has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px",
+          "skui:flex-row skui:items-center skui:has-[>[data-slot=field-content]]:items-start skui:*:data-[slot=field-label]:flex-auto skui:has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px",
         responsive:
-          "flex-col *:w-full @md/field-group:flex-row @md/field-group:items-center @md/field-group:*:w-auto @md/field-group:has-[>[data-slot=field-content]]:items-start @md/field-group:*:data-[slot=field-label]:flex-auto [&>.sr-only]:w-auto @md/field-group:has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px",
+          "skui:flex-col skui:*:w-full skui:@md/field-group:flex-row skui:@md/field-group:items-center skui:@md/field-group:*:w-auto skui:@md/field-group:has-[>[data-slot=field-content]]:items-start skui:@md/field-group:*:data-[slot=field-label]:flex-auto skui:[&>.sr-only]:w-auto skui:@md/field-group:has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px",
       },
     },
     defaultVariants: {
@@ -115,7 +115,7 @@ const FieldContent = React.forwardRef<
       ref={ref}
       data-slot="field-content"
       className={cn(
-        "group/field-content flex flex-1 flex-col gap-0.5 leading-snug",
+        "skui:group/field-content skui:flex skui:flex-1 skui:flex-col skui:gap-0.5 skui:leading-snug",
         className
       )}
       {...props}
@@ -136,8 +136,8 @@ const FieldLabel = React.forwardRef<
       ref={ref}
       data-slot="field-label"
       className={cn(
-        "group/field-label peer/field-label flex w-fit gap-2 leading-snug group-data-[disabled=true]/field:opacity-50 has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border *:data-[slot=field]:p-2.5 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10",
-        "has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col",
+        "skui:group/field-label skui:peer/field-label skui:flex skui:w-fit skui:gap-2 skui:leading-snug skui:group-data-[disabled=true]/field:opacity-50 skui:has-data-checked:border-primary/30 skui:has-data-checked:bg-primary/5 skui:has-[>[data-slot=field]]:rounded-lg skui:has-[>[data-slot=field]]:border skui:*:data-[slot=field]:p-2.5 skui:dark:has-data-checked:border-primary/20 skui:dark:has-data-checked:bg-primary/10",
+        "skui:has-[>[data-slot=field]]:w-full skui:has-[>[data-slot=field]]:flex-col",
         className
       )}
       {...props}
@@ -155,7 +155,7 @@ const FieldTitle = React.forwardRef<
       ref={ref}
       data-slot="field-label"
       className={cn(
-        "flex w-fit items-center gap-2 text-sm font-medium group-data-[disabled=true]/field:opacity-50",
+        "skui:flex skui:w-fit skui:items-center skui:gap-2 skui:text-sm skui:font-medium skui:group-data-[disabled=true]/field:opacity-50",
         className
       )}
       {...props}
@@ -173,9 +173,9 @@ const FieldDescription = React.forwardRef<
       ref={ref}
       data-slot="field-description"
       className={cn(
-        "text-left text-sm leading-normal font-normal text-muted-foreground group-has-data-horizontal/field:text-balance [[data-variant=legend]+&]:-mt-1.5",
-        "last:mt-0 nth-last-2:-mt-1",
-        "[&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary",
+        "skui:text-left skui:text-sm skui:leading-normal skui:font-normal skui:text-muted-foreground skui:group-has-data-horizontal/field:text-balance skui:[[data-variant=legend]+&]:-mt-1.5",
+        "skui:last:mt-0 skui:nth-last-2:-mt-1",
+        "skui:[&>a]:underline skui:[&>a]:underline-offset-4 skui:[&>a:hover]:text-primary",
         className
       )}
       {...props}
@@ -200,15 +200,15 @@ const FieldSeparator = React.forwardRef<
       data-slot="field-separator"
       data-content={!!children}
       className={cn(
-        "relative -my-2 h-5 text-sm group-data-[variant=outline]/field-group:-mb-2",
+        "skui:relative skui:-my-2 skui:h-5 skui:text-sm skui:group-data-[variant=outline]/field-group:-mb-2",
         className
       )}
       {...props}
     >
-      <Separator className="absolute inset-0 top-1/2" />
+      <Separator className="skui:absolute skui:inset-0 skui:top-1/2" />
       {children && (
         <span
-          className="relative mx-auto block w-fit bg-background px-2 text-muted-foreground"
+          className="skui:relative skui:mx-auto skui:block skui:w-fit skui:bg-background skui:px-2 skui:text-muted-foreground"
           data-slot="field-separator-content"
         >
           {children}
@@ -248,7 +248,7 @@ const FieldError = React.forwardRef<
     }
 
     return (
-      <ul className="ml-4 flex list-disc flex-col gap-1">
+      <ul className="skui:ml-4 skui:flex skui:list-disc skui:flex-col skui:gap-1">
         {uniqueErrors.map(
           (error, index) =>
             error?.message && <li key={index}>{error.message}</li>
@@ -266,7 +266,7 @@ const FieldError = React.forwardRef<
       ref={ref}
       role="alert"
       data-slot="field-error"
-      className={cn("text-sm font-normal text-destructive", className)}
+      className={cn("skui:text-sm skui:font-normal skui:text-destructive", className)}
       {...props}
     >
       {content}

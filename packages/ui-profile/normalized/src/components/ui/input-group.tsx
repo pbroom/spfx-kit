@@ -18,7 +18,7 @@ const InputGroup = React.forwardRef<
       data-slot="input-group"
       role="group"
       className={cn(
-        "group/input-group relative flex h-8 w-full min-w-0 items-center rounded-lg border border-input transition-colors outline-none in-data-[slot=combobox-content]:focus-within:border-inherit in-data-[slot=combobox-content]:focus-within:ring-0 has-disabled:bg-input/50 has-disabled:opacity-50 has-[[data-slot=input-group-control]:focus-visible]:border-ring has-[[data-slot=input-group-control]:focus-visible]:ring-3 has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50 has-[[data-slot][aria-invalid=true]]:border-destructive has-[[data-slot][aria-invalid=true]]:ring-3 has-[[data-slot][aria-invalid=true]]:ring-destructive/20 has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>textarea]:h-auto dark:bg-input/30 dark:has-disabled:bg-input/80 dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40 has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5",
+        "skui:group/input-group skui:relative skui:flex skui:h-8 skui:w-full skui:min-w-0 skui:items-center skui:rounded-lg skui:border skui:border-input skui:transition-colors skui:outline-none skui:in-data-[slot=combobox-content]:focus-within:border-inherit skui:in-data-[slot=combobox-content]:focus-within:ring-0 skui:has-disabled:bg-input/50 skui:has-disabled:opacity-50 skui:has-[[data-slot=input-group-control]:focus-visible]:border-ring skui:has-[[data-slot=input-group-control]:focus-visible]:ring-3 skui:has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50 skui:has-[[data-slot][aria-invalid=true]]:border-destructive skui:has-[[data-slot][aria-invalid=true]]:ring-3 skui:has-[[data-slot][aria-invalid=true]]:ring-destructive/20 skui:has-[>[data-align=block-end]]:h-auto skui:has-[>[data-align=block-end]]:flex-col skui:has-[>[data-align=block-start]]:h-auto skui:has-[>[data-align=block-start]]:flex-col skui:has-[>textarea]:h-auto skui:dark:bg-input/30 skui:dark:has-disabled:bg-input/80 skui:dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40 skui:has-[>[data-align=block-end]]:[&>input]:pt-3 skui:has-[>[data-align=block-start]]:[&>input]:pb-3 skui:has-[>[data-align=inline-end]]:[&>input]:pr-1.5 skui:has-[>[data-align=inline-start]]:[&>input]:pl-1.5",
         className
       )}
       {...props}
@@ -28,18 +28,18 @@ const InputGroup = React.forwardRef<
 })
 
 const inputGroupAddonVariants = cva(
-  "flex h-auto cursor-text items-center justify-center gap-2 py-1.5 text-sm font-medium text-muted-foreground select-none group-data-[disabled=true]/input-group:opacity-50 [&>kbd]:rounded-[calc(var(--radius)-5px)] [&>svg:not([class*='size-'])]:size-4",
+  "skui:flex skui:h-auto skui:cursor-text skui:items-center skui:justify-center skui:gap-2 skui:py-1.5 skui:text-sm skui:font-medium skui:text-muted-foreground skui:select-none skui:group-data-[disabled=true]/input-group:opacity-50 skui:[&>kbd]:rounded-[calc(var(--radius)-5px)] skui:[&>svg:not([class*='size-'])]:size-4",
   {
     variants: {
       align: {
         "inline-start":
-          "order-first pl-2 has-[>button]:ml-[-0.3rem] has-[>kbd]:ml-[-0.15rem]",
+          "skui:order-first skui:pl-2 skui:has-[>button]:ml-[-0.3rem] skui:has-[>kbd]:ml-[-0.15rem]",
         "inline-end":
-          "order-last pr-2 has-[>button]:mr-[-0.3rem] has-[>kbd]:mr-[-0.15rem]",
+          "skui:order-last skui:pr-2 skui:has-[>button]:mr-[-0.3rem] skui:has-[>kbd]:mr-[-0.15rem]",
         "block-start":
-          "order-first w-full justify-start px-2.5 pt-2 group-has-[>input]/input-group:pt-2 [.border-b]:pb-2",
+          "skui:order-first skui:w-full skui:justify-start skui:px-2.5 skui:pt-2 skui:group-has-[>input]/input-group:pt-2 skui:[.border-b]:pb-2",
         "block-end":
-          "order-last w-full justify-start px-2.5 pb-2 group-has-[>input]/input-group:pb-2 [.border-t]:pt-2",
+          "skui:order-last skui:w-full skui:justify-start skui:px-2.5 skui:pb-2 skui:group-has-[>input]/input-group:pb-2 skui:[.border-t]:pt-2",
       },
     },
     defaultVariants: {
@@ -76,15 +76,15 @@ const InputGroupAddon = React.forwardRef<
 })
 
 const inputGroupButtonVariants = cva(
-  "flex items-center gap-2 text-sm shadow-none",
+  "skui:flex skui:items-center skui:gap-2 skui:text-sm skui:shadow-none",
   {
     variants: {
       size: {
-        xs: "h-6 gap-1 rounded-[calc(var(--radius)-3px)] px-1.5 [&>svg:not([class*='size-'])]:size-3.5",
+        xs: "skui:h-6 skui:gap-1 skui:rounded-[calc(var(--radius)-3px)] skui:px-1.5 skui:[&>svg:not([class*='size-'])]:size-3.5",
         sm: "",
         "icon-xs":
-          "size-6 rounded-[calc(var(--radius)-3px)] p-0 has-[>svg]:p-0",
-        "icon-sm": "size-8 p-0 has-[>svg]:p-0",
+          "skui:size-6 skui:rounded-[calc(var(--radius)-3px)] skui:p-0 skui:has-[>svg]:p-0",
+        "icon-sm": "skui:size-8 skui:p-0 skui:has-[>svg]:p-0",
       },
     },
     defaultVariants: {
@@ -127,7 +127,7 @@ const InputGroupText = React.forwardRef<
     <span
       ref={ref}
       className={cn(
-        "flex items-center gap-2 text-sm text-muted-foreground [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
+        "skui:flex skui:items-center skui:gap-2 skui:text-sm skui:text-muted-foreground skui:[&_svg]:pointer-events-none skui:[&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -148,7 +148,7 @@ const InputGroupInput = React.forwardRef<
       ref={ref}
       data-slot="input-group-control"
       className={cn(
-        "flex-1 rounded-none border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0 disabled:bg-transparent aria-invalid:ring-0 dark:bg-transparent dark:disabled:bg-transparent",
+        "skui:flex-1 skui:rounded-none skui:border-0 skui:bg-transparent skui:shadow-none skui:ring-0 skui:focus-visible:ring-0 skui:disabled:bg-transparent skui:aria-invalid:ring-0 skui:dark:bg-transparent skui:dark:disabled:bg-transparent",
         className
       )}
       {...props}
@@ -169,7 +169,7 @@ const InputGroupTextarea = React.forwardRef<
       ref={ref}
       data-slot="input-group-control"
       className={cn(
-        "flex-1 resize-none rounded-none border-0 bg-transparent py-2 shadow-none ring-0 focus-visible:ring-0 disabled:bg-transparent aria-invalid:ring-0 dark:bg-transparent dark:disabled:bg-transparent",
+        "skui:flex-1 skui:resize-none skui:rounded-none skui:border-0 skui:bg-transparent skui:py-2 skui:shadow-none skui:ring-0 skui:focus-visible:ring-0 skui:disabled:bg-transparent skui:aria-invalid:ring-0 skui:dark:bg-transparent skui:dark:disabled:bg-transparent",
         className
       )}
       {...props}

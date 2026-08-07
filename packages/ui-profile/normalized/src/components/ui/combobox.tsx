@@ -31,12 +31,12 @@ const ComboboxTrigger = React.forwardRef<
     <ComboboxPrimitive.Trigger
       ref={ref}
       data-slot="combobox-trigger"
-      className={cn("[&_svg:not([class*='size-'])]:size-4", className)}
+      className={cn("skui:[&_svg:not([class*='size-'])]:size-4", className)}
       {...props}
     >
       {children}
       <ChevronDownIcon
-        className="pointer-events-none size-4 text-muted-foreground"
+        className="skui:pointer-events-none skui:size-4 skui:text-muted-foreground"
       />
     </ComboboxPrimitive.Trigger>
   )
@@ -56,7 +56,7 @@ const ComboboxClear = React.forwardRef<
       {...props}
     >
       <XIcon
-        className="pointer-events-none"
+        className="skui:pointer-events-none"
       />
     </ComboboxPrimitive.Clear>
   )
@@ -78,7 +78,7 @@ const ComboboxInput = React.forwardRef<
   ...props
 }, ref) {
   return (
-    <InputGroup className={cn("w-auto", className)}>
+    <InputGroup className={cn("skui:w-auto", className)}>
       <ComboboxPrimitive.Input
         ref={ref}
         render={<InputGroupInput disabled={disabled} />}
@@ -91,7 +91,7 @@ const ComboboxInput = React.forwardRef<
             variant="ghost"
             render={<ComboboxTrigger />}
             data-slot="input-group-button"
-            className="group-has-data-[slot=combobox-clear]/input-group:hidden data-pressed:bg-transparent"
+            className="skui:group-has-data-[slot=combobox-clear]/input-group:hidden skui:data-pressed:bg-transparent"
             disabled={disabled}
           />
         )}
@@ -127,14 +127,14 @@ const ComboboxContent = React.forwardRef<
         align={align}
         alignOffset={alignOffset}
         anchor={anchor}
-        className="isolate z-50"
+        className="skui:isolate skui:z-50"
       >
         <ComboboxPrimitive.Popup
           ref={ref}
           data-slot="combobox-content"
           data-chips={!!anchor}
           className={cn(
-            "cn-menu-target cn-menu-translucent group/combobox-content relative max-h-(--available-height) w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+--spacing(7))] origin-(--transform-origin) overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[chips=true]:min-w-(--anchor-width) data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 *:data-[slot=input-group]:m-1 *:data-[slot=input-group]:mb-0 *:data-[slot=input-group]:h-8 *:data-[slot=input-group]:border-input/30 *:data-[slot=input-group]:bg-input/30 *:data-[slot=input-group]:shadow-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            "skui:group/combobox-content skui:relative skui:max-h-(--available-height) skui:w-(--anchor-width) skui:max-w-(--available-width) skui:min-w-[calc(var(--anchor-width)+--spacing(7))] skui:origin-(--transform-origin) skui:overflow-hidden skui:rounded-lg skui:bg-popover skui:text-popover-foreground skui:shadow-md skui:ring-1 skui:ring-foreground/10 skui:duration-100 skui:data-[chips=true]:min-w-(--anchor-width) skui:data-[side=bottom]:slide-in-from-top-2 skui:data-[side=inline-end]:slide-in-from-left-2 skui:data-[side=inline-start]:slide-in-from-right-2 skui:data-[side=left]:slide-in-from-right-2 skui:data-[side=right]:slide-in-from-left-2 skui:data-[side=top]:slide-in-from-bottom-2 skui:*:data-[slot=input-group]:m-1 skui:*:data-[slot=input-group]:mb-0 skui:*:data-[slot=input-group]:h-8 skui:*:data-[slot=input-group]:border-input/30 skui:*:data-[slot=input-group]:bg-input/30 skui:*:data-[slot=input-group]:shadow-none skui:data-open:animate-in skui:data-open:fade-in-0 skui:data-open:zoom-in-95 skui:data-closed:animate-out skui:data-closed:fade-out-0 skui:data-closed:zoom-out-95",
             className
           )}
           {...props}
@@ -154,7 +154,7 @@ const ComboboxList = React.forwardRef<
       ref={ref}
       data-slot="combobox-list"
       className={cn(
-        "no-scrollbar max-h-[min(calc(--spacing(72)---spacing(9)),calc(var(--available-height)---spacing(9)))] scroll-py-1 overflow-y-auto overscroll-contain p-1 data-empty:p-0",
+        "skui:no-scrollbar skui:max-h-[min(calc(--spacing(72)---spacing(9)),calc(var(--available-height)---spacing(9)))] skui:scroll-py-1 skui:overflow-y-auto skui:overscroll-contain skui:p-1 skui:data-empty:p-0",
         className
       )}
       {...props}
@@ -176,7 +176,7 @@ const ComboboxItem = React.forwardRef<
       ref={ref}
       data-slot="combobox-item"
       className={cn(
-        "relative flex w-full cursor-default items-center gap-2 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground not-data-[variant=destructive]:data-highlighted:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "skui:relative skui:flex skui:w-full skui:cursor-default skui:items-center skui:gap-2 skui:rounded-md skui:py-1 skui:pr-8 skui:pl-1.5 skui:text-sm skui:outline-hidden skui:select-none skui:data-highlighted:bg-accent skui:data-highlighted:text-accent-foreground skui:not-data-[variant=destructive]:data-highlighted:**:text-accent-foreground skui:data-disabled:pointer-events-none skui:data-disabled:opacity-50 skui:[&_svg]:pointer-events-none skui:[&_svg]:shrink-0 skui:[&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -184,11 +184,11 @@ const ComboboxItem = React.forwardRef<
       {children}
       <ComboboxPrimitive.ItemIndicator
         render={
-          <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center" />
+          <span className="skui:pointer-events-none skui:absolute skui:right-2 skui:flex skui:size-4 skui:items-center skui:justify-center" />
         }
       >
         <CheckIcon
-          className="pointer-events-none"
+          className="skui:pointer-events-none"
         />
       </ComboboxPrimitive.ItemIndicator>
     </ComboboxPrimitive.Item>
@@ -222,7 +222,7 @@ const ComboboxLabel = React.forwardRef<
     <ComboboxPrimitive.GroupLabel
       ref={ref}
       data-slot="combobox-label"
-      className={cn("px-2 py-1.5 text-xs text-muted-foreground", className)}
+      className={cn("skui:px-2 skui:py-1.5 skui:text-xs skui:text-muted-foreground", className)}
       {...props}
     />
   )
@@ -244,7 +244,7 @@ const ComboboxEmpty = React.forwardRef<
       ref={ref}
       data-slot="combobox-empty"
       className={cn(
-        "hidden w-full justify-center py-2 text-center text-sm text-muted-foreground group-data-empty/combobox-content:flex",
+        "skui:hidden skui:w-full skui:justify-center skui:py-2 skui:text-center skui:text-sm skui:text-muted-foreground skui:group-data-empty/combobox-content:flex",
         className
       )}
       {...props}
@@ -264,7 +264,7 @@ const ComboboxSeparator = React.forwardRef<
     <ComboboxPrimitive.Separator
       ref={ref}
       data-slot="combobox-separator"
-      className={cn("-mx-1 my-1 h-px bg-border", className)}
+      className={cn("skui:-mx-1 skui:my-1 skui:h-px skui:bg-border", className)}
       {...props}
     />
   )
@@ -284,7 +284,7 @@ const ComboboxChips = React.forwardRef<
       ref={ref}
       data-slot="combobox-chips"
       className={cn(
-        "flex min-h-8 flex-wrap items-center gap-1 rounded-lg border border-input bg-transparent bg-clip-padding px-2.5 py-1 text-sm transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 has-aria-invalid:border-destructive has-aria-invalid:ring-3 has-aria-invalid:ring-destructive/20 has-data-[slot=combobox-chip]:px-1 dark:bg-input/30 dark:has-aria-invalid:border-destructive/50 dark:has-aria-invalid:ring-destructive/40",
+        "skui:flex skui:min-h-8 skui:flex-wrap skui:items-center skui:gap-1 skui:rounded-lg skui:border skui:border-input skui:bg-transparent skui:bg-clip-padding skui:px-2.5 skui:py-1 skui:text-sm skui:transition-colors skui:focus-within:border-ring skui:focus-within:ring-3 skui:focus-within:ring-ring/50 skui:has-aria-invalid:border-destructive skui:has-aria-invalid:ring-3 skui:has-aria-invalid:ring-destructive/20 skui:has-data-[slot=combobox-chip]:px-1 skui:dark:bg-input/30 skui:dark:has-aria-invalid:border-destructive/50 skui:dark:has-aria-invalid:ring-destructive/40",
         className
       )}
       {...props}
@@ -309,7 +309,7 @@ const ComboboxChip = React.forwardRef<
       ref={ref}
       data-slot="combobox-chip"
       className={cn(
-        "flex h-[calc(--spacing(5.25))] w-fit items-center justify-center gap-1 rounded-sm bg-muted px-1.5 text-xs font-medium whitespace-nowrap text-foreground has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:opacity-50 has-data-[slot=combobox-chip-remove]:pr-0",
+        "skui:flex skui:h-[calc(--spacing(5.25))] skui:w-fit skui:items-center skui:justify-center skui:gap-1 skui:rounded-sm skui:bg-muted skui:px-1.5 skui:text-xs skui:font-medium skui:whitespace-nowrap skui:text-foreground skui:has-disabled:pointer-events-none skui:has-disabled:cursor-not-allowed skui:has-disabled:opacity-50 skui:has-data-[slot=combobox-chip-remove]:pr-0",
         className
       )}
       {...props}
@@ -318,11 +318,11 @@ const ComboboxChip = React.forwardRef<
       {showRemove && (
         <ComboboxPrimitive.ChipRemove
           render={<Button variant="ghost" size="icon-xs" />}
-          className="-ml-1 opacity-50 hover:opacity-100"
+          className="skui:-ml-1 skui:opacity-50 skui:hover:opacity-100"
           data-slot="combobox-chip-remove"
         >
           <XIcon
-            className="pointer-events-none"
+            className="skui:pointer-events-none"
           />
         </ComboboxPrimitive.ChipRemove>
       )}
@@ -342,7 +342,7 @@ const ComboboxChipsInput = React.forwardRef<
     <ComboboxPrimitive.Input
       ref={ref}
       data-slot="combobox-chip-input"
-      className={cn("min-w-16 flex-1 outline-none", className)}
+      className={cn("skui:min-w-16 skui:flex-1 skui:outline-none", className)}
       {...props}
     />
   )

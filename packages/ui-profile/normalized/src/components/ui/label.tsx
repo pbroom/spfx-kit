@@ -13,7 +13,7 @@ const Label = React.forwardRef<
       ref={ref}
       data-slot="label"
       className={cn(
-        "flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
+        "skui:flex skui:items-center skui:gap-2 skui:text-sm skui:leading-none skui:font-medium skui:select-none skui:group-data-[disabled=true]:pointer-events-none skui:group-data-[disabled=true]:opacity-50 skui:peer-disabled:cursor-not-allowed skui:peer-disabled:opacity-50",
         className
       )}
       {...props}
