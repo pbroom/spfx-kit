@@ -8,3 +8,4 @@ apps/lab/src/generated
 package-lock.json
 docs/evidence/shadcn-migration/monaco-0.53.0-min-vs-inventory.json
 docs/evidence/shadcn-migration/workbench-v1-public-source-format-inventory.json
+packages/ui-profile/compat/base-ui-1.6.0/select-value

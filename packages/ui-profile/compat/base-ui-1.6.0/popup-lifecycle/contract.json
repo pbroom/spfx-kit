@@ -1,0 +1,30 @@
+{
+  "contractVersion": "base-ui-1.6.0-popup-lifecycle-react17-v1",
+  "package": "@base-ui/react",
+  "version": "1.6.0",
+  "upstream": {
+    "pullRequest": "https://github.com/mui/base-ui/pull/5387",
+    "mergeCommit": "3b5715cc70f6b1988051c989ae32f8082c71d5ae",
+    "sourcePath": "packages/react/src/utils/popups/popupStoreUtils.ts"
+  },
+  "files": [
+    {
+      "installedPath": "utils/popups/popupStoreUtils.mjs",
+      "originalPath": "compat/base-ui-1.6.0/popup-lifecycle/original/popupStoreUtils.mjs.fragment",
+      "transformedPath": "compat/base-ui-1.6.0/popup-lifecycle/transformed/popupStoreUtils.mjs.fragment",
+      "originalSha256": "2f6882b426cc8c2415d4faf3eece44a62acbf7aeedf56f8f51d6659b7c1bd360",
+      "transformedSha256": "ff76c6fe3d11d76846623381a3eac5f793215b9b3e7547ef32a379e64149b0fe",
+      "originalFileSha256": "6a81eec29a22a4ba7d41e43ff690aa4404845706961b54339a27940e137fc670",
+      "transformedFileSha256": "dad85a1bfca6c2e5a60404ef7a01b045e7e8d81f578b2730a0a92e79eb71c4dc"
+    },
+    {
+      "installedPath": "utils/popups/popupStoreUtils.js",
+      "originalPath": "compat/base-ui-1.6.0/popup-lifecycle/original/popupStoreUtils.js.fragment",
+      "transformedPath": "compat/base-ui-1.6.0/popup-lifecycle/transformed/popupStoreUtils.js.fragment",
+      "originalSha256": "ddb384ae9ff5f32dbec5d6ed56bac0f602abc4a4665159dae6d84878f60b591e",
+      "transformedSha256": "b7229c0038cdafef321a80a805e64e57ad214db9c4fda63a0764e8cd802c740b",
+      "originalFileSha256": "38112657a8678cc54218340376eae9784c150572bf84658c5638a6249c578f82",
+      "transformedFileSha256": "bab93edbe7fb29e032587fcca8469189e43e2344b873dfb14588cc4a565e2b39"
+    }
+  ]
+}
