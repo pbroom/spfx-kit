@@ -13,6 +13,7 @@ import {
 
 const compilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
+  'compat-consumers/select-value.tsx',
   'scripts/typecheck.mjs',
   'scripts/lib/generate-profile.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',

@@ -32,6 +32,7 @@ const manifest = await readJson('package.json');
 const expectedIds = [...REGISTRY_IDS];
 const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
+  'compat-consumers/select-value.tsx',
   'scripts/typecheck.mjs',
   'scripts/lib/generate-profile.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',
@@ -98,7 +99,7 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === '9c5871a3485a131282632793a8237809793aee80a27b4e7f479b907e60fbc633',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === 'c169e7c28208f31750f087615841f481b3fb0e5ba015691ae4d471304961145c',
   'profile.schema.json identity differs'
 );
 assert(

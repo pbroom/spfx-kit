@@ -26,10 +26,11 @@
     "normalizationImplementationSha256": { "$ref": "#/$defs/sha256" },
     "compilerInputs": {
       "type": "array",
-      "minItems": 13,
-      "maxItems": 13,
+      "minItems": 14,
+      "maxItems": 14,
       "prefixItems": [
         { "$ref": "#/$defs/compilerBridge" },
+        { "$ref": "#/$defs/selectValueCompatibilityProbe" },
         { "$ref": "#/$defs/typecheckImplementation" },
         { "$ref": "#/$defs/profileGenerationImplementation" },
         { "$ref": "#/$defs/generatedProfileTypecheckImplementation" },
@@ -71,6 +72,12 @@
       "allOf": [
         { "$ref": "#/$defs/snapshot" },
         { "type": "object", "properties": { "path": { "const": "compat-consumers/react17-base-ui-jsx.d.ts" } } }
+      ]
+    },
+    "selectValueCompatibilityProbe": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "compat-consumers/select-value.tsx" } } }
       ]
     },
     "typecheckImplementation": {
