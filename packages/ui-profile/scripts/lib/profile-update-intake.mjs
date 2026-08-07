@@ -16,7 +16,7 @@ import {
 const SHADCN_NAME = 'shadcn';
 const SHADCN_VERSION = '4.16.1';
 const SHADCN_INTEGRITY = 'sha512-XLFzfNNIUPlUlyheFEzj0H4Vnhi9nI0nl3Nfgg8HYXW1FkUVhVT1X+mgmOUW8aWL5SeG0A+yJIV5fm3Hr9MVkQ==';
-const PROVENANCE_SCHEMA_SHA256 = 'd402c9716a05eb39a73615c2ebca00f28dfc67bbbba1ea54cf7c859eef43128e';
+const PROVENANCE_SCHEMA_SHA256 = '64b48f281eb52c98d8698a22749b09953c86458a8418f00b227c3ac1059f32ef';
 const DEFAULT_REGISTRY_ITEM_MAX_BYTES = 256 * 1024;
 const DEFAULT_REGISTRY_AGGREGATE_MAX_BYTES = 4 * 1024 * 1024;
 const DEFAULT_REGISTRY_REQUEST_TIMEOUT_MS = 30_000;
@@ -236,11 +236,11 @@ export async function assertProfileGenerationProvenance({ packageRoot, provenanc
     'Provenance identity does not match the profile generator'
   );
   assertRegistryIds(provenance.registryIds);
-  return assertCommittedRegistrySnapshots(packageRoot, provenance);
 }
 
 export async function assertProfileUpdateProvenance(options) {
-  return assertProfileGenerationProvenance(options);
+  await assertProfileGenerationProvenance(options);
+  return assertCommittedRegistrySnapshots(options.packageRoot, options.provenance);
 }
 
 export async function assertPinnedShadcnToolchain({
@@ -347,7 +347,7 @@ export async function fetchValidatedProfileUpdateSnapshots({
   getRegistryItemsImpl,
   resolvedRegistryUrl
 }) {
-  const expectedSourcePathsById = await assertProfileGenerationProvenance({ packageRoot, provenance });
+  const expectedSourcePathsById = await assertProfileUpdateProvenance({ packageRoot, provenance });
   return fetchPinnedRegistrySnapshots({
     packageRoot,
     registry: provenance.registry,
