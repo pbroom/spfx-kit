@@ -10,11 +10,13 @@ import {
   normalizeRegistrySource,
   sha256
 } from './profile.mjs';
+import { assertFetchedRegistryClosure } from './profile-update-intake.mjs';
 
 const compilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'scripts/typecheck.mjs',
   'scripts/lib/generate-profile.mjs',
+  'scripts/lib/profile-update-intake.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
   'scripts/lib/generated-tree-closure.mjs',
@@ -27,51 +29,34 @@ const compilerInputPaths = [
   'tsconfig.ts58.json'
 ];
 
-function dependencyName(specifier, label) {
-  if (typeof specifier !== 'string' || specifier.length === 0) throw new Error(`${label} has an invalid dependency`);
-  const match = specifier.startsWith('@')
-    ? /^(@[^/]+\/[^@/]+)(?:@.+)?$/u.exec(specifier)
-    : /^([^@/]+)(?:@.+)?$/u.exec(specifier);
-  if (!match) throw new Error(`${label} has an unsupported dependency specifier: ${specifier}`);
-  return match[1];
-}
-
-function isExcludedDependency(name, exclusions) {
-  return exclusions.some((specifier) => {
-    if (specifier.endsWith('/*')) return name.startsWith(specifier.slice(0, -1));
-    return dependencyName(specifier, 'Profile exclusion') === name;
-  });
-}
-
-function assertMetadataDependenciesAllowed(item, exclusions) {
-  for (const field of ['dependencies', 'devDependencies']) {
-    const dependencies = item[field] ?? [];
-    if (!Array.isArray(dependencies)) throw new Error(`${item.name}: ${field} metadata is invalid`);
-    for (const specifier of dependencies) {
-      const name = dependencyName(specifier, `${item.name} ${field}`);
-      if (isExcludedDependency(name, exclusions)) {
-        throw new Error(`${item.name}: excluded metadata dependency ${name} is present`);
-      }
-    }
-  }
-}
-
 export async function generateProfile({ packageRoot, rawRoot, outputRoot, provenance, provenanceBytes }) {
   assertRegistryIds(provenance.registryIds);
   await mkdir(path.join(outputRoot, 'snapshots', 'canonical'), { recursive: true });
   const implementationPath = path.join(packageRoot, 'scripts', 'lib', 'profile.mjs');
   const items = [];
   const outputPaths = new Set();
+  const snapshots = [];
 
   for (const id of provenance.registryIds) {
-    const rawRelative = `snapshots/raw/${id}.json`;
-    const canonicalRelative = `snapshots/canonical/${id}.json`;
     const rawBytes = await readFile(path.join(rawRoot, `${id}.json`));
     const parsed = JSON.parse(rawBytes.toString('utf8'));
     if (parsed.name !== id || !Array.isArray(parsed.files) || parsed.files.length === 0) {
       throw new Error(`Registry snapshot for ${id} has an unexpected identity or no files`);
     }
-    assertMetadataDependenciesAllowed(parsed, provenance.excludedDependencies ?? []);
+    snapshots.push({ id, rawBytes, parsed });
+  }
+  assertFetchedRegistryClosure(
+    snapshots.map(({ parsed }) => parsed),
+    provenance.registryIds,
+    {
+      excludedDependencies: provenance.excludedDependencies,
+      directProductionDependencies: provenance.directProductionDependencies
+    }
+  );
+
+  for (const { id, rawBytes, parsed } of snapshots) {
+    const rawRelative = `snapshots/raw/${id}.json`;
+    const canonicalRelative = `snapshots/canonical/${id}.json`;
     const canonicalBytes = Buffer.from(canonicalJson(parsed));
     await writeFile(path.join(outputRoot, canonicalRelative), canonicalBytes);
 

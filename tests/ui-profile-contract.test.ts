@@ -47,6 +47,7 @@ const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'scripts/typecheck.mjs',
   'scripts/lib/generate-profile.mjs',
+  'scripts/lib/profile-update-intake.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
   'scripts/lib/generated-tree-closure.mjs',
@@ -251,13 +252,29 @@ interface DependencyClosure {
   packages: ClosureEntry[];
 }
 
-async function rewriteSnapshot(root: string, profile: ProfileManifest, item: ProfileItem, raw: RegistrySnapshot): Promise<void> {
+async function rewriteSnapshot(
+  root: string,
+  profile: ProfileManifest,
+  item: ProfileItem,
+  raw: RegistrySnapshot,
+  { bindProvenance = true } = {}
+): Promise<void> {
   const rawBytes = Buffer.from(JSON.stringify(raw));
   const canonicalBytes = Buffer.from(canonicalJson(raw));
   await writeFile(path.join(root, item.raw.path), rawBytes);
   await writeFile(path.join(root, item.canonical.path), canonicalBytes);
   item.raw.sha256 = sha256(rawBytes);
   item.canonical.sha256 = sha256(canonicalBytes);
+  if (bindProvenance) {
+    const provenance = await readJson<any>(root, 'provenance.json');
+    provenance.registrySnapshots[item.id] = {
+      rawSha256: item.raw.sha256,
+      canonicalSha256: item.canonical.sha256
+    };
+    const provenanceBytes = Buffer.from(canonicalJson(provenance));
+    await writeFile(path.join(root, 'provenance.json'), provenanceBytes);
+    profile.provenanceSha256 = sha256(provenanceBytes);
+  }
   await writeCanonicalJson(root, 'profile.json', profile);
 }
 
@@ -315,7 +332,7 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(profileSchema.required).toContain('$schema');
     expect(profileSchema.properties.profileId.const).toBe('spfx-react17-base-nova-v1');
     expect(profileSchema.properties.items).toMatchObject({ minItems: 24, maxItems: 24 });
-    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 13, maxItems: 13, items: false });
+    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 14, maxItems: 14, items: false });
     expect(profileSchema.properties.items.uniqueItems).toBe(true);
     expect(profileSchema.$defs.sha256.pattern).toBe('^[a-f0-9]{64}$');
     expect(profileSchema.$defs.item.additionalProperties).toBe(false);
@@ -573,7 +590,21 @@ describe('offline profile verifier', () => {
     await rewriteSnapshot(excludedRoot, excludedProfile, excludedItem, excludedRaw);
     const excluded = runOfflineVerifier(excludedRoot);
     expect(excluded.status).not.toBe(0);
-    expect(verifierMessage(excluded)).toContain('excluded dependency cmdk@1.1.1 is present');
+    expect(verifierMessage(excluded)).toContain('uses excluded dependency cmdk');
+  });
+
+  it('rejects snapshot bytes whose manifest digests are updated without rebinding provenance', async () => {
+    const root = await copyProfile();
+    const profile = await readJson<ProfileManifest>(root, 'profile.json');
+    const item = profile.items.find((candidate) => candidate.id === 'button')!;
+    const raw = await readJson<RegistrySnapshot>(root, item.raw.path);
+    raw.files[0].content += '\n';
+    await rewriteSnapshot(root, profile, item, raw, { bindProvenance: false });
+
+    const result = runOfflineVerifier(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toContain('button: raw snapshot differs from provenance');
   });
 
   it('rejects an undeclared external import even when every affected digest is honestly updated', async () => {
@@ -627,7 +658,9 @@ describe('offline profile verifier', () => {
     const result = runOfflineRegenerator(root);
 
     expect(result.status).not.toBe(0);
-    expect(verifierMessage(result)).toContain('relative import "./calendar" does not resolve to an emitted normalized output');
+    expect(verifierMessage(result)).toContain(
+      'registry/base-nova/ui/button.tsx requires source outside the fetched registry closure: calendar'
+    );
     expect(await treeDigests(root)).toEqual(before);
   });
 

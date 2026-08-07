@@ -36,7 +36,7 @@ async function expectInvalidUpdateStagingBeforeReplacement(
   sourcePrefix: string,
   expectedMessage: string,
   registryId = 'button',
-  mutateSnapshot?: (snapshot: { dependencies?: unknown; devDependencies?: unknown }) => void
+  mutateSnapshot?: (snapshot: { dependencies?: unknown; devDependencies?: unknown; registryDependencies?: unknown }) => void
 ): Promise<void> {
   const root = await mkdtemp(path.join(tmpdir(), 'ui-profile-update-staging-'));
   temporaryRoots.push(root);
@@ -70,10 +70,39 @@ describe('generated profile module closure', () => {
   it('rejects excluded snapshot metadata dependencies before replacement', async () => {
     await expectInvalidUpdateStagingBeforeReplacement(
       '',
-      'button: excluded metadata dependency cmdk is present',
+      'Pinned registry item button uses excluded dependency cmdk',
       'button',
       (snapshot) => {
         snapshot.dependencies = ['cmdk@1.1.1'];
+      }
+    );
+  });
+
+  it.each([
+    [
+      'an undeclared dependency',
+      'Pinned registry item button uses undeclared production dependency left-pad',
+      ['left-pad@1.0.0']
+    ],
+    [
+      'a wrong pinned version in devDependencies',
+      'Pinned registry item button requires react@18.0.0 instead of the pinned 17.0.1',
+      undefined
+    ]
+  ])('rejects snapshot metadata with %s before replacement', async (_label, expectedMessage, dependencies) => {
+    await expectInvalidUpdateStagingBeforeReplacement('', expectedMessage, 'button', (snapshot) => {
+      if (dependencies) snapshot.dependencies = dependencies;
+      else snapshot.devDependencies = ['react@18.0.0'];
+    });
+  });
+
+  it('rejects registryDependencies outside the declared snapshot closure before replacement', async () => {
+    await expectInvalidUpdateStagingBeforeReplacement(
+      '',
+      'Pinned registry item button requires source outside the fetched registry closure: missing-widget',
+      'button',
+      (snapshot) => {
+        snapshot.registryDependencies = ['missing-widget'];
       }
     );
   });
@@ -302,7 +331,7 @@ describe('generated profile module closure', () => {
     [
       'missing normalized alias',
       'import { Calendar } from "@/registry/base-nova/ui/calendar"',
-      'relative import "./calendar" does not resolve to an emitted normalized output'
+      'registry/base-nova/ui/button.tsx requires source outside the fetched registry closure: calendar'
     ],
     [
       'comma-sequence require',

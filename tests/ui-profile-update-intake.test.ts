@@ -7,10 +7,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
 import {
   assertProfileUpdateProvenance,
+  bindVerifiedSnapshotsToProvenance,
   assertPinnedShadcnToolchain,
   fetchPinnedRegistrySnapshots,
   fetchValidatedProfileUpdateSnapshots
 } from '../packages/ui-profile/scripts/lib/profile-update-intake.mjs';
+// @ts-expect-error plain .mjs module without type declarations
+import { canonicalJson } from '../packages/ui-profile/scripts/lib/profile.mjs';
 
 const SHADCN_INTEGRITY = 'sha512-XLFzfNNIUPlUlyheFEzj0H4Vnhi9nI0nl3Nfgg8HYXW1FkUVhVT1X+mgmOUW8aWL5SeG0A+yJIV5fm3Hr9MVkQ==';
 const registry = {
@@ -74,6 +77,25 @@ async function provenanceFixture() {
 }
 
 describe('committed UI profile provenance', () => {
+  it('binds verified raw and canonical snapshot bytes into a new provenance value', () => {
+    const raw = Buffer.from('{\n  "name": "button", "files": []\n}\n');
+    const provenance = {
+      registryIds: ['button'],
+      registrySnapshots: { button: { rawSha256: '0'.repeat(64), canonicalSha256: '0'.repeat(64) } }
+    };
+
+    const rebound = bindVerifiedSnapshotsToProvenance(provenance, new Map([['button', raw]]));
+
+    expect(rebound).not.toBe(provenance);
+    expect(rebound.registrySnapshots.button.rawSha256).toBe(createHash('sha256').update(raw).digest('hex'));
+    expect(rebound.registrySnapshots.button.canonicalSha256).toBe(
+      createHash('sha256')
+        .update(canonicalJson(JSON.parse(raw.toString('utf8'))))
+        .digest('hex')
+    );
+    expect(provenance.registrySnapshots.button.rawSha256).toBe('0'.repeat(64));
+  });
+
   it('verifies the pinned schema plus every committed raw and canonical snapshot digest', async () => {
     const { packageRoot, provenance } = await provenanceFixture();
 

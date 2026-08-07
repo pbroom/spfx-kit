@@ -41,7 +41,7 @@
   "normalization": {
     "contractVersion": "react17-classic-jsx-v1",
     "implementation": "scripts/lib/profile.mjs",
-    "implementationSha256": "fc34540f12aa2f5992fe777353b1713b88afb632061a7ead9280ac038310227b"
+    "implementationSha256": "950b0978e88e7af0ee71b655221a88087d9d8230c0fe16b35f9022a095bb26a8"
   },
   "registryIds": [
     "button",

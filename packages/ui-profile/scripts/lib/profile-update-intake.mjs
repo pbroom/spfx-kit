@@ -117,6 +117,16 @@ function assertAllowedProductionDependency(specifier, label, policy) {
   }
 }
 
+export function assertRegistryMetadataDependencies(item, policy) {
+  for (const field of ['dependencies', 'devDependencies']) {
+    const dependencies = item[field] ?? [];
+    assert(Array.isArray(dependencies), `Pinned registry item ${item.name} has invalid ${field}`);
+    for (const dependency of dependencies) {
+      assertAllowedProductionDependency(dependency, `Pinned registry item ${item.name}`, policy);
+    }
+  }
+}
+
 function resolveRelativeSourcePath(sourcePath, specifier, sourcePaths) {
   const base = path.posix.normalize(path.posix.join(path.posix.dirname(sourcePath), specifier));
   const candidates = [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`].filter((candidate) =>
@@ -125,7 +135,7 @@ function resolveRelativeSourcePath(sourcePath, specifier, sourcePaths) {
   assert(candidates.length === 1, `${sourcePath} has an unresolved or ambiguous relative source import: ${specifier}`);
 }
 
-function assertFetchedRegistryClosure(items, registryIds, policy, expectedSourcePathsById = new Map()) {
+export function assertFetchedRegistryClosure(items, registryIds, policy, expectedSourcePathsById = new Map()) {
   const registryIdSet = new Set(registryIds);
   const sourcePaths = new Set();
   for (const item of items) {
@@ -149,13 +159,7 @@ function assertFetchedRegistryClosure(items, registryIds, policy, expectedSource
   }
 
   for (const item of items) {
-    for (const field of ['dependencies', 'devDependencies']) {
-      const dependencies = item[field] ?? [];
-      assert(Array.isArray(dependencies), `Pinned registry item ${item.name} has invalid ${field}`);
-      for (const dependency of dependencies) {
-        assertAllowedProductionDependency(dependency, `Pinned registry item ${item.name}`, policy);
-      }
-    }
+    assertRegistryMetadataDependencies(item, policy);
     const registryDependencies = item.registryDependencies ?? [];
     assert(Array.isArray(registryDependencies), `Pinned registry item ${item.name} has invalid registryDependencies`);
     for (const dependency of registryDependencies) {
@@ -190,6 +194,25 @@ function assertFetchedRegistryClosure(items, registryIds, policy, expectedSource
       }
     }
   }
+}
+
+export function bindVerifiedSnapshotsToProvenance(provenance, snapshots) {
+  const registrySnapshots = {};
+  for (const id of provenance.registryIds) {
+    const raw = snapshots.get(id);
+    assert(Buffer.isBuffer(raw), `Verified registry snapshot is missing for ${id}`);
+    let parsed;
+    try {
+      parsed = JSON.parse(raw.toString('utf8'));
+    } catch (error) {
+      throw new Error(`Verified registry snapshot is not JSON for ${id}`, { cause: error });
+    }
+    registrySnapshots[id] = {
+      rawSha256: sha256(raw),
+      canonicalSha256: sha256(Buffer.from(canonicalJson(parsed)))
+    };
+  }
+  return { ...provenance, registrySnapshots };
 }
 
 async function assertCommittedRegistrySnapshots(packageRoot, provenance) {

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 
 import { assertGeneratedTreeClosure, pinnedTypeDirectiveNames } from './lib/generated-tree-closure.mjs';
+import { assertRegistryMetadataDependencies } from './lib/profile-update-intake.mjs';
 import {
   GENERATOR_VERSION,
   NORMALIZATION_CONTRACT_VERSION,
@@ -34,6 +35,7 @@ const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'scripts/typecheck.mjs',
   'scripts/lib/generate-profile.mjs',
+  'scripts/lib/profile-update-intake.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
   'scripts/lib/generated-tree-closure.mjs',
@@ -97,7 +99,7 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === '9c5871a3485a131282632793a8237809793aee80a27b4e7f479b907e60fbc633',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === 'e36ae25449c7b917c44d578c33ed12d58cb0e299c2496001669aa3a69638d6d1',
   'profile.schema.json identity differs'
 );
 assert(
@@ -227,6 +229,14 @@ for (const item of profile.items) {
   const canonicalBytes = await readFile(path.join(packageRoot, expectedCanonicalPath));
   assert(sha256(rawBytes) === item.raw.sha256, `${item.id}: raw snapshot digest differs`);
   assert(sha256(canonicalBytes) === item.canonical.sha256, `${item.id}: canonical snapshot digest differs`);
+  assert(
+    sha256(rawBytes) === provenance.registrySnapshots[item.id].rawSha256,
+    `${item.id}: raw snapshot differs from provenance`
+  );
+  assert(
+    sha256(canonicalBytes) === provenance.registrySnapshots[item.id].canonicalSha256,
+    `${item.id}: canonical snapshot differs from provenance`
+  );
 
   const raw = JSON.parse(rawBytes);
   const canonical = JSON.parse(canonicalBytes);
@@ -234,15 +244,10 @@ for (const item of profile.items) {
   assert(canonicalJson(raw) === canonicalBytes.toString('utf8'), `${item.id}: canonical bytes are not reproducible`);
   assertExact(canonical, raw, `${item.id}: canonical JSON value`);
 
-  const registryDependencies = [...(raw.dependencies ?? []), ...(raw.devDependencies ?? [])].map((dependency) =>
-    dependency.replace(/^(@[^/]+\/[^@]+|[^@]+)@.*$/, '$1')
-  );
-  for (const excluded of provenance.excludedDependencies) {
-    const excludedName = excluded.replace(/@\d.*$/, '');
-    const matches = (dependency) =>
-      excludedName.endsWith('/*') ? dependency.startsWith(excludedName.slice(0, -1)) : dependency === excludedName;
-    assert(!registryDependencies.some(matches), `${item.id}: excluded dependency ${excluded} is present`);
-  }
+  assertRegistryMetadataDependencies(raw, {
+    excludedDependencies: provenance.excludedDependencies,
+    directProductionDependencies: provenance.directProductionDependencies
+  });
 
   assert(Array.isArray(item.normalized) && item.normalized.length === raw.files.length, `${item.id}: source count differs`);
   for (const output of item.normalized) {

@@ -304,26 +304,89 @@ function insertImport(source, declaration) {
 }
 
 function resolveIconPlaceholders(source) {
-  const placeholderImport = /^import\s*{\s*IconPlaceholder\s*}\s*from\s*["'][^"']*icon-placeholder["']\n?/m;
-  if (!placeholderImport.test(source)) return { source, transformed: false };
+  const sourceFile = parsedSource(source, 'icon-placeholder-normalization.tsx');
+  const selectorNames = new Set(['lucide', 'tabler', 'hugeicons', 'phosphor', 'remixicon']);
+  const placeholderImport = sourceFile.statements.find(
+    (statement) =>
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteralLike(statement.moduleSpecifier) &&
+      /(?:^|\/)icon-placeholder$/u.test(statement.moduleSpecifier.text) &&
+      statement.importClause?.namedBindings &&
+      ts.isNamedImports(statement.importClause.namedBindings) &&
+      statement.importClause.namedBindings.elements.length === 1 &&
+      statement.importClause.namedBindings.elements.some(
+        (element) => element.name.text === 'IconPlaceholder' && (element.propertyName?.text ?? element.name.text) === 'IconPlaceholder'
+      )
+  );
+  if (!placeholderImport) return { source, transformed: false };
 
+  let importEnd = placeholderImport.getEnd();
+  const trailingLine = /^[\t ]*\r?\n/u.exec(source.slice(importEnd));
+  importEnd += trailingLine?.[0].length ?? 0;
+  const replacements = [{ start: placeholderImport.getStart(sourceFile), end: importEnd, replacement: '' }];
   const icons = new Set();
-  let normalized = source.replace(placeholderImport, '');
-  normalized = normalized.replace(/<IconPlaceholder([\s\S]*?)\/>/g, (_match, attributes) => {
-    const lucide = /\blucide=["']([A-Za-z][A-Za-z0-9]*)["']/.exec(attributes);
-    if (!lucide) throw new Error('IconPlaceholder does not declare a pinned Lucide icon');
-    icons.add(lucide[1]);
-    const preserved = attributes.replace(/\s+(?:lucide|tabler|hugeicons|phosphor|remixicon)=["'][^"']*["']/g, '');
-    if (/\b(?:lucide|tabler|hugeicons|phosphor|remixicon)\s*=/.test(preserved)) {
-      throw new Error('IconPlaceholder contains an unrecognized icon selector form');
+  function visit(node) {
+    if (ts.isJsxElement(node) && ts.isIdentifier(node.openingElement.tagName) && node.openingElement.tagName.text === 'IconPlaceholder') {
+      throw new Error('An unresolved IconPlaceholder remains');
     }
-    return preserved.trim() ? `<${lucide[1]}${preserved}/>` : `<${lucide[1]} />`;
-  });
-  if (/<IconPlaceholder\b/.test(normalized)) {
+    if (ts.isJsxSelfClosingElement(node) && ts.isIdentifier(node.tagName) && node.tagName.text === 'IconPlaceholder') {
+      const selectors = node.attributes.properties.filter(
+        (attribute) => ts.isJsxAttribute(attribute) && ts.isIdentifier(attribute.name) && selectorNames.has(attribute.name.text)
+      );
+      const lucideSelectors = selectors.filter((attribute) => attribute.name.text === 'lucide');
+      const lucide = lucideSelectors[0];
+      if (lucideSelectors.length !== 1 || !lucide.initializer || !ts.isStringLiteralLike(lucide.initializer)) {
+        throw new Error('IconPlaceholder does not declare a pinned Lucide icon');
+      }
+      const icon = lucide.initializer.text;
+      if (!/^[A-Za-z][A-Za-z0-9]*$/u.test(icon)) {
+        throw new Error('IconPlaceholder does not declare a pinned Lucide icon');
+      }
+      icons.add(icon);
+      if (selectors.length === node.attributes.properties.length) {
+        replacements.push({ start: node.getStart(sourceFile), end: node.getEnd(), replacement: `<${icon} />` });
+        return;
+      }
+      replacements.push({ start: node.tagName.getStart(sourceFile), end: node.tagName.getEnd(), replacement: icon });
+      for (const selector of selectors) {
+        if (!selector.initializer || !ts.isStringLiteralLike(selector.initializer)) {
+          throw new Error('IconPlaceholder contains an unrecognized icon selector form');
+        }
+        let start = selector.getStart(sourceFile);
+        while (start > node.tagName.getEnd() && /\s/u.test(source[start - 1])) start -= 1;
+        replacements.push({ start, end: selector.getEnd(), replacement: '' });
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  if (icons.size === 0) {
     throw new Error('An unresolved IconPlaceholder remains');
+  }
+
+  let normalized = source;
+  for (const replacement of replacements.sort((left, right) => right.start - left.start)) {
+    normalized = `${normalized.slice(0, replacement.start)}${replacement.replacement}${normalized.slice(replacement.end)}`;
   }
   const declaration = `import { ${[...icons].sort().join(', ')} } from "lucide-react"`;
   return { source: insertImport(normalized, declaration), transformed: true };
+}
+
+function hasActualIconPlaceholderJsx(source, label) {
+  const sourceFile = parsedSource(source, label);
+  let found = false;
+  function visit(node) {
+    if (
+      (ts.isJsxElement(node) && ts.isIdentifier(node.openingElement.tagName) && node.openingElement.tagName.text === 'IconPlaceholder') ||
+      (ts.isJsxSelfClosingElement(node) && ts.isIdentifier(node.tagName) && node.tagName.text === 'IconPlaceholder')
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return found;
 }
 
 function findMatching(source, openIndex, openCharacter, closeCharacter) {
@@ -393,6 +456,10 @@ function exportedNames(source) {
       for (const element of statement.exportClause.elements) {
         names.add((element.propertyName ?? element.name).text);
       }
+    }
+    if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+      const expression = unwrapExpression(statement.expression);
+      if (ts.isIdentifier(expression)) names.add(expression.text);
     }
   }
   return names;
@@ -1188,7 +1255,7 @@ function assertReact17AstSource(source, label) {
 
 export function assertReact17Source(source, label) {
   assertReact17AstSource(source, label);
-  if (hasAppOwnedAliasSpecifier(source, label) || /<IconPlaceholder\b|\bIcons\./.test(source)) {
+  if (hasAppOwnedAliasSpecifier(source, label) || hasActualIconPlaceholderJsx(source, label) || /\bIcons\./.test(source)) {
     throw new Error(`${label}: unresolved alias or icon placeholder remains after normalization`);
   }
   if (label.endsWith('.tsx') && hasJsx(source) && !hasReactBinding(source)) {

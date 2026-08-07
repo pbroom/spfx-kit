@@ -256,6 +256,26 @@ describe('React 17 UI profile normalization', () => {
     }
   });
 
+  it('fails closed for default-exported variable ref wrappers', () => {
+    for (const [declaration, message] of [
+      [
+        'const Probe = ({ ...props }: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />',
+        'public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'const Probe = function NamedProbe({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }',
+        'public ref-bearing function-expression wrapper Probe is not normalized with React.forwardRef'
+      ]
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+          source: 'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' + `${declaration}\nexport default Probe\n`
+        })
+      ).toThrow(message);
+    }
+  });
+
   it('uses the Base UI 1.6 root DOM contract for Checkbox and Switch refs', () => {
     for (const [name, primitive] of [
       ['Checkbox', 'CheckboxPrimitive'],
@@ -309,6 +329,56 @@ describe('React 17 UI profile normalization', () => {
         registrySourcePath: 'registry/base-nova/ui/icon.tsx'
       })
     ).toThrow('does not declare a pinned Lucide icon');
+  });
+
+  it('rewrites only actual icon placeholder JSX and preserves placeholder-looking text', () => {
+    const placeholder = '<IconPlaceholder lucide="Search" />';
+    const source =
+      'import { IconPlaceholder } from "@/registry/base-nova/ui/icon-placeholder"\n' +
+      `const single = '${placeholder}'\n` +
+      `const double = "${placeholder.replaceAll('"', '\\"')}"\n` +
+      `const template = \`${placeholder}\`\n` +
+      `// ${placeholder}\n` +
+      `/* ${placeholder} */\n` +
+      'export const Icon = () => <IconPlaceholder lucide="Search" aria-label={single} />\n';
+
+    const result = normalizeRegistrySource({
+      source,
+      registrySourcePath: 'registry/base-nova/ui/icon.tsx'
+    });
+
+    expect(result.source).toContain('import { Search } from "lucide-react"');
+    expect(result.source).toContain(`const single = '${placeholder}'`);
+    expect(result.source).toContain(`const double = "${placeholder.replaceAll('"', '\\"')}"`);
+    expect(result.source).toContain(`const template = \`${placeholder}\``);
+    expect(result.source).toContain(`// ${placeholder}`);
+    expect(result.source).toContain(`/* ${placeholder} */`);
+    expect(result.source).toContain('<Search aria-label={single} />');
+  });
+
+  it('ignores import-looking comments and fails closed for unsupported actual placeholders', () => {
+    const commentOnly = normalizeRegistrySource({
+      source:
+        '// import { IconPlaceholder } from "@/registry/base-nova/ui/icon-placeholder"\n' +
+        'export const text = "<IconPlaceholder lucide=\\"Search\\" />"\n',
+      registrySourcePath: 'registry/base-nova/ui/icon.tsx'
+    });
+    expect(commentOnly.transformations).not.toContain('resolve-lucide-icon-placeholders');
+
+    for (const placeholder of [
+      '<IconPlaceholder lucide="Search"></IconPlaceholder>',
+      '<IconPlaceholder lucide={iconName} />',
+      '<IconPlaceholder lucide="Search" lucide="Check" />'
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            'import { IconPlaceholder } from "@/registry/base-nova/ui/icon-placeholder"\n' +
+            `export const Icon = () => ${placeholder}\n`,
+          registrySourcePath: 'registry/base-nova/ui/icon.tsx'
+        })
+      ).toThrow(/unresolved IconPlaceholder|does not declare a pinned Lucide icon/u);
+    }
   });
 
   it('rejects hostile aliases, icon placeholders, automatic JSX, and React 18/19 APIs', async () => {
