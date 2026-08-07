@@ -231,6 +231,131 @@ describe('React 17 UI profile normalization', () => {
     expect(rerun.source).toBe(first.source);
   });
 
+  it('resolves chained local props aliases before normalizing ref-bearing wrappers', () => {
+    const result = normalizeRegistrySource({
+      source:
+        'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+        'type PrimitiveProps = ButtonPrimitive.Props\n' +
+        'type ProbeProps = PrimitiveProps\n' +
+        'function Probe({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }\n' +
+        'export { Probe }\n',
+      registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+    });
+
+    expect(result.source).toContain('const Probe = React.forwardRef<');
+    expect(result.source).toContain('React.PropsWithoutRef<ProbeProps>');
+  });
+
+  it('resolves merged interface heritage before normalizing ref-bearing wrappers', () => {
+    const result = normalizeRegistrySource({
+      source:
+        'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+        'interface ProbeProps extends ButtonPrimitive.Props {}\n' +
+        'interface ProbeProps { disabled?: boolean }\n' +
+        'function Probe({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }\n' +
+        'export { Probe }\n',
+      registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+    });
+
+    expect(result.source).toContain('const Probe = React.forwardRef<');
+    expect(result.source).toContain('React.PropsWithoutRef<ProbeProps>');
+  });
+
+  it('does not resolve qualified type names through same-named local aliases', () => {
+    const result = normalizeRegistrySource({
+      source:
+        'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+        'type PrimitiveProps = ButtonPrimitive.Props\n' +
+        'function Probe(props: Namespace.PrimitiveProps) { return <ButtonPrimitive {...props} /> }\n' +
+        'export { Probe }\n',
+      registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+    });
+
+    expect(result.source).toContain('function Probe(props: Namespace.PrimitiveProps)');
+    expect(result.source).not.toContain('React.forwardRef');
+  });
+
+  it('fails closed for identifier-parameter wrappers with direct or aliased ref-bearing props', () => {
+    for (const [alias, propsType] of [
+      ['', 'ButtonPrimitive.Props'],
+      ['type ProbeProps = ButtonPrimitive.Props\n', 'ProbeProps']
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            alias +
+            `function Probe(props: ${propsType}) { return <ButtonPrimitive {...props} /> }\n` +
+            'export { Probe }\n',
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+        })
+      ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+    }
+  });
+
+  it('fails closed for direct or aliased import-type ref-bearing props', () => {
+    for (const [alias, propsType] of [
+      ['', 'import("@base-ui/react/button").Button.Props'],
+      ['type ProbeProps = import("@base-ui/react/button").Button.Props\n', 'ProbeProps']
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            alias +
+            `function Probe(props: ${propsType}) { return <ButtonPrimitive {...props} /> }\n` +
+            'export { Probe }\n',
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+        })
+      ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+    }
+  });
+
+  it('fails closed instead of reconstructing unsupported function declaration shapes', () => {
+    for (const declaration of [
+      'async function Probe({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }',
+      'function* Probe({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }',
+      'function Probe<T>({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }',
+      'function Probe({ ...props }: ProbeProps, context: unknown) { return <ButtonPrimitive {...props} /> }',
+      'function Probe({ ...props }: ProbeProps = {} as ProbeProps) { return <ButtonPrimitive {...props} /> }',
+      'function Probe({ ...props }: ProbeProps): React.ReactElement\n' +
+        'function Probe({ ...props }: ProbeProps) { return <ButtonPrimitive {...props} /> }'
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            'type ProbeProps = ButtonPrimitive.Props\n' +
+            `${declaration}\nexport { Probe }\n`,
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+        })
+      ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+    }
+  });
+
+  it('ignores TypeScript this parameters when inspecting ref-bearing props', () => {
+    for (const [declaration, message] of [
+      [
+        'function Probe(this: void, props: ProbeProps) { return <ButtonPrimitive {...props} /> }; export { Probe }',
+        'public ref-bearing wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'export const Probe = function (this: void, props: ProbeProps) { return <ButtonPrimitive {...props} /> }',
+        'public ref-bearing function-expression wrapper Probe is not normalized with React.forwardRef'
+      ]
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            'type ProbeProps = ButtonPrimitive.Props\n' +
+            `${declaration}\n`,
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+        })
+      ).toThrow(message);
+    }
+  });
+
   it('fails closed for exported arrow ref wrappers that the normalizer cannot safely rewrite', () => {
     expect(() =>
       normalizeRegistrySource({
@@ -242,10 +367,23 @@ describe('React 17 UI profile normalization', () => {
     ).toThrow('public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef');
   });
 
+  it('fails closed for exported variable wrappers with aliased ref-bearing props', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'type ProbeProps = ButtonPrimitive.Props\n' +
+          'export const Probe = ({ ...props }: ProbeProps) => <ButtonPrimitive {...props} />\n'
+      })
+    ).toThrow('public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef');
+  });
+
   it('fails closed for exported function-expression ref wrappers', () => {
     for (const declaration of [
       'export const Probe = function ({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }',
-      'const Probe = function NamedProbe({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }; export { Probe }'
+      'const Probe = function NamedProbe({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }; export { Probe }',
+      'const Probe = function Probe({ ...props }: ButtonPrimitive.Props) { return <ButtonPrimitive {...props} /> }; export { Probe }'
     ]) {
       expect(() =>
         normalizeRegistrySource({
@@ -254,6 +392,36 @@ describe('React 17 UI profile normalization', () => {
         })
       ).toThrow('public ref-bearing function-expression wrapper Probe is not normalized with React.forwardRef');
     }
+  });
+
+  it('fails closed for overloaded wrappers with aliased ref-bearing props', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'type ProbeProps = ButtonPrimitive.Props\n' +
+          'function Probe(props: ProbeProps): React.ReactElement\n' +
+          'function Probe(props: ProbeProps) { return <ButtonPrimitive {...props} /> }\n' +
+          'export { Probe }\n'
+      })
+    ).toThrow('public ref-bearing wrapper Probe is not normalized with React.forwardRef');
+  });
+
+  it('does not let nested shadow bindings mask exported variable wrappers', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'type ProbeProps = ButtonPrimitive.Props\n' +
+          'export const Probe = ({ ...props }: ProbeProps) => {\n' +
+          '  function helper() { const Probe = (value: string) => value; return Probe("nested") }\n' +
+          '  helper()\n' +
+          '  return <ButtonPrimitive {...props} />\n' +
+          '}\n'
+      })
+    ).toThrow('public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef');
   });
 
   it('fails closed for default-exported variable ref wrappers', () => {

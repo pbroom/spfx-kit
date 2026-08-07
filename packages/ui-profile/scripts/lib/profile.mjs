@@ -529,37 +529,116 @@ function refElementType(target, propsType) {
   return /^[a-z]/.test(target) ? `React.ElementRef<"${target}">` : `React.ElementRef<typeof ${target}>`;
 }
 
+function isRefBearingPropsType(source, propsType) {
+  if (!propsType.trim()) return false;
+  const sourceFile = parsedSource(source, 'ref-bearing-props.tsx');
+  const aliases = new Map();
+  const addAlias = (name, type) => aliases.set(name, [...(aliases.get(name) ?? []), type]);
+  for (const statement of sourceFile.statements) {
+    if (ts.isTypeAliasDeclaration(statement)) {
+      addAlias(statement.name.text, statement.type);
+    } else if (ts.isInterfaceDeclaration(statement)) {
+      for (const type of (statement.heritageClauses ?? []).flatMap((clause) => clause.types)) {
+        addAlias(statement.name.text, type);
+      }
+    }
+  }
+
+  const syntheticFile = parsedSource(`type RefBearingProps = ${propsType}`, 'ref-bearing-props-input.tsx');
+  const input = syntheticFile.statements.find(ts.isTypeAliasDeclaration)?.type;
+  if (!input) return false;
+
+  const visitedAliases = new Set();
+  function isDirectRefPropsName(name) {
+    const nameText = name.getText(name.getSourceFile());
+    return (
+      (ts.isQualifiedName(name) && name.right.text === 'Props') ||
+      /^(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?$/u.test(nameText)
+    );
+  }
+  function inspect(node) {
+    if (ts.isTypeReferenceNode(node)) {
+      if (isDirectRefPropsName(node.typeName)) return true;
+      if (ts.isIdentifier(node.typeName) && aliases.has(node.typeName.text) && !visitedAliases.has(node.typeName.text)) {
+        visitedAliases.add(node.typeName.text);
+        if (aliases.get(node.typeName.text).some(inspect)) return true;
+      }
+      return (node.typeArguments ?? []).some(inspect);
+    }
+    if (ts.isImportTypeNode(node)) {
+      if (node.qualifier && isDirectRefPropsName(node.qualifier)) return true;
+      return (node.typeArguments ?? []).some(inspect);
+    }
+    if (ts.isExpressionWithTypeArguments(node)) {
+      const expression = node.expression;
+      const expressionName = expression.getText(node.getSourceFile());
+      if (
+        (ts.isPropertyAccessExpression(expression) && expression.name.text === 'Props') ||
+        /^(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?$/u.test(expressionName)
+      ) {
+        return true;
+      }
+      if (ts.isIdentifier(expression) && aliases.has(expression.text) && !visitedAliases.has(expression.text)) {
+        visitedAliases.add(expression.text);
+        if (aliases.get(expression.text).some(inspect)) return true;
+      }
+      return (node.typeArguments ?? []).some(inspect);
+    }
+    let found = false;
+    ts.forEachChild(node, (child) => {
+      if (!found && inspect(child)) found = true;
+    });
+    return found;
+  }
+  return inspect(input);
+}
+
 function normalizePublicForwardRefs(source) {
   const exports = exportedNames(source);
+  const sourceFile = parsedSource(source, 'public-forward-ref-wrappers.tsx');
   const candidates = [];
-  for (const match of source.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)) {
-    if (exports.has(match[1]) || INTERNAL_REF_WRAPPER_NAMES.has(match[1])) {
-      candidates.push({ name: match[1], start: match.index });
-    }
+  for (const statement of sourceFile.statements) {
+    if (!ts.isFunctionDeclaration(statement) || !statement.name || !statement.body) continue;
+    const name = statement.name.text;
+    if (!exports.has(name) && !INTERNAL_REF_WRAPPER_NAMES.has(name)) continue;
+    const modifiers = statement.modifiers ?? [];
+    const parameter = statement.parameters[0];
+    const hasOverloads = sourceFile.statements.filter(
+      (candidate) => ts.isFunctionDeclaration(candidate) && candidate.name?.text === name
+    ).length > 1;
+    const isSupportedShape =
+      !hasOverloads &&
+      !statement.asteriskToken &&
+      !statement.typeParameters?.length &&
+      !modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) &&
+      statement.parameters.length === 1 &&
+      parameter &&
+      ts.isObjectBindingPattern(parameter.name) &&
+      !parameter.dotDotDotToken &&
+      !parameter.initializer &&
+      !parameter.questionToken &&
+      parameter.type;
+    if (!isSupportedShape) continue;
+    candidates.push({
+      bodyClose: statement.body.end - 1,
+      bodyOpen: statement.body.getStart(sourceFile),
+      declarationStart: statement.getStart(sourceFile),
+      defaultExport: modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword),
+      namedExport: modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
+      name,
+      parameter
+    });
   }
 
   let normalized = source;
   let transformed = false;
   for (const candidate of candidates.reverse()) {
-    const functionStart = candidate.start;
-    const defaultExport = /export\s+default\s+$/.exec(normalized.slice(0, functionStart));
-    const declarationStart = defaultExport ? defaultExport.index : functionStart;
-    const parameterOpen = normalized.indexOf('(', functionStart);
-    const parameterClose = findMatching(normalized, parameterOpen, '(', ')');
-    if (parameterClose === -1) throw new Error(`Unable to parse ${candidate.name} parameters`);
-    const bodyOpen = normalized.indexOf('{', parameterClose);
-    const bodyClose = findMatching(normalized, bodyOpen, '{', '}');
-    if (bodyOpen === -1 || bodyClose === -1) throw new Error(`Unable to parse ${candidate.name} body`);
-
-    const parameters = normalized.slice(parameterOpen + 1, parameterClose);
-    const split = parameters.lastIndexOf('}:');
-    if (!parameters.trimStart().startsWith('{') || split === -1) continue;
-    let destructuring = parameters.slice(0, split + 1);
-    const propsType = parameters.slice(split + 2).trim();
-    if (!/\.Props\b|(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?\b/.test(propsType)) continue;
+    let destructuring = candidate.parameter.name.getText(sourceFile);
+    const propsType = candidate.parameter.type.getText(sourceFile);
+    if (!isRefBearingPropsType(normalized, propsType)) continue;
     destructuring = destructuring.replace(/(^|\n)(\s*)ref\s*,\s*(?=\n|})/m, '$1$2').replace(/{\s*ref\s*,/, '{');
 
-    let body = normalized.slice(bodyOpen + 1, bodyClose);
+    let body = normalized.slice(candidate.bodyOpen + 1, candidate.bodyClose);
     let target = propsSpreadTarget(body);
     const useRender = /return\s+useRender\(\{\s*/.exec(body);
     if (!target && useRender) {
@@ -583,55 +662,51 @@ function normalizePublicForwardRefs(source) {
     }
     const elementType = refElementType(targetName, propsType);
     const replacement =
-      `const ${candidate.name} = React.forwardRef<\n  ${elementType},\n  React.PropsWithoutRef<${propsType}>\n>(function ${candidate.name}(${destructuring}, ref) {${body}\n})` +
-      (defaultExport ? `\nexport default ${candidate.name}` : '');
-    normalized = `${normalized.slice(0, declarationStart)}${replacement}${normalized.slice(bodyClose + 1)}`;
+      `${candidate.namedExport && !candidate.defaultExport ? 'export ' : ''}const ${candidate.name} = React.forwardRef<\n  ${elementType},\n  React.PropsWithoutRef<${propsType}>\n>(function ${candidate.name}(${destructuring}, ref) {${body}\n})` +
+      (candidate.defaultExport ? `\nexport default ${candidate.name}` : '');
+    normalized = `${normalized.slice(0, candidate.declarationStart)}${replacement}${normalized.slice(candidate.bodyClose + 1)}`;
     transformed = true;
   }
   return { source: normalized, transformed };
 }
 
 function exportedFunctionContract(source, name) {
-  const match = new RegExp(`\\bfunction\\s+${name}\\s*\\(`).exec(source);
-  if (!match) return null;
-  const parameterOpen = source.indexOf('(', match.index);
-  const parameterClose = findMatching(source, parameterOpen, '(', ')');
-  const bodyOpen = source.indexOf('{', parameterClose);
-  const bodyClose = findMatching(source, bodyOpen, '{', '}');
-  if (parameterClose === -1 || bodyOpen === -1 || bodyClose === -1) return null;
-  const parameters = source.slice(parameterOpen + 1, parameterClose);
-  const split = parameters.lastIndexOf('}:');
+  const sourceFile = parsedSource(source, 'normalized-function-wrapper.tsx');
+  const declaration = sourceFile.statements.find(
+    (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === name && statement.body
+  );
+  if (!declaration) return null;
+  const parameter = declaration.parameters.find(
+    (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
+  );
   return {
-    propsType: split === -1 ? '' : parameters.slice(split + 2).trim(),
-    body: source.slice(bodyOpen + 1, bodyClose)
+    propsType: parameter?.type?.getText(sourceFile) ?? '',
+    body: declaration.body.getText(sourceFile).slice(1, -1)
   };
 }
 
 function exportedVariableFunctionContract(source, name) {
   const sourceFile = parsedSource(source, 'normalized-variable-wrapper.tsx');
-  let contract = null;
-  function visit(node) {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === name &&
-      node.initializer &&
-      (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
-    ) {
-      const parameter = node.initializer.parameters[0];
-      if (!parameter) return;
-      contract = {
-        kind: ts.isArrowFunction(node.initializer) ? 'arrow' : 'function-expression',
-        propsType: parameter.type?.getText(sourceFile) ?? '',
-        body: ts.isBlock(node.initializer.body)
-          ? node.initializer.body.getText(sourceFile).slice(1, -1)
-          : `return ${node.initializer.body.getText(sourceFile)}`
-      };
-    }
-    ts.forEachChild(node, visit);
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    const declaration = statement.declarationList.declarations.find(
+      (candidate) => ts.isIdentifier(candidate.name) && candidate.name.text === name
+    );
+    const initializer = declaration?.initializer;
+    if (!initializer || (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer))) continue;
+    const parameter = initializer.parameters.find(
+      (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
+    );
+    if (!parameter) return null;
+    return {
+      kind: ts.isArrowFunction(initializer) ? 'arrow' : 'function-expression',
+      propsType: parameter.type?.getText(sourceFile) ?? '',
+      body: ts.isBlock(initializer.body)
+        ? initializer.body.getText(sourceFile).slice(1, -1)
+        : `return ${initializer.body.getText(sourceFile)}`
+    };
   }
-  visit(sourceFile);
-  return contract;
+  return null;
 }
 
 export function normalizeRegistrySource({ source, registrySourcePath }) {
@@ -1264,8 +1339,7 @@ export function assertReact17Source(source, label) {
   for (const name of exportedNames(source)) {
     const forwardRef = new RegExp(`\\bconst\\s+${name}\\s*=\\s*React\\.forwardRef\\b`);
     const ordinary = exportedFunctionContract(source, name);
-    const refProps =
-      ordinary && /\.Props\b|(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?\b/.test(ordinary.propsType);
+    const refProps = ordinary && isRefBearingPropsType(source, ordinary.propsType);
     const useRenderWrapper = ordinary && /return\s+useRender\(\{/.test(ordinary.body);
     if (
       ordinary &&
@@ -1276,9 +1350,7 @@ export function assertReact17Source(source, label) {
       throw new Error(`${label}: public ref-bearing wrapper ${name} is not normalized with React.forwardRef`);
     }
     const variableFunction = exportedVariableFunctionContract(source, name);
-    const variableRefProps =
-      variableFunction &&
-      /\.Props\b|(?:React|useRender)\.ComponentProps(?:WithRef|WithoutRef)?\b/.test(variableFunction.propsType);
+    const variableRefProps = variableFunction && isRefBearingPropsType(source, variableFunction.propsType);
     const variableUseRenderWrapper = variableFunction && /return\s+useRender\(\{/.test(variableFunction.body);
     if (
       variableFunction &&
