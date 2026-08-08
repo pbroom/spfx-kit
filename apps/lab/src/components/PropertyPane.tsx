@@ -1,29 +1,33 @@
 import * as React from 'react';
 import {
-  Button,
-  Checkbox,
-  ColorArea,
-  ColorPicker,
-  ColorSlider,
   Combobox,
-  Dropdown,
-  Field,
-  Input,
-  Option,
-  Popover,
-  PopoverSurface,
-  PopoverTrigger,
-  Textarea,
-  Toolbar,
-  ToolbarRadioButton,
-  ToolbarRadioGroup
-} from '@fluentui/react-components';
-import { TextAlignCenterRegular, TextAlignLeftRegular, TextAlignRightRegular } from '@fluentui/react-icons';
+  ComboboxContent,
+  ComboboxGroup,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList
+} from '../../../../packages/ui-profile/normalized/src/components/ui/combobox';
+import { Checkbox } from '../../../../packages/ui-profile/normalized/src/components/ui/checkbox';
+import { Field, FieldDescription, FieldLabel } from '../../../../packages/ui-profile/normalized/src/components/ui/field';
+import { Input } from '../../../../packages/ui-profile/normalized/src/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '../../../../packages/ui-profile/normalized/src/components/ui/select';
+import { Textarea } from '../../../../packages/ui-profile/normalized/src/components/ui/textarea';
+import { ToggleGroup, ToggleGroupItem } from '../../../../packages/ui-profile/normalized/src/components/ui/toggle-group';
+import { useSpfxUiDerivedId, useSpfxUiId } from '../../../../packages/ui-profile/normalized/src/lib/ui-root';
+import { AlignCenter, AlignLeft, AlignRight } from 'lucide-react';
 import {
   LabPropertyBag,
   LabPropertyControl,
   LabPropertyPaneRenderProps,
   LabSourceEditorControl,
+  LabThemeMode,
   LabWebPart
 } from '@spfx-kit/spfx-lab-runtime';
 import {
@@ -34,6 +38,8 @@ import {
 } from '@spfx-kit/code-workbench-runtime';
 import { createMockSpfxContext } from '@spfx-kit/spfx-lab-runtime';
 import { CssEditor } from './CssEditor';
+import { ColorField } from './ColorField';
+import { LegacyFluentShellIslands } from './LegacyFluentShellIslands';
 import { resolveSelectControlState } from './propertyPaneSelectState';
 import { SourceEditor } from './SourceEditor';
 import { SourceWorkspace } from './SourceWorkspace';
@@ -53,6 +59,7 @@ const codeWorkbenchMockSpfx = createSpfxBridge(createMockSpfxContext());
 const labMonacoBaseUrl = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs';
 
 interface PropertyPaneProps {
+  themeMode: LabThemeMode;
   webPart?: LabWebPart;
   values: LabPropertyBag;
   onChange: (patch: LabPropertyBag) => void;
@@ -71,6 +78,7 @@ export function PropertyPane(props: PropertyPaneProps): JSX.Element {
         key={control.name}
         values={props.values}
         value={value}
+        themeMode={props.themeMode}
         onChange={onChange}
         onPatch={props.onChange}
       />
@@ -141,16 +149,20 @@ interface ControlRendererProps {
   value: LabPropertyBag[string];
   onChange: (value: LabPropertyBag[string]) => void;
   onPatch: (patch: LabPropertyBag) => void;
+  themeMode: LabThemeMode;
 }
 
-function ControlRenderer({ control, values, value, onChange, onPatch }: ControlRendererProps): JSX.Element {
+function ControlRenderer({ control, values, value, onChange, onPatch, themeMode }: ControlRendererProps): JSX.Element {
+  const controlId = useSpfxUiId(`property-control:${control.name}`);
+  const contentId = useSpfxUiDerivedId(controlId, 'content');
+
   if (control.type === 'codeWorkspace') {
     const source = deserializeCodeWorkbenchSource(
       typeof value === 'string' ? value : undefined,
       createDefaultCodeWorkbenchSource()
     );
     return (
-      <Field className="property-field" hint={control.description} label={control.label} size="small">
+      <LabField controlId={controlId} description={control.description} label={control.label}>
         <React.Suspense fallback={<p className="property-field__loading">Loading editor…</p>}>
           <LazyCodeWorkspaceEditor
             source={source}
@@ -164,18 +176,16 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
             }}
           />
         </React.Suspense>
-      </Field>
+      </LabField>
     );
   }
 
   if (control.type === 'toggle') {
     return (
-      <Checkbox
-        checked={Boolean(value)}
-        className="property-field property-field--inline"
-        label={control.label}
-        onChange={(_event, data) => onChange(Boolean(data.checked))}
-      />
+      <Field className="property-field property-field--inline" orientation="horizontal">
+        <FieldLabel htmlFor={controlId}>{control.label}</FieldLabel>
+        <Checkbox id={controlId} checked={Boolean(value)} onCheckedChange={(checked) => onChange(Boolean(checked))} />
+      </Field>
     );
   }
 
@@ -266,36 +276,39 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
 
   if (control.type === 'textarea') {
     return (
-      <Field className="property-field" label={control.label} size="small">
+      <LabField controlId={controlId} label={control.label}>
         <Textarea
+          id={controlId}
           placeholder={control.placeholder}
-          resize="vertical"
           rows={3}
           value={String(value ?? '')}
           onChange={(event) => onChange(event.currentTarget.value)}
         />
-      </Field>
+      </LabField>
     );
   }
 
   if (control.type === 'number') {
     const unit = control.getUnit ? control.getUnit(values) : control.unit;
     return (
-      <Field className="property-field" label={control.label} size="small">
-        <Input
-          aria-label={unit ? `${control.label} (${unit})` : control.label}
-          contentAfter={unit ? <span className="property-number-unit">{unit}</span> : undefined}
-          type="number"
-          min={control.min}
-          max={control.max}
-          step={control.step}
-          value={value === undefined ? '' : String(value)}
-          onChange={(event) => {
-            const rawValue = event.currentTarget.value;
-            onChange(rawValue === '' ? undefined : Number(rawValue));
-          }}
-        />
-      </Field>
+      <LabField controlId={controlId} label={control.label}>
+        <div className="property-number-input">
+          <Input
+            aria-label={unit ? `${control.label} (${unit})` : control.label}
+            id={controlId}
+            type="number"
+            min={control.min}
+            max={control.max}
+            step={control.step}
+            value={value === undefined ? '' : String(value)}
+            onChange={(event) => {
+              const rawValue = event.currentTarget.value;
+              onChange(rawValue === '' ? undefined : Number(rawValue));
+            }}
+          />
+          {unit ? <span className="property-number-unit">{unit}</span> : null}
+        </div>
+      </LabField>
     );
   }
 
@@ -304,31 +317,38 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
     const { selectedOption, selectedOptions, selectedValue } = resolveSelectControlState(value, options);
 
     return (
-      <Field className="property-field" label={control.label} size="small">
-        <Dropdown
-          aria-label={control.label}
-          selectedOptions={selectedOptions}
-          value={selectedOption?.label || selectedValue}
-          onOptionSelect={(_event, data) => {
-            if (data.optionValue !== undefined) {
-              onChange(data.optionValue);
-            }
+      <LabField controlId={controlId} label={control.label}>
+        <Select
+          id={controlId}
+          items={options}
+          value={selectedOptions[0] || null}
+          onValueChange={(nextValue) => {
+            if (nextValue !== null) onChange(String(nextValue));
           }}
         >
-          {options.map((option) => (
-            <Option value={option.value} key={option.value}>
-              {option.label}
-            </Option>
-          ))}
-        </Dropdown>
-      </Field>
+          <SelectTrigger aria-label={control.label} className="property-select">
+            <SelectValue>{selectedOption?.label || selectedValue}</SelectValue>
+          </SelectTrigger>
+          <SelectContent id={contentId} align="start">
+            <SelectGroup>
+              {options.map((option) => (
+                <SelectItem value={option.value} key={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </LabField>
     );
   }
 
   if (control.type === 'combobox') {
     return (
-      <Field className="property-field" label={control.label} size="small">
+      <LabField controlId={controlId} label={control.label}>
         <ComboboxPropertyControl
+          contentId={contentId}
+          controlId={controlId}
           label={control.label}
           maxVisibleOptions={control.maxVisibleOptions}
           options={control.options}
@@ -336,7 +356,7 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
           value={String(value ?? '')}
           onChange={onChange}
         />
-      </Field>
+      </LabField>
     );
   }
 
@@ -344,56 +364,63 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
     const selectedValue = String(value ?? '');
 
     return (
-      <Field className="property-field" label={control.label} size="small">
-        <Toolbar
+      <LabField controlId={controlId} label={control.label}>
+        <ToggleGroup
           aria-label={control.label}
-          checkedValues={{ [control.name]: selectedValue ? [selectedValue] : [] }}
-          className="property-radio-toolbar"
-          size="small"
-          onCheckedValueChange={(_event, data) => {
-            const [nextValue] = data.checkedItems;
-            if (nextValue) {
-              onChange(nextValue);
-            }
+          className="property-radio-toolbar__group"
+          size="sm"
+          spacing={2}
+          value={selectedValue ? [selectedValue] : []}
+          variant="outline"
+          onValueChange={(nextValues) => {
+            const nextValue = nextValues[0];
+            if (nextValue) onChange(nextValue);
           }}
         >
-          <ToolbarRadioGroup className="property-radio-toolbar__group">
-            {control.options.map((option) => (
-              <ToolbarRadioButton
-                aria-label={option.label}
-                icon={getPropertyControlIcon(option.icon)}
-                key={option.value}
-                name={control.name}
-                title={option.label}
-                value={option.value}
-              >
-                {option.icon ? undefined : option.label}
-              </ToolbarRadioButton>
-            ))}
-          </ToolbarRadioGroup>
-        </Toolbar>
-      </Field>
+          {control.options.map((option) => (
+            <ToggleGroupItem aria-label={option.label} key={option.value} title={option.label} value={option.value}>
+              {getPropertyControlIcon(option.icon) || option.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </LabField>
     );
   }
 
   if (control.type === 'color') {
-    const colorValue = normalizeHexColor(String(value ?? ''));
-
     return (
-      <Field className="property-field" label={control.label} size="small">
-        <ColorPropertyControl label={control.label} value={colorValue} onChange={onChange} />
-      </Field>
+      <LegacyFluentShellIslands themeMode={themeMode}>
+        <ColorField label={control.label} value={String(value ?? '')} onChange={onChange} />
+      </LegacyFluentShellIslands>
     );
   }
 
   return (
-    <Field className="property-field" label={control.label} size="small">
+    <LabField controlId={controlId} label={control.label}>
       <Input
+        id={controlId}
         type="text"
         value={String(value ?? '')}
         placeholder={control.placeholder}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
+    </LabField>
+  );
+}
+
+interface LabFieldProps {
+  children: React.ReactNode;
+  controlId: string;
+  description?: string;
+  label: string;
+}
+
+function LabField({ children, controlId, description, label }: LabFieldProps): JSX.Element {
+  return (
+    <Field className="property-field">
+      <FieldLabel htmlFor={controlId}>{label}</FieldLabel>
+      {children}
+      {description ? <FieldDescription>{description}</FieldDescription> : null}
     </Field>
   );
 }
@@ -445,19 +472,21 @@ function resolveSourceWorkspaceDocument(
 
 function getPropertyControlIcon(icon: string | undefined): JSX.Element | undefined {
   if (icon === 'text-align-left') {
-    return <TextAlignLeftRegular />;
+    return <AlignLeft aria-hidden="true" data-icon="inline-start" />;
   }
   if (icon === 'text-align-center') {
-    return <TextAlignCenterRegular />;
+    return <AlignCenter aria-hidden="true" data-icon="inline-start" />;
   }
   if (icon === 'text-align-right') {
-    return <TextAlignRightRegular />;
+    return <AlignRight aria-hidden="true" data-icon="inline-start" />;
   }
 
   return undefined;
 }
 
 interface ComboboxPropertyControlProps {
+  contentId: string;
+  controlId: string;
   label: string;
   maxVisibleOptions?: number;
   options: Array<{ label: string; value: string }>;
@@ -471,6 +500,11 @@ function ComboboxPropertyControl(props: ComboboxPropertyControlProps): JSX.Eleme
   const limit = props.maxVisibleOptions ?? 50;
   const selectedOption = props.options.find((option) => option.value === props.value);
   const displayValue = query !== undefined ? query : selectedOption?.label || props.value;
+  const items = React.useMemo(() => props.options.map((option) => option.value), [props.options]);
+  const labelsByValue = React.useMemo(
+    () => new Map(props.options.map((option) => [option.value, option.label])),
+    [props.options]
+  );
   const visibleOptions = React.useMemo(() => {
     const normalized = (query || '').trim().toLowerCase();
     if (!normalized) {
@@ -481,324 +515,33 @@ function ComboboxPropertyControl(props: ComboboxPropertyControlProps): JSX.Eleme
 
   return (
     <Combobox
+      id={props.controlId}
       aria-label={props.label}
-      placeholder={props.placeholder}
-      selectedOptions={props.value ? [props.value] : ['']}
-      value={displayValue}
-      onBlur={() => setQuery(undefined)}
-      onChange={(event) => setQuery(event.currentTarget.value)}
-      onOptionSelect={(_event, data) => {
+      inputValue={displayValue}
+      items={items}
+      itemToStringLabel={(itemValue) => labelsByValue.get(itemValue) ?? itemValue}
+      value={props.value || null}
+      onInputValueChange={(nextQuery) => setQuery(nextQuery)}
+      onOpenChange={(open) => {
+        if (!open) setQuery(undefined);
+      }}
+      onValueChange={(nextValue) => {
         setQuery(undefined);
-        if (data.optionValue !== undefined) {
-          props.onChange(data.optionValue);
-        }
+        if (nextValue !== null) props.onChange(String(nextValue));
       }}
     >
-      {visibleOptions.map((option) => (
-        <Option key={option.value || '__empty__'} text={option.label} value={option.value}>
-          {option.label}
-        </Option>
-      ))}
+      <ComboboxInput aria-label={props.label} placeholder={props.placeholder} showClear={Boolean(query)} />
+      <ComboboxContent id={props.contentId}>
+        <ComboboxList>
+          <ComboboxGroup>
+            {visibleOptions.map((option) => (
+              <ComboboxItem key={option.value || '__empty__'} value={option.value}>
+                {option.label}
+              </ComboboxItem>
+            ))}
+          </ComboboxGroup>
+        </ComboboxList>
+      </ComboboxContent>
     </Combobox>
   );
-}
-
-interface ColorPropertyControlProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}
-
-function ColorPropertyControl({ label, value, onChange }: ColorPropertyControlProps): JSX.Element {
-  const [isOpen, setIsOpen] = React.useState(false);
-  const hsvColor = hexToHsv(value);
-  const hslColor = hexToHsl(value);
-  const onHslChange = (channel: keyof HslColor, nextValue: string): void => {
-    const parsedValue = Number(nextValue);
-
-    if (!Number.isFinite(parsedValue)) {
-      return;
-    }
-
-    onChange(
-      hslToHex({
-        ...hslColor,
-        [channel]: channel === 'h' ? clampHue(parsedValue) : clampPercentage(parsedValue)
-      })
-    );
-  };
-
-  return (
-    <div className="property-color-picker">
-      <div className="property-color-picker__footer">
-        <Popover
-          open={isOpen}
-          positioning={{ position: 'below', align: 'start' }}
-          withArrow
-          onOpenChange={(_event, data) => setIsOpen(data.open)}
-        >
-          <PopoverTrigger disableButtonEnhancement>
-            <Button
-              appearance="outline"
-              aria-label={`Open ${label} color picker`}
-              className="property-color-picker__swatch-button"
-              onClick={() => setIsOpen((currentValue) => !currentValue)}
-            >
-              <span aria-hidden="true" className="property-color-picker__swatch" style={{ backgroundColor: value }} />
-            </Button>
-          </PopoverTrigger>
-          <PopoverSurface className="property-color-picker__popover">
-            <ColorPicker color={hsvColor} onColorChange={(_event, data) => onChange(hsvToHex(data.color))}>
-              <ColorArea aria-label={`${label} saturation and brightness`} />
-              <ColorSlider aria-label={`${label} hue`} />
-              <div className="property-color-picker__hsl" aria-label={`${label} HSL values`}>
-                <label className="property-color-picker__hsl-field">
-                  <span>H</span>
-                  <Input
-                    aria-label={`${label} HSL hue`}
-                    max={360}
-                    min={0}
-                    step={1}
-                    type="number"
-                    value={String(hslColor.h)}
-                    onChange={(event) => onHslChange('h', event.currentTarget.value)}
-                  />
-                </label>
-                <label className="property-color-picker__hsl-field">
-                  <span>S</span>
-                  <Input
-                    aria-label={`${label} HSL saturation`}
-                    contentAfter={<span className="property-number-unit">%</span>}
-                    max={100}
-                    min={0}
-                    step={1}
-                    type="number"
-                    value={String(hslColor.s)}
-                    onChange={(event) => onHslChange('s', event.currentTarget.value)}
-                  />
-                </label>
-                <label className="property-color-picker__hsl-field">
-                  <span>L</span>
-                  <Input
-                    aria-label={`${label} HSL lightness`}
-                    contentAfter={<span className="property-number-unit">%</span>}
-                    max={100}
-                    min={0}
-                    step={1}
-                    type="number"
-                    value={String(hslColor.l)}
-                    onChange={(event) => onHslChange('l', event.currentTarget.value)}
-                  />
-                </label>
-              </div>
-            </ColorPicker>
-          </PopoverSurface>
-        </Popover>
-        <Input
-          aria-label={`${label} hex value`}
-          className="property-color-picker__hex"
-          value={value}
-          onChange={(event) => onChange(normalizeHexColor(event.currentTarget.value))}
-        />
-      </div>
-    </div>
-  );
-}
-
-interface HsvColor {
-  h: number;
-  s: number;
-  v: number;
-  a?: number;
-}
-
-interface HslColor {
-  h: number;
-  s: number;
-  l: number;
-}
-
-function normalizeHexColor(value: string): string {
-  const trimmed = value.trim();
-
-  if (/^#[0-9a-f]{6}$/i.test(trimmed)) {
-    return trimmed.toLowerCase();
-  }
-  if (/^#[0-9a-f]{3}$/i.test(trimmed)) {
-    const [, r, g, b] = trimmed.toLowerCase();
-    return `#${r}${r}${g}${g}${b}${b}`;
-  }
-  if (/^[0-9a-f]{6}$/i.test(trimmed)) {
-    return `#${trimmed.toLowerCase()}`;
-  }
-  if (/^[0-9a-f]{3}$/i.test(trimmed)) {
-    const [r, g, b] = trimmed.toLowerCase();
-    return `#${r}${r}${g}${g}${b}${b}`;
-  }
-
-  return '#8a8886';
-}
-
-function hexToHsv(hex: string): HsvColor {
-  const normalized = normalizeHexColor(hex);
-  const red = parseInt(normalized.slice(1, 3), 16) / 255;
-  const green = parseInt(normalized.slice(3, 5), 16) / 255;
-  const blue = parseInt(normalized.slice(5, 7), 16) / 255;
-  const max = Math.max(red, green, blue);
-  const min = Math.min(red, green, blue);
-  const delta = max - min;
-  let hue = 0;
-
-  if (delta !== 0) {
-    if (max === red) {
-      hue = 60 * (((green - blue) / delta) % 6);
-    } else if (max === green) {
-      hue = 60 * ((blue - red) / delta + 2);
-    } else {
-      hue = 60 * ((red - green) / delta + 4);
-    }
-  }
-
-  return {
-    h: Math.round(hue < 0 ? hue + 360 : hue),
-    s: max === 0 ? 0 : delta / max,
-    v: max,
-    a: 1
-  };
-}
-
-function hexToHsl(hex: string): HslColor {
-  const normalized = normalizeHexColor(hex);
-  const red = parseInt(normalized.slice(1, 3), 16) / 255;
-  const green = parseInt(normalized.slice(3, 5), 16) / 255;
-  const blue = parseInt(normalized.slice(5, 7), 16) / 255;
-  const max = Math.max(red, green, blue);
-  const min = Math.min(red, green, blue);
-  const delta = max - min;
-  const lightness = (max + min) / 2;
-  let hue = 0;
-  let saturation = 0;
-
-  if (delta !== 0) {
-    saturation = delta / (1 - Math.abs(2 * lightness - 1));
-
-    if (max === red) {
-      hue = 60 * (((green - blue) / delta) % 6);
-    } else if (max === green) {
-      hue = 60 * ((blue - red) / delta + 2);
-    } else {
-      hue = 60 * ((red - green) / delta + 4);
-    }
-  }
-
-  return {
-    h: clampHue(hue < 0 ? hue + 360 : hue),
-    s: clampPercentage(saturation * 100),
-    l: clampPercentage(lightness * 100)
-  };
-}
-
-function hslToHex(color: HslColor): string {
-  const hue = clampHue(color.h) / 360;
-  const saturation = clampPercentage(color.s) / 100;
-  const lightness = clampPercentage(color.l) / 100;
-
-  if (saturation === 0) {
-    return `#${toHexChannel(lightness)}${toHexChannel(lightness)}${toHexChannel(lightness)}`;
-  }
-
-  const q = lightness < 0.5 ? lightness * (1 + saturation) : lightness + saturation - lightness * saturation;
-  const p = 2 * lightness - q;
-
-  return `#${toHexChannel(hueToRgb(p, q, hue + 1 / 3))}${toHexChannel(hueToRgb(p, q, hue))}${toHexChannel(hueToRgb(p, q, hue - 1 / 3))}`;
-}
-
-function hsvToHex(color: HsvColor): string {
-  const hue = (((color.h || 0) % 360) + 360) % 360;
-  const saturation = clampUnit(color.s);
-  const value = clampUnit(color.v);
-  const chroma = value * saturation;
-  const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
-  const m = value - chroma;
-  let red = 0;
-  let green = 0;
-  let blue = 0;
-
-  if (hue < 60) {
-    red = chroma;
-    green = x;
-  } else if (hue < 120) {
-    red = x;
-    green = chroma;
-  } else if (hue < 180) {
-    green = chroma;
-    blue = x;
-  } else if (hue < 240) {
-    green = x;
-    blue = chroma;
-  } else if (hue < 300) {
-    red = x;
-    blue = chroma;
-  } else {
-    red = chroma;
-    blue = x;
-  }
-
-  return `#${toHexChannel(red + m)}${toHexChannel(green + m)}${toHexChannel(blue + m)}`;
-}
-
-function clampUnit(value: number | undefined): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-  return Math.min(Math.max(parsed, 0), 1);
-}
-
-function clampHue(value: number): number {
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-
-  return Math.min(Math.max(Math.round(parsed), 0), 360);
-}
-
-function clampPercentage(value: number): number {
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-
-  return Math.min(Math.max(Math.round(parsed), 0), 100);
-}
-
-function hueToRgb(p: number, q: number, value: number): number {
-  let normalizedValue = value;
-
-  if (normalizedValue < 0) {
-    normalizedValue += 1;
-  }
-  if (normalizedValue > 1) {
-    normalizedValue -= 1;
-  }
-  if (normalizedValue < 1 / 6) {
-    return p + (q - p) * 6 * normalizedValue;
-  }
-  if (normalizedValue < 1 / 2) {
-    return q;
-  }
-  if (normalizedValue < 2 / 3) {
-    return p + (q - p) * (2 / 3 - normalizedValue) * 6;
-  }
-
-  return p;
-}
-
-function toHexChannel(value: number): string {
-  return Math.round(Math.min(Math.max(value, 0), 1) * 255)
-    .toString(16)
-    .padStart(2, '0');
 }

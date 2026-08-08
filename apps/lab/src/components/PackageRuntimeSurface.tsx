@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Button, Spinner } from '@fluentui/react-components';
+import { Button } from '../../../../packages/ui-profile/normalized/src/components/ui/button';
+import { Spinner } from '../../../../packages/ui-profile/normalized/src/components/ui/spinner';
 import { loadCdnPackageDescriptor, type CdnPackageDescriptor } from '../api/packageRuntime';
 import { cdnPackageSelectionKey, type LabPackageMode } from '../lib/packageMode';
 import { CdnSmokeCheck, type CdnSmokeCheckStatus } from './CdnSmokeCheck';
@@ -105,7 +106,7 @@ export function PackageRuntimeSurface({
         >
           {mode === 'cdn' && descriptorLoading ? (
             <div className="package-runtime-state" role="status">
-              <Spinner size="small" />
+              <Spinner />
               <strong>Preparing local mock-CDN smoke check</strong>
               <span>Validating the staged release and pinning its separate-origin delivery URL.</span>
             </div>
@@ -113,7 +114,7 @@ export function PackageRuntimeSurface({
             <div className="package-runtime-state package-runtime-state--error" role="status">
               <strong>CDN resources unavailable</strong>
               <span>{descriptorState.message}</span>
-              <Button appearance="primary" size="small" onClick={retry}>
+              <Button size="sm" onClick={retry}>
                 Retry
               </Button>
             </div>
