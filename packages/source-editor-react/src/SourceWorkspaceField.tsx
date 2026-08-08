@@ -2,9 +2,10 @@
 
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
-import { FluentProvider, Tab, TabList, webDarkTheme } from '@fluentui/react-components';
 import { SourceEditorField, constrainFloatingRect, isCloseShortcut, resizeFloatingRect } from './SourceEditorField';
 import type { FloatingRect, ResizeDirection, SourceEditorFieldProps } from './SourceEditorField';
+import { Tabs, TabsList, TabsTrigger } from './ui-profile/components/ui/tabs';
+import { createSpfxUiHost, SpfxUiHostProvider, type SpfxUiHost, type SpfxUiThemeTokens } from './ui-profile/lib/ui-root';
 
 export interface SourceWorkspaceDocument extends Omit<
   SourceEditorFieldProps,
@@ -16,8 +17,13 @@ export interface SourceWorkspaceDocument extends Omit<
 export interface SourceWorkspaceFieldProps {
   description?: string;
   documents: readonly SourceWorkspaceDocument[];
+  /** Stable caller-owned identity unique within targetDocument and across independently bundled workspaces. */
+  instanceId: string;
   label: string;
   defaultView?: 'first' | 'split';
+  portalParent?: HTMLElement;
+  targetDocument?: Document;
+  theme?: SpfxUiThemeTokens;
 }
 
 type WorkspaceView = string | 'split';
@@ -41,8 +47,6 @@ interface PointerInteraction {
   startY: number;
 }
 
-let nextSourceWorkspaceInstanceId = 0;
-
 const resizeZones: Array<{ direction: ResizeDirection; label: string }> = [
   { direction: 'n', label: 'Resize source workspace from top edge' },
   { direction: 's', label: 'Resize source workspace from bottom edge' },
@@ -54,14 +58,37 @@ const resizeZones: Array<{ direction: ResizeDirection; label: string }> = [
   { direction: 'se', label: 'Resize source workspace from bottom right' }
 ];
 
-export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldProps> = (props) => {
-  const instanceIdRef = React.useRef<number | null>(null);
-  if (instanceIdRef.current === null) {
-    nextSourceWorkspaceInstanceId += 1;
-    instanceIdRef.current = nextSourceWorkspaceInstanceId;
-  }
+const sourceWorkspaceProfileId = 'source-editor-react17-base-nova-v1';
+const sourceWorkspaceScopeValue = 'skui-9eea46b8e51bf75d';
+const defaultSourceWorkspaceTheme: SpfxUiThemeTokens = {
+  mode: 'light',
+  colorBackground: '#ffffff',
+  colorForeground: '#242424',
+  colorCard: '#ffffff',
+  colorCardForeground: '#242424',
+  colorPopover: '#ffffff',
+  colorPopoverForeground: '#242424',
+  colorPrimary: '#0f6cbd',
+  colorPrimaryForeground: '#ffffff',
+  colorSecondary: '#f5f5f5',
+  colorSecondaryForeground: '#242424',
+  colorMuted: '#f0f0f0',
+  colorMutedForeground: '#616161',
+  colorAccent: '#ebf3fc',
+  colorAccentForeground: '#115ea3',
+  colorDestructive: '#c50f1f',
+  colorBorder: '#d1d1d1',
+  colorInput: '#8a8886',
+  colorRing: '#0f6cbd',
+  radiusSm: '0.25rem',
+  radiusMd: '0.375rem',
+  radiusLg: '0.5rem',
+  radiusXl: '0.75rem',
+  fontHeading: '"Segoe UI", SegoeUI, sans-serif'
+};
 
-  const idPrefix = `source-workspace-${instanceIdRef.current}`;
+export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldProps> = (props) => {
+  const workspaceInstanceId = requireWorkspaceInstanceId(props.instanceId);
   const firstDocumentId = props.documents[0]?.id;
   const [view, setView] = React.useState<WorkspaceView>(() =>
     props.defaultView === 'split' && props.documents.length > 1 ? 'split' : firstDocumentId || 'split'
@@ -73,12 +100,51 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
     createSourceWorkspaceState
   );
   const floatingOpen = workspaceState.floatingOpen;
-  const [floatingRect, setFloatingRect] = React.useState<FloatingRect>(() => createInitialWorkspaceRect());
+  const [floatingRect, setFloatingRect] = React.useState<FloatingRect>(() =>
+    createInitialWorkspaceRect(props.targetDocument?.defaultView || undefined)
+  );
   const [pointerState, setPointerState] = React.useState<PointerInteraction | null>(null);
+  const hostMountRef = React.useRef<HTMLDivElement | null>(null);
   const inlineRootRef = React.useRef<HTMLDivElement | null>(null);
   const floatingRootRef = React.useRef<HTMLDivElement | null>(null);
   const popoutButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const [uiHost, setUiHost] = React.useState<SpfxUiHost | null>(null);
   const closeShortcutLabel = React.useMemo(() => getCloseShortcutLabel(), []);
+  const targetWindow =
+    uiHost?.targetWindow || props.targetDocument?.defaultView || (typeof window === 'undefined' ? undefined : window);
+
+  React.useLayoutEffect(() => {
+    const mountPoint = hostMountRef.current;
+    if (!mountPoint) {
+      return undefined;
+    }
+    const targetDocument = props.targetDocument || mountPoint.ownerDocument;
+    if (mountPoint.ownerDocument !== targetDocument) {
+      throw new Error('Source workspace targetDocument must own its mount point');
+    }
+    const portalParent = props.portalParent || targetDocument.body;
+    const host = createSpfxUiHost({
+      mountPoint,
+      portalParent,
+      targetDocument,
+      instanceId: workspaceInstanceId,
+      profileId: sourceWorkspaceProfileId,
+      scopeValue: sourceWorkspaceScopeValue,
+      theme: props.theme || defaultSourceWorkspaceTheme
+    });
+    setFloatingRect(createInitialWorkspaceRect(host.targetWindow));
+    setUiHost(host);
+    return () => {
+      setUiHost((current) => (current === host ? null : current));
+      host.dispose();
+    };
+  }, [props.portalParent, props.targetDocument, workspaceInstanceId]);
+
+  React.useEffect(() => {
+    if (uiHost) {
+      uiHost.applyTheme(props.theme || defaultSourceWorkspaceTheme);
+    }
+  }, [props.theme, uiHost]);
 
   React.useEffect(() => {
     if (view === 'split' ? props.documents.length > 1 : props.documents.some((document) => document.id === view)) {
@@ -109,42 +175,51 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
       const deltaY = event.clientY - pointerState.startY;
       if (pointerState.mode === 'drag') {
         setFloatingRect(
-          constrainFloatingRect({
-            ...pointerState.startRect,
-            left: pointerState.startRect.left + deltaX,
-            top: pointerState.startRect.top + deltaY
-          })
+          constrainFloatingRect(
+            {
+              ...pointerState.startRect,
+              left: pointerState.startRect.left + deltaX,
+              top: pointerState.startRect.top + deltaY
+            },
+            targetWindow
+          )
         );
         return;
       }
-      setFloatingRect(resizeFloatingRect(pointerState.startRect, deltaX, deltaY, pointerState.direction || 'se'));
+      setFloatingRect(resizeFloatingRect(pointerState.startRect, deltaX, deltaY, pointerState.direction || 'se', targetWindow));
     };
     const stopPointerInteraction = (): void => setPointerState(null);
 
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', stopPointerInteraction, { once: true });
-    window.addEventListener('pointercancel', stopPointerInteraction, { once: true });
+    if (!targetWindow) {
+      return undefined;
+    }
+    targetWindow.addEventListener('pointermove', handlePointerMove);
+    targetWindow.addEventListener('pointerup', stopPointerInteraction, { once: true });
+    targetWindow.addEventListener('pointercancel', stopPointerInteraction, { once: true });
     return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', stopPointerInteraction);
-      window.removeEventListener('pointercancel', stopPointerInteraction);
+      targetWindow.removeEventListener('pointermove', handlePointerMove);
+      targetWindow.removeEventListener('pointerup', stopPointerInteraction);
+      targetWindow.removeEventListener('pointercancel', stopPointerInteraction);
     };
-  }, [pointerState]);
+  }, [pointerState, targetWindow]);
 
-  const focusVisibleEditor = React.useCallback((floating: boolean): void => {
-    window.requestAnimationFrame(() => {
-      const editor = (floating ? floatingRootRef.current : inlineRootRef.current)?.querySelector<HTMLElement>(
-        '.bt-source-workspace__pane:not([hidden]) textarea.ime-text-area, .bt-source-workspace__pane:not([hidden]) .bt-css-editor__textarea'
-      );
-      editor?.focus();
-    });
-  }, []);
+  const focusVisibleEditor = React.useCallback(
+    (floating: boolean): void => {
+      targetWindow?.requestAnimationFrame(() => {
+        const editor = (floating ? floatingRootRef.current : inlineRootRef.current)?.querySelector<HTMLElement>(
+          '.bt-source-workspace__pane:not([hidden]) textarea.ime-text-area, .bt-source-workspace__pane:not([hidden]) .bt-css-editor__textarea'
+        );
+        editor?.focus();
+      });
+    },
+    [targetWindow]
+  );
 
   const closeFloatingWorkspace = React.useCallback((): void => {
     setView((currentView) => (currentView === 'split' ? lastDocumentView : currentView));
     dispatchWorkspaceAction({ type: 'set-floating', open: false });
-    window.requestAnimationFrame(() => popoutButtonRef.current?.focus());
-  }, [lastDocumentView]);
+    targetWindow?.requestAnimationFrame(() => popoutButtonRef.current?.focus());
+  }, [lastDocumentView, targetWindow]);
 
   React.useEffect(() => {
     if (!floatingOpen) {
@@ -158,13 +233,12 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
       event.stopPropagation();
       closeFloatingWorkspace();
     };
-    window.addEventListener('keydown', closeOnShortcut);
-    return () => window.removeEventListener('keydown', closeOnShortcut);
-  }, [closeFloatingWorkspace, floatingOpen]);
-
-  if (!firstDocumentId) {
-    return null;
-  }
+    if (!targetWindow) {
+      return undefined;
+    }
+    targetWindow.addEventListener('keydown', closeOnShortcut);
+    return () => targetWindow.removeEventListener('keydown', closeOnShortcut);
+  }, [closeFloatingWorkspace, floatingOpen, targetWindow]);
 
   const selectView = (nextView: WorkspaceView, floating: boolean): void => {
     if (nextView !== 'split') {
@@ -195,57 +269,56 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
 
   const renderViewTabs = (floating: boolean): JSX.Element => {
     const surfaceId = floating ? 'floating' : 'inline';
-    const panelId = `${idPrefix}-${surfaceId}-panel`;
+    const surfaceRootId = uiHost!.deriveElementId(uiHost!.idFor('workspace'), surfaceId);
+    const panelId = uiHost!.deriveElementId(surfaceRootId, 'panel');
     const selectedView = floating || view !== 'split' ? view : lastDocumentView;
 
     return (
-      <TabList
+      <TabsList
         aria-label={`${props.label} views`}
         className="bt-source-workspace__tabs"
-        reserveSelectedTabSpace={false}
-        selectedValue={selectedView}
-        size="small"
+        variant="line"
         onPointerDown={(event) => event.stopPropagation()}
-        onTabSelect={(_event, data) => selectView(String(data.value), floating)}
       >
         {props.documents.map((document) => (
-          <Tab
+          <TabsTrigger
             aria-controls={panelId}
             className="bt-source-workspace__tab"
-            id={`${idPrefix}-${surfaceId}-${document.id}-tab`}
+            id={uiHost!.deriveElementId(surfaceRootId, `tab:${document.id}`)}
             key={document.id}
             value={document.id}
           >
             {document.label}
-          </Tab>
+          </TabsTrigger>
         ))}
         {floating && props.documents.length > 1 ? (
-          <Tab
+          <TabsTrigger
             aria-controls={panelId}
             aria-label="Split"
             className="bt-source-workspace__tab bt-source-workspace__tab--split"
-            id={`${idPrefix}-${surfaceId}-split-tab`}
-            icon={
-              <svg aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M6 3a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3H6ZM4 6c0-1.1.9-2 2-2h3.5v12H6a2 2 0 0 1-2-2V6Zm6.5 10V4H14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3.5Z" />
-              </svg>
-            }
+            id={uiHost!.deriveElementId(surfaceRootId, 'tab:split')}
             title="Split view"
             value="split"
-          />
+          >
+            <svg aria-hidden="true" data-icon="inline-start" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M6 3a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3H6ZM4 6c0-1.1.9-2 2-2h3.5v12H6a2 2 0 0 1-2-2V6Zm6.5 10V4H14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3.5Z" />
+            </svg>
+            <span className="bt-source-workspace__split-label">Split</span>
+          </TabsTrigger>
         ) : null}
-      </TabList>
+      </TabsList>
     );
   };
 
   const renderWorkspace = (floating: boolean): JSX.Element => {
     const surfaceId = floating ? 'floating' : 'inline';
-    const panelId = `${idPrefix}-${surfaceId}-panel`;
+    const surfaceRootId = uiHost!.deriveElementId(uiHost!.idFor('workspace'), surfaceId);
+    const panelId = uiHost!.deriveElementId(surfaceRootId, 'panel');
     const selectedView = floating || view !== 'split' ? view : lastDocumentView;
-    const activeTabId = `${idPrefix}-${surfaceId}-${selectedView}-tab`;
+    const activeTabId = uiHost!.deriveElementId(surfaceRootId, `tab:${selectedView}`);
 
     return (
-      <div
+      <Tabs
         aria-label={floating ? `${props.label} source workspace` : undefined}
         aria-modal={floating ? 'false' : undefined}
         className={`bt-source-workspace ${floating ? 'bt-source-workspace--floating' : ''} ${
@@ -253,6 +326,7 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
         }`}
         ref={floating ? floatingRootRef : inlineRootRef}
         role={floating ? 'dialog' : undefined}
+        value={selectedView}
         style={
           floating
             ? {
@@ -266,6 +340,7 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
         onClick={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
+        onValueChange={(nextView) => selectView(String(nextView), floating)}
       >
         <style>{workspaceCss}</style>
         <div
@@ -297,7 +372,7 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
                   focusVisibleEditor(true);
                   return;
                 }
-                setFloatingRect((current) => constrainFloatingRect(current));
+                setFloatingRect((current) => constrainFloatingRect(current, targetWindow));
                 dispatchWorkspaceAction({ type: 'set-floating', open: true });
                 focusVisibleEditor(true);
               }}
@@ -317,7 +392,7 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
           {props.documents.map((document) => {
             const visible = selectedView === 'split' || selectedView === document.id;
             const baseConfig = document.configuration || document.config || {};
-            const modelPathPrefix = `${idPrefix}.${surfaceId}.${document.id}`;
+            const modelPathPrefix = `${workspaceInstanceId}.${surfaceId}.${document.id}`;
             return (
               <section
                 aria-label={`${document.label} editor`}
@@ -360,14 +435,26 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
               />
             ))
           : null}
-      </div>
+      </Tabs>
     );
   };
 
   return (
     <>
-      {renderWorkspace(false)}
-      {floatingOpen ? renderFloatingEditorLayer(renderWorkspace(true)) : null}
+      <div className="bt-source-workspace__host" ref={hostMountRef} />
+      {uiHost && firstDocumentId ? (
+        <SpfxUiHostProvider host={uiHost}>
+          {
+            ReactDom.createPortal(
+              <>
+                {renderWorkspace(false)}
+                {floatingOpen ? renderFloatingEditorLayer(renderWorkspace(true), uiHost.portalHost) : null}
+              </>,
+              uiHost.appRoot
+            ) as unknown as JSX.Element
+          }
+        </SpfxUiHostProvider>
+      ) : null}
     </>
   );
 };
@@ -407,9 +494,9 @@ function reduceSourceWorkspaceState(state: SourceWorkspaceState, action: SourceW
   return changed ? { ...state, committedValues: nextCommittedValues, drafts: nextDrafts } : state;
 }
 
-function createInitialWorkspaceRect(): FloatingRect {
-  const viewportWidth = typeof window === 'undefined' ? 1280 : window.innerWidth;
-  const viewportHeight = typeof window === 'undefined' ? 800 : window.innerHeight;
+function createInitialWorkspaceRect(targetWindow?: Window): FloatingRect {
+  const viewportWidth = targetWindow?.innerWidth || 1280;
+  const viewportHeight = targetWindow?.innerHeight || 800;
   const width = Math.min(1040, Math.max(520, viewportWidth - 64));
   const height = Math.min(680, Math.max(360, viewportHeight - 96));
   return {
@@ -420,18 +507,19 @@ function createInitialWorkspaceRect(): FloatingRect {
   };
 }
 
+function requireWorkspaceInstanceId(instanceId: string): string {
+  if (!instanceId || instanceId.trim() !== instanceId || /[\u0000-\u001f\u007f]/u.test(instanceId)) {
+    throw new Error('Source workspace instanceId must be a non-empty, trimmed string without control characters');
+  }
+  return instanceId;
+}
+
 function getCloseShortcutLabel(): string {
   return typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? '⌘S' : 'Ctrl+S';
 }
 
-function renderFloatingEditorLayer(element: JSX.Element): JSX.Element {
-  if (typeof document === 'undefined' || !document.body) {
-    return element;
-  }
-  return ReactDom.createPortal(
-    <FluentProvider theme={webDarkTheme}>{element}</FluentProvider>,
-    document.body
-  ) as unknown as JSX.Element;
+function renderFloatingEditorLayer(element: JSX.Element, portalHost: HTMLElement): JSX.Element {
+  return ReactDom.createPortal(element, portalHost) as unknown as JSX.Element;
 }
 
 const workspaceCss = `.bt-source-workspace {
@@ -476,6 +564,15 @@ const workspaceCss = `.bt-source-workspace {
 .bt-source-workspace__tab--split svg {
   width: 16px;
   height: 16px;
+}
+
+.bt-source-workspace__split-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .bt-source-workspace__body {

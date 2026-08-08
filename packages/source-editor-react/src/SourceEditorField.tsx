@@ -1640,7 +1640,8 @@ export function resizeFloatingRect(
   startRect: FloatingRect,
   deltaX: number,
   deltaY: number,
-  direction: ResizeDirection
+  direction: ResizeDirection,
+  targetWindow?: Window
 ): FloatingRect {
   const next = { ...startRect };
 
@@ -1667,11 +1668,11 @@ export function resizeFloatingRect(
     }
   }
 
-  return constrainFloatingRect(next);
+  return constrainFloatingRect(next, targetWindow);
 }
 
-export function constrainFloatingRect(rect: FloatingRect): FloatingRect {
-  const viewport = getViewportSize();
+export function constrainFloatingRect(rect: FloatingRect, targetWindow?: Window): FloatingRect {
+  const viewport = getViewportSize(targetWindow);
   const width = Math.min(Math.max(rect.width, minFloatingWidth), Math.max(minFloatingWidth, viewport.width - 16));
   const height = Math.min(Math.max(rect.height, minFloatingHeight), Math.max(minFloatingHeight, viewport.height - 16));
   return {
@@ -1682,13 +1683,14 @@ export function constrainFloatingRect(rect: FloatingRect): FloatingRect {
   };
 }
 
-function getViewportSize(): { width: number; height: number } {
-  if (typeof window === 'undefined') {
+function getViewportSize(targetWindow?: Window): { width: number; height: number } {
+  const viewportWindow = targetWindow || (typeof window === 'undefined' ? undefined : window);
+  if (!viewportWindow) {
     return { width: 1280, height: 800 };
   }
   return {
-    width: window.innerWidth || 1280,
-    height: window.innerHeight || 800
+    width: viewportWindow.innerWidth || 1280,
+    height: viewportWindow.innerHeight || 800
   };
 }
 

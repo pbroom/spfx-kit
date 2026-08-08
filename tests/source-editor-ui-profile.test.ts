@@ -32,6 +32,21 @@ describe('source editor UI profile', () => {
       expect(file.source).toBe(await readFile(path.join(repositoryRoot, file.sourcePath), 'utf8'));
     }
 
+    const localMirrorPairs = [
+      [
+        'packages/ui-profile/normalized/src/components/ui/tabs.tsx',
+        'packages/source-editor-react/src/ui-profile/components/ui/tabs.tsx'
+      ],
+      ['packages/ui-profile/normalized/src/lib/spfx-theme.ts', 'packages/source-editor-react/src/ui-profile/lib/spfx-theme.ts'],
+      ['packages/ui-profile/normalized/src/lib/ui-root.tsx', 'packages/source-editor-react/src/ui-profile/lib/ui-root.tsx'],
+      ['packages/ui-profile/normalized/src/lib/utils.ts', 'packages/source-editor-react/src/ui-profile/lib/utils.ts']
+    ];
+    for (const [authoritativePath, mirrorPath] of localMirrorPairs) {
+      expect(await readFile(path.join(repositoryRoot, mirrorPath), 'utf8')).toBe(
+        await readFile(path.join(repositoryRoot, authoritativePath), 'utf8')
+      );
+    }
+
     const componentSources = resolved.files
       .filter((file: { vendorPath: string }) => file.vendorPath.endsWith('.tsx'))
       .map((file: { source: string }) => file.source)
