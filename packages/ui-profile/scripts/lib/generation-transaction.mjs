@@ -2686,7 +2686,13 @@ async function recoverActiveTransaction(
         await assertContainedRealPath(transaction.backupRoot, backup, `recovery backup ${relativePath}`, {
           includeTarget: true
         });
+        if (await pathExists(target)) {
+          throw new Error(`Generated profile recovery target was recreated before restore: ${relativePath}`);
+        }
         await mkdir(path.dirname(target), { recursive: true });
+        if (await pathExists(target)) {
+          throw new Error(`Generated profile recovery target was recreated before restore: ${relativePath}`);
+        }
         await rename(backup, target);
         await onRecoveryBoundary(`recovery-restored:${relativePath}`, transaction);
         await assertPathDigest(target, transaction.priorDigests[relativePath], 'restored prior target');
