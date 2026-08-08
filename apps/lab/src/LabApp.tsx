@@ -1,23 +1,24 @@
 import * as React from 'react';
 import LayoutRightIcon from '@hugeicons/core-free-icons/LayoutRightIcon';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Pin16Filled, Pin16Regular } from '@fluentui/react-icons';
+import { Button } from '../../../packages/ui-profile/normalized/src/components/ui/button';
 import {
-  Button,
-  Dropdown,
-  FluentProvider,
-  Menu,
-  MenuButton,
-  MenuItemRadio,
-  MenuList,
-  MenuPopover,
-  MenuTrigger,
-  Option,
-  Tab,
-  TabList,
-  webDarkTheme,
-  webLightTheme
-} from '@fluentui/react-components';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger
+} from '../../../packages/ui-profile/normalized/src/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '../../../packages/ui-profile/normalized/src/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '../../../packages/ui-profile/normalized/src/components/ui/tabs';
+import { type SpfxUiHost, useSpfxUiDerivedId, useSpfxUiId } from '../../../packages/ui-profile/normalized/src/lib/ui-root';
 import {
   Moon,
   PanelRight,
@@ -30,6 +31,7 @@ import {
   Eye,
   Menu as MenuIcon,
   Pencil,
+  Pin,
   Upload
 } from 'lucide-react';
 import {
@@ -60,6 +62,8 @@ import {
   resolvePinnedAppId
 } from './lib/pinnedApp';
 import type { LabPackageMode } from './lib/packageMode';
+import { LegacyFluentShellIslands } from './components/LegacyFluentShellIslands';
+import { createLabUiThemeTokens } from './ui-profile/lab-theme';
 
 type PropsByWebPart = Record<string, LabPropertyBag>;
 
@@ -69,7 +73,11 @@ const themeOptions: Array<{ label: string; value: LabThemeMode }> = [
   { label: 'Custom', value: 'custom' }
 ];
 
-export function LabApp(): JSX.Element {
+interface LabAppProps {
+  uiHost: SpfxUiHost;
+}
+
+export function LabApp({ uiHost }: LabAppProps): JSX.Element {
   const registry = React.useMemo(() => {
     const next = new LabWebPartRegistry();
     registerGeneratedWebParts(next);
@@ -96,7 +104,6 @@ export function LabApp(): JSX.Element {
   const [panelCollapsed, setPanelCollapsed] = React.useState(false);
   const [webPartPickerOpen, setWebPartPickerOpen] = React.useState(false);
   const [pinAnnouncement, setPinAnnouncement] = React.useState('');
-  const activeWebPartOptionIdRef = React.useRef(selectedId);
   const [propsByWebPart, setPropsByWebPart] = React.useState<PropsByWebPart>(() =>
     Object.fromEntries(webParts.map((webPart) => [webPart.id, { ...webPart.defaultProps }]))
   );
@@ -138,7 +145,10 @@ export function LabApp(): JSX.Element {
 
   const activeBreakpoint = SHAREPOINT_BREAKPOINTS.find((item) => item.id === breakpointId) || SHAREPOINT_BREAKPOINTS[0];
   const theme = createLabTheme(themeMode, customBackground);
-  const fluentTheme = themeMode === 'dark' ? webDarkTheme : webLightTheme;
+  const themeMenuTriggerId = useSpfxUiId('lab-theme-menu-trigger');
+  const themeMenuContentId = useSpfxUiDerivedId(themeMenuTriggerId, 'content');
+  const webPartSelectId = useSpfxUiId('lab-webpart-select');
+  const webPartSelectContentId = useSpfxUiDerivedId(webPartSelectId, 'content');
   const activeProps = selected ? propsByWebPart[selected.id] || selected.defaultProps : {};
   const webPartsByAppId = React.useMemo(() => groupWebPartsByAppId(webParts), [webParts]);
   const context = React.useMemo(() => createMockSpfxContext(), []);
@@ -146,6 +156,10 @@ export function LabApp(): JSX.Element {
   const panelHeaderOnly = viewerMode || panelCollapsed;
   const effectiveBoundsVisible = displayMode === 'edit' && boundsVisible;
   const ignorePropertyUpdate = React.useCallback((): void => undefined, []);
+
+  React.useEffect(() => {
+    uiHost.applyTheme(createLabUiThemeTokens(themeMode, theme));
+  }, [theme, themeMode, uiHost]);
 
   const updateProps = (patch: LabPropertyBag): void => {
     if (!selected) {
@@ -251,14 +265,14 @@ export function LabApp(): JSX.Element {
     ) : undefined;
 
   return (
-    <FluentProvider theme={fluentTheme}>
-      <main
-        className={`lab-shell lab-shell--${themeMode} lab-shell--${displayMode} ${
-          panelHeaderOnly ? 'lab-shell--panel-header-only' : ''
-        }`}
-        data-display-mode={displayMode}
-        style={{ '--lab-section-background': theme.background } as React.CSSProperties}
-      >
+    <main
+      className={`lab-shell lab-shell--${themeMode} lab-shell--${displayMode} ${
+        panelHeaderOnly ? 'lab-shell--panel-header-only' : ''
+      }`}
+      data-display-mode={displayMode}
+      style={{ '--lab-section-background': theme.background } as React.CSSProperties}
+    >
+      <LegacyFluentShellIslands themeMode={themeMode}>
         <AppManagementSidebar
           open={appSidebarOpen}
           pinnedAppId={pinnedAppId}
@@ -270,179 +284,184 @@ export function LabApp(): JSX.Element {
           onSelectApp={selectApp}
           onTogglePinned={togglePinnedAppById}
         />
+      </LegacyFluentShellIslands>
 
-        <section className="preview-area" aria-label="Web part preview area">
-          <div className={`lab-toolbar lab-toolbar--preview lab-toolbar--${displayMode}`}>
-            <div className="preview-toolbar__primary">
-              {displayMode === 'edit' ? (
-                <div className="app-menu-control" aria-label="App menu">
-                  <IconButton
-                    controls="app-management-sidebar"
-                    expanded={appSidebarOpen}
-                    label="Open app menu"
-                    onClick={appSidebarOpen ? () => setAppSidebarOpen(false) : openAppSidebar}
-                  >
-                    <MenuIcon size={16} />
-                  </IconButton>
-                  <IconButton label="Export package" onClick={openExportDrawer}>
-                    <Upload size={16} />
-                  </IconButton>
-                </div>
-              ) : null}
-
-              <div className="package-mode-control">
-                <TabList
-                  aria-label="App package mode"
-                  className="lab-mode-tabs package-mode-tabs"
-                  selectedValue={packageMode}
-                  size="small"
-                  onTabSelect={(_event, data) => selectPackageMode(data.value as LabPackageMode)}
+      <section className="preview-area" aria-label="Web part preview area">
+        <div className={`lab-toolbar lab-toolbar--preview lab-toolbar--${displayMode}`}>
+          <div className="preview-toolbar__primary">
+            {displayMode === 'edit' ? (
+              <div className="app-menu-control" aria-label="App menu">
+                <IconButton
+                  controls="app-management-sidebar"
+                  expanded={appSidebarOpen}
+                  label="Open app menu"
+                  onClick={appSidebarOpen ? () => setAppSidebarOpen(false) : openAppSidebar}
                 >
-                  <Tab value="standalone">Standalone</Tab>
-                  <Tab
+                  <MenuIcon size={16} />
+                </IconButton>
+                <IconButton label="Export package" onClick={openExportDrawer}>
+                  <Upload size={16} />
+                </IconButton>
+              </div>
+            ) : null}
+
+            <div className="package-mode-control">
+              <Tabs
+                className="lab-tabs-root"
+                value={packageMode}
+                onValueChange={(nextValue) => selectPackageMode(nextValue as LabPackageMode)}
+              >
+                <TabsList aria-label="App package mode" className="lab-mode-tabs package-mode-tabs">
+                  <TabsTrigger value="standalone">Standalone</TabsTrigger>
+                  <TabsTrigger
                     aria-describedby="cdn-package-mode-description"
                     title="Local mock-CDN staged-bundle smoke check (not a SharePoint preview)"
                     value="cdn"
                   >
                     CDN
-                  </Tab>
-                </TabList>
-                <span className="visually-hidden" id="cdn-package-mode-description">
-                  CDN runs a staged bundle smoke check, not a SharePoint or deployment preview.
-                </span>
-              </div>
-
-              <Button
-                appearance="subtle"
-                aria-label="Local CDN bucket"
-                className="preview-toolbar__bucket-button"
-                size="small"
-                onClick={() => setLocalCdnBucketOpen(true)}
-              >
-                Local CDN
-              </Button>
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <span className="visually-hidden" id="cdn-package-mode-description">
+                CDN runs a staged bundle smoke check, not a SharePoint or deployment preview.
+              </span>
             </div>
 
-            {displayMode === 'edit' ? (
-              <div className="preview-toolbar__center">
-                <IconButton
-                  label={boundsVisible ? 'Hide preview bounds' : 'Show preview bounds'}
-                  pressed={boundsVisible}
-                  onClick={() => setBoundsVisible((value) => !value)}
-                >
-                  <SquareDashed size={16} />
-                </IconButton>
+            <Button
+              aria-label="Local CDN bucket"
+              className="preview-toolbar__bucket-button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setLocalCdnBucketOpen(true)}
+            >
+              Local CDN
+            </Button>
+          </div>
 
-                <TabList
-                  aria-label="SharePoint breakpoint"
-                  className="breakpoint-tabs"
-                  selectedValue={breakpointId}
-                  size="small"
-                  onTabSelect={(_event, data) => setBreakpointId(data.value as LabBreakpoint['id'])}
-                >
+          {displayMode === 'edit' ? (
+            <div className="preview-toolbar__center">
+              <IconButton
+                label={boundsVisible ? 'Hide preview bounds' : 'Show preview bounds'}
+                pressed={boundsVisible}
+                onClick={() => setBoundsVisible((value) => !value)}
+              >
+                <SquareDashed size={16} />
+              </IconButton>
+
+              <Tabs
+                className="lab-tabs-root"
+                value={breakpointId}
+                onValueChange={(nextValue) => setBreakpointId(nextValue as LabBreakpoint['id'])}
+              >
+                <TabsList aria-label="SharePoint breakpoint" className="breakpoint-tabs">
                   {SHAREPOINT_BREAKPOINTS.map((breakpoint) => (
-                    <Tab
+                    <TabsTrigger
                       aria-label={breakpoint.label}
-                      icon={iconForBreakpoint(breakpoint.id)}
+                      className="breakpoint-tab"
                       key={breakpoint.id}
                       title={`${breakpoint.label} - ${breakpoint.description}`}
                       value={breakpoint.id}
-                      onClick={() => setBreakpointId(breakpoint.id)}
-                    />
+                    >
+                      {iconForBreakpoint(breakpoint.id)}
+                    </TabsTrigger>
                   ))}
-                </TabList>
+                </TabsList>
+              </Tabs>
 
-                <Menu
-                  checkedValues={{ theme: [themeMode] }}
-                  open={themeMenuOpen}
-                  positioning={{ position: 'below', align: 'start' }}
-                  onOpenChange={(_event, data) => setThemeMenuOpen(data.open)}
-                >
-                  <MenuTrigger disableButtonEnhancement>
-                    <MenuButton
-                      appearance="subtle"
+              <DropdownMenu open={themeMenuOpen} triggerId={themeMenuTriggerId} onOpenChange={(open) => setThemeMenuOpen(open)}>
+                <DropdownMenuTrigger
+                  id={themeMenuTriggerId}
+                  render={
+                    <Button
                       aria-label={`Theme: ${themeOptions.find((option) => option.value === themeMode)?.label || themeMode}`}
                       className="theme-menu-trigger"
-                      icon={<Moon size={16} />}
-                      size="small"
+                      size="icon-sm"
+                      variant="ghost"
                     />
-                  </MenuTrigger>
-                  <MenuPopover className="theme-menu-popover">
-                    <MenuList>
-                      {themeOptions.map((option) => (
-                        <MenuItemRadio
-                          key={option.value}
-                          name="theme"
-                          value={option.value}
-                          onClick={() => selectThemeMode(option.value)}
-                        >
-                          {option.label}
-                        </MenuItemRadio>
-                      ))}
-                      <label className="theme-color-field">
-                        <span>Background</span>
-                        <input
-                          aria-label="Section background"
-                          className="theme-color-input"
-                          type="color"
-                          value={customBackground}
-                          onInput={(event) => selectCustomBackground(event.currentTarget.value)}
-                          onChange={(event) => selectCustomBackground(event.currentTarget.value)}
-                        />
-                      </label>
-                    </MenuList>
-                  </MenuPopover>
-                </Menu>
-              </div>
-            ) : (
-              <span aria-hidden="true" />
-            )}
-
-            <div className="preview-toolbar__modes">
-              <TabList
-                aria-label="Lab display mode"
-                className="lab-mode-tabs"
-                selectedValue={displayMode}
-                size="small"
-                onTabSelect={(_event, data) => selectDisplayMode(data.value as LabDisplayMode)}
-              >
-                <Tab icon={<Pencil size={14} />} value="edit">
-                  Edit
-                </Tab>
-                <Tab icon={<Eye size={14} />} value="viewer">
-                  Viewer
-                </Tab>
-              </TabList>
+                  }
+                >
+                  <Moon aria-hidden="true" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="theme-menu-popover" id={themeMenuContentId}>
+                  <DropdownMenuRadioGroup
+                    value={themeMode}
+                    onValueChange={(nextValue) => selectThemeMode(nextValue as LabThemeMode)}
+                  >
+                    {themeOptions.map((option) => (
+                      <DropdownMenuRadioItem key={option.value} value={option.value}>
+                        {option.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  <label className="theme-color-field">
+                    <span>Background</span>
+                    <input
+                      aria-label="Section background"
+                      className="theme-color-input"
+                      type="color"
+                      value={customBackground}
+                      onInput={(event) => selectCustomBackground(event.currentTarget.value)}
+                      onChange={(event) => selectCustomBackground(event.currentTarget.value)}
+                    />
+                  </label>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+
+          <div className="preview-toolbar__modes">
+            <Tabs
+              className="lab-tabs-root"
+              value={displayMode}
+              onValueChange={(nextValue) => selectDisplayMode(nextValue as LabDisplayMode)}
+            >
+              <TabsList aria-label="Lab display mode" className="lab-mode-tabs">
+                <TabsTrigger value="edit">
+                  <Pencil aria-hidden="true" data-icon="inline-start" />
+                  Edit
+                </TabsTrigger>
+                <TabsTrigger value="viewer">
+                  <Eye aria-hidden="true" data-icon="inline-start" />
+                  Viewer
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
+        </div>
 
-          <PackageRuntimeSurface
-            boundsVisible={effectiveBoundsVisible}
-            frameWidth={activeBreakpoint.width}
-            mode={packageMode}
-            selectionRevision={cdnSelectionRevision}
-            selected={selected}
-            standaloneContent={standalonePreview}
-          />
-        </section>
+        <PackageRuntimeSurface
+          boundsVisible={effectiveBoundsVisible}
+          frameWidth={activeBreakpoint.width}
+          mode={packageMode}
+          selectionRevision={cdnSelectionRevision}
+          selected={selected}
+          standaloneContent={standalonePreview}
+        />
+      </section>
 
-        <aside
-          aria-label="Options panel"
-          className={`options-panel ${panelHeaderOnly ? 'options-panel--header-only' : ''}`}
-          data-panel-state={panelHeaderOnly ? 'header-only' : 'expanded'}
-        >
-          <>
-            <div className="lab-toolbar lab-toolbar--panel">
-              <Dropdown
+      <aside
+        aria-label="Options panel"
+        className={`options-panel ${panelHeaderOnly ? 'options-panel--header-only' : ''}`}
+        data-panel-state={panelHeaderOnly ? 'header-only' : 'expanded'}
+      >
+        <>
+          <div className="lab-toolbar lab-toolbar--panel">
+            <Select
+              id={webPartSelectId}
+              items={webParts.map((webPart) => ({ label: webPart.title, value: webPart.id }))}
+              open={webPartPickerOpen}
+              value={selected?.id || null}
+              onValueChange={(nextValue) => {
+                if (nextValue) setSelectedId(String(nextValue));
+              }}
+              onOpenChange={(open) => setWebPartPickerOpen(open)}
+            >
+              <SelectTrigger
                 aria-label="Select web part"
                 className="webpart-select"
-                open={webPartPickerOpen}
-                selectedOptions={selected?.id ? [selected.id] : []}
-                size="small"
-                value={selected?.title || ''}
-                onActiveOptionChange={(_event, data) => {
-                  activeWebPartOptionIdRef.current = data.nextOption?.value || selected?.id || '';
-                }}
+                size="sm"
                 onKeyDown={(event) => {
                   if (
                     !webPartPickerOpen ||
@@ -455,7 +474,7 @@ export function LabApp(): JSX.Element {
                   ) {
                     return;
                   }
-                  const activeWebPart = webParts.find((webPart) => webPart.id === activeWebPartOptionIdRef.current);
+                  const activeWebPart = selected;
                   if (!activeWebPart) {
                     return;
                   }
@@ -463,82 +482,77 @@ export function LabApp(): JSX.Element {
                   event.stopPropagation();
                   togglePinnedApp(activeWebPart);
                 }}
-                onOpenChange={(_event, data) => {
-                  setWebPartPickerOpen(data.open);
-                  if (data.open) {
-                    activeWebPartOptionIdRef.current = selected?.id || '';
-                  }
-                }}
-                onOptionSelect={(_event, data) => {
-                  if (data.optionValue) {
-                    setSelectedId(data.optionValue);
-                  }
-                }}
               >
-                {webParts.map((webPart) => {
-                  const appPinned = pinnedAppId === getLabAppId(webPart);
-                  return (
-                    <div
-                      className={`webpart-option-row ${appPinned ? 'webpart-option-row--pinned' : ''}`}
-                      key={webPart.id}
-                      role="presentation"
-                    >
-                      <Option
-                        aria-label={`${webPart.title}. ${appPinned ? 'Pinned' : 'Not pinned'}. Press Alt+P to ${
-                          appPinned ? 'unpin' : 'pin'
-                        }.`}
-                        className="webpart-option"
-                        text={webPart.title}
-                        value={webPart.id}
+                <SelectValue>{selected?.title || ''}</SelectValue>
+              </SelectTrigger>
+              <SelectContent align="start" id={webPartSelectContentId}>
+                <SelectGroup>
+                  {webParts.map((webPart) => {
+                    const appPinned = pinnedAppId === getLabAppId(webPart);
+                    return (
+                      <div
+                        className={`webpart-option-row ${appPinned ? 'webpart-option-row--pinned' : ''}`}
+                        key={webPart.id}
+                        role="presentation"
                       >
-                        <span className="webpart-option__label">{webPart.title}</span>
-                      </Option>
-                      <button
-                        aria-label={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
-                        aria-pressed={appPinned}
-                        className="webpart-option__pin"
-                        title={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
-                        type="button"
-                        onPointerDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          togglePinnedApp(webPart);
-                        }}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          if (event.detail === 0) {
+                        <SelectItem
+                          aria-label={`${webPart.title}. ${appPinned ? 'Pinned' : 'Not pinned'}. Press Alt+P to ${
+                            appPinned ? 'unpin' : 'pin'
+                          }.`}
+                          className="webpart-option"
+                          value={webPart.id}
+                        >
+                          <span className="webpart-option__label">{webPart.title}</span>
+                        </SelectItem>
+                        <button
+                          aria-label={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
+                          aria-pressed={appPinned}
+                          className="webpart-option__pin"
+                          title={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
+                          type="button"
+                          onPointerDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
                             togglePinnedApp(webPart);
-                          }
-                        }}
-                      >
-                        {appPinned ? <Pin16Filled aria-hidden="true" /> : <Pin16Regular aria-hidden="true" />}
-                      </button>
-                    </div>
-                  );
-                })}
-              </Dropdown>
-              <span aria-live="polite" className="visually-hidden" role="status">
-                {pinAnnouncement}
-              </span>
-              <IconButton
-                label={
-                  panelHeaderOnly
-                    ? viewerMode
-                      ? 'Expand options panel and switch to edit mode'
-                      : 'Expand options panel'
-                    : 'Collapse options panel'
-                }
-                pressed={panelHeaderOnly}
-                onClick={panelHeaderOnly ? expandOptionsPanel : () => setPanelCollapsed(true)}
-              >
-                <HugeiconsIcon aria-hidden="true" className="huge-icon" icon={LayoutRightIcon} size={16} strokeWidth={1.7} />
-              </IconButton>
-            </div>
-            {!panelHeaderOnly && <PropertyPane webPart={selected} values={activeProps} onChange={updateProps} />}
-          </>
-        </aside>
+                          }}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (event.detail === 0) togglePinnedApp(webPart);
+                          }}
+                        >
+                          <Pin aria-hidden="true" fill={appPinned ? 'currentColor' : 'none'} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <span aria-live="polite" className="visually-hidden" role="status">
+              {pinAnnouncement}
+            </span>
+            <IconButton
+              label={
+                panelHeaderOnly
+                  ? viewerMode
+                    ? 'Expand options panel and switch to edit mode'
+                    : 'Expand options panel'
+                  : 'Collapse options panel'
+              }
+              pressed={panelHeaderOnly}
+              onClick={panelHeaderOnly ? expandOptionsPanel : () => setPanelCollapsed(true)}
+            >
+              <HugeiconsIcon aria-hidden="true" className="huge-icon" icon={LayoutRightIcon} size={16} strokeWidth={1.7} />
+            </IconButton>
+          </div>
+          {!panelHeaderOnly ? (
+            <PropertyPane themeMode={themeMode} webPart={selected} values={activeProps} onChange={updateProps} />
+          ) : null}
+        </>
+      </aside>
 
+      <LegacyFluentShellIslands themeMode={themeMode}>
         <LocalCdnBucketDialog
           open={localCdnBucketOpen}
           onOpenChange={setLocalCdnBucketOpen}
@@ -559,8 +573,8 @@ export function LabApp(): JSX.Element {
             />
           </>
         ) : null}
-      </main>
-    </FluentProvider>
+      </LegacyFluentShellIslands>
+    </main>
   );
 }
 
@@ -576,17 +590,18 @@ interface IconButtonProps {
 function IconButton(props: IconButtonProps): JSX.Element {
   return (
     <Button
-      appearance={props.pressed ? 'secondary' : 'subtle'}
       aria-controls={props.controls}
       aria-expanded={props.expanded}
       aria-label={props.label}
       aria-pressed={props.pressed}
       className="icon-button"
-      icon={props.children as React.ReactElement}
-      size="small"
+      size="icon"
       title={props.label}
+      variant={props.pressed ? 'secondary' : 'ghost'}
       onClick={props.onClick}
-    />
+    >
+      {props.children}
+    </Button>
   );
 }
 

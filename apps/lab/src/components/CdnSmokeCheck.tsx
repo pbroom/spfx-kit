@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Spinner } from '@fluentui/react-components';
+import { Spinner } from '../../../../packages/ui-profile/normalized/src/components/ui/spinner';
 import type { CdnPackageDescriptor } from '../api/packageRuntime';
 import { parseCdnSmokeMessage, type CdnSmokeAssetEvidence, type CdnSmokeRegistration } from '../lib/cdnSmokeProtocol';
 
@@ -124,7 +124,7 @@ export function CdnSmokeCheck({ descriptor, onRetry, onStatusChange }: CdnSmokeC
     >
       {state.status === 'loading' ? (
         <>
-          <Spinner size="small" />
+          <Spinner />
           <strong>Checking mock-CDN delivery</strong>
           <span>Loading the pinned staged scripts from {descriptor.delivery.origin}.</span>
         </>
