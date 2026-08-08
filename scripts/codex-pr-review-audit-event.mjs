@@ -14,12 +14,22 @@ import {
   verifyAuditRecord
 } from './codex-pr-review-audit.mjs';
 import { findingPriority } from './codex-review-priority.mjs';
-import { MAX_FIX_ATTEMPTS, parseLoopState, STATUS_MARKER } from './codex-review-loop.mjs';
+import { parseLoopState, STATUS_MARKER } from './codex-review-loop.mjs';
 
-export const AUDIT_EVENT_KIND = 'pbroom.spfx-kit.pr-review-audit-event';
-export const AUDIT_EVENT_SCHEMA_VERSION = 1;
-export const AUDIT_EVENT_TYPE = 'complete_snapshot';
-export const AUDIT_EVENT_CLASSIFIER_ID = 'spfx-kit-review-observation-v1';
+const EVENT_SCHEMA_V1 = Object.freeze({
+  kind: 'pbroom.spfx-kit.pr-review-audit-event',
+  schemaVersion: 1,
+  eventType: 'complete_snapshot',
+  classifierId: 'spfx-kit-review-observation-v1',
+  classifierVersion: 1,
+  slotWindowMilliseconds: 30 * 60 * 1_000,
+  maxAuditDurationMilliseconds: AUDIT_SCHEMA_V1_MAX_AGE_SECONDS * 1_000,
+  maxFixAttempts: 3
+});
+export const AUDIT_EVENT_KIND = EVENT_SCHEMA_V1.kind;
+export const AUDIT_EVENT_SCHEMA_VERSION = EVENT_SCHEMA_V1.schemaVersion;
+export const AUDIT_EVENT_TYPE = EVENT_SCHEMA_V1.eventType;
+export const AUDIT_EVENT_CLASSIFIER_ID = EVENT_SCHEMA_V1.classifierId;
 export const AUDIT_EVENT_PROJECTOR_VERSION = 1;
 
 const SOURCE_ORDER = ['codex', 'greptile', 'graphite', 'github_user', 'other_automation', 'unknown'];
@@ -30,7 +40,7 @@ const GREPTILE_ACTORS = new Set(['greptile-apps', 'greptileai']);
 const GRAPHITE_ACTORS = new Set(['graphite', 'graphite-app']);
 const GITHUB_ACTIONS_ACTOR_ID = 41_898_282;
 const CODEX_ACTOR_ID = 199_175_422;
-const LOOP_STATUSES = new Set([
+const LOOP_STATUSES_V1 = new Set([
   'blocked',
   'failed',
   'generating',
@@ -42,9 +52,7 @@ const LOOP_STATUSES = new Set([
   'skipped',
   'validation_failed'
 ]);
-const LOOP_RESULTS = new Set(['accepted', 'clean', 'failed', 'no_patch', 'pushed', 'push_failed', 'validation_failed']);
-const SLOT_WINDOW_MILLISECONDS = 30 * 60 * 1_000;
-const MAX_AUDIT_DURATION_MILLISECONDS = AUDIT_SCHEMA_V1_MAX_AGE_SECONDS * 1_000;
+const LOOP_RESULTS_V1 = new Set(['accepted', 'clean', 'failed', 'no_patch', 'pushed', 'push_failed', 'validation_failed']);
 const LOCK_KIND = 'pbroom.spfx-kit.pr-review-audit-event-lock';
 const LOCK_SCHEMA_VERSION = 1;
 const LOCK_LEASE_MILLISECONDS = 15 * 60 * 1_000;
@@ -84,7 +92,7 @@ const PROJECTOR_V1_IMPLEMENTATION_PATHS = Object.freeze([
   'scripts/codex-review-loop.mjs',
   'scripts/codex-review-priority.mjs'
 ]);
-const PROJECTOR_COMPATIBILITY = new Map([
+const PROJECTOR_V1_COMPATIBILITY = new Map([
   [
     1,
     {
@@ -94,13 +102,25 @@ const PROJECTOR_COMPATIBILITY = new Map([
     }
   ]
 ]);
+const PROJECTOR_COMPATIBILITY = new Map([[EVENT_SCHEMA_V1.schemaVersion, PROJECTOR_V1_COMPATIBILITY]]);
+const EVENT_SCHEMA_COMPATIBILITY = new Map([
+  [
+    EVENT_SCHEMA_V1.schemaVersion,
+    {
+      schema: EVENT_SCHEMA_V1,
+      validate: validateAuditEventV1,
+      streamView: eventStreamViewV1
+    }
+  ]
+]);
 const PROJECTOR_LOCAL_FILES = new Map([
   ['scripts/codex-pr-review-audit-event.mjs', fileURLToPath(import.meta.url)],
   ['scripts/codex-pr-review-audit.mjs', fileURLToPath(new URL('./codex-pr-review-audit.mjs', import.meta.url))],
   ['scripts/codex-review-loop.mjs', fileURLToPath(new URL('./codex-review-loop.mjs', import.meta.url))],
   ['scripts/codex-review-priority.mjs', fileURLToPath(new URL('./codex-review-priority.mjs', import.meta.url))]
 ]);
-const CURRENT_PROJECTOR_COMPATIBILITY = PROJECTOR_COMPATIBILITY.get(AUDIT_EVENT_PROJECTOR_VERSION);
+const CURRENT_PROJECTOR_COMPATIBILITY =
+  PROJECTOR_COMPATIBILITY.get(AUDIT_EVENT_SCHEMA_VERSION)?.get(AUDIT_EVENT_PROJECTOR_VERSION);
 if (!CURRENT_PROJECTOR_COMPATIBILITY) throw new Error('Current audit-event projector version has no compatibility entry.');
 const PROJECTOR_IMPLEMENTATION_FILES = CURRENT_PROJECTOR_COMPATIBILITY.manifestPaths.map((filename) => ({
   path: filename,
@@ -216,9 +236,9 @@ function validLoopState(state) {
     state.version !== 1 ||
     !Number.isSafeInteger(state.attempts) ||
     state.attempts < 0 ||
-    state.attempts > MAX_FIX_ATTEMPTS ||
+    state.attempts > EVENT_SCHEMA_V1.maxFixAttempts ||
     typeof state.status !== 'string' ||
-    !LOOP_STATUSES.has(state.status) ||
+    !LOOP_STATUSES_V1.has(state.status) ||
     typeof state.headSha !== 'string' ||
     (state.headSha !== '' && !/^[0-9a-f]{40}$/i.test(state.headSha)) ||
     !Number.isSafeInteger(state.reviewId) ||
@@ -249,7 +269,7 @@ function validLoopState(state) {
       entry.attempt < 0 ||
       entry.attempt > state.attempts ||
       typeof entry.result !== 'string' ||
-      !LOOP_RESULTS.has(entry.result) ||
+      !LOOP_RESULTS_V1.has(entry.result) ||
       !canonicalTimestamp(entry.at) ||
       (entry.result === 'clean' && entry.threadIds !== undefined) ||
       (entry.result !== 'clean' &&
@@ -285,11 +305,20 @@ function threadRootPair(pullRequest, thread) {
     graphql: comment,
     rest: pullRequest.reviewComments.values.find((candidate) => String(candidate.id) === String(comment.id)) || null
   }));
+  if (comments.some((comment) => !comment.rest || comment.graphql.nodeId !== comment.rest.nodeId)) {
+    throw new Error(`Review thread ${thread.id} has inconsistent paired REST and GraphQL comment identities.`);
+  }
   const rootCandidates = comments.filter((comment) => comment.rest?.inReplyToId === null);
-  return rootCandidates.length === 1 ? rootCandidates[0] : comments[0] || { graphql: null, rest: null };
+  if (rootCandidates.length !== 1) {
+    throw new Error(`Review thread ${thread.id} does not have exactly one paired REST root comment.`);
+  }
+  if (comments.some((comment) => comment.rest.inReplyToId !== null && comment.rest.inReplyToId !== rootCandidates[0].rest.id)) {
+    throw new Error(`Review thread ${thread.id} contains a reply that does not point to its paired REST root comment.`);
+  }
+  return rootCandidates[0];
 }
 
-function loopStateMatchesThreadIdentities(state, pullRequest) {
+function loopStateMatchesThreadIdentities(state, pullRequest, observedAt) {
   const threads = new Map(pullRequest.reviewThreads.values.map((thread) => [thread.id, thread]));
   const reviews = new Map(pullRequest.reviews.values.map((review) => [review.id, review]));
   for (const entry of state.processedReviews) {
@@ -299,7 +328,8 @@ function loopStateMatchesThreadIdentities(state, pullRequest) {
       auditedReview.submittedAt === null ||
       typeof auditedReview.commitId !== 'string' ||
       auditedReview.commitId.toLowerCase() !== entry.headSha.toLowerCase() ||
-      Date.parse(entry.at) < Date.parse(auditedReview.submittedAt)
+      Date.parse(entry.at) < Date.parse(auditedReview.submittedAt) ||
+      Date.parse(entry.at) > Date.parse(observedAt)
     ) {
       return false;
     }
@@ -319,7 +349,7 @@ function loopStateMatchesThreadIdentities(state, pullRequest) {
   return true;
 }
 
-function loopContext(pullRequest) {
+function loopContext(pullRequest, observedAt) {
   const markerComments = pullRequest.issueComments.values.filter(
     (comment) =>
       normalizedLogin(comment.author?.login) === 'github-actions' &&
@@ -335,7 +365,7 @@ function loopContext(pullRequest) {
   }
   const state = parseLoopState(markerComments[0].body);
   const rawState = rawLoopState(markerComments[0].body);
-  if (!state || !validLoopState(rawState) || !loopStateMatchesThreadIdentities(rawState, pullRequest)) {
+  if (!state || !validLoopState(rawState) || !loopStateMatchesThreadIdentities(rawState, pullRequest, observedAt)) {
     return { state: null, comment: markerComments[0], status: 'unknown', reason: 'marker_invalid' };
   }
   return { state: rawState, comment: markerComments[0], status: 'observed', reason: null };
@@ -573,7 +603,7 @@ function samplingMetadata(sampling = {}) {
 }
 
 function eventPullRequest(pullRequest, record) {
-  const context = loopContext(pullRequest);
+  const context = loopContext(pullRequest, record.audit.completedAt);
   const observations = findingObservations(pullRequest, context);
   return {
     number: pullRequest.number,
@@ -1036,7 +1066,7 @@ function validStackCandidate(candidate) {
   );
 }
 
-function validFinding(finding, pullRequest) {
+function validFinding(finding, pullRequest, observedAt, schema) {
   const severityKnown = finding?.severity?.status === 'classified';
   const sourceKnown = finding?.source?.classification?.status === 'classified';
   const headKnown = finding?.headRelationship?.status === 'classified';
@@ -1088,11 +1118,12 @@ function validFinding(finding, pullRequest) {
         Number.isSafeInteger(report.attemptNumber) &&
         report.attemptNumber >= 0 &&
         report.attemptNumber <= pullRequest.reviewLoop.number &&
-        report.attemptNumber <= MAX_FIX_ATTEMPTS &&
-        LOOP_RESULTS.has(report.result) &&
+        report.attemptNumber <= schema.maxFixAttempts &&
+        LOOP_RESULTS_V1.has(report.result) &&
         report.result !== 'clean' &&
         typeof report.reportedAt === 'string' &&
-        Number.isFinite(Date.parse(report.reportedAt)) &&
+        canonicalTimestamp(report.reportedAt) &&
+        Date.parse(report.reportedAt) <= Date.parse(observedAt) &&
         report.workflowRunUrl === null &&
         report.workflowRunUrlReason === 'not_recorded_per_processed_review'
     ) &&
@@ -1197,7 +1228,7 @@ function validFinding(finding, pullRequest) {
   );
 }
 
-function validEventPullRequest(pullRequest, repository) {
+function validEventPullRequest(pullRequest, repository, observedAt, schema) {
   const findings = pullRequest?.findings;
   const findingIds = Array.isArray(findings) ? findings.map((finding) => finding.id) : [];
   const candidateLists = [pullRequest?.stack?.parentCandidates, pullRequest?.stack?.childCandidates];
@@ -1266,7 +1297,7 @@ function validEventPullRequest(pullRequest, repository) {
     ((reviewLoopObserved &&
       Number.isSafeInteger(pullRequest.reviewLoop.number) &&
       pullRequest.reviewLoop.number >= 0 &&
-      pullRequest.reviewLoop.number <= MAX_FIX_ATTEMPTS &&
+      pullRequest.reviewLoop.number <= schema.maxFixAttempts &&
       pullRequest.reviewLoop.reason === null) ||
       (pullRequest.reviewLoop?.status === 'unknown' &&
         pullRequest.reviewLoop.number === null &&
@@ -1279,7 +1310,7 @@ function validEventPullRequest(pullRequest, repository) {
     (pullRequest.reviewLoop.statusMarkerCommentId === null ||
       (Number.isSafeInteger(pullRequest.reviewLoop.statusMarkerCommentId) && pullRequest.reviewLoop.statusMarkerCommentId > 0)) &&
     (reviewLoopObserved
-      ? LOOP_STATUSES.has(pullRequest.reviewLoop.statusMarkerState) &&
+      ? LOOP_STATUSES_V1.has(pullRequest.reviewLoop.statusMarkerState) &&
         Number.isSafeInteger(pullRequest.reviewLoop.statusMarkerCommentId) &&
         pullRequest.reviewLoop.statusMarkerCommentId > 0 &&
         Number.isSafeInteger(pullRequest.reviewLoop.retainedProcessedReviewCount) &&
@@ -1344,7 +1375,7 @@ function validEventPullRequest(pullRequest, repository) {
         typeof pullRequest.stack.reason === 'string') &&
     candidateLists.flat().every((candidate) => candidate.number !== pullRequest.number) &&
     Array.isArray(findings) &&
-    findings.every((finding) => validFinding(finding, pullRequest)) &&
+    findings.every((finding) => validFinding(finding, pullRequest, observedAt, schema)) &&
     findingIds.every((id, index) => index === 0 || compareText(findingIds[index - 1], id) < 0) &&
     canonicalJson(pullRequest.findingSummary) === canonicalJson(findingSummary(findings))
   );
@@ -1363,7 +1394,38 @@ function validProjectorImplementation(implementation, compatibility) {
 }
 
 export function validateAuditEvent(event, expectedPreviousDigest) {
-  const projectorCompatibility = PROJECTOR_COMPATIBILITY.get(event?.provenance?.projector?.version);
+  const compatibility = EVENT_SCHEMA_COMPATIBILITY.get(event?.schemaVersion);
+  if (!compatibility || !Number.isSafeInteger(event?.schemaVersion)) {
+    throw new Error('Audit analytics event schema version is unsupported.');
+  }
+  return compatibility.validate(event, expectedPreviousDigest, compatibility.schema);
+}
+
+function eventStreamView(event) {
+  const compatibility = EVENT_SCHEMA_COMPATIBILITY.get(event?.schemaVersion);
+  if (!compatibility || !Number.isSafeInteger(event?.schemaVersion)) {
+    throw new Error('Audit analytics event schema version is unsupported.');
+  }
+  return compatibility.streamView(event);
+}
+
+function eventStreamViewV1(event) {
+  return {
+    repository: event.repository,
+    runId: event.run.id,
+    eventId: event.eventId,
+    auditDigest: event.provenance.auditDigest,
+    slotId: event.sampling.slotId,
+    expectedAt: event.sampling.expectedAt,
+    previousEventDigest: event.log.previousEventDigest,
+    integrityDigest: event.integrity.digest,
+    pullRequests: event.pullRequests,
+    instructions: event.instructions
+  };
+}
+
+function validateAuditEventV1(event, expectedPreviousDigest, schema = EVENT_SCHEMA_V1) {
+  const projectorCompatibility = PROJECTOR_COMPATIBILITY.get(schema.schemaVersion)?.get(event?.provenance?.projector?.version);
   const expectedSlotId = `twice-daily:${event?.sampling?.expectedAt}`;
   const expectedAtMilliseconds = Date.parse(event?.sampling?.expectedAt);
   const startedAtMilliseconds = Date.parse(event?.run?.startedAt);
@@ -1387,9 +1449,9 @@ export function validateAuditEvent(event, expectedPreviousDigest) {
       'log',
       'integrity'
     ]) ||
-    event.kind !== AUDIT_EVENT_KIND ||
-    event.schemaVersion !== AUDIT_EVENT_SCHEMA_VERSION ||
-    event.eventType !== AUDIT_EVENT_TYPE ||
+    event.kind !== schema.kind ||
+    event.schemaVersion !== schema.schemaVersion ||
+    event.eventType !== schema.eventType ||
     event.eventId !== `${event.run?.id}:complete-snapshot` ||
     typeof event.run?.id !== 'string' ||
     event.run.id.length === 0 ||
@@ -1398,7 +1460,7 @@ export function validateAuditEvent(event, expectedPreviousDigest) {
     !canonicalTimestamp(event.run?.startedAt) ||
     !canonicalTimestamp(event.run?.completedAt) ||
     Date.parse(event.run.startedAt) > Date.parse(event.run.completedAt) ||
-    Date.parse(event.run.completedAt) - Date.parse(event.run.startedAt) > MAX_AUDIT_DURATION_MILLISECONDS ||
+    Date.parse(event.run.completedAt) - Date.parse(event.run.startedAt) > schema.maxAuditDurationMilliseconds ||
     !exactKeys(event.repository, ['nameWithOwner', 'nodeId']) ||
     !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(String(event.repository.nameWithOwner || '')) ||
     typeof event.repository.nodeId !== 'string' ||
@@ -1409,7 +1471,7 @@ export function validateAuditEvent(event, expectedPreviousDigest) {
     !/^\d{4}-\d{2}-\d{2}T(?:00|12):00:00\.000Z$/.test(String(event.sampling?.expectedAt || '')) ||
     !canonicalTimestamp(event.sampling.expectedAt) ||
     startedAtMilliseconds < expectedAtMilliseconds ||
-    startedAtMilliseconds > expectedAtMilliseconds + SLOT_WINDOW_MILLISECONDS ||
+    startedAtMilliseconds > expectedAtMilliseconds + schema.slotWindowMilliseconds ||
     event.sampling?.coverageState !== 'complete' ||
     typeof event.sampling?.runnerVersion !== 'string' ||
     !event.sampling.runnerVersion ||
@@ -1444,8 +1506,8 @@ export function validateAuditEvent(event, expectedPreviousDigest) {
     !/^[0-9a-f]{64}$/.test(String(event.provenance?.auditDigest || '')) ||
     !validActor(event.provenance.authenticatedAs) ||
     !exactKeys(event.provenance.classifier, ['id', 'version']) ||
-    event.provenance?.classifier?.id !== AUDIT_EVENT_CLASSIFIER_ID ||
-    event.provenance?.classifier?.version !== 1 ||
+    event.provenance?.classifier?.id !== schema.classifierId ||
+    event.provenance?.classifier?.version !== schema.classifierVersion ||
     !exactKeys(event.provenance.projector, ['id', 'version', 'implementation']) ||
     !projectorCompatibility ||
     event.provenance?.projector?.id !== projectorCompatibility.id ||
@@ -1483,7 +1545,9 @@ export function validateAuditEvent(event, expectedPreviousDigest) {
   if (nodeIds.some((nodeId) => typeof nodeId !== 'string' || !nodeId) || new Set(nodeIds).size !== nodeIds.length) {
     throw new Error('Audit analytics event pull-request node IDs are not globally unique.');
   }
-  if (!event.pullRequests.every((pullRequest) => validEventPullRequest(pullRequest, event.repository))) {
+  if (
+    !event.pullRequests.every((pullRequest) => validEventPullRequest(pullRequest, event.repository, event.observedAt, schema))
+  ) {
     throw new Error('Audit analytics event pull-request schema is invalid.');
   }
   validateActorIdentityMappings(event);
@@ -1672,25 +1736,26 @@ function parseEventLog(raw, repositoryIdentity) {
       throw new Error(`Audit analytics event log record ${index + 1} is not canonical JSON.`);
     }
     validateAuditEvent(event, previousDigest);
-    if (event.repository.nodeId !== repositoryIdentity.nodeId) {
+    const view = eventStreamView(event);
+    if (view.repository.nodeId !== repositoryIdentity.nodeId) {
       throw new Error(`Audit analytics event log record ${index + 1} belongs to another repository stream.`);
     }
     if (
-      runIds.has(event.run.id) ||
-      sourceDigests.has(event.provenance.auditDigest) ||
-      slotIds.has(event.sampling.slotId) ||
-      expectedSlots.has(event.sampling.expectedAt) ||
-      (previousExpectedAt !== null && event.sampling.expectedAt <= previousExpectedAt)
+      runIds.has(view.runId) ||
+      sourceDigests.has(view.auditDigest) ||
+      slotIds.has(view.slotId) ||
+      expectedSlots.has(view.expectedAt) ||
+      (previousExpectedAt !== null && view.expectedAt <= previousExpectedAt)
     ) {
       throw new Error(`Audit analytics event log record ${index + 1} duplicates or reorders an analytics slot.`);
     }
-    runIds.add(event.run.id);
-    sourceDigests.add(event.provenance.auditDigest);
-    slotIds.add(event.sampling.slotId);
-    expectedSlots.add(event.sampling.expectedAt);
+    runIds.add(view.runId);
+    sourceDigests.add(view.auditDigest);
+    slotIds.add(view.slotId);
+    expectedSlots.add(view.expectedAt);
     events.push(event);
-    previousDigest = event.integrity.digest;
-    previousExpectedAt = event.sampling.expectedAt;
+    previousDigest = view.integrityDigest;
+    previousExpectedAt = view.expectedAt;
   }
   validatePullRequestIdentityStream(events);
   validateReviewThreadIdentityStream(events);
@@ -1701,7 +1766,9 @@ function parseEventLog(raw, repositoryIdentity) {
 function validatePullRequestIdentityStream(events) {
   const nodeIdByNumber = new Map();
   const numberByNodeId = new Map();
-  for (const event of events) {
+  const chronologyByNodeId = new Map();
+  for (const rawEvent of events) {
+    const event = eventStreamView(rawEvent);
     for (const pullRequest of event.pullRequests) {
       if (
         (nodeIdByNumber.has(pullRequest.number) && nodeIdByNumber.get(pullRequest.number) !== pullRequest.nodeId) ||
@@ -1711,6 +1778,18 @@ function validatePullRequestIdentityStream(events) {
       }
       nodeIdByNumber.set(pullRequest.number, pullRequest.nodeId);
       numberByNodeId.set(pullRequest.nodeId, pullRequest.number);
+      const previousChronology = chronologyByNodeId.get(pullRequest.nodeId);
+      if (
+        previousChronology &&
+        (previousChronology.createdAt !== pullRequest.createdAt ||
+          Date.parse(pullRequest.updatedAt) < Date.parse(previousChronology.updatedAt))
+      ) {
+        throw new Error('Audit analytics event log pull-request chronology changed across records.');
+      }
+      chronologyByNodeId.set(pullRequest.nodeId, {
+        createdAt: pullRequest.createdAt,
+        updatedAt: pullRequest.updatedAt
+      });
     }
   }
 }
@@ -1722,7 +1801,8 @@ function validateReviewThreadIdentityStream(events) {
   const knownReviewByThreadId = new Map();
   const knownReviewByDatabaseId = new Map();
   const knownReviewByNodeId = new Map();
-  for (const event of events) {
+  for (const rawEvent of events) {
+    const event = eventStreamView(rawEvent);
     for (const pullRequest of event.pullRequests) {
       for (const finding of pullRequest.findings) {
         const observation = {
@@ -1797,7 +1877,8 @@ function reconcileKnownIdentity(map, key, candidate, errorMessage) {
 
 function validateInstructionIdentityStream(events) {
   const digestByRoleAndId = new Map();
-  for (const event of events) {
+  for (const rawEvent of events) {
+    const event = eventStreamView(rawEvent);
     for (const role of ['reviewer', 'fixer']) {
       const instruction = event.instructions[role];
       if (instruction.id === null || instruction.digest === null) continue;
@@ -1850,7 +1931,7 @@ export async function appendCompleteAuditEvent({
     try {
       preAppendRaw = logHandle ? await readEventLogHandle(logHandle) : '';
       const events = parseEventLog(preAppendRaw, record.repository);
-      const previousEventDigest = events.at(-1)?.integrity.digest || null;
+      const previousEventDigest = events.length > 0 ? eventStreamView(events.at(-1)).integrityDigest : null;
       const proof = verifyAuditRecord(record, {
         repository,
         expectedRunId,
@@ -1867,18 +1948,21 @@ export async function appendCompleteAuditEvent({
       validatePullRequestIdentityStream([...events, event]);
       validateReviewThreadIdentityStream([...events, event]);
       validateInstructionIdentityStream([...events, event]);
+      const eventView = eventStreamView(event);
       if (
-        events.some(
-          (existing) =>
-            existing.run.id === event.run.id ||
-            existing.eventId === event.eventId ||
-            existing.provenance.auditDigest === event.provenance.auditDigest ||
-            existing.sampling.slotId === event.sampling.slotId ||
-            existing.sampling.expectedAt === event.sampling.expectedAt
-        ) ||
-        (events.length > 0 && events.at(-1).sampling.expectedAt >= event.sampling.expectedAt)
+        events.some((existing) => {
+          const existingView = eventStreamView(existing);
+          return (
+            existingView.runId === eventView.runId ||
+            existingView.eventId === eventView.eventId ||
+            existingView.auditDigest === eventView.auditDigest ||
+            existingView.slotId === eventView.slotId ||
+            existingView.expectedAt === eventView.expectedAt
+          );
+        }) ||
+        (events.length > 0 && eventStreamView(events.at(-1)).expectedAt >= eventView.expectedAt)
       ) {
-        throw new Error(`Audit analytics event log already contains or follows slot ${event.sampling.slotId}.`);
+        throw new Error(`Audit analytics event log already contains or follows slot ${eventView.slotId}.`);
       }
       if (!logHandle) {
         try {
@@ -1924,7 +2008,8 @@ export async function appendCompleteAuditEvent({
       }
       const appendedEvents = parseEventLog(await readEventLogHandle(logHandle), record.repository);
       const tail = appendedEvents.at(-1);
-      if (tail?.eventId !== event.eventId || tail?.integrity?.digest !== event.integrity.digest) {
+      const tailView = tail ? eventStreamView(tail) : null;
+      if (tailView?.eventId !== eventView.eventId || tailView?.integrityDigest !== eventView.integrityDigest) {
         throw new Error('Audit analytics event was not the validated final append.');
       }
       const finalIdentity = await lstat(resolved);

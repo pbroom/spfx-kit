@@ -121,6 +121,18 @@ function requireInteger(value, context) {
   return Number(value);
 }
 
+function requirePositiveIntegerPrimitive(value, context) {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    fail(`${context} integer was missing or invalid.`, { phase: 'normalize', collection: context });
+  }
+  return value;
+}
+
+function optionalPositiveIntegerPrimitive(value, context) {
+  if (value === null || value === undefined) return null;
+  return requirePositiveIntegerPrimitive(value, context);
+}
+
 function requireString(value, context) {
   if (typeof value !== 'string' || !value) {
     fail(`${context} string was missing or invalid.`, { phase: 'normalize', collection: context });
@@ -398,10 +410,10 @@ function normalizeReviewComment(value) {
     fail('Review-comment response was incomplete.', { phase: 'normalize', collection: 'reviewComments' });
   }
   return {
-    id: requireInteger(value.id, 'review comment id'),
+    id: requirePositiveIntegerPrimitive(value.id, 'reviewComments'),
     nodeId: requireString(value.node_id, 'review comment node id'),
-    pullRequestReviewId: requireInteger(value.pull_request_review_id, 'review comment review id'),
-    inReplyToId: optionalInteger(value.in_reply_to_id),
+    pullRequestReviewId: requirePositiveIntegerPrimitive(value.pull_request_review_id, 'reviewComments'),
+    inReplyToId: optionalPositiveIntegerPrimitive(value.in_reply_to_id, 'reviewComments'),
     url: requireString(value.html_url, 'review comment URL'),
     body: requireBody(value.body, 'review comment'),
     path: requireString(value.path, 'review comment path'),
@@ -419,7 +431,12 @@ function normalizeReviewComment(value) {
 }
 
 function normalizeThreadComment(value) {
-  if (!value || !/^\d+$/.test(String(value.fullDatabaseId || '')) || !Object.hasOwn(value, 'body')) {
+  if (
+    !value ||
+    typeof value.fullDatabaseId !== 'string' ||
+    !/^[1-9]\d*$/.test(value.fullDatabaseId) ||
+    !Object.hasOwn(value, 'body')
+  ) {
     fail('Review-thread comment response was incomplete.', {
       phase: 'normalize',
       collection: 'reviewThreadComments'
@@ -815,6 +832,8 @@ async function fetchEvidenceSnapshot(client, repository, inventory, pageSize) {
 function sourceReviewIdentitiesAreConsistent(pullRequests) {
   const byDatabaseId = new Map();
   const byNodeId = new Map();
+  const commentByDatabaseId = new Map();
+  const commentByNodeId = new Map();
   for (const pullRequest of pullRequests) {
     for (const review of pullRequest.reviews.values) {
       const databaseTuple = canonicalJson({ nodeId: review.nodeId, pullRequestNumber: pullRequest.number });
@@ -834,38 +853,66 @@ function sourceReviewIdentitiesAreConsistent(pullRequests) {
     if (pullRequest.reviewComments.values.some((comment) => !reviewsByDatabaseId.has(comment.pullRequestReviewId))) {
       return false;
     }
-    for (const comment of pullRequest.reviewThreads.values.flatMap((thread) => thread.comments.values)) {
-      if (comment.review === null) continue;
-      const graphqlReview = comment.review;
+    for (const comment of pullRequest.reviewComments.values) {
+      if (typeof comment.nodeId !== 'string' || !comment.nodeId) return false;
+      const databaseId = String(comment.id);
+      const databaseTuple = canonicalJson({ nodeId: comment.nodeId, pullRequestNumber: pullRequest.number });
+      const nodeTuple = canonicalJson({ databaseId, pullRequestNumber: pullRequest.number });
       if (
-        !graphqlReview ||
-        typeof graphqlReview !== 'object' ||
-        Array.isArray(graphqlReview) ||
-        typeof graphqlReview.nodeId !== 'string' ||
-        !graphqlReview.nodeId ||
-        (graphqlReview.id !== null && typeof graphqlReview.id !== 'string') ||
-        (graphqlReview.commitId !== null &&
-          (typeof graphqlReview.commitId !== 'string' || !/^[0-9a-f]{40}$/i.test(graphqlReview.commitId)))
+        (commentByDatabaseId.has(databaseId) && commentByDatabaseId.get(databaseId) !== databaseTuple) ||
+        (commentByNodeId.has(comment.nodeId) && commentByNodeId.get(comment.nodeId) !== nodeTuple)
       ) {
         return false;
       }
-      const reviewByNodeId = reviewsByNodeId.get(graphqlReview.nodeId);
-      const reviewComment = reviewCommentsById.get(String(comment.id));
-      let reviewByDatabaseId = reviewByNodeId;
-      if (graphqlReview.id !== null) {
-        if (!/^[1-9]\d*$/.test(graphqlReview.id) || !Number.isSafeInteger(Number(graphqlReview.id))) return false;
-        reviewByDatabaseId = reviewsByDatabaseId.get(Number(graphqlReview.id));
-      }
+      commentByDatabaseId.set(databaseId, databaseTuple);
+      commentByNodeId.set(comment.nodeId, nodeTuple);
+    }
+    for (const thread of pullRequest.reviewThreads.values) {
+      const pairedComments = thread.comments.values.map((comment) => ({
+        graphql: comment,
+        rest: reviewCommentsById.get(String(comment.id))
+      }));
+      const rootCandidates = pairedComments.filter(({ rest }) => rest?.inReplyToId === null);
       if (
-        !reviewByNodeId ||
-        !reviewComment ||
-        reviewsByDatabaseId.get(reviewComment.pullRequestReviewId) !== reviewByNodeId ||
-        reviewByDatabaseId !== reviewByNodeId ||
-        (graphqlReview.commitId !== null &&
-          reviewByNodeId.commitId !== null &&
-          reviewByNodeId.commitId.toLowerCase() !== graphqlReview.commitId.toLowerCase())
+        pairedComments.some(
+          ({ graphql, rest }) => !rest || typeof graphql.nodeId !== 'string' || !graphql.nodeId || graphql.nodeId !== rest.nodeId
+        ) ||
+        rootCandidates.length !== 1 ||
+        pairedComments.some(({ rest }) => rest.inReplyToId !== null && rest.inReplyToId !== rootCandidates[0].rest.id)
       ) {
         return false;
+      }
+      for (const { graphql: comment, rest: reviewComment } of pairedComments) {
+        if (comment.review === null) continue;
+        const graphqlReview = comment.review;
+        if (
+          !graphqlReview ||
+          typeof graphqlReview !== 'object' ||
+          Array.isArray(graphqlReview) ||
+          typeof graphqlReview.nodeId !== 'string' ||
+          !graphqlReview.nodeId ||
+          (graphqlReview.id !== null && typeof graphqlReview.id !== 'string') ||
+          (graphqlReview.commitId !== null &&
+            (typeof graphqlReview.commitId !== 'string' || !/^[0-9a-f]{40}$/i.test(graphqlReview.commitId)))
+        ) {
+          return false;
+        }
+        const reviewByNodeId = reviewsByNodeId.get(graphqlReview.nodeId);
+        let reviewByDatabaseId = reviewByNodeId;
+        if (graphqlReview.id !== null) {
+          if (!/^[1-9]\d*$/.test(graphqlReview.id) || !Number.isSafeInteger(Number(graphqlReview.id))) return false;
+          reviewByDatabaseId = reviewsByDatabaseId.get(Number(graphqlReview.id));
+        }
+        if (
+          !reviewByNodeId ||
+          reviewsByDatabaseId.get(reviewComment.pullRequestReviewId) !== reviewByNodeId ||
+          reviewByDatabaseId !== reviewByNodeId ||
+          (graphqlReview.commitId !== null &&
+            reviewByNodeId.commitId !== null &&
+            reviewByNodeId.commitId.toLowerCase() !== graphqlReview.commitId.toLowerCase())
+        ) {
+          return false;
+        }
       }
     }
   }
@@ -879,6 +926,22 @@ function requireConsistentSourceReviewIdentities(pullRequests) {
       collection: 'reviewIdentities'
     });
   }
+}
+
+function pairedThreadRoot(pullRequest, thread) {
+  const reviewCommentsById = new Map(pullRequest.reviewComments.values.map((comment) => [String(comment.id), comment]));
+  const pairedComments = thread.comments.values.map((comment) => ({
+    graphql: comment,
+    rest: reviewCommentsById.get(String(comment.id))
+  }));
+  const roots = pairedComments.filter(({ rest }) => rest?.inReplyToId === null);
+  if (roots.length !== 1) {
+    throw new Error(`Audit review thread ${thread.id} does not have exactly one paired REST root comment.`);
+  }
+  if (pairedComments.some(({ rest }) => !rest || (rest.inReplyToId !== null && rest.inReplyToId !== roots[0].rest.id))) {
+    throw new Error(`Audit review thread ${thread.id} contains a reply that does not point to its paired REST root comment.`);
+  }
+  return roots[0].graphql;
 }
 
 function auditSummary(pullRequests) {
@@ -900,7 +963,7 @@ function auditSummary(pullRequests) {
       if (!thread.isResolved) unresolvedThreadCount += 1;
       if (!thread.isResolved && !thread.isOutdated) {
         unresolvedNonOutdatedThreadCount += 1;
-        const root = thread.comments.values[0];
+        const root = pairedThreadRoot(pullRequest, thread);
         if (
           root &&
           normalizeLogin(root.author?.login) === CODEX_REVIEW_ACTOR &&
@@ -1274,6 +1337,20 @@ export function verifyAuditRecord(record, { repository, expectedRunId, maxAgeSec
       throw new Error(`Audit review schema for pull request #${pullRequest.number} is invalid.`);
     }
     if (
+      pullRequest.reviewComments.values.some(
+        (comment) =>
+          !Number.isSafeInteger(comment.id) ||
+          comment.id < 1 ||
+          typeof comment.nodeId !== 'string' ||
+          !comment.nodeId ||
+          !Number.isSafeInteger(comment.pullRequestReviewId) ||
+          comment.pullRequestReviewId < 1 ||
+          (comment.inReplyToId !== null && (!Number.isSafeInteger(comment.inReplyToId) || comment.inReplyToId < 1))
+      )
+    ) {
+      throw new Error(`Audit review-comment schema for pull request #${pullRequest.number} is invalid.`);
+    }
+    if (
       !isSortedUnique(
         pullRequest.reviews.values,
         (item) => item.id,
@@ -1300,7 +1377,13 @@ export function verifyAuditRecord(record, { repository, expectedRunId, maxAgeSec
     for (const thread of pullRequest.reviewThreads.values) {
       verifyCollection(thread.comments, `#${pullRequest.number} thread ${thread.id} comments`);
       if (
-        !thread.comments.values.every((comment) => /^\d+$/.test(String(comment.id))) ||
+        !thread.comments.values.every(
+          (comment) =>
+            typeof comment.id === 'string' &&
+            /^[1-9]\d*$/.test(comment.id) &&
+            typeof comment.nodeId === 'string' &&
+            comment.nodeId.length > 0
+        ) ||
         !isSortedUnique(
           thread.comments.values,
           (item) => item.id,

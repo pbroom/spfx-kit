@@ -196,6 +196,63 @@ describe('Codex PR review audit', () => {
         now: new Date('2026-08-07T12:00:03.000Z')
       })
     ).toThrow(/review database and node identities/);
+    const contradictoryCommentNode = structuredClone(first);
+    contradictoryCommentNode.pullRequests[0].reviewThreads.values[1].comments.values[0].nodeId = 'another-review-comment-node';
+    expect(() =>
+      verifyAuditRecord(addIntegrity(contradictoryCommentNode), {
+        repository,
+        expectedRunId: 'heartbeat-123',
+        maxAgeSeconds: 300,
+        now: new Date('2026-08-07T12:00:03.000Z')
+      })
+    ).toThrow(/review database and node identities/);
+    const duplicateCommentNode = structuredClone(first);
+    const duplicateRestComment = duplicateCommentNode.pullRequests[0].reviewComments.values.find(
+      (comment: any) => comment.id === 102
+    );
+    const duplicateGraphqlComment = duplicateCommentNode.pullRequests[0].reviewThreads.values[1].comments.values.find(
+      (comment: any) => comment.id === '102'
+    );
+    duplicateRestComment.nodeId = 'review-comment-101';
+    duplicateGraphqlComment.nodeId = 'review-comment-101';
+    expect(() =>
+      verifyAuditRecord(addIntegrity(duplicateCommentNode), {
+        repository,
+        expectedRunId: 'heartbeat-123',
+        maxAgeSeconds: 300,
+        now: new Date('2026-08-07T12:00:03.000Z')
+      })
+    ).toThrow(/review database and node identities/);
+    for (const rootMode of ['zero', 'multiple'] as const) {
+      const ambiguousRoots = structuredClone(first);
+      if (rootMode === 'zero') {
+        for (const comment of ambiguousRoots.pullRequests[0].reviewComments.values.filter((comment: any) =>
+          [100, 101].includes(comment.id)
+        )) {
+          comment.inReplyToId = 999;
+        }
+      } else {
+        ambiguousRoots.pullRequests[0].reviewComments.values.find((comment: any) => comment.id === 102).inReplyToId = null;
+      }
+      expect(() =>
+        verifyAuditRecord(addIntegrity(ambiguousRoots), {
+          repository,
+          expectedRunId: 'heartbeat-123',
+          maxAgeSeconds: 300,
+          now: new Date('2026-08-07T12:00:03.000Z')
+        })
+      ).toThrow(/review database and node identities/);
+    }
+    const stringReviewCommentId = structuredClone(first);
+    stringReviewCommentId.pullRequests[0].reviewComments.values[0].id = '100';
+    expect(() =>
+      verifyAuditRecord(addIntegrity(stringReviewCommentId), {
+        repository,
+        expectedRunId: 'heartbeat-123',
+        maxAgeSeconds: 300,
+        now: new Date('2026-08-07T12:00:03.000Z')
+      })
+    ).toThrow(/review-comment schema/);
     const reversedPullRequestTimestamps = structuredClone(first);
     reversedPullRequestTimestamps.pullRequests[0].createdAt = '2026-08-07T12:00:00Z';
     expect(() =>
@@ -348,12 +405,31 @@ describe('Codex PR review audit', () => {
       ['graphql-review-database-mismatch', { graphqlReviewDatabaseId: '10' }],
       ['graphql-review-node-mismatch', { graphqlReviewNodeId: 'another-review-node' }],
       ['graphql-review-commit-mismatch', { graphqlReviewCommitMismatch: true }],
-      ['rest-review-comment-mismatch', { restReviewCommentReviewId: 10 }]
+      ['rest-review-comment-mismatch', { restReviewCommentReviewId: 10 }],
+      ['graphql-comment-node-mismatch', { graphqlCommentNodeIdMismatch: true }],
+      ['duplicate-review-comment-node', { duplicateReviewCommentNodeId: true }],
+      ['zero-review-thread-roots', { ambiguousThreadRoots: 'zero' }],
+      ['multiple-review-thread-roots', { ambiguousThreadRoots: 'multiple' }]
     ] as const) {
       await expect(auditWith(githubFixture(options), runId)).rejects.toMatchObject({
         record: { status: 'incomplete', failure: { phase: 'normalize', collection: 'reviewIdentities' } }
       });
     }
+    await expect(
+      auditWith(githubFixture({ restReviewCommentIdAsString: true }), 'rest-review-comment-id-string')
+    ).rejects.toMatchObject({
+      record: { status: 'incomplete', failure: { phase: 'normalize', collection: 'reviewComments' } }
+    });
+    await expect(
+      auditWith(githubFixture({ invalidReviewCommentParent: true }), 'invalid-review-comment-parent')
+    ).rejects.toMatchObject({
+      record: { status: 'incomplete', failure: { phase: 'normalize', collection: 'reviewIdentities' } }
+    });
+    await expect(auditWith(githubFixture({ graphqlCommentIdAsNumber: true }), 'graphql-comment-id-number')).rejects.toMatchObject(
+      {
+        record: { status: 'incomplete', failure: { phase: 'normalize', collection: 'reviewThreadComments' } }
+      }
+    );
     await expect(
       auditWith(githubFixture({ reversedPullRequestTimestamps: true }), 'reversed-pull-request-timestamps')
     ).rejects.toMatchObject({
@@ -502,12 +578,65 @@ describe('Codex PR review audit', () => {
   it('appends versioned complete-run analytics events with an immutable digest chain', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'spfx-kit-pr-audit-events-'));
     const filename = path.join(directory, 'events.jsonl');
+    const historicalSchemaFilename = path.join(directory, 'historical-schema-events.jsonl');
     const expected = JSON.parse(
       await readFile(new URL('./fixtures/codex-pr-review-audit/analytics-event-v1.expect.json', import.meta.url), 'utf8')
     );
     const instructionDigest = `sha256:${'1'.repeat(64)}`;
     try {
       const firstRecord = await auditWith(githubFixture({ loopMarker: true, pendingReview: true }), 'analytics-one');
+      for (const rootMode of ['zero', 'multiple'] as const) {
+        const ambiguousProjectorRecord = structuredClone(firstRecord);
+        if (rootMode === 'zero') {
+          for (const comment of ambiguousProjectorRecord.pullRequests[0].reviewComments.values.filter((comment: any) =>
+            [100, 101].includes(comment.id)
+          )) {
+            comment.inReplyToId = 999;
+          }
+        } else {
+          ambiguousProjectorRecord.pullRequests[0].reviewComments.values.find((comment: any) => comment.id === 102).inReplyToId =
+            null;
+        }
+        const retainedAmbiguousRecord = addIntegrity(ambiguousProjectorRecord);
+        expect(() =>
+          createAuditEvent(
+            retainedAmbiguousRecord,
+            { auditId: retainedAmbiguousRecord.audit.id, digest: retainedAmbiguousRecord.integrity.digest },
+            { sampling: samplingFor(analyticsSlotOne), previousEventDigest: null }
+          )
+        ).toThrow(/exactly one paired REST root comment/);
+      }
+      const mismatchedProjectorRecord = structuredClone(firstRecord);
+      mismatchedProjectorRecord.pullRequests[0].reviewThreads.values[1].comments.values[0].nodeId = 'another-review-comment-node';
+      const retainedMismatchedProjectorRecord = addIntegrity(mismatchedProjectorRecord);
+      expect(() =>
+        createAuditEvent(
+          retainedMismatchedProjectorRecord,
+          {
+            auditId: retainedMismatchedProjectorRecord.audit.id,
+            digest: retainedMismatchedProjectorRecord.integrity.digest
+          },
+          { sampling: samplingFor(analyticsSlotOne), previousEventDigest: null }
+        )
+      ).toThrow(/inconsistent paired REST and GraphQL comment identities/);
+      const invalidParentRecord = structuredClone(firstRecord);
+      invalidParentRecord.pullRequests[0].reviewComments.values.find((comment: any) => comment.id === 102).inReplyToId = 999;
+      const retainedInvalidParentRecord = addIntegrity(invalidParentRecord);
+      expect(() =>
+        verifyAuditRecord(retainedInvalidParentRecord, {
+          repository,
+          expectedRunId: 'analytics-one',
+          maxAgeSeconds: 300,
+          now: new Date('2026-08-07T12:00:03.000Z')
+        })
+      ).toThrow(/identities/);
+      expect(() =>
+        createAuditEvent(
+          retainedInvalidParentRecord,
+          { auditId: retainedInvalidParentRecord.audit.id, digest: retainedInvalidParentRecord.integrity.digest },
+          { sampling: samplingFor(analyticsSlotOne), previousEventDigest: null }
+        )
+      ).toThrow(/does not point to its paired REST root comment/);
       const invalidPendingReview = structuredClone(firstRecord);
       invalidPendingReview.pullRequests[0].reviews.values.find((review: any) => review.submittedAt === null).submittedAt = 1;
       expect(() =>
@@ -562,29 +691,25 @@ describe('Codex PR review audit', () => {
         causalAttribution: { status: 'not_claimed' },
         log: { previousEventDigest: null }
       });
-      const historicalProjectorV1 = structuredClone(first);
-      historicalProjectorV1.provenance.projector = {
-        id: 'codex-pr-review-audit-event',
-        version: 1,
-        implementation: {
-          kind: 'sha256-manifest',
-          digest: '',
-          files: [
-            'scripts/codex-pr-review-audit-event.mjs',
-            'scripts/codex-pr-review-audit.mjs',
-            'scripts/codex-review-loop.mjs',
-            'scripts/codex-review-priority.mjs'
-          ].map((projectorPath, index) => ({
-            path: projectorPath,
-            digest: `sha256:${String(index + 1).repeat(64)}`
-          }))
-        }
-      };
-      historicalProjectorV1.provenance.projector.implementation.digest = `sha256:${createHash('sha256')
-        .update(canonicalJson(historicalProjectorV1.provenance.projector.implementation.files))
-        .digest('hex')}`;
-      const retainedHistoricalProjectorV1 = addIntegrity(historicalProjectorV1);
+      const retainedHistoricalProjectorV1 = JSON.parse(
+        await readFile(new URL('./fixtures/codex-pr-review-audit/analytics-event-v1.canonical.json', import.meta.url), 'utf8')
+      );
       expect(() => validateAuditEvent(retainedHistoricalProjectorV1, null)).not.toThrow();
+      await writeFile(historicalSchemaFilename, `${canonicalJson(retainedHistoricalProjectorV1)}\n`, { mode: 0o600 });
+      const historicalV1AttemptCap = structuredClone(retainedHistoricalProjectorV1);
+      historicalV1AttemptCap.pullRequests[0].reviewLoop.number = 3;
+      historicalV1AttemptCap.pullRequests[0].findings[1].fixLink.reports[0].attemptNumber = 3;
+      historicalV1AttemptCap.summary.reviewLoopNumberTotal = 3;
+      expect(() => validateAuditEvent(addIntegrity(historicalV1AttemptCap), null)).not.toThrow();
+      historicalV1AttemptCap.pullRequests[0].reviewLoop.number = 4;
+      historicalV1AttemptCap.pullRequests[0].findings[1].fixLink.reports[0].attemptNumber = 4;
+      historicalV1AttemptCap.summary.reviewLoopNumberTotal = 4;
+      expect(() => validateAuditEvent(addIntegrity(historicalV1AttemptCap), null)).toThrow(/schema/);
+      for (const unsupportedSchemaVersion of [999, '1', { version: 1 }]) {
+        const unsupportedSchema = structuredClone(retainedHistoricalProjectorV1);
+        unsupportedSchema.schemaVersion = unsupportedSchemaVersion;
+        expect(() => validateAuditEvent(addIntegrity(unsupportedSchema), null)).toThrow(/schema version is unsupported/);
+      }
 
       const unsupportedProjector = structuredClone(retainedHistoricalProjectorV1);
       unsupportedProjector.provenance.projector.version = 999;
@@ -638,6 +763,9 @@ describe('Codex PR review audit', () => {
       const reportedTimestampContradiction = structuredClone(first);
       reportedTimestampContradiction.pullRequests[0].findings[1].fixLink.reports[0].reportedAt = 0;
       expect(() => validateAuditEvent(addIntegrity(reportedTimestampContradiction), null)).toThrow(/schema/);
+      const futureReportedTimestamp = structuredClone(first);
+      futureReportedTimestamp.pullRequests[0].findings[1].fixLink.reports[0].reportedAt = '2026-08-07T12:00:02.001Z';
+      expect(() => validateAuditEvent(addIntegrity(futureReportedTimestamp), null)).toThrow(/schema/);
       const reversedEventPullRequestTimestamps = structuredClone(first);
       reversedEventPullRequestTimestamps.pullRequests[0].createdAt = '2026-08-07T12:00:00Z';
       expect(() => validateAuditEvent(addIntegrity(reversedEventPullRequestTimestamps), null)).toThrow(/schema/);
@@ -859,6 +987,18 @@ describe('Codex PR review audit', () => {
         '2026-08-08T00:00:00.000Z',
         '2026-08-08T00:00:02.000Z'
       );
+      await expect(
+        appendCompleteAuditEvent({
+          filename: historicalSchemaFilename,
+          record: secondRecord,
+          repository,
+          expectedRunId: 'analytics-two',
+          maxAgeSeconds: 300,
+          now: new Date('2026-08-08T00:00:03.000Z'),
+          sampling: samplingFor(analyticsSlotTwo)
+        })
+      ).resolves.toBeDefined();
+      expect((await readFile(historicalSchemaFilename, 'utf8')).trim().split('\n')).toHaveLength(2);
       const second = await appendCompleteAuditEvent({
         filename,
         record: secondRecord,
@@ -1036,6 +1176,37 @@ describe('Codex PR review audit', () => {
       expect(validCleanMarkerEvent.pullRequests[0].findings.every((finding: any) => finding.fixLink.status === 'unknown')).toBe(
         true
       );
+      for (const cleanMarker of [false, true]) {
+        const futureMarkerRecord = await auditWith(
+          githubFixture({ loopMarker: true, cleanMarker, loopMarkerAfterAuditCompletion: true }),
+          `analytics-future-marker-${cleanMarker}`
+        );
+        const futureMarkerEvent = createAuditEvent(
+          futureMarkerRecord,
+          { auditId: futureMarkerRecord.audit.id, digest: futureMarkerRecord.integrity.digest },
+          { sampling: samplingFor(analyticsSlotOne), previousEventDigest: null }
+        );
+        expect(futureMarkerEvent.pullRequests[0].reviewLoop).toMatchObject({
+          number: null,
+          status: 'unknown',
+          reason: 'marker_invalid'
+        });
+        expect(() => validateAuditEvent(futureMarkerEvent, null)).not.toThrow();
+      }
+      const completionBoundaryRecord = await auditWith(
+        githubFixture({ loopMarker: true, loopMarkerAtAuditCompletion: true }),
+        'analytics-completion-boundary'
+      );
+      const completionBoundaryEvent = createAuditEvent(
+        completionBoundaryRecord,
+        { auditId: completionBoundaryRecord.audit.id, digest: completionBoundaryRecord.integrity.digest },
+        { sampling: samplingFor(analyticsSlotOne), previousEventDigest: null }
+      );
+      expect(completionBoundaryEvent.pullRequests[0].reviewLoop).toMatchObject({
+        number: 1,
+        status: 'observed',
+        reason: null
+      });
 
       const nullAuthorRecord = await auditWith(
         githubFixture({ nullPrAuthor: true }),
@@ -1379,6 +1550,7 @@ describe('Codex PR review audit', () => {
   it('preserves the bidirectional pull-request identity mapping across event-log rows', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'spfx-kit-pr-audit-pr-identity-'));
     const filename = path.join(directory, 'events.jsonl');
+    const chronologyFilename = path.join(directory, 'chronology.jsonl');
     try {
       const firstRecord = await auditWith(githubFixture(), 'analytics-pr-identity-one');
       const firstEvent = await appendCompleteAuditEvent({
@@ -1391,12 +1563,72 @@ describe('Codex PR review audit', () => {
         sampling: samplingFor(analyticsSlotOne)
       });
       const firstBytes = await readFile(filename, 'utf8');
+      await appendCompleteAuditEvent({
+        filename: chronologyFilename,
+        record: firstRecord,
+        repository,
+        expectedRunId: 'analytics-pr-identity-one',
+        maxAgeSeconds: 300,
+        now: new Date('2026-08-07T12:00:03.000Z'),
+        sampling: samplingFor(analyticsSlotOne)
+      });
       const secondRecord = await auditWith(
         githubFixture(),
         'analytics-pr-identity-two',
         '2026-08-08T00:00:00.000Z',
         '2026-08-08T00:00:02.000Z'
       );
+      for (const [runId, fixtureOptions] of [
+        ['analytics-pr-created-at-changed', { pullRequestCreatedAt: '2026-08-02T00:00:00Z' }],
+        ['analytics-pr-updated-at-regressed', { pullRequestUpdatedAt: '2026-08-07T11:58:59Z' }]
+      ] as const) {
+        const contradictoryChronologyRecord = await auditWith(
+          githubFixture(fixtureOptions),
+          runId,
+          '2026-08-08T00:00:00.000Z',
+          '2026-08-08T00:00:02.000Z'
+        );
+        await expect(
+          appendCompleteAuditEvent({
+            filename,
+            record: contradictoryChronologyRecord,
+            repository,
+            expectedRunId: runId,
+            maxAgeSeconds: 300,
+            now: new Date('2026-08-08T00:00:03.000Z'),
+            sampling: samplingFor(analyticsSlotTwo)
+          })
+        ).rejects.toThrow(/chronology changed/);
+        expect(await readFile(filename, 'utf8')).toBe(firstBytes);
+      }
+      await expect(
+        appendCompleteAuditEvent({
+          filename: chronologyFilename,
+          record: secondRecord,
+          repository,
+          expectedRunId: 'analytics-pr-identity-two',
+          maxAgeSeconds: 300,
+          now: new Date('2026-08-08T00:00:03.000Z'),
+          sampling: samplingFor(analyticsSlotTwo)
+        })
+      ).resolves.toBeDefined();
+      const advancedChronologyRecord = await auditWith(
+        githubFixture({ pullRequestUpdatedAt: '2026-08-08T12:00:00Z' }),
+        'analytics-pr-chronology-advanced',
+        '2026-08-08T12:00:00.000Z',
+        '2026-08-08T12:00:02.000Z'
+      );
+      await expect(
+        appendCompleteAuditEvent({
+          filename: chronologyFilename,
+          record: advancedChronologyRecord,
+          repository,
+          expectedRunId: 'analytics-pr-chronology-advanced',
+          maxAgeSeconds: 300,
+          now: new Date('2026-08-08T12:00:03.000Z'),
+          sampling: samplingFor(analyticsSlotThree)
+        })
+      ).resolves.toBeDefined();
       const changedNodeRecord = structuredClone(secondRecord);
       changedNodeRecord.pullRequests[0].nodeId = 'another-pull-request-node';
       await expect(
@@ -1494,7 +1726,7 @@ describe('Codex PR review audit', () => {
       const graphqlRoot = changedRootRecord.pullRequests[0].reviewThreads.values.find((thread: any) => thread.id === 'thread-a')
         .comments.values[0];
       graphqlRoot.id = '99';
-      graphqlRoot.nodeId = 'review-comment-node-99';
+      graphqlRoot.nodeId = 'review-comment-99';
       await expect(
         appendCompleteAuditEvent({
           filename,
@@ -2140,6 +2372,8 @@ interface FixtureOptions {
   loopMarkerHeadMismatch?: boolean;
   loopMarkerBeforeReviewSubmission?: boolean;
   loopMarkerAtReviewSubmission?: boolean;
+  loopMarkerAfterAuditCompletion?: boolean;
+  loopMarkerAtAuditCompletion?: boolean;
   loopMarkerMultipleThreads?: boolean;
   nullPrAuthor?: boolean;
   pendingReview?: boolean;
@@ -2160,7 +2394,15 @@ interface FixtureOptions {
   graphqlReviewDatabaseId?: string;
   graphqlReviewCommitMismatch?: boolean;
   restReviewCommentReviewId?: number;
+  ambiguousThreadRoots?: 'zero' | 'multiple';
+  graphqlCommentNodeIdMismatch?: boolean;
+  duplicateReviewCommentNodeId?: boolean;
+  restReviewCommentIdAsString?: boolean;
+  graphqlCommentIdAsNumber?: boolean;
+  invalidReviewCommentParent?: boolean;
   reversedPullRequestTimestamps?: boolean;
+  pullRequestCreatedAt?: string;
+  pullRequestUpdatedAt?: string;
   repositoryFullName?: string;
   repositoryNodeId?: string;
   noReviewThreads?: boolean;
@@ -2176,6 +2418,8 @@ function githubFixture(options: FixtureOptions = {}) {
   pullRequest.html_url = `https://github.com/${fixtureRepository}/pull/7`;
   pullRequest.head.repo.full_name = fixtureRepository;
   pullRequest.base.repo.full_name = fixtureRepository;
+  if (options.pullRequestCreatedAt) pullRequest.created_at = options.pullRequestCreatedAt;
+  if (options.pullRequestUpdatedAt) pullRequest.updated_at = options.pullRequestUpdatedAt;
   if (options.nullPrAuthor) pullRequest.user = null;
   if (options.mismatchedPullRequestUrl) pullRequest.html_url = 'https://github.com/pbroom/spfx-kit/pull/999';
   if (options.mismatchedBaseRepository) pullRequest.base.repo.full_name = 'another/repository';
@@ -2190,6 +2434,16 @@ function githubFixture(options: FixtureOptions = {}) {
   draft.html_url = `https://github.com/${fixtureRepository}/pull/8`;
   if (options.duplicatePullRequestNodeId) draft.draft = false;
   if (options.duplicateReviewDatabaseIdAcrossPullRequests) draft.draft = false;
+
+  const fixtureReviewComment = (id: number) => {
+    const comment = reviewCommentFixture(id, options.restReviewCommentReviewId);
+    if (options.ambiguousThreadRoots === 'zero' && [100, 101].includes(id)) comment.in_reply_to_id = 999;
+    if (options.ambiguousThreadRoots === 'multiple' && id === 102) comment.in_reply_to_id = null;
+    if (options.duplicateReviewCommentNodeId && id === 102) comment.node_id = 'review-comment-101';
+    if (options.restReviewCommentIdAsString && id === 101) comment.id = '101';
+    if (options.invalidReviewCommentParent && id === 102) comment.in_reply_to_id = 999;
+    return comment;
+  };
 
   const fetch = async (input: string | URL, init: RequestInit = {}): Promise<any> => {
     const url = new URL(String(input));
@@ -2276,7 +2530,9 @@ function githubFixture(options: FixtureOptions = {}) {
               options.loopMarkerHeadMismatch,
               options.loopMarkerMultipleThreads,
               options.loopMarkerBeforeReviewSubmission,
-              options.loopMarkerAtReviewSubmission
+              options.loopMarkerAtReviewSubmission,
+              options.loopMarkerAfterAuditCompletion,
+              options.loopMarkerAtAuditCompletion
             )
           : issueCommentFixture(40);
         if (options.duplicateLoopMarkerBlocks) marker.body = `${marker.body}\n${marker.body}`;
@@ -2290,16 +2546,16 @@ function githubFixture(options: FixtureOptions = {}) {
     if (url.pathname === '/repos/pbroom/spfx-kit/pulls/7/comments') {
       if (options.noReviewThreads) return response([]);
       if (url.searchParams.get('page') === '1') {
-        return response([reviewCommentFixture(102, options.restReviewCommentReviewId)], {
+        return response([fixtureReviewComment(102)], {
           link: link('/repos/pbroom/spfx-kit/pulls/7/comments?per_page=1&page=2')
         });
       }
       if (url.searchParams.get('page') === '2') {
-        return response([reviewCommentFixture(101, options.restReviewCommentReviewId)], {
+        return response([fixtureReviewComment(101)], {
           link: link('/repos/pbroom/spfx-kit/pulls/7/comments?per_page=1&page=3')
         });
       }
-      return response([reviewCommentFixture(100, options.restReviewCommentReviewId)]);
+      return response([fixtureReviewComment(100)]);
     }
     if (url.pathname === '/graphql') {
       const body = JSON.parse(String(init.body));
@@ -2320,7 +2576,12 @@ function githubFixture(options: FixtureOptions = {}) {
                     false,
                     options.graphqlReviewCommitMismatch ? 'c'.repeat(40) : options.reviewCommitOid,
                     options.graphqlReviewNodeId,
-                    options.graphqlReviewDatabaseId
+                    options.graphqlReviewDatabaseId,
+                    options.graphqlCommentNodeIdMismatch
+                      ? 'mismatched-review-comment-102'
+                      : options.duplicateReviewCommentNodeId
+                        ? 'review-comment-101'
+                        : undefined
                   )
                 ],
                 pageInfo: { hasNextPage: false, endCursor: null }
@@ -2382,7 +2643,9 @@ function githubFixture(options: FixtureOptions = {}) {
                           options.nullableThreadReview,
                           options.graphqlReviewCommitMismatch ? 'c'.repeat(40) : options.reviewCommitOid,
                           options.graphqlReviewNodeId,
-                          options.graphqlReviewDatabaseId
+                          options.graphqlReviewDatabaseId,
+                          options.graphqlCommentNodeIdMismatch ? 'mismatched-review-comment-101' : undefined,
+                          options.graphqlCommentIdAsNumber ? 101 : undefined
                         )
                       ],
                       true
@@ -2414,7 +2677,8 @@ function githubFixture(options: FixtureOptions = {}) {
                         false,
                         options.graphqlReviewCommitMismatch ? 'c'.repeat(40) : options.reviewCommitOid,
                         options.graphqlReviewNodeId,
-                        options.graphqlReviewDatabaseId
+                        options.graphqlReviewDatabaseId,
+                        options.graphqlCommentNodeIdMismatch ? 'mismatched-review-comment-100' : undefined
                       )
                     ],
                     false
@@ -2478,7 +2742,9 @@ function loopStatusCommentFixture(
   headMismatch = false,
   multipleThreads = false,
   beforeReviewSubmission = false,
-  atReviewSubmission = false
+  atReviewSubmission = false,
+  afterAuditCompletion = false,
+  atAuditCompletion = false
 ): any {
   const comment = issueCommentFixture(40);
   comment.user = { id: 41898282, login: 'github-actions[bot]', type: 'Bot' };
@@ -2516,6 +2782,8 @@ function loopStatusCommentFixture(
   if (multipleThreads) state.processedReviews[0].threadIds = ['thread-a', 'thread-b'];
   if (beforeReviewSubmission) state.processedReviews[0].at = '2026-08-07T11:49:59.000Z';
   if (atReviewSubmission) state.processedReviews[0].at = '2026-08-07T11:50:00.000Z';
+  if (afterAuditCompletion) state.processedReviews[0].at = '2026-08-07T12:00:02.001Z';
+  if (atAuditCompletion) state.processedReviews[0].at = '2026-08-07T12:00:02.000Z';
   comment.body = `<!-- codex-review-fix-loop:v1
 ${JSON.stringify(state)}
 -->`;
@@ -2581,11 +2849,13 @@ function threadCommentFixture(
   nullableReview = false,
   reviewCommitOid = head,
   reviewNodeId = 'review-20',
-  reviewDatabaseId = '20'
+  reviewDatabaseId = '20',
+  commentNodeId = `review-comment-${id}`,
+  commentDatabaseId: string | number = String(id)
 ): any {
   return {
-    id: `review-comment-node-${id}`,
-    fullDatabaseId: String(id),
+    id: commentNodeId,
+    fullDatabaseId: commentDatabaseId,
     body,
     path: 'src/value.ts',
     line: 3,
