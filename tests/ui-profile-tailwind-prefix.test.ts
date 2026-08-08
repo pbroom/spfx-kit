@@ -711,7 +711,7 @@ describe('UI profile Tailwind prefix normalization', () => {
     for (const metadataAssignment of [
       'Probe.displayName = "Probe"',
       'Probe["displayName"] = "Probe"',
-      'Probe.propTypes = { className: PropTypes.string, options: PropTypes.shape({ className: PropTypes.string }) }',
+      'import * as PropTypes from "prop-types"; Probe.propTypes = { className: PropTypes.string, options: PropTypes.shape({ className: PropTypes.string }).isRequired }',
       'Probe.contextType = Context'
     ]) {
       expect(
@@ -739,6 +739,19 @@ describe('UI profile Tailwind prefix normalization', () => {
       expect(() =>
         prefixTailwindClassCandidates(
           `export function Probe({ className }) { return <div className={className} /> } ${metadataInvocation}`
+        )
+      ).toThrow('dynamic class expressions are not accepted');
+    }
+    for (const executableMetadata of [
+      'Probe.propTypes = (() => { mount(React.createElement("div", { className: "flex" })); return {} })() as any',
+      'Probe.propTypes = evil({ className: "flex" }) as any',
+      'Probe.propTypes = (() => ({ className: getClass() })) as any',
+      'Probe.propTypes = { validator: evil({ className: getClass() }) } as any',
+      'Probe.propTypes = { get className() { return "flex" } } as any'
+    ]) {
+      expect(() =>
+        prefixTailwindClassCandidates(
+          `export function Probe({ className }) { return <div className={className} /> } ${executableMetadata}`
         )
       ).toThrow('dynamic class expressions are not accepted');
     }

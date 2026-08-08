@@ -183,23 +183,21 @@ if (!manifestOnly) {
     `Effective npm config legacy-peer-deps must be false (received ${JSON.stringify(npmPeerResolution)})`
   );
 
-  const npmArguments = [
-    'ls',
-    '--all',
-    '--workspace',
-    '@spfx-kit/ui-profile',
-    '--json',
-    strictPeerResolutionArgument,
-    ...[...accepted.keys()].sort()
-  ];
+  const npmArguments = ['ls', '--all', '--workspace', '@spfx-kit/ui-profile', '--json', strictPeerResolutionArgument];
   let npmResult;
+  let npmFailure;
   try {
     npmResult = await runNpm(npmArguments);
   } catch (error) {
-    const stdout = error.stdout || '{}';
-    const tree = JSON.parse(stdout);
-    const problems = tree.problems ?? [error.message];
-    throw new Error(`npm dependency tree is invalid: ${problems.join('; ')}`, { cause: error });
+    npmFailure = error;
+    const stdout = error.stdout;
+    assert(stdout, `npm dependency tree could not be inspected: ${error.message}`);
+    try {
+      JSON.parse(stdout);
+    } catch {
+      throw new Error('npm dependency tree did not produce valid JSON', { cause: error });
+    }
+    npmResult = { stdout };
   }
   const tree = JSON.parse(npmResult.stdout);
   const problems = [...(tree.problems ?? [])];
@@ -213,6 +211,7 @@ if (!manifestOnly) {
     }
   }
   collectProblems(tree);
+  if (npmFailure && problems.length === 0) problems.push(npmFailure.message);
   assert(problems.length === 0, `npm dependency tree problems: ${[...new Set(problems)].join('; ')}`);
   const installedProfile = tree.dependencies?.['@spfx-kit/ui-profile'];
   assert(installedProfile, 'Installed npm tree omits the UI profile workspace');

@@ -80,6 +80,75 @@ describe('UI profile dependency closure', () => {
     }
   });
 
+  it('fails closed when the unfiltered production tree contains a nested extraneous package', () => {
+    const temporaryDirectory = mkdtempSync(path.join(os.tmpdir(), 'spfx-kit-fake-npm-'));
+    const fakeNpm = path.join(temporaryDirectory, 'fake-npm.mjs');
+    writeFileSync(
+      fakeNpm,
+      'if (process.argv.includes("config")) console.log("false"); else if (process.argv.includes("clsx")) console.log(JSON.stringify({ dependencies: { "@spfx-kit/ui-profile": { version: "0.0.0", dependencies: {} } } })); else console.log(JSON.stringify({ dependencies: { "@spfx-kit/ui-profile": { version: "0.0.0", dependencies: { clsx: { version: "2.1.1", dependencies: { "profile-evil": { version: "1.0.0", extraneous: true } } } } } } }))\n'
+    );
+
+    try {
+      const result = runVerifier({ npm_execpath: fakeNpm });
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('clsx > profile-evil: extraneous');
+    } finally {
+      rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed on top-level unfiltered npm problems and direct workspace extraneous packages', () => {
+    for (const tree of [
+      {
+        problems: ['extraneous: profile-evil'],
+        dependencies: { '@spfx-kit/ui-profile': { version: '0.0.0', dependencies: {} } }
+      },
+      {
+        dependencies: {
+          '@spfx-kit/ui-profile': {
+            version: '0.0.0',
+            dependencies: { 'profile-evil': { version: '1.0.0', extraneous: true } }
+          }
+        }
+      }
+    ]) {
+      const temporaryDirectory = mkdtempSync(path.join(os.tmpdir(), 'spfx-kit-fake-npm-'));
+      const fakeNpm = path.join(temporaryDirectory, 'fake-npm.mjs');
+      writeFileSync(
+        fakeNpm,
+        `if (process.argv.includes("config")) console.log("false"); else console.log(${JSON.stringify(JSON.stringify(tree))})\n`
+      );
+
+      try {
+        const result = runVerifier({ npm_execpath: fakeNpm });
+
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain('profile-evil');
+      } finally {
+        rmSync(temporaryDirectory, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('fails closed when npm exits nonzero with a valid JSON tree and no reported problem', () => {
+    const temporaryDirectory = mkdtempSync(path.join(os.tmpdir(), 'spfx-kit-fake-npm-'));
+    const fakeNpm = path.join(temporaryDirectory, 'fake-npm.mjs');
+    writeFileSync(
+      fakeNpm,
+      'if (process.argv.includes("config")) console.log("false"); else { console.log(JSON.stringify({ dependencies: { "@spfx-kit/ui-profile": { version: "0.0.0", dependencies: {} } } })); process.exitCode = 1 }\n'
+    );
+
+    try {
+      const result = runVerifier({ npm_execpath: fakeNpm });
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('npm dependency tree problems');
+    } finally {
+      rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
   it('binds physical manifests to the checkout selected by --lockfile', () => {
     const temporaryRepository = mkdtempSync(path.join(os.tmpdir(), 'spfx-kit-selected-lockfile-'));
     const temporaryProfile = path.join(temporaryRepository, 'packages', 'ui-profile');

@@ -2549,25 +2549,65 @@ function classExpressionBindings(sourceFile, helpers) {
   const reactNamespaceSymbols = new Set();
   const reactMemoSymbols = new Set();
   const reactForwardRefSymbols = new Set();
+  const propTypesNamespaceSymbols = new Set();
+  const propTypesValidatorSymbols = new Set();
+  const propTypesValidatorNames = new Set([
+    'any',
+    'array',
+    'arrayOf',
+    'bigint',
+    'bool',
+    'element',
+    'elementType',
+    'exact',
+    'func',
+    'instanceOf',
+    'node',
+    'number',
+    'object',
+    'objectOf',
+    'oneOf',
+    'oneOfType',
+    'shape',
+    'string',
+    'symbol'
+  ]);
   for (const statement of sourceFile.statements) {
     if (
       ts.isImportEqualsDeclaration(statement) &&
       !statement.isTypeOnly &&
       ts.isExternalModuleReference(statement.moduleReference) &&
-      statement.moduleReference.expression?.text === 'react'
+      (statement.moduleReference.expression?.text === 'react' || statement.moduleReference.expression?.text === 'prop-types')
     ) {
-      addSymbol(reactNamespaceSymbols, statement.name);
+      addSymbol(
+        statement.moduleReference.expression.text === 'react' ? reactNamespaceSymbols : propTypesNamespaceSymbols,
+        statement.name
+      );
       continue;
     }
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteralLike(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== 'react' ||
       !statement.importClause ||
       statement.importClause.isTypeOnly
     ) {
       continue;
     }
+    if (statement.moduleSpecifier.text === 'prop-types') {
+      if (statement.importClause.name) addSymbol(propTypesNamespaceSymbols, statement.importClause.name);
+      const bindings = statement.importClause.namedBindings;
+      if (bindings && ts.isNamespaceImport(bindings)) {
+        addSymbol(propTypesNamespaceSymbols, bindings.name);
+      } else if (bindings) {
+        for (const specifier of bindings.elements) {
+          if (specifier.isTypeOnly) continue;
+          const importedName = (specifier.propertyName ?? specifier.name).text;
+          if (propTypesValidatorNames.has(importedName)) addSymbol(propTypesValidatorSymbols, specifier.name);
+        }
+      }
+      continue;
+    }
+    if (statement.moduleSpecifier.text !== 'react') continue;
     if (statement.importClause.name) addSymbol(reactNamespaceSymbols, statement.importClause.name);
     const bindings = statement.importClause.namedBindings;
     if (bindings && ts.isNamespaceImport(bindings)) {
@@ -2707,6 +2747,85 @@ function classExpressionBindings(sourceFile, helpers) {
     }
     return null;
   }
+  function propTypesValidatorReference(node) {
+    const unwrapped = unwrapExpression(node);
+    if (ts.isIdentifier(unwrapped)) {
+      return propTypesValidatorSymbols.has(symbolAt(unwrapped)) ? unwrapped.text : null;
+    }
+    if (!ts.isPropertyAccessExpression(unwrapped) && !ts.isElementAccessExpression(unwrapped)) return null;
+    const property = reactMetadataProperty(unwrapped);
+    if (property === 'isRequired') return null;
+    const receiver = unwrapExpression(unwrapped.expression);
+    return ts.isIdentifier(receiver) && propTypesNamespaceSymbols.has(symbolAt(receiver)) && propTypesValidatorNames.has(property)
+      ? property
+      : null;
+  }
+  function isStaticPropTypesLiteral(node) {
+    const unwrapped = unwrapExpression(node);
+    if (
+      ts.isStringLiteralLike(unwrapped) ||
+      ts.isNumericLiteral(unwrapped) ||
+      unwrapped.kind === ts.SyntaxKind.NullKeyword ||
+      unwrapped.kind === ts.SyntaxKind.TrueKeyword ||
+      unwrapped.kind === ts.SyntaxKind.FalseKeyword
+    ) {
+      return true;
+    }
+    if (ts.isPrefixUnaryExpression(unwrapped)) {
+      return (
+        (unwrapped.operator === ts.SyntaxKind.PlusToken || unwrapped.operator === ts.SyntaxKind.MinusToken) &&
+        ts.isNumericLiteral(unwrapExpression(unwrapped.operand))
+      );
+    }
+    return false;
+  }
+  function isStaticPropTypesObject(node) {
+    const object = unwrapExpression(node);
+    if (!ts.isObjectLiteralExpression(object)) return false;
+    return object.properties.every((property) => {
+      if (
+        !ts.isPropertyAssignment(property) ||
+        !property.name ||
+        ts.isComputedPropertyName(property.name) ||
+        isPrototypeSetterProperty(property, sourceFile)
+      ) {
+        return false;
+      }
+      return isStaticPropTypesValidator(property.initializer);
+    });
+  }
+  function isStaticPropTypesValidator(node) {
+    const unwrapped = unwrapExpression(node);
+    if (
+      (ts.isPropertyAccessExpression(unwrapped) || ts.isElementAccessExpression(unwrapped)) &&
+      reactMetadataProperty(unwrapped) === 'isRequired'
+    ) {
+      return isStaticPropTypesValidator(unwrapped.expression);
+    }
+    if (propTypesValidatorReference(unwrapped)) return true;
+    if (!ts.isCallExpression(unwrapped)) return false;
+    const validator = propTypesValidatorReference(unwrapped.expression);
+    if (!validator || unwrapped.arguments.length !== 1) return false;
+    const argument = unwrapExpression(unwrapped.arguments[0]);
+    if (validator === 'shape' || validator === 'exact') return isStaticPropTypesObject(argument);
+    if (validator === 'arrayOf' || validator === 'objectOf') return isStaticPropTypesValidator(argument);
+    if (validator === 'oneOfType') {
+      return ts.isArrayLiteralExpression(argument) && argument.elements.every(isStaticPropTypesValidator);
+    }
+    if (validator === 'oneOf') {
+      return ts.isArrayLiteralExpression(argument) && argument.elements.every(isStaticPropTypesLiteral);
+    }
+    if (validator === 'instanceOf') return ts.isIdentifier(argument);
+    return false;
+  }
+  function isStaticReactMetadataAssignment(assignment, access) {
+    const property = reactMetadataProperty(access);
+    const value = unwrapExpression(assignment.right);
+    if (property === 'displayName') return ts.isStringLiteralLike(value);
+    if (property === 'contextType') return ts.isIdentifier(value);
+    if (property === 'propTypes') return isStaticPropTypesObject(value);
+    return false;
+  }
   function isNonInvokingReactMetadataReference(identifier) {
     const receiver = outerTransparentExpression(identifier);
     const access = receiver.parent;
@@ -2725,6 +2844,13 @@ function classExpressionBindings(sourceFile, helpers) {
       current = outerTransparentExpression(current.parent);
     }
     const parent = current.parent;
+    if (
+      ts.isBinaryExpression(parent) &&
+      parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      parent.left === current
+    ) {
+      return current === outerTransparentExpression(access) && isStaticReactMetadataAssignment(parent, access);
+    }
     return !(
       ((ts.isCallExpression(parent) || ts.isNewExpression(parent)) && parent.expression === current) ||
       (ts.isTaggedTemplateExpression(parent) && parent.tag === current)
@@ -2745,7 +2871,8 @@ function classExpressionBindings(sourceFile, helpers) {
         return (
           ts.isIdentifier(receiver) &&
           componentConsumerSymbols.has(symbolAt(receiver)) &&
-          nonInvokingReactMetadataProperties.has(reactMetadataProperty(access))
+          nonInvokingReactMetadataProperties.has(reactMetadataProperty(access)) &&
+          isStaticReactMetadataAssignment(parent, access)
         );
       }
       current = parent;
