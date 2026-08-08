@@ -16,6 +16,7 @@
     "dependencyClosure",
     "baseUiDeclarationTransform",
     "baseUiPopupLifecycleTransform",
+    "ownedSources",
     "items"
   ],
   "properties": {
@@ -61,6 +62,13 @@
     "dependencyClosure": { "$ref": "#/$defs/snapshot" },
     "baseUiDeclarationTransform": { "$ref": "#/$defs/snapshot" },
     "baseUiPopupLifecycleTransform": { "$ref": "#/$defs/snapshot" },
+    "ownedSources": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [{ "$ref": "#/$defs/ownedThemeSource" }, { "$ref": "#/$defs/ownedRootSource" }],
+      "items": false
+    },
     "items": {
       "type": "array",
       "minItems": 24,
@@ -78,6 +86,46 @@
       "properties": {
         "path": { "type": "string", "pattern": "^[^/].*" },
         "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "ownedThemeSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "output", "transformations"],
+      "properties": {
+        "source": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            { "type": "object", "properties": { "path": { "const": "owned/src/lib/spfx-theme.ts" } } }
+          ]
+        },
+        "output": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            { "type": "object", "properties": { "path": { "const": "normalized/src/lib/spfx-theme.ts" } } }
+          ]
+        },
+        "transformations": { "const": ["copy-owned-host-contract"] }
+      }
+    },
+    "ownedRootSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "output", "transformations"],
+      "properties": {
+        "source": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            { "type": "object", "properties": { "path": { "const": "owned/src/lib/ui-root.tsx" } } }
+          ]
+        },
+        "output": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            { "type": "object", "properties": { "path": { "const": "normalized/src/lib/ui-root.tsx" } } }
+          ]
+        },
+        "transformations": { "const": ["copy-owned-host-contract"] }
       }
     },
     "compilerBridge": {

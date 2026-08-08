@@ -37,7 +37,7 @@
   "properties": {
     "$schema": { "const": "./provenance.schema.json" },
     "schemaVersion": { "const": 1 },
-    "generatorVersion": { "const": "1.2.0" },
+    "generatorVersion": { "const": "1.3.0" },
     "profileId": { "const": "spfx-react17-base-nova-v1" },
     "registry": {
       "type": "object",
@@ -144,7 +144,7 @@
       "additionalProperties": false,
       "required": ["contractVersion", "configuration", "implementation", "implementationSha256"],
       "properties": {
-        "contractVersion": { "const": "react17-classic-jsx-skui-v2" },
+        "contractVersion": { "const": "react17-classic-jsx-skui-v4" },
         "configuration": {
           "const": {
             "tailwindPrefix": "skui",

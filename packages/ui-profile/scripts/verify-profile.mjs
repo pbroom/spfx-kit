@@ -149,11 +149,11 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === '1db7992670e1c8cd71d021976f4e83d2fb39c853ce9b12dfdc9c5dbc71267138',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === 'adef1d5ce84b157591dace061c04591fe53679716a0da48fb4973801ea99c1da',
   'profile.schema.json identity differs'
 );
 assert(
-  sha256(Buffer.from(canonicalJson(provenanceSchema))) === '89208086e782b025d5abf7f4cad63b0dc7731e5aca2007fb862af49350ab74d6',
+  sha256(Buffer.from(canonicalJson(provenanceSchema))) === '3c7011e554de1eb7e01399f4239ddde69dea1ebb73c64c1b747042c634468e61',
   'provenance.schema.json identity differs'
 );
 assert(validateProfile(profile), `profile.json schema errors: ${ajv.errorsText(validateProfile.errors)}`);
@@ -220,6 +220,23 @@ assert(
     sha256(await readFile(path.join(packageRoot, profile.baseUiPopupLifecycleTransform.path))),
   'Base UI popup lifecycle transform digest differs'
 );
+assert(Array.isArray(profile.ownedSources) && profile.ownedSources.length === 2, 'Owned host source inventory differs');
+assertExact(
+  profile.ownedSources.map(({ source, output }) => [source.path, output.path]),
+  [
+    ['owned/src/lib/spfx-theme.ts', 'normalized/src/lib/spfx-theme.ts'],
+    ['owned/src/lib/ui-root.tsx', 'normalized/src/lib/ui-root.tsx']
+  ],
+  'Owned host source paths'
+);
+for (const ownedHostSource of profile.ownedSources) {
+  assertExact(ownedHostSource.transformations, ['copy-owned-host-contract'], 'Owned host source transformations');
+  const ownedHostSourceBytes = await readFile(path.join(packageRoot, ownedHostSource.source.path));
+  const ownedHostOutputBytes = await readFile(path.join(packageRoot, ownedHostSource.output.path));
+  assert(ownedHostSource.source.sha256 === sha256(ownedHostSourceBytes), 'Owned host source digest differs');
+  assert(ownedHostSource.output.sha256 === sha256(ownedHostOutputBytes), 'Owned host output digest differs');
+  assert(ownedHostOutputBytes.equals(ownedHostSourceBytes), 'Owned host output is not an exact source copy');
+}
 assert(provenance.profileId === PROFILE_ID, 'Provenance profile ID differs');
 assert(provenance.registry.preset === 'base-nova', 'Registry preset differs');
 assert(provenance.registry.cli.version === '4.16.1', 'shadcn version differs');

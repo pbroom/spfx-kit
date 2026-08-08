@@ -10,8 +10,8 @@ const profileManifest = require('../../package.json');
 
 export const PROFILE_ID = 'spfx-react17-base-nova-v1';
 export const PROFILE_SCHEMA_VERSION = 1;
-export const GENERATOR_VERSION = '1.2.0';
-export const NORMALIZATION_CONTRACT_VERSION = 'react17-classic-jsx-skui-v2';
+export const GENERATOR_VERSION = '1.3.0';
+export const NORMALIZATION_CONTRACT_VERSION = 'react17-classic-jsx-skui-v4';
 export const TAILWIND_PREFIX = 'skui';
 export const REGISTRY_IDS = Object.freeze([
   'button',
@@ -254,6 +254,406 @@ function rewriteModuleSpecifiers(source, label, rewrite) {
     normalized = `${normalized.slice(0, replacement.start)}${replacement.replacement}${normalized.slice(replacement.end)}`;
   }
   return { source: normalized, transformed: replacements.length > 0 };
+}
+
+const portalOwnershipCounts = new Map([
+  ['registry/base-nova/ui/combobox.tsx', 1],
+  ['registry/base-nova/ui/dialog.tsx', 1],
+  ['registry/base-nova/ui/dropdown-menu.tsx', 2],
+  ['registry/base-nova/ui/popover.tsx', 1],
+  ['registry/base-nova/ui/select.tsx', 1],
+  ['registry/base-nova/ui/sheet.tsx', 1],
+  ['registry/base-nova/ui/tooltip.tsx', 1]
+]);
+
+const portalPopupOwnershipCounts = new Map([
+  ['registry/base-nova/ui/combobox.tsx', { ComboboxContent: 1 }],
+  ['registry/base-nova/ui/dialog.tsx', { DialogContent: 1 }],
+  ['registry/base-nova/ui/dropdown-menu.tsx', { DropdownMenuContent: 1 }],
+  ['registry/base-nova/ui/popover.tsx', { PopoverContent: 1 }],
+  ['registry/base-nova/ui/select.tsx', { SelectContent: 1 }],
+  ['registry/base-nova/ui/sheet.tsx', { SheetContent: 1 }],
+  ['registry/base-nova/ui/tooltip.tsx', { TooltipContent: 1 }]
+]);
+
+const portalPrimitiveContracts = new Map([
+  [
+    'registry/base-nova/ui/combobox.tsx',
+    { moduleSpecifier: '@base-ui/react/combobox', importedName: 'Combobox', localName: 'ComboboxPrimitive' }
+  ],
+  [
+    'registry/base-nova/ui/dialog.tsx',
+    { moduleSpecifier: '@base-ui/react/dialog', importedName: 'Dialog', localName: 'DialogPrimitive' }
+  ],
+  [
+    'registry/base-nova/ui/dropdown-menu.tsx',
+    { moduleSpecifier: '@base-ui/react/menu', importedName: 'Menu', localName: 'MenuPrimitive' }
+  ],
+  [
+    'registry/base-nova/ui/popover.tsx',
+    { moduleSpecifier: '@base-ui/react/popover', importedName: 'Popover', localName: 'PopoverPrimitive' }
+  ],
+  [
+    'registry/base-nova/ui/select.tsx',
+    { moduleSpecifier: '@base-ui/react/select', importedName: 'Select', localName: 'SelectPrimitive' }
+  ],
+  [
+    'registry/base-nova/ui/sheet.tsx',
+    { moduleSpecifier: '@base-ui/react/dialog', importedName: 'Dialog', localName: 'SheetPrimitive' }
+  ],
+  [
+    'registry/base-nova/ui/tooltip.tsx',
+    { moduleSpecifier: '@base-ui/react/tooltip', importedName: 'Tooltip', localName: 'TooltipPrimitive' }
+  ]
+]);
+
+const ownedBaseUiRootIds = new Map([
+  ['registry/base-nova/ui/combobox.tsx', { component: 'Combobox', primitive: 'ComboboxPrimitive' }],
+  ['registry/base-nova/ui/select.tsx', { component: 'Select', primitive: 'SelectPrimitive' }]
+]);
+
+function requireOwnedBaseUiRootId(source, registrySourcePath, outputPath) {
+  const contract = ownedBaseUiRootIds.get(registrySourcePath);
+  if (!contract) return { source, transformed: false };
+  const sourceFile = parsedSource(source, outputPath);
+  const matches = [];
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement) || statement.declarationList.declarations.length !== 1) continue;
+    const declaration = statement.declarationList.declarations[0];
+    if (
+      ts.isIdentifier(declaration.name) &&
+      declaration.name.text === contract.component &&
+      declaration.initializer &&
+      ts.isPropertyAccessExpression(declaration.initializer) &&
+      ts.isIdentifier(declaration.initializer.expression) &&
+      declaration.initializer.expression.text === contract.primitive &&
+      declaration.initializer.name.text === 'Root'
+    ) {
+      matches.push(statement);
+    }
+  }
+  if (matches.length !== 1) {
+    throw new Error(`${outputPath}: expected one ${contract.component} Base UI Root alias, found ${matches.length}`);
+  }
+  const replacement = `function ${contract.component}<Value, Multiple extends boolean | undefined = false>({
+  id,
+  ...props
+}: ${contract.primitive}.Root.Props<Value, Multiple>) {
+  return <${contract.primitive}.Root id={useSpfxUiRequiredId(id, "${contract.component}.Root")} {...props} />
+}`;
+  const match = matches[0];
+  const normalized = `${source.slice(0, match.getStart(sourceFile))}${replacement}${source.slice(match.getEnd())}`;
+  return {
+    source: insertImport(normalized, 'import { useSpfxUiRequiredId } from "../../lib/ui-root"'),
+    transformed: true
+  };
+}
+
+function routeBaseUiPortalsThroughOwnedHost(source, registrySourcePath, outputPath) {
+  const expectedCount = portalOwnershipCounts.get(registrySourcePath);
+  if (!expectedCount) return { source, transformed: false };
+  const sourceFile = parsedSource(source, outputPath);
+  const primitiveContract = portalPrimitiveContracts.get(registrySourcePath);
+  if (!primitiveContract) {
+    throw new Error(`${outputPath}: missing Base UI portal primitive contract`);
+  }
+  const primitiveImports = [];
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      !statement.moduleSpecifier.text.startsWith('@base-ui/react')
+    ) {
+      continue;
+    }
+    const clause = statement.importClause;
+    const bindings = clause?.namedBindings;
+    if (
+      statement.moduleSpecifier.text === primitiveContract.moduleSpecifier &&
+      clause &&
+      !clause.isTypeOnly &&
+      !clause.name &&
+      bindings &&
+      ts.isNamedImports(bindings) &&
+      bindings.elements.length === 1
+    ) {
+      const element = bindings.elements[0];
+      if (
+        !element.isTypeOnly &&
+        (element.propertyName?.text ?? element.name.text) === primitiveContract.importedName &&
+        element.name.text === primitiveContract.localName
+      ) {
+        primitiveImports.push({ declaration: statement, specifier: element });
+        continue;
+      }
+    }
+    throw new Error(
+      `${outputPath}: Base UI portal ownership requires only import { ${primitiveContract.importedName} as ${primitiveContract.localName} } from "${primitiveContract.moduleSpecifier}"`
+    );
+  }
+  if (primitiveImports.length !== 1) {
+    throw new Error(
+      `${outputPath}: expected one owned ${primitiveContract.localName} Base UI import, found ${primitiveImports.length}`
+    );
+  }
+  const primitiveImport = primitiveImports[0];
+  for (const specifier of moduleSpecifierNodes(sourceFile)) {
+    if (
+      specifier.text.startsWith('@base-ui/react') &&
+      specifier !== primitiveImport.declaration.moduleSpecifier
+    ) {
+      throw new Error(`${outputPath}: additional Base UI dependencies are not accepted by portal ownership`);
+    }
+  }
+  function assertNoPrimitiveShadow(node) {
+    const shadowsPrimitive =
+      ((ts.isParameter(node) || ts.isVariableDeclaration(node)) &&
+        bindingNameContains(node.name, primitiveContract.localName)) ||
+      ((ts.isFunctionDeclaration(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isClassDeclaration(node) ||
+        ts.isClassExpression(node) ||
+        ts.isEnumDeclaration(node) ||
+        ts.isModuleDeclaration(node) ||
+        ts.isImportEqualsDeclaration(node)) &&
+        node.name &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === primitiveContract.localName) ||
+      ((ts.isImportSpecifier(node) || ts.isNamespaceImport(node)) &&
+        node !== primitiveImport.specifier &&
+        node.name.text === primitiveContract.localName) ||
+      (ts.isImportClause(node) && node.name?.text === primitiveContract.localName);
+    if (shadowsPrimitive) {
+      throw new Error(`${outputPath}: ${primitiveContract.localName} binding must not be shadowed`);
+    }
+    ts.forEachChild(node, assertNoPrimitiveShadow);
+  }
+  assertNoPrimitiveShadow(sourceFile);
+  const insertions = [];
+  const popupCounts = new Map();
+  const portalRouteCounts = new Map();
+  const directPortalNodes = [];
+  let directPortalCount = 0;
+  function assertPropsRestBinding(node) {
+    let current = node.parent;
+    while (current && !ts.isFunctionLike(current)) current = current.parent;
+    const binding = current?.parameters[0]?.name;
+    const hasPropsRest =
+      binding &&
+      ts.isObjectBindingPattern(binding) &&
+      binding.elements.some(
+        (element) => element.dotDotDotToken && ts.isIdentifier(element.name) && element.name.text === 'props'
+      );
+    if (!hasPropsRest) {
+      throw new Error(`${outputPath}: owned Base UI Portal routing requires an enclosing ...props binding`);
+    }
+  }
+  function enclosingFunctionName(node) {
+    let current = node.parent;
+    while (current && !ts.isFunctionLike(current)) current = current.parent;
+    if (current?.name && ts.isIdentifier(current.name)) return current.name.text;
+    if (
+      current?.parent &&
+      ts.isVariableDeclaration(current.parent) &&
+      ts.isIdentifier(current.parent.name)
+    ) {
+      return current.parent.name.text;
+    }
+    throw new Error(`${outputPath}: owned Base UI popup routing requires a named enclosing function`);
+  }
+  function collectDirectPortals(node) {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const tag = node.tagName;
+      if (ts.isPropertyAccessExpression(tag) && tag.name.text === 'Portal') {
+        if (!ts.isIdentifier(tag.expression) || tag.expression.text !== primitiveContract.localName) {
+          throw new Error(`${outputPath}: Base UI Portal target must be ${primitiveContract.localName}.Portal`);
+        }
+        directPortalNodes.push(node);
+      }
+      if (
+        ts.isPropertyAccessExpression(tag) &&
+        tag.name.text === 'Popup' &&
+        (!ts.isIdentifier(tag.expression) || tag.expression.text !== primitiveContract.localName)
+      ) {
+        throw new Error(`${outputPath}: Base UI Popup target must be ${primitiveContract.localName}.Popup`);
+      }
+    }
+    ts.forEachChild(node, collectDirectPortals);
+  }
+  collectDirectPortals(sourceFile);
+  const portalOwnerFunctions = new Set(directPortalNodes.map((node) => enclosingFunctionName(node)));
+  const expectedPopupFunctions = portalPopupOwnershipCounts.get(registrySourcePath) ?? {};
+  const portalWrapperFunctions = new Set(
+    [...portalOwnerFunctions].filter((functionName) => !expectedPopupFunctions[functionName])
+  );
+  function visit(node) {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const tag = node.tagName;
+      if (ts.isPropertyAccessExpression(tag) && tag.name.text === 'Portal') {
+        const functionName = enclosingFunctionName(node);
+        if (
+          portalPopupOwnershipCounts.get(registrySourcePath)?.[functionName] &&
+          node.attributes.properties.some((attribute) => ts.isJsxSpreadAttribute(attribute))
+        ) {
+          throw new Error(`${outputPath}: ${functionName} owned Base UI Portal must not spread popup props`);
+        }
+        const hasContainer = node.attributes.properties.some(
+          (attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(sourceFile) === 'container'
+        );
+        if (hasContainer) {
+          throw new Error(`${outputPath}: upstream Base UI Portal container ownership is not accepted`);
+        }
+        const hasId = node.attributes.properties.some(
+          (attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(sourceFile) === 'id'
+        );
+        if (hasId) {
+          throw new Error(`${outputPath}: upstream Base UI Portal ID ownership is not accepted`);
+        }
+        const hasRender = node.attributes.properties.some(
+          (attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(sourceFile) === 'render'
+        );
+        if (hasRender) {
+          throw new Error(`${outputPath}: upstream Base UI Portal render ownership is not accepted`);
+        }
+        assertPropsRestBinding(node);
+        directPortalCount += 1;
+        if (portalPopupOwnershipCounts.get(registrySourcePath)?.[functionName]) {
+          portalRouteCounts.set(functionName, (portalRouteCounts.get(functionName) ?? 0) + 1);
+        }
+        const ownedPortalRender = portalWrapperFunctions.has(functionName)
+          ? ` render={useSpfxUiOwnedPortalRender(props.render, props.id, "${functionName}")}`
+          : '';
+        insertions.push({
+          position: node.attributes.end,
+          text:
+            ' id={useSpfxUiPortalId(props.id)}' +
+            ' container={useSpfxUiPortalHost()}' +
+            ownedPortalRender
+        });
+      } else if (ts.isIdentifier(tag) && portalWrapperFunctions.has(tag.text)) {
+        const functionName = enclosingFunctionName(node);
+        if (!portalPopupOwnershipCounts.get(registrySourcePath)?.[functionName]) {
+          throw new Error(
+            `${outputPath}: local Base UI Portal wrapper ${tag.text} must be invoked directly by an owned popup function`
+          );
+        }
+        assertPropsRestBinding(node);
+        const hasId = node.attributes.properties.some(
+          (attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(sourceFile) === 'id'
+        );
+        if (hasId) throw new Error(`${outputPath}: upstream ${tag.text} ID ownership is not accepted`);
+        portalRouteCounts.set(functionName, (portalRouteCounts.get(functionName) ?? 0) + 1);
+        insertions.push({ position: node.attributes.end, text: ' id={props.id}' });
+      }
+      if (ts.isPropertyAccessExpression(tag) && tag.name.text === 'Popup') {
+        const functionName = enclosingFunctionName(node);
+        const expectedPopupCount = portalPopupOwnershipCounts.get(registrySourcePath)?.[functionName];
+        if (expectedPopupCount) {
+          assertPropsRestBinding(node);
+          if (
+            node.attributes.properties.some(
+              (attribute) => ts.isJsxAttribute(attribute) && ['id', 'render'].includes(attribute.name.getText(sourceFile))
+            )
+          ) {
+            throw new Error(`${outputPath}: upstream ${functionName} popup ID or render ownership is not accepted`);
+          }
+          popupCounts.set(functionName, (popupCounts.get(functionName) ?? 0) + 1);
+          insertions.push({
+            position: node.attributes.end,
+            text:
+              ' id={props.id}' +
+              ` render={useSpfxUiOwnedRender(props.render, props.id, "${functionName}")}`
+          });
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  function isJsxTagMember(node) {
+    const parent = node.parent;
+    return (
+      (ts.isJsxOpeningElement(parent) || ts.isJsxSelfClosingElement(parent) || ts.isJsxClosingElement(parent)) &&
+      parent.tagName === node
+    );
+  }
+  function isTypeOnlyPrimitiveReference(node) {
+    let current = node;
+    while (current.parent) {
+      const parent = current.parent;
+      if (
+        (ts.isPropertyAccessExpression(parent) && parent.expression === current) ||
+        (ts.isQualifiedName(parent) && (parent.left === current || parent.right === current))
+      ) {
+        current = parent;
+        continue;
+      }
+      if (ts.isTypeQueryNode(parent) || ts.isTypeNode(parent)) return true;
+      if (ts.isExpression(parent) || ts.isStatement(parent) || ts.isJsxAttribute(parent)) return false;
+      current = parent;
+    }
+    return false;
+  }
+  function rejectPrimitiveEscapes(node) {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(unwrapExpression(node.expression)) &&
+      unwrapExpression(node.expression).text === 'eval'
+    ) {
+      throw new Error(`${outputPath}: direct eval is not accepted in an owned Base UI portal module`);
+    }
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === primitiveContract.localName &&
+      (node.name.text === 'Portal' || node.name.text === 'Popup') &&
+      !isJsxTagMember(node) &&
+      !isTypeOnlyPrimitiveReference(node)
+    ) {
+      throw new Error(
+        `${outputPath}: runtime Base UI ${node.name.text} member must not escape its owned wrapper`
+      );
+    }
+    if (ts.isIdentifier(node) && node.text === primitiveContract.localName) {
+      const isImportBinding = node === primitiveImport.specifier.name;
+      const isMemberExpression = ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node;
+      if (!isImportBinding && !isMemberExpression && !isTypeOnlyPrimitiveReference(node)) {
+        throw new Error(`${outputPath}: ${primitiveContract.localName} must not escape as a runtime value`);
+      }
+    }
+    ts.forEachChild(node, rejectPrimitiveEscapes);
+  }
+  rejectPrimitiveEscapes(sourceFile);
+  if (directPortalCount !== expectedCount) {
+    throw new Error(`${outputPath}: expected ${expectedCount} Base UI Portal surfaces, found ${directPortalCount}`);
+  }
+  for (const [functionName, expectedPopupCount] of Object.entries(
+    portalPopupOwnershipCounts.get(registrySourcePath) ?? {}
+  )) {
+    const actualPopupCount = popupCounts.get(functionName) ?? 0;
+    if (actualPopupCount !== expectedPopupCount) {
+      throw new Error(
+        `${outputPath}: expected ${expectedPopupCount} ${functionName} owned popup surface, found ${actualPopupCount}`
+      );
+    }
+    const actualPortalRouteCount = portalRouteCounts.get(functionName) ?? 0;
+    if (actualPortalRouteCount !== expectedPopupCount) {
+      throw new Error(
+        `${outputPath}: expected ${expectedPopupCount} ${functionName} owned portal route, found ${actualPortalRouteCount}`
+      );
+    }
+  }
+  let normalized = source;
+  for (const insertion of insertions.sort((left, right) => right.position - left.position)) {
+    normalized = `${normalized.slice(0, insertion.position)}${insertion.text}${normalized.slice(insertion.position)}`;
+  }
+  const ownedHostImports = portalWrapperFunctions.size
+    ? 'import { useSpfxUiOwnedPortalRender, useSpfxUiOwnedRender, useSpfxUiPortalHost, useSpfxUiPortalId } from "../../lib/ui-root"'
+    : 'import { useSpfxUiOwnedRender, useSpfxUiPortalHost, useSpfxUiPortalId } from "../../lib/ui-root"';
+  return {
+    source: insertImport(normalized, ownedHostImports),
+    transformed: true
+  };
 }
 
 function hasAppOwnedAliasSpecifier(source, label) {
@@ -3952,6 +4352,14 @@ export function normalizeRegistrySource({ source, registrySourcePath, sourceCont
   const iconResult = resolveIconPlaceholders(normalized);
   if (iconResult.transformed) transformations.push('resolve-lucide-icon-placeholders');
   normalized = iconResult.source;
+
+  const portalResult = routeBaseUiPortalsThroughOwnedHost(normalized, registrySourcePath, outputPath);
+  if (portalResult.transformed) transformations.push('route-portals-through-owned-host');
+  normalized = portalResult.source;
+
+  const rootIdResult = requireOwnedBaseUiRootId(normalized, registrySourcePath, outputPath);
+  if (rootIdResult.transformed) transformations.push('require-owned-base-ui-root-id');
+  normalized = rootIdResult.source;
 
   const tailwindResult = prefixTailwindClassCandidates(normalized, outputPath, { deferAmbiguousJsxSpreads: true });
   if (tailwindResult.transformed) transformations.push('prefix-tailwind-utilities');
