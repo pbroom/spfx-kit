@@ -2,7 +2,6 @@
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import type * as BundledMonaco from 'monaco-editor/esm/vs/editor/editor.api';
-import { Menu, MenuButton, MenuItem, MenuList, MenuPopover, MenuTrigger } from '@fluentui/react-components';
 import { getSourceDiagnostics, shouldCommitSource } from './sourceEditorCore';
 import type {
   SourceEditorCommitMode,
@@ -10,6 +9,15 @@ import type {
   SourceEditorSnippet,
   SourceEditorValidator
 } from './sourceEditorCore';
+import { Button } from './ui-profile/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from './ui-profile/components/ui/dropdown-menu';
+import { useSpfxUiHost, useSpfxUiId } from './ui-profile/lib/ui-root';
 
 type MonacoApi = typeof BundledMonaco;
 
@@ -18,6 +26,8 @@ export interface SourceEditorMonacoAdapter {
 }
 
 export interface SourceEditorFieldProps {
+  /** Stable caller-owned identity unique within the current UI host. */
+  instanceId: string;
   label: string;
   language: SourceEditorLanguage;
   value: string;
@@ -113,6 +123,7 @@ const defaultMonacoAdapter: SourceEditorMonacoAdapter = {
 };
 
 export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> = (props) => {
+  const sourceEditorInstanceId = requireSourceEditorInstanceId(props.instanceId);
   const baseConfig = props.configuration || props.config || {};
   const commitMode = props.commitMode ?? baseConfig.commitMode;
   const maxBytes = props.maxBytes ?? baseConfig.maxBytes;
@@ -368,6 +379,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
     <SourceEditorShortcutToolbar
       ariaLabel={toolbarLabel}
       editingTarget={editingTarget}
+      instanceId={sourceEditorInstanceId}
       snippets={sourceEditorSnippets}
       targets={sourceEditorTargets}
       onApplySnippet={handleFloatingSnippet}
@@ -642,6 +654,7 @@ interface MonacoDiagnosticNoticeProps {
 interface SourceEditorShortcutToolbarProps {
   ariaLabel: string;
   editingTarget: { selector: string; value: string } | null;
+  instanceId: string;
   snippets: readonly SourceEditorSnippet[];
   targets: readonly SourceEditorTarget[];
   onApplySnippet: (snippet: SourceEditorSnippet) => void;
@@ -652,15 +665,20 @@ interface SourceEditorShortcutToolbarProps {
 }
 
 const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutToolbarProps> = (props) => {
+  const uiHost = useSpfxUiHost();
+  const targetWindow = uiHost.targetWindow;
   const toolbarRef = React.useRef<HTMLDivElement | null>(null);
   const itemsRef = React.useRef<HTMLDivElement | null>(null);
   const menuTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const menuEditInputRef = React.useRef<HTMLInputElement | null>(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const menuTriggerId = useSpfxUiId(`source-editor:${props.instanceId}:shortcut-menu-trigger`);
+  const menuContentId = useSpfxUiId(`source-editor:${props.instanceId}:shortcut-menu-content`);
   const shortcutSignature = [
     ...props.targets.map((target) => `${target.label}:${target.selector}:${target.editable ? 'editable' : 'fixed'}`),
     ...props.snippets.map((snippet) => `${snippet.label}:${snippet.searchText || snippet.snippet}`)
   ].join('|');
-  const isCollapsed = useShortcutToolbarOverflow(toolbarRef, itemsRef, shortcutSignature);
+  const isCollapsed = useShortcutToolbarOverflow(toolbarRef, itemsRef, shortcutSignature, targetWindow);
   const shortcutCount = props.targets.length + props.snippets.length;
 
   React.useEffect(() => {
@@ -669,6 +687,15 @@ const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutT
     }
   }, [isCollapsed, menuOpen]);
 
+  React.useEffect(() => {
+    if (!menuOpen || !props.editingTarget) {
+      return undefined;
+    }
+
+    const animationFrame = targetWindow.requestAnimationFrame(() => menuEditInputRef.current?.focus());
+    return () => targetWindow.cancelAnimationFrame(animationFrame);
+  }, [menuOpen, props.editingTarget, targetWindow]);
+
   if (shortcutCount === 0) {
     return null;
   }
@@ -676,41 +703,8 @@ const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutT
   const closeMenu = (restoreFocus = false): void => {
     setMenuOpen(false);
     if (restoreFocus) {
-      window.requestAnimationFrame(() => menuTriggerRef.current?.focus());
+      targetWindow.requestAnimationFrame(() => menuTriggerRef.current?.focus());
     }
-  };
-
-  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-      return;
-    }
-    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].indexOf(event.key) < 0) {
-      return;
-    }
-
-    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])'));
-    if (items.length === 0) {
-      return;
-    }
-
-    const currentItem = (event.target as HTMLElement).closest<HTMLElement>('[role="menuitem"]');
-    const currentIndex = currentItem ? items.indexOf(currentItem) : -1;
-    const nextIndex =
-      event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? items.length - 1
-          : event.key === 'ArrowUp'
-            ? currentIndex <= 0
-              ? items.length - 1
-              : currentIndex - 1
-            : currentIndex < 0 || currentIndex === items.length - 1
-              ? 0
-              : currentIndex + 1;
-
-    event.preventDefault();
-    event.stopPropagation();
-    items[nextIndex].focus();
   };
 
   const renderTarget = (target: SourceEditorTarget, location: 'inline' | 'menu'): React.ReactNode => {
@@ -831,20 +825,24 @@ const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutT
 
     return (
       <React.Fragment key={`menu-${target.selector}`}>
-        <MenuItem aria-label={`Add or jump to ${target.selector}`} onClick={() => props.onApplyTarget(target)}>
+        <DropdownMenuItem
+          aria-label={`Add or jump to ${target.selector}`}
+          className="bt-floating-editor__shortcut-menu-item"
+          onClick={() => props.onApplyTarget(target)}
+        >
           {target.label}
-        </MenuItem>
+        </DropdownMenuItem>
         {target.editable ? (
           isEditing ? (
-            <MenuItem
+            <DropdownMenuItem
               aria-label={target.renameLabel || `Edit ${target.selector}`}
-              className="bt-floating-editor__shortcut-menu-edit-item"
-              persistOnClick
+              className="bt-floating-editor__shortcut-menu-item bt-floating-editor__shortcut-menu-edit-item"
+              closeOnClick={false}
             >
               <input
                 aria-label={target.renameLabel || `Edit ${target.selector}`}
-                autoFocus
                 className="bt-floating-editor__target-input bt-floating-editor__target-input--menu"
+                ref={menuEditInputRef}
                 value={props.editingTarget?.value || target.selector}
                 onBlur={(event) => props.onCommitTarget(target, event.currentTarget.value)}
                 onChange={(event) => props.onEditingTargetChange({ selector: target.selector, value: event.currentTarget.value })}
@@ -866,15 +864,16 @@ const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutT
                 }}
                 onPointerDown={(event) => event.stopPropagation()}
               />
-            </MenuItem>
+            </DropdownMenuItem>
           ) : (
-            <MenuItem
+            <DropdownMenuItem
               aria-label={target.renameLabel || `Edit ${target.selector}`}
-              persistOnClick
+              className="bt-floating-editor__shortcut-menu-item"
+              closeOnClick={false}
               onClick={() => props.onEditTarget(target)}
             >
               {target.renameLabel || `Edit ${target.label}`}
-            </MenuItem>
+            </DropdownMenuItem>
           )
         ) : null}
       </React.Fragment>
@@ -882,13 +881,14 @@ const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutT
   };
 
   const renderMenuSnippet = (snippet: SourceEditorSnippet): React.ReactNode => (
-    <MenuItem
+    <DropdownMenuItem
       aria-label={snippet.label}
+      className="bt-floating-editor__shortcut-menu-item"
       key={`menu-${snippet.label}:${snippet.searchText || snippet.snippet}`}
       onClick={() => props.onApplySnippet(snippet)}
     >
       {snippet.label}
-    </MenuItem>
+    </DropdownMenuItem>
   );
 
   return (
@@ -905,33 +905,51 @@ const SourceEditorShortcutToolbar: React.FunctionComponent<SourceEditorShortcutT
         </div>
       </div>
       {isCollapsed ? (
-        <Menu
-          inline
+        <DropdownMenu
+          loopFocus
+          modal={false}
           open={menuOpen}
-          positioning={{ align: 'start', position: 'below' }}
-          surfaceMotion={null}
-          onOpenChange={(_event, data) => setMenuOpen(data.open)}
+          triggerId={menuTriggerId}
+          onOpenChange={(open) => setMenuOpen(open)}
         >
-          <MenuTrigger disableButtonEnhancement>
-            <MenuButton
-              appearance="secondary"
-              aria-label={`Open ${props.ariaLabel}`}
-              className="bt-floating-editor__shortcut-menu-trigger"
-              ref={menuTriggerRef}
-              size="small"
-              onPointerDown={(event) => event.stopPropagation()}
+          <DropdownMenuTrigger
+            id={menuTriggerId}
+            render={
+              <Button
+                aria-label={`Open ${props.ariaLabel}`}
+                className="bt-floating-editor__shortcut-menu-trigger"
+                ref={menuTriggerRef}
+                size="sm"
+                variant="secondary"
+                onPointerDown={(event) => event.stopPropagation()}
+              />
+            }
+          >
+            <span>Shortcuts</span>
+            <span className="bt-floating-editor__shortcut-menu-count">{shortcutCount}</span>
+            <svg
+              aria-hidden="true"
+              className="bt-floating-editor__shortcut-menu-icon"
+              data-icon="inline-end"
+              fill="currentColor"
+              viewBox="0 0 20 20"
             >
-              <span>Shortcuts</span>
-              <span className="bt-floating-editor__shortcut-menu-count">{shortcutCount}</span>
-            </MenuButton>
-          </MenuTrigger>
-          <MenuPopover className="bt-floating-editor__shortcut-menu-popover">
-            <MenuList aria-label={props.ariaLabel} onKeyDown={handleMenuKeyDown}>
+              <path d="m5.5 7.5 4.5 4.5 4.5-4.5 1 1-5.5 5.5-5.5-5.5 1-1Z" />
+            </svg>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            aria-label={props.ariaLabel}
+            className="bt-floating-editor__shortcut-menu-popover"
+            id={menuContentId}
+            side="bottom"
+          >
+            <DropdownMenuGroup>
               {props.targets.map(renderMenuTarget)}
               {props.snippets.map(renderMenuSnippet)}
-            </MenuList>
-          </MenuPopover>
-        </Menu>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : null}
     </div>
   );
@@ -944,7 +962,8 @@ export function shouldCollapseShortcutToolbar(availableWidth: number, requiredWi
 function useShortcutToolbarOverflow(
   toolbarRef: React.RefObject<HTMLDivElement>,
   itemsRef: React.RefObject<HTMLDivElement>,
-  shortcutSignature: string
+  shortcutSignature: string,
+  targetWindow: Window
 ): boolean {
   const [isCollapsed, setIsCollapsed] = React.useState(false);
 
@@ -956,7 +975,7 @@ function useShortcutToolbarOverflow(
     }
 
     const measure = (): void => {
-      const computedStyle = window.getComputedStyle(toolbar);
+      const computedStyle = targetWindow.getComputedStyle(toolbar);
       const horizontalPadding =
         Number.parseFloat(computedStyle.paddingLeft || '0') + Number.parseFloat(computedStyle.paddingRight || '0');
       const availableWidth = Math.max(0, toolbar.clientWidth - horizontalPadding);
@@ -965,8 +984,9 @@ function useShortcutToolbarOverflow(
     };
 
     measure();
-    if (typeof ResizeObserver === 'function') {
-      const observer = new ResizeObserver(measure);
+    const ResizeObserverConstructor = (targetWindow as Window & { ResizeObserver?: typeof ResizeObserver }).ResizeObserver;
+    if (typeof ResizeObserverConstructor === 'function') {
+      const observer = new ResizeObserverConstructor(measure);
       observer.observe(toolbar);
       observer.observe(items);
       return () => observer.disconnect();
@@ -974,19 +994,22 @@ function useShortcutToolbarOverflow(
 
     const workspace = toolbar.closest<HTMLElement>('.bt-source-workspace');
     let mutationObserver: MutationObserver | undefined;
-    if (workspace && typeof MutationObserver === 'function') {
-      mutationObserver = new MutationObserver(measure);
-      mutationObserver.observe(workspace, {
+    const MutationObserverConstructor = (targetWindow as Window & { MutationObserver?: typeof MutationObserver })
+      .MutationObserver;
+    if (workspace && typeof MutationObserverConstructor === 'function') {
+      const observer = new MutationObserverConstructor(measure);
+      observer.observe(workspace, {
         attributeFilter: ['class', 'style'],
         attributes: true
       });
+      mutationObserver = observer;
     }
-    window.addEventListener('resize', measure);
+    targetWindow.addEventListener('resize', measure);
     return () => {
       mutationObserver?.disconnect();
-      window.removeEventListener('resize', measure);
+      targetWindow.removeEventListener('resize', measure);
     };
-  }, [itemsRef, shortcutSignature, toolbarRef]);
+  }, [itemsRef, shortcutSignature, targetWindow, toolbarRef]);
 
   return isCollapsed;
 }
@@ -1236,6 +1259,17 @@ function getCloseShortcutLabel(): string {
   }
 
   return 'Ctrl+S';
+}
+
+function requireSourceEditorInstanceId(instanceId: string): string {
+  const hasControlCharacter = Array.from(instanceId || '').some((character) => {
+    const codePoint = character.charCodeAt(0);
+    return codePoint <= 31 || codePoint === 127;
+  });
+  if (!instanceId || instanceId.trim() !== instanceId || hasControlCharacter) {
+    throw new Error('Source editor instanceId must be a non-empty, trimmed string without control characters');
+  }
+  return instanceId;
 }
 
 function installCloseShortcutGuard(editor: any, onClose: () => void): void {
@@ -1600,8 +1634,8 @@ function createValueSuggestions(monaco: any, range: any): any[] {
   }));
 }
 
-function createInitialFloatingRect(): FloatingRect {
-  const viewport = getViewportSize();
+function createInitialFloatingRect(targetWindow?: Window): FloatingRect {
+  const viewport = getViewportSize(targetWindow);
   const width = Math.min(760, Math.max(360, viewport.width - 48));
   const height = Math.min(560, Math.max(300, viewport.height - 96));
   return {
@@ -2082,14 +2116,6 @@ const editorCss = `.bt-css-editor {
   opacity: 1;
 }
 
-.bt-floating-editor__shortcut-menu-trigger.fui-MenuButton:hover:active,
-.bt-floating-editor__shortcut-menu-trigger.fui-MenuButton:active:focus-visible {
-  border-color: #64748b;
-  color: #f8fafc;
-  background: #273449;
-  opacity: 1;
-}
-
 .bt-floating-editor__shortcut-menu-trigger:hover .bt-floating-editor__shortcut-menu-count,
 .bt-floating-editor__shortcut-menu-trigger:focus-visible .bt-floating-editor__shortcut-menu-count,
 .bt-floating-editor__shortcut-menu-trigger:active .bt-floating-editor__shortcut-menu-count,
@@ -2097,7 +2123,9 @@ const editorCss = `.bt-css-editor {
   color: #cbd5e1;
 }
 
-.bt-floating-editor__shortcut-menu-trigger .fui-MenuButton__menuIcon {
+.bt-floating-editor__shortcut-menu-icon {
+  width: 14px;
+  height: 14px;
   margin-left: 0;
 }
 
@@ -2116,7 +2144,7 @@ const editorCss = `.bt-css-editor {
   overscroll-behavior: contain;
 }
 
-.bt-floating-editor__shortcut-menu-popover .fui-MenuItem {
+.bt-floating-editor__shortcut-menu-item {
   min-height: 28px;
   border-radius: 4px;
   padding: 4px 8px;
@@ -2130,14 +2158,11 @@ const editorCss = `.bt-css-editor {
     color 50ms ease;
 }
 
-.bt-floating-editor__shortcut-menu-popover .fui-MenuItem__content {
-  padding-inline: 0;
-}
-
-.bt-floating-editor__shortcut-menu-popover .fui-MenuItem:hover,
-.bt-floating-editor__shortcut-menu-popover .fui-MenuItem:focus,
-.bt-floating-editor__shortcut-menu-popover .fui-MenuItem:focus-visible,
-.bt-floating-editor__shortcut-menu-popover .fui-MenuItem:active {
+.bt-floating-editor__shortcut-menu-item:hover,
+.bt-floating-editor__shortcut-menu-item:focus,
+.bt-floating-editor__shortcut-menu-item:focus-visible,
+.bt-floating-editor__shortcut-menu-item:active,
+.bt-floating-editor__shortcut-menu-item[data-highlighted] {
   color: #ffffff;
   background: #1e293b;
   opacity: 1;
