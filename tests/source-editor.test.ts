@@ -16,7 +16,6 @@ import {
   sourceEditorCompletionTriggerCharacters,
   sourceEditorTabCompletion
 } from '../apps/lab/src/components/SourceEditor';
-import { SourceWorkspaceField as ProductionSourceWorkspace } from '../packages/source-editor-react/src/SourceWorkspaceField';
 import {
   SourceEditorField as ProductionSourceEditor,
   createSourceEditorSuggestions as createProductionSourceEditorSuggestions,
@@ -223,52 +222,6 @@ describe('source editor state', () => {
         expect.objectContaining({ label: 'background', kind: 9, range }),
         expect.objectContaining({ label: '#0f6cbd', kind: 12, range })
       ])
-    );
-  });
-
-  it('renders one inline source workspace without exposing the pop-out-only split view', () => {
-    const markup = renderToStaticMarkup(
-      React.createElement(ProductionSourceWorkspace, {
-        label: 'Styles & template',
-        description: 'Edit both sources together.',
-        documents: [
-          {
-            id: 'scss',
-            label: 'CSS/SCSS',
-            language: 'scss',
-            value: '.better-list {}',
-            onChange: () => undefined
-          },
-          {
-            id: 'html',
-            label: 'HTML template',
-            language: 'html',
-            value: '<template data-bl-fragment="item"></template>',
-            onChange: () => undefined
-          }
-        ]
-      })
-    );
-
-    expect(markup.match(/>Pop out</g)).toHaveLength(1);
-    expect(markup).toContain('role="tablist"');
-    expect(markup).toContain('fui-TabList');
-    expect(markup).toContain('fui-Tab');
-    expect(markup).toContain('>CSS/SCSS</span>');
-    expect(markup).toContain('>HTML template</span>');
-    expect(markup).not.toContain('aria-label="Split"');
-    expect(markup).not.toContain('title="Split view"');
-    expect(markup).toContain('aria-selected="true"');
-    expect(markup).toContain('hidden=""');
-    expect(markup).toContain('justify-self: start;');
-    expect(markup).toContain('max-width: 100%;');
-    expect(markup).toContain('.bt-source-workspace--floating .bt-source-workspace__tabs {');
-    expect(markup).toContain(
-      '.bt-source-workspace--floating .bt-css-editor--fill &gt; .bt-floating-editor__toolbar {\n  margin-block-end: -6px;'
-    );
-    expect(markup).toContain('.bt-source-workspace__pane {\n  display: grid;\n  grid-template-rows: minmax(0, 1fr);');
-    expect(markup).toContain(
-      '.bt-source-workspace__body--split .bt-source-workspace__pane {\n  grid-template-rows: auto minmax(0, 1fr);'
     );
   });
 

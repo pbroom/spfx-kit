@@ -257,6 +257,7 @@ function ControlRenderer({ control, values, value, onChange, onPatch }: ControlR
           defaultView={control.defaultView}
           description={control.description}
           documents={documents}
+          instanceId={`lab-source-workspace-${control.name}`}
           label={control.label}
         />
       </div>
