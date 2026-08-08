@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { applyPopupLifecycle } from './transform-base-ui-popup-lifecycle.mjs';
+import { applyIdOwnership } from './transform-base-ui-id-ownership.mjs';
 import { applySelectValueDeclarations } from './transform-base-ui-select-value.mjs';
 import {
   acquirePreparationLock,
@@ -108,6 +109,7 @@ export async function prepareBaseUi() {
     }
     await applySelectValueDeclarations(stagingRoot);
     await applyPopupLifecycle(stagingRoot);
+    await applyIdOwnership(stagingRoot);
 
     const hadPrepared = await pathExists(preparedRoot);
     const journaled = await beginBaseUiPreparationTransaction(lockRoot, lockOwner.token, {

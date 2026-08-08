@@ -4,6 +4,10 @@
     "path": "compat/base-ui-1.6.0/select-value/contract.json",
     "sha256": "39bc2e24fea78e7e68f8518c217698489d7963c049d44cdb85ffaba539d66072"
   },
+  "baseUiIdOwnershipTransform": {
+    "path": "compat/base-ui-1.6.0/id-ownership/contract.json",
+    "sha256": "660f74a5e1f350fbdddd792d00c2d48265f435e6a1b79075bd3327b2c8581870"
+  },
   "baseUiPopupLifecycleTransform": {
     "path": "compat/base-ui-1.6.0/popup-lifecycle/contract.json",
     "sha256": "6500f7475790853273cfbbb10c1c570c054acd883db4031988b0001978aacfef"
@@ -16,6 +20,10 @@
     {
       "path": "compat-consumers/select-value.tsx",
       "sha256": "b53b21ce15ee5ddf3185aaac4d02d3ab7fe3f6bb32a5ae56a1fa818de3ebfcd3"
+    },
+    {
+      "path": "compat/base-ui-1.6.0/id-ownership/contract.schema.json",
+      "sha256": "df509d92500517aa2fe28c5871ec94409468548095ef46e5c643efdb618820be"
     },
     {
       "path": "tailwind-profile.css",
@@ -47,7 +55,7 @@
     },
     {
       "path": "scripts/lib/generate-profile.mjs",
-      "sha256": "0177d96176ecc4f06b8aa135ee09967238e74bfb682ec2b460b8a70f5409e92b"
+      "sha256": "31ecb00f568ed14bce1939f7e1315846fbaaf081b13d3321ba4b8ec176427076"
     },
     {
       "path": "scripts/lib/profile-update-intake.mjs",
@@ -59,7 +67,7 @@
     },
     {
       "path": "scripts/lib/generate-validated-profile.mjs",
-      "sha256": "96ac5ebb2471cbd875b1ad119d26d4e0bcb233971b6ab728d58a18a71b643ca9"
+      "sha256": "73f8cdd03d57d99c2b1dfec14ddfa1a77d266daaf5d1bf4dca408be94c1ea6a6"
     },
     {
       "path": "scripts/lib/generation-transaction.mjs",
@@ -71,7 +79,7 @@
     },
     {
       "path": "scripts/lib/generated-tree-closure.mjs",
-      "sha256": "d60869936bfb4dff1699f4edd0ce7576633a0a4de76f4a5673c1b74a600e2376"
+      "sha256": "20c9af8d933c9b73277f0150761fafc824626e98c6b36ed5b7c1de463a096ba7"
     },
     {
       "path": "scripts/verify-dependency-closure.mjs",
@@ -79,7 +87,7 @@
     },
     {
       "path": "scripts/prepare-base-ui.mjs",
-      "sha256": "22f78ddd1aa9b98e7ee26e48fc32dac4feca05937f1687f0c80cf3d54001b149"
+      "sha256": "a6c6bfda562bb1bc4348eb3f6accd2849f65d502ad7854e9fbcb38beae87e2a7"
     },
     {
       "path": "scripts/transform-base-ui-select-value.mjs",
@@ -88,6 +96,10 @@
     {
       "path": "scripts/transform-base-ui-popup-lifecycle.mjs",
       "sha256": "6c4e1979c96f64b69833c2420caf6af3329a90fe663d6a4860e5d835663d7604"
+    },
+    {
+      "path": "scripts/transform-base-ui-id-ownership.mjs",
+      "sha256": "6433f8aec3d8a09bed2950873da9538dfd45d92b82b5dfbc3379f1f796d916ea"
     },
     {
       "path": "scripts/lib/preparation-lock.mjs",
@@ -115,7 +127,7 @@
     },
     "artifact": {
       "path": "generated/tailwind-profile.css",
-      "sha256": "b02865f7607f96ce38dad4a32003103f0ed2717b0e981ae74894f5ad75abb6f8"
+      "sha256": "e3fadb073a4feb7ff6c72a140baa2832d5a977875f284979cb0e9769670021be"
     },
     "candidateCount": 609,
     "compiler": {
@@ -144,9 +156,9 @@
       "path": "scripts/lib/scope-tailwind-css.mjs",
       "sha256": "0fa68a7fb45f214b17bd149c05aab73028fe158e15339052fb01261e6360a308"
     },
-    "scopeSeedSha256": "0a159937d0cdd39e3a7a0becfb977361c7f674b59128d13bbdef3788a54fc5ca",
-    "scopeSelector": "[data-spfx-ui-scope=\"skui-0a159937d0cdd39e\"]",
-    "scopeValue": "skui-0a159937d0cdd39e",
+    "scopeSeedSha256": "9eea46b8e51bf75d65258eeac59d916b2c864b73c63c68ddafe91c61f62b08cc",
+    "scopeSelector": "[data-spfx-ui-scope=\"skui-9eea46b8e51bf75d\"]",
+    "scopeValue": "skui-9eea46b8e51bf75d",
     "structuralMarkers": [
       "skui:group/accordion-trigger",
       "skui:group/alert",
@@ -820,11 +832,11 @@
     {
       "output": {
         "path": "normalized/src/lib/ui-root.tsx",
-        "sha256": "f62f80725805c348dc4d623970d91fda6684591ee9ea7a3d70ee45ed9ab5c70f"
+        "sha256": "1855d4a6a8d909a016d44c186df14e2b4a50b74126051785fe8ec3a4944f079d"
       },
       "source": {
         "path": "owned/src/lib/ui-root.tsx",
-        "sha256": "f62f80725805c348dc4d623970d91fda6684591ee9ea7a3d70ee45ed9ab5c70f"
+        "sha256": "1855d4a6a8d909a016d44c186df14e2b4a50b74126051785fe8ec3a4944f079d"
       },
       "transformations": [
         "copy-owned-host-contract"

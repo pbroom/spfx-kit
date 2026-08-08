@@ -16,6 +16,7 @@ export const PROFILE_EXTERNAL_MODULE_SUBPATHS = Object.freeze([
   '@base-ui/react/popover',
   '@base-ui/react/select',
   '@base-ui/react/separator',
+  '@base-ui/react/spfx-id-ownership',
   '@base-ui/react/switch',
   '@base-ui/react/tabs',
   '@base-ui/react/toggle',

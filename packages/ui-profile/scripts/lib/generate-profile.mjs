@@ -19,6 +19,7 @@ import { compileTailwindCss } from './compile-tailwind-css.mjs';
 const compilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'compat-consumers/select-value.tsx',
+  'compat/base-ui-1.6.0/id-ownership/contract.schema.json',
   'tailwind-profile.css',
   'scripts/build-tailwind-css.mjs',
   'scripts/verify-tailwind-css.mjs',
@@ -37,6 +38,7 @@ const compilerInputPaths = [
   'scripts/prepare-base-ui.mjs',
   'scripts/transform-base-ui-select-value.mjs',
   'scripts/transform-base-ui-popup-lifecycle.mjs',
+  'scripts/transform-base-ui-id-ownership.mjs',
   'scripts/lib/preparation-lock.mjs',
   'tsconfig.base.json',
   'tsconfig.ts53.json',
@@ -176,6 +178,10 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
     baseUiPopupLifecycleTransform: {
       path: 'compat/base-ui-1.6.0/popup-lifecycle/contract.json',
       sha256: sha256(await readFile(path.join(packageRoot, 'compat', 'base-ui-1.6.0', 'popup-lifecycle', 'contract.json')))
+    },
+    baseUiIdOwnershipTransform: {
+      path: 'compat/base-ui-1.6.0/id-ownership/contract.json',
+      sha256: sha256(await readFile(path.join(packageRoot, 'compat', 'base-ui-1.6.0', 'id-ownership', 'contract.json')))
     },
     css,
     ownedSources,

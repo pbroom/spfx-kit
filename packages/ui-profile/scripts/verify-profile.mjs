@@ -38,6 +38,7 @@ const expectedIds = [...REGISTRY_IDS];
 const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'compat-consumers/select-value.tsx',
+  'compat/base-ui-1.6.0/id-ownership/contract.schema.json',
   'tailwind-profile.css',
   'scripts/build-tailwind-css.mjs',
   'scripts/verify-tailwind-css.mjs',
@@ -56,6 +57,7 @@ const expectedCompilerInputPaths = [
   'scripts/prepare-base-ui.mjs',
   'scripts/transform-base-ui-select-value.mjs',
   'scripts/transform-base-ui-popup-lifecycle.mjs',
+  'scripts/transform-base-ui-id-ownership.mjs',
   'scripts/lib/preparation-lock.mjs',
   'tsconfig.base.json',
   'tsconfig.ts53.json',
@@ -128,7 +130,7 @@ const expectedScripts = {
   'profile:verify': 'node ./scripts/verify-profile.mjs',
   'profile:verify:closure': 'node ./scripts/verify-dependency-closure.mjs',
   'profile:verify:base-ui':
-    'node ./scripts/transform-base-ui-select-value.mjs --verify-fixtures && node ./scripts/transform-base-ui-popup-lifecycle.mjs --verify-fixtures',
+    'node ./scripts/transform-base-ui-select-value.mjs --verify-fixtures && node ./scripts/transform-base-ui-popup-lifecycle.mjs --verify-fixtures && node ./scripts/transform-base-ui-id-ownership.mjs --verify-fixtures',
   'profile:prepare:base-ui': 'node ./scripts/prepare-base-ui.mjs',
   'typecheck:ts53': 'node ./scripts/typecheck.mjs typescript 5.3.3 ./tsconfig.ts53.json',
   'typecheck:ts58': 'node ./scripts/typecheck.mjs typescript-5-8 5.8.3 ./tsconfig.ts58.json',
@@ -149,7 +151,7 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === 'adef1d5ce84b157591dace061c04591fe53679716a0da48fb4973801ea99c1da',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === '3a05e925d45ba023b2d9d627711e0d9adca717f5a3f72d539eaddce2e1501794',
   'profile.schema.json identity differs'
 );
 assert(
@@ -219,6 +221,15 @@ assert(
   profile.baseUiPopupLifecycleTransform.sha256 ===
     sha256(await readFile(path.join(packageRoot, profile.baseUiPopupLifecycleTransform.path))),
   'Base UI popup lifecycle transform digest differs'
+);
+assert(
+  profile.baseUiIdOwnershipTransform.path === 'compat/base-ui-1.6.0/id-ownership/contract.json',
+  'Base UI ID ownership transform path differs'
+);
+assert(
+  profile.baseUiIdOwnershipTransform.sha256 ===
+    sha256(await readFile(path.join(packageRoot, profile.baseUiIdOwnershipTransform.path))),
+  'Base UI ID ownership transform digest differs'
 );
 assert(Array.isArray(profile.ownedSources) && profile.ownedSources.length === 2, 'Owned host source inventory differs');
 assertExact(

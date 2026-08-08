@@ -1,4 +1,5 @@
 import * as React from "react"
+import { BaseUiIdOwnershipProvider } from "@base-ui/react/spfx-id-ownership"
 
 import type { SpfxUiThemeTokens } from "./spfx-theme"
 
@@ -217,7 +218,11 @@ export function SpfxUiHostProvider({ host, children }: SpfxUiHostProviderProps):
     }),
     [host]
   )
-  return <SpfxUiHostContext.Provider value={value}>{children}</SpfxUiHostContext.Provider>
+  return (
+    <BaseUiIdOwnershipProvider deriveElementId={host.deriveElementId}>
+      <SpfxUiHostContext.Provider value={value}>{children}</SpfxUiHostContext.Provider>
+    </BaseUiIdOwnershipProvider>
+  )
 }
 
 export function useSpfxUiHost(): SpfxUiHostContextValue {
