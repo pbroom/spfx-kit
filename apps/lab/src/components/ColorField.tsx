@@ -1,272 +1,295 @@
 import * as React from 'react';
+import { Button } from '../../../../packages/ui-profile/normalized/src/components/ui/button';
+import { Field, FieldLabel } from '../../../../packages/ui-profile/normalized/src/components/ui/field';
+import { Input } from '../../../../packages/ui-profile/normalized/src/components/ui/input';
 import {
-  Button,
-  ColorArea,
-  ColorPicker,
-  ColorSlider,
-  Field,
-  Input,
   Popover,
-  PopoverSurface,
+  PopoverContent,
+  PopoverTitle,
   PopoverTrigger
-} from '@fluentui/react-components';
+} from '../../../../packages/ui-profile/normalized/src/components/ui/popover';
+import { useSpfxUiDerivedId, useSpfxUiHost } from '../../../../packages/ui-profile/normalized/src/lib/ui-root';
+import {
+  clampPercentage,
+  clampUnit,
+  hexToHsl,
+  hexToHsv,
+  hslToHex,
+  hsvToHex,
+  normalizeHexColor,
+  normalizeHue,
+  parseHexColor,
+  type HslColor,
+  type HsvColor
+} from './colorFieldMath';
 
 export interface ColorFieldProps {
+  controlId: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
 }
 
-/** Temporary Fluent island; the owned ColorField organism replaces these internals in the next slice. */
-export function ColorField({ label, value, onChange }: ColorFieldProps): JSX.Element {
+interface PointerDrag {
+  area: HTMLDivElement;
+  pointerId: number;
+  ownerWindow: Window;
+  move: (event: PointerEvent) => void;
+  finish: (event: PointerEvent) => void;
+}
+
+export function ColorField({ controlId, label, value, onChange }: ColorFieldProps): JSX.Element {
+  const { targetDocument, targetWindow } = useSpfxUiHost();
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const pointerDragRef = React.useRef<PointerDrag | null>(null);
   const [isOpen, setIsOpen] = React.useState(false);
   const normalizedValue = normalizeHexColor(value);
+  const [hexDraft, setHexDraft] = React.useState(normalizedValue);
+  const parsedDraft = parseHexColor(hexDraft);
+  const isHexInvalid = parsedDraft === null;
   const hsvColor = hexToHsv(normalizedValue);
   const hslColor = hexToHsl(normalizedValue);
-  const onHslChange = (channel: keyof HslColor, nextValue: string): void => {
-    const parsedValue = Number(nextValue);
+  const fieldId = useSpfxUiDerivedId(controlId, 'color-field');
+  const hexId = useSpfxUiDerivedId(fieldId, 'hex');
+  const triggerId = useSpfxUiDerivedId(fieldId, 'trigger');
+  const popoverId = useSpfxUiDerivedId(fieldId, 'popover');
+  const saturationValueId = useSpfxUiDerivedId(fieldId, 'saturation-value');
+  const hueFieldId = useSpfxUiDerivedId(fieldId, 'hue-field');
+  const hueId = useSpfxUiDerivedId(fieldId, 'hue');
+  const hslGroupId = useSpfxUiDerivedId(fieldId, 'hsl-group');
+  const hslHueFieldId = useSpfxUiDerivedId(fieldId, 'hsl-h-field');
+  const hslSaturationFieldId = useSpfxUiDerivedId(fieldId, 'hsl-s-field');
+  const hslLightnessFieldId = useSpfxUiDerivedId(fieldId, 'hsl-l-field');
+  const hslHueId = useSpfxUiDerivedId(fieldId, 'hsl-h');
+  const hslSaturationId = useSpfxUiDerivedId(fieldId, 'hsl-s');
+  const hslLightnessId = useSpfxUiDerivedId(fieldId, 'hsl-l');
+  const hslIds: Record<keyof HslColor, string> = {
+    h: hslHueId,
+    s: hslSaturationId,
+    l: hslLightnessId
+  };
+  const hslFieldIds: Record<keyof HslColor, string> = {
+    h: hslHueFieldId,
+    s: hslSaturationFieldId,
+    l: hslLightnessFieldId
+  };
 
-    if (!Number.isFinite(parsedValue)) {
+  React.useEffect(() => {
+    setHexDraft(normalizedValue);
+  }, [normalizedValue]);
+
+  const stopPointerDrag = React.useCallback((event?: PointerEvent): void => {
+    const drag = pointerDragRef.current;
+    if (!drag) return;
+
+    drag.ownerWindow.removeEventListener('pointermove', drag.move);
+    drag.ownerWindow.removeEventListener('pointerup', drag.finish);
+    drag.ownerWindow.removeEventListener('pointercancel', drag.finish);
+    if (drag.area.hasPointerCapture?.(drag.pointerId)) {
+      drag.area.releasePointerCapture(drag.pointerId);
+    }
+    pointerDragRef.current = null;
+    event?.preventDefault();
+  }, []);
+
+  React.useEffect(() => () => stopPointerDrag(), [stopPointerDrag]);
+
+  const emitHsv = React.useCallback((nextColor: HsvColor): void => onChange(hsvToHex(nextColor)), [onChange]);
+
+  const updateSaturationValue = React.useCallback(
+    (area: HTMLDivElement, clientX: number, clientY: number): void => {
+      const bounds = area.getBoundingClientRect();
+      const width = Math.max(bounds.width, 1);
+      const height = Math.max(bounds.height, 1);
+      emitHsv({
+        h: hsvColor.h,
+        s: clampUnit((clientX - bounds.left) / width),
+        v: clampUnit(1 - (clientY - bounds.top) / height)
+      });
+    },
+    [emitHsv, hsvColor.h]
+  );
+
+  const beginPointerDrag = (event: React.PointerEvent<HTMLDivElement>): void => {
+    if (event.button !== 0) return;
+    stopPointerDrag();
+
+    const area = event.currentTarget;
+    const ownerWindow = area.ownerDocument.defaultView;
+    if (!ownerWindow || area.ownerDocument !== targetDocument || ownerWindow !== targetWindow) return;
+
+    const move = (nextEvent: PointerEvent): void => {
+      if (nextEvent.pointerId !== event.pointerId) return;
+      updateSaturationValue(area, nextEvent.clientX, nextEvent.clientY);
+      nextEvent.preventDefault();
+    };
+    const finish = (nextEvent: PointerEvent): void => {
+      if (nextEvent.pointerId === event.pointerId) stopPointerDrag(nextEvent);
+    };
+
+    area.setPointerCapture?.(event.pointerId);
+    pointerDragRef.current = { area, pointerId: event.pointerId, ownerWindow, move, finish };
+    ownerWindow.addEventListener('pointermove', move);
+    ownerWindow.addEventListener('pointerup', finish);
+    ownerWindow.addEventListener('pointercancel', finish);
+    updateSaturationValue(area, event.clientX, event.clientY);
+    event.preventDefault();
+    area.focus();
+  };
+
+  const onAreaKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    const step = event.shiftKey ? 0.1 : 0.01;
+    let saturation = hsvColor.s;
+    let colorValue = hsvColor.v;
+
+    if (event.key === 'ArrowLeft') saturation -= step;
+    else if (event.key === 'ArrowRight') saturation += step;
+    else if (event.key === 'ArrowDown') colorValue -= step;
+    else if (event.key === 'ArrowUp') colorValue += step;
+    else return;
+
+    event.preventDefault();
+    emitHsv({ h: hsvColor.h, s: clampUnit(saturation), v: clampUnit(colorValue) });
+  };
+
+  const onHueKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
+    const step = event.shiftKey ? 10 : 1;
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowDown' && event.key !== 'ArrowRight' && event.key !== 'ArrowUp') {
       return;
     }
+
+    event.preventDefault();
+    const direction = event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -1 : 1;
+    emitHsv({ ...hsvColor, h: normalizeHue(hsvColor.h + direction * step) });
+  };
+
+  const onHslChange = (channel: keyof HslColor, nextValue: string): void => {
+    const parsedValue = Number(nextValue);
+    if (!Number.isFinite(parsedValue)) return;
 
     onChange(
       hslToHex({
         ...hslColor,
-        [channel]: channel === 'h' ? clampHue(parsedValue) : clampPercentage(parsedValue)
+        [channel]: channel === 'h' ? normalizeHue(parsedValue) : clampPercentage(parsedValue)
       })
     );
   };
 
+  const restoreHexDraft = (): void => setHexDraft(normalizedValue);
+
   return (
-    <Field className="property-field" label={label} size="small">
+    <Field className="property-field" data-invalid={isHexInvalid || undefined} id={fieldId}>
+      <FieldLabel htmlFor={hexId}>{label}</FieldLabel>
       <div className="property-color-picker">
         <div className="property-color-picker__footer">
           <Popover
             open={isOpen}
-            positioning={{ position: 'below', align: 'start' }}
-            withArrow
-            onOpenChange={(_event, data) => setIsOpen(data.open)}
+            onOpenChange={(open, details) => {
+              setIsOpen(open);
+              if (!open && details.reason === 'escape-key') {
+                targetWindow.setTimeout(() => triggerRef.current?.focus(), 0);
+              }
+            }}
           >
-            <PopoverTrigger disableButtonEnhancement>
-              <Button
-                appearance="outline"
-                aria-label={`Open ${label} color picker`}
-                className="property-color-picker__swatch-button"
-                onClick={() => setIsOpen((currentValue) => !currentValue)}
-              >
-                <span aria-hidden="true" className="property-color-picker__swatch" style={{ backgroundColor: normalizedValue }} />
-              </Button>
+            <PopoverTrigger
+              ref={triggerRef}
+              aria-label={`Open ${label} color picker`}
+              className="property-color-picker__swatch-button"
+              id={triggerId}
+              render={<Button size="icon" type="button" variant="outline" />}
+            >
+              <span aria-hidden="true" className="property-color-picker__swatch" style={{ backgroundColor: normalizedValue }} />
             </PopoverTrigger>
-            <PopoverSurface className="property-color-picker__popover">
-              <ColorPicker color={hsvColor} onColorChange={(_event, data) => onChange(hsvToHex(data.color))}>
-                <ColorArea aria-label={`${label} saturation and brightness`} />
-                <ColorSlider aria-label={`${label} hue`} />
-                <div className="property-color-picker__hsl" aria-label={`${label} HSL values`}>
-                  <label className="property-color-picker__hsl-field">
-                    <span>H</span>
-                    <Input
-                      aria-label={`${label} HSL hue`}
-                      max={360}
-                      min={0}
-                      step={1}
-                      type="number"
-                      value={String(hslColor.h)}
-                      onChange={(event) => onHslChange('h', event.currentTarget.value)}
-                    />
-                  </label>
-                  <label className="property-color-picker__hsl-field">
-                    <span>S</span>
-                    <Input
-                      aria-label={`${label} HSL saturation`}
-                      contentAfter={<span className="property-number-unit">%</span>}
-                      max={100}
-                      min={0}
-                      step={1}
-                      type="number"
-                      value={String(hslColor.s)}
-                      onChange={(event) => onHslChange('s', event.currentTarget.value)}
-                    />
-                  </label>
-                  <label className="property-color-picker__hsl-field">
-                    <span>L</span>
-                    <Input
-                      aria-label={`${label} HSL lightness`}
-                      contentAfter={<span className="property-number-unit">%</span>}
-                      max={100}
-                      min={0}
-                      step={1}
-                      type="number"
-                      value={String(hslColor.l)}
-                      onChange={(event) => onHslChange('l', event.currentTarget.value)}
-                    />
-                  </label>
-                </div>
-              </ColorPicker>
-            </PopoverSurface>
+            <PopoverContent
+              align="start"
+              aria-label={`${label} color picker`}
+              className="property-color-picker__popover"
+              id={popoverId}
+            >
+              <PopoverTitle className="property-color-picker__sr-only">{label} color picker</PopoverTitle>
+              <div
+                aria-label={`${label} saturation and brightness`}
+                aria-valuemax={100}
+                aria-valuemin={0}
+                aria-valuenow={Math.round(hsvColor.s * 100)}
+                aria-valuetext={`${Math.round(hsvColor.s * 100)}% saturation, ${Math.round(hsvColor.v * 100)}% brightness`}
+                className="property-color-picker__area"
+                id={saturationValueId}
+                role="slider"
+                style={{ backgroundColor: `hsl(${hsvColor.h} 100% 50%)` }}
+                tabIndex={0}
+                onKeyDown={onAreaKeyDown}
+                onPointerDown={beginPointerDrag}
+              >
+                <span
+                  aria-hidden="true"
+                  className="property-color-picker__area-thumb"
+                  style={{ left: `${hsvColor.s * 100}%`, top: `${(1 - hsvColor.v) * 100}%` }}
+                />
+              </div>
+              <Field className="property-color-picker__hue-field" id={hueFieldId}>
+                <FieldLabel htmlFor={hueId}>Hue</FieldLabel>
+                <Input
+                  aria-label={`${label} hue`}
+                  aria-valuetext={`${hsvColor.h} degrees`}
+                  className="property-color-picker__hue"
+                  id={hueId}
+                  max={359}
+                  min={0}
+                  step={1}
+                  type="range"
+                  value={hsvColor.h}
+                  onChange={(event) => emitHsv({ ...hsvColor, h: normalizeHue(Number(event.currentTarget.value)) })}
+                  onKeyDown={onHueKeyDown}
+                />
+              </Field>
+              <div className="property-color-picker__hsl" aria-label={`${label} HSL values`} id={hslGroupId} role="group">
+                {(['h', 's', 'l'] as const).map((channel) => {
+                  const channelId = hslIds[channel];
+                  return (
+                    <Field className="property-color-picker__hsl-field" id={hslFieldIds[channel]} key={channel}>
+                      <FieldLabel htmlFor={channelId}>{channel.toUpperCase()}</FieldLabel>
+                      <div className="property-color-picker__number">
+                        <Input
+                          aria-label={`${label} HSL ${channel === 'h' ? 'hue' : channel === 's' ? 'saturation' : 'lightness'}`}
+                          id={channelId}
+                          max={channel === 'h' ? 359 : 100}
+                          min={0}
+                          step={1}
+                          type="number"
+                          value={String(hslColor[channel])}
+                          onChange={(event) => onHslChange(channel, event.currentTarget.value)}
+                        />
+                        {channel !== 'h' && <span className="property-number-unit">%</span>}
+                      </div>
+                    </Field>
+                  );
+                })}
+              </div>
+            </PopoverContent>
           </Popover>
           <Input
+            aria-invalid={isHexInvalid || undefined}
             aria-label={`${label} hex value`}
             className="property-color-picker__hex"
-            value={normalizedValue}
-            onChange={(event) => onChange(normalizeHexColor(event.currentTarget.value))}
+            id={hexId}
+            value={hexDraft}
+            onBlur={restoreHexDraft}
+            onChange={(event) => {
+              const nextDraft = event.currentTarget.value;
+              const nextColor = parseHexColor(nextDraft);
+              setHexDraft(nextDraft);
+              if (nextColor) onChange(nextColor);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape') return;
+              event.preventDefault();
+              restoreHexDraft();
+              event.currentTarget.blur();
+            }}
           />
         </div>
       </div>
     </Field>
   );
-}
-
-interface HsvColor {
-  h: number;
-  s: number;
-  v: number;
-  a?: number;
-}
-
-interface HslColor {
-  h: number;
-  s: number;
-  l: number;
-}
-
-function normalizeHexColor(value: string): string {
-  const trimmed = value.trim();
-
-  if (/^#[0-9a-f]{6}$/i.test(trimmed)) return trimmed.toLowerCase();
-  if (/^#[0-9a-f]{3}$/i.test(trimmed)) {
-    const [, r, g, b] = trimmed.toLowerCase();
-    return `#${r}${r}${g}${g}${b}${b}`;
-  }
-  if (/^[0-9a-f]{6}$/i.test(trimmed)) return `#${trimmed.toLowerCase()}`;
-  if (/^[0-9a-f]{3}$/i.test(trimmed)) {
-    const [r, g, b] = trimmed.toLowerCase();
-    return `#${r}${r}${g}${g}${b}${b}`;
-  }
-
-  return '#8a8886';
-}
-
-function hexToHsv(hex: string): HsvColor {
-  const normalized = normalizeHexColor(hex);
-  const red = parseInt(normalized.slice(1, 3), 16) / 255;
-  const green = parseInt(normalized.slice(3, 5), 16) / 255;
-  const blue = parseInt(normalized.slice(5, 7), 16) / 255;
-  const max = Math.max(red, green, blue);
-  const min = Math.min(red, green, blue);
-  const delta = max - min;
-  let hue = 0;
-
-  if (delta !== 0) {
-    if (max === red) hue = 60 * (((green - blue) / delta) % 6);
-    else if (max === green) hue = 60 * ((blue - red) / delta + 2);
-    else hue = 60 * ((red - green) / delta + 4);
-  }
-
-  return { h: Math.round(hue < 0 ? hue + 360 : hue), s: max === 0 ? 0 : delta / max, v: max, a: 1 };
-}
-
-function hexToHsl(hex: string): HslColor {
-  const normalized = normalizeHexColor(hex);
-  const red = parseInt(normalized.slice(1, 3), 16) / 255;
-  const green = parseInt(normalized.slice(3, 5), 16) / 255;
-  const blue = parseInt(normalized.slice(5, 7), 16) / 255;
-  const max = Math.max(red, green, blue);
-  const min = Math.min(red, green, blue);
-  const delta = max - min;
-  const lightness = (max + min) / 2;
-  let hue = 0;
-  let saturation = 0;
-
-  if (delta !== 0) {
-    saturation = delta / (1 - Math.abs(2 * lightness - 1));
-    if (max === red) hue = 60 * (((green - blue) / delta) % 6);
-    else if (max === green) hue = 60 * ((blue - red) / delta + 2);
-    else hue = 60 * ((red - green) / delta + 4);
-  }
-
-  return {
-    h: clampHue(hue < 0 ? hue + 360 : hue),
-    s: clampPercentage(saturation * 100),
-    l: clampPercentage(lightness * 100)
-  };
-}
-
-function hslToHex(color: HslColor): string {
-  const hue = clampHue(color.h) / 360;
-  const saturation = clampPercentage(color.s) / 100;
-  const lightness = clampPercentage(color.l) / 100;
-
-  if (saturation === 0) {
-    return `#${toHexChannel(lightness)}${toHexChannel(lightness)}${toHexChannel(lightness)}`;
-  }
-
-  const q = lightness < 0.5 ? lightness * (1 + saturation) : lightness + saturation - lightness * saturation;
-  const p = 2 * lightness - q;
-  return `#${toHexChannel(hueToRgb(p, q, hue + 1 / 3))}${toHexChannel(hueToRgb(p, q, hue))}${toHexChannel(hueToRgb(p, q, hue - 1 / 3))}`;
-}
-
-function hsvToHex(color: HsvColor): string {
-  const hue = (((color.h || 0) % 360) + 360) % 360;
-  const saturation = clampUnit(color.s);
-  const value = clampUnit(color.v);
-  const chroma = value * saturation;
-  const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
-  const m = value - chroma;
-  let red = 0;
-  let green = 0;
-  let blue = 0;
-
-  if (hue < 60) {
-    red = chroma;
-    green = x;
-  } else if (hue < 120) {
-    red = x;
-    green = chroma;
-  } else if (hue < 180) {
-    green = chroma;
-    blue = x;
-  } else if (hue < 240) {
-    green = x;
-    blue = chroma;
-  } else if (hue < 300) {
-    red = x;
-    blue = chroma;
-  } else {
-    red = chroma;
-    blue = x;
-  }
-
-  return `#${toHexChannel(red + m)}${toHexChannel(green + m)}${toHexChannel(blue + m)}`;
-}
-
-function clampUnit(value: number | undefined): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 1) : 0;
-}
-
-function clampHue(value: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.min(Math.max(Math.round(parsed), 0), 360) : 0;
-}
-
-function clampPercentage(value: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.min(Math.max(Math.round(parsed), 0), 100) : 0;
-}
-
-function hueToRgb(p: number, q: number, value: number): number {
-  let normalizedValue = value;
-  if (normalizedValue < 0) normalizedValue += 1;
-  if (normalizedValue > 1) normalizedValue -= 1;
-  if (normalizedValue < 1 / 6) return p + (q - p) * 6 * normalizedValue;
-  if (normalizedValue < 1 / 2) return q;
-  if (normalizedValue < 2 / 3) return p + (q - p) * (2 / 3 - normalizedValue) * 6;
-  return p;
-}
-
-function toHexChannel(value: number): string {
-  return Math.round(Math.min(Math.max(value, 0), 1) * 255)
-    .toString(16)
-    .padStart(2, '0');
 }

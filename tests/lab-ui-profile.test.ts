@@ -12,6 +12,7 @@ import { createLabUiThemeTokens } from '../apps/lab/src/ui-profile/lab-theme';
 
 const migratedLabFiles = [
   'apps/lab/src/LabApp.tsx',
+  'apps/lab/src/components/ColorField.tsx',
   'apps/lab/src/components/PropertyPane.tsx',
   'apps/lab/src/components/PackageRuntimeSurface.tsx',
   'apps/lab/src/components/CdnSmokeCheck.tsx'
@@ -52,12 +53,10 @@ describe('Lab UI profile slice', () => {
     }
 
     const colorSource = readFileSync('apps/lab/src/components/ColorField.tsx', 'utf8');
-    expect(colorSource).toContain('Temporary Fluent island');
     expect(colorSource).toContain('export interface ColorFieldProps');
-
-    const propertyPaneSource = readFileSync('apps/lab/src/components/PropertyPane.tsx', 'utf8');
-    expect(propertyPaneSource).toMatch(
-      /<LegacyFluentShellIslands themeMode=\{themeMode\}>\s*<ColorField[\s\S]*?<\/LegacyFluentShellIslands>/u
+    expect(colorSource).toContain("from '../../../../packages/ui-profile/normalized/src/components/ui/popover'");
+    expect(readFileSync('apps/lab/src/components/PropertyPane.tsx', 'utf8')).not.toMatch(
+      /LegacyFluentShellIslands[^]*?<ColorField/u
     );
   });
 

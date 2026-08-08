@@ -39,7 +39,6 @@ import {
 import { createMockSpfxContext } from '@spfx-kit/spfx-lab-runtime';
 import { CssEditor } from './CssEditor';
 import { ColorField } from './ColorField';
-import { LegacyFluentShellIslands } from './LegacyFluentShellIslands';
 import { resolveSelectControlState } from './propertyPaneSelectState';
 import { SourceEditor } from './SourceEditor';
 import { SourceWorkspace } from './SourceWorkspace';
@@ -78,7 +77,6 @@ export function PropertyPane(props: PropertyPaneProps): JSX.Element {
         key={control.name}
         values={props.values}
         value={value}
-        themeMode={props.themeMode}
         onChange={onChange}
         onPatch={props.onChange}
       />
@@ -149,10 +147,9 @@ interface ControlRendererProps {
   value: LabPropertyBag[string];
   onChange: (value: LabPropertyBag[string]) => void;
   onPatch: (patch: LabPropertyBag) => void;
-  themeMode: LabThemeMode;
 }
 
-function ControlRenderer({ control, values, value, onChange, onPatch, themeMode }: ControlRendererProps): JSX.Element {
+function ControlRenderer({ control, values, value, onChange, onPatch }: ControlRendererProps): JSX.Element {
   const controlId = useSpfxUiId(`property-control:${control.name}`);
   const contentId = useSpfxUiDerivedId(controlId, 'content');
 
@@ -388,11 +385,7 @@ function ControlRenderer({ control, values, value, onChange, onPatch, themeMode 
   }
 
   if (control.type === 'color') {
-    return (
-      <LegacyFluentShellIslands themeMode={themeMode}>
-        <ColorField label={control.label} value={String(value ?? '')} onChange={onChange} />
-      </LegacyFluentShellIslands>
-    );
+    return <ColorField controlId={controlId} label={control.label} value={String(value ?? '')} onChange={onChange} />;
   }
 
   return (
