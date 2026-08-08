@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "profileId": "source-editor-react17-base-nova-v1",
+  "packageVersion": "0.1.0",
+  "upstream": {
+    "profileId": "spfx-react17-base-nova-v1",
+    "profilePath": "packages/ui-profile/profile.json",
+    "profileSha256": "2e408c7c8c04e420fdc1de91cfac3fc5dbb14db9b9ac1decdb99a3198a8b22e5",
+    "provenancePath": "packages/ui-profile/provenance.json",
+    "provenanceSha256": "2b6b0ee6edc8ad7f8c6f88027fccb9fafa17c1f8fb377d27b6fc00b94c37f9a6"
+  },
+  "surfaces": [
+    {
+      "consumer": "SourceEditorField",
+      "components": ["button", "dropdown-menu"]
+    },
+    {
+      "consumer": "SourceWorkspaceField",
+      "components": ["tabs"]
+    }
+  ],
+  "preparedBaseUi": {
+    "package": "@base-ui/react",
+    "version": "1.6.0",
+    "dependencyClosurePath": "packages/ui-profile/dependency-closure.json",
+    "dependencyClosureSha256": "071df6ff0af2debfd0cbbdbdbd372ad6d94230242e6a3cb0f4f9e70c347ef736",
+    "contracts": [
+      {
+        "path": "packages/ui-profile/compat/base-ui-1.6.0/id-ownership/contract.json",
+        "sha256": "660f74a5e1f350fbdddd792d00c2d48265f435e6a1b79075bd3327b2c8581870"
+      },
+      {
+        "path": "packages/ui-profile/compat/base-ui-1.6.0/popup-lifecycle/contract.json",
+        "sha256": "6500f7475790853273cfbbb10c1c570c054acd883db4031988b0001978aacfef"
+      },
+      {
+        "path": "packages/ui-profile/compat/base-ui-1.6.0/select-value/contract.json",
+        "sha256": "39bc2e24fea78e7e68f8518c217698489d7963c049d44cdb85ffaba539d66072"
+      }
+    ]
+  },
+  "files": [
+    {
+      "sourcePath": "packages/ui-profile/compat-consumers/react17-base-ui-jsx.d.ts",
+      "vendorPath": "src/vendor/source-editor/ui-profile/compat/react17-base-ui-jsx.d.ts",
+      "sha256": "76f6e8a5b9ebc66c2289ba7aa9d16e200cbb116e27b3117d7de18c18cc23398e"
+    },
+    {
+      "sourcePath": "packages/ui-profile/normalized/src/components/ui/button.tsx",
+      "vendorPath": "src/vendor/source-editor/ui-profile/components/ui/button.tsx",
+      "sha256": "99383a9b61cef0314525afd41b4ac97c72b2e1c58c1d9e3783d60fa8253cb185"
+    },
+    {
+      "sourcePath": "packages/ui-profile/normalized/src/components/ui/dropdown-menu.tsx",
+      "vendorPath": "src/vendor/source-editor/ui-profile/components/ui/dropdown-menu.tsx",
+      "sha256": "230acf536abe2c392af10b04933e6c28882f5d8b7ed640e4564ddfc509ecc83a"
+    },
+    {
+      "sourcePath": "packages/ui-profile/normalized/src/components/ui/tabs.tsx",
+      "vendorPath": "src/vendor/source-editor/ui-profile/components/ui/tabs.tsx",
+      "sha256": "29f4339e9f7d627fb2409391bba6700a76247e8984feca6c132e791b07e5408d"
+    },
+    {
+      "sourcePath": "packages/ui-profile/normalized/src/lib/spfx-theme.ts",
+      "vendorPath": "src/vendor/source-editor/ui-profile/lib/spfx-theme.ts",
+      "sha256": "ae4ad87e790d3d7c0190a84a0662331cf2320eae5badddb813e517869b87b9dc"
+    },
+    {
+      "sourcePath": "packages/ui-profile/normalized/src/lib/ui-root.tsx",
+      "vendorPath": "src/vendor/source-editor/ui-profile/lib/ui-root.tsx",
+      "sha256": "1855d4a6a8d909a016d44c186df14e2b4a50b74126051785fe8ec3a4944f079d"
+    },
+    {
+      "sourcePath": "packages/ui-profile/normalized/src/lib/utils.ts",
+      "vendorPath": "src/vendor/source-editor/ui-profile/lib/utils.ts",
+      "sha256": "7c8c3dfc0cdd370d44932828eb067ef771c8fe7996693221d5d4b90af6d54f2d"
+    },
+    {
+      "sourcePath": "packages/ui-profile/generated/tailwind-profile.css",
+      "vendorPath": "src/vendor/source-editor/ui-profile/tailwind-profile.css",
+      "sha256": "e3fadb073a4feb7ff6c72a140baa2832d5a977875f284979cb0e9769670021be"
+    }
+  ]
+}
