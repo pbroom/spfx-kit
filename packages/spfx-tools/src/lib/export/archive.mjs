@@ -6,7 +6,10 @@ import { childStdio } from './output.mjs';
 
 export async function createArchive(outDir, targets, archivePath) {
   const targetEntries = targets.map((target) => path.relative(outDir, target.dir).split(path.sep)[0]);
-  const entries = [...targetEntries, 'README.md', 'manifest.json'].filter((entry, index, arr) => arr.indexOf(entry) === index);
+  const uiProfileEvidence = 'ui-profile-delivery.json';
+  const rootEntries = ['README.md', 'manifest.json'];
+  if (await exists(path.join(outDir, uiProfileEvidence))) rootEntries.push(uiProfileEvidence);
+  const entries = [...targetEntries, ...rootEntries].filter((entry, index, arr) => arr.indexOf(entry) === index);
   const result = spawnSync('tar', ['-czf', archivePath, '-C', outDir, ...entries], { stdio: childStdio() });
   if (result.status !== 0) {
     throw new Error(`Could not create export archive: ${archivePath}`);
