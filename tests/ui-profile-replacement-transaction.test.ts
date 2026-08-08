@@ -1201,6 +1201,24 @@ describe('generated profile full-command transaction', () => {
     expect(await readFile(path.join(packageRoot, 'profile.json'), 'utf8')).toBe('{"version":"editor"}\n');
   });
 
+  it('refuses to overwrite a target recreated after recovery discard before backup restore', async () => {
+    const { packageRoot, token } = await fixture();
+    const target = path.join(packageRoot, 'profile.json');
+    await killAtBoundary(packageRoot, token, 'installed:profile.json');
+
+    await expect(
+      recoverGeneratedReplacement({
+        packageRoot,
+        onRecoveryBoundary: async (boundary: string) => {
+          if (boundary === 'recovery-discarded:profile.json') {
+            await writeFile(target, '{"version":"editor"}\n');
+          }
+        }
+      })
+    ).rejects.toThrow('Generated profile recovery target was recreated before restore: profile.json');
+    await expect(readFile(target, 'utf8')).resolves.toBe('{"version":"editor"}\n');
+  });
+
   it('allows a new session after interrupted partial cleanup of a detached settled lock', async () => {
     const { packageRoot, token } = await fixture();
     await killAtBoundary(packageRoot, token, 'lock-removing', async () => {
