@@ -1,4 +1,4 @@
-import { access, readFile } from 'node:fs/promises';
+import { access, lstat, readFile, realpath } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -150,12 +150,12 @@ if (!manifestOnly) {
 
   const npmArguments = [
     'ls',
-    '--omit=dev',
     '--all',
     '--workspace',
     '@spfx-kit/ui-profile',
     '--json',
-    strictPeerResolutionArgument
+    strictPeerResolutionArgument,
+    ...[...accepted.keys()].sort()
   ];
   let npmResult;
   try {
@@ -180,9 +180,140 @@ if (!manifestOnly) {
   collectProblems(tree);
   assert(problems.length === 0, `npm dependency tree problems: ${[...new Set(problems)].join('; ')}`);
   const installedProfile = tree.dependencies?.['@spfx-kit/ui-profile'];
+  assert(installedProfile, 'Installed npm tree omits the UI profile workspace');
+  for (const root of closure.productionRoots) {
+    const installed = installedProfile.dependencies?.[root];
+    const expected = accepted.get(root);
+    assert(installed, `Installed npm tree omits production root ${root}`);
+    assert(installed.link !== true, `Installed npm tree links production root ${root}`);
+    assert(installed.version === expected.version, `${root}: installed root version differs`);
+    for (const dependency of Object.keys(expected.dependencies)) {
+      assert(
+        installed.dependencies?.[dependency]?.version === accepted.get(dependency)?.version,
+        `${root}: installed dependency edge ${dependency} differs from the accepted closure`
+      );
+    }
+  }
+
+  const canonicalRepositoryRoot = await realpath(repositoryRoot);
+  const canonicalNodeModulesRoot = await realpath(path.join(repositoryRoot, 'node_modules'));
   assert(
-    installedProfile === undefined || Object.keys(installedProfile.dependencies ?? {}).length === 0,
-    'Tooling-only UI profile leaked dependencies into the production install tree'
+    canonicalNodeModulesRoot === path.join(canonicalRepositoryRoot, 'node_modules'),
+    'Repository node_modules root resolves outside the repository'
+  );
+  function isContainedPath(root, candidate) {
+    const relative = path.relative(root, candidate);
+    return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  }
+
+  async function resolveInstalledManifest(fromDirectory, name) {
+    let current = path.resolve(fromDirectory);
+    assert(
+      current === canonicalRepositoryRoot || isContainedPath(canonicalRepositoryRoot, current),
+      `${fromDirectory}: installed dependency resolution starts outside the repository`
+    );
+    while (true) {
+      const packageDirectory = path.join(current, 'node_modules', ...name.split('/'));
+      const candidate = path.join(packageDirectory, 'package.json');
+      try {
+        const packageStats = await lstat(packageDirectory);
+        assert(
+          packageStats.isDirectory() && !packageStats.isSymbolicLink(),
+          `${name}: installed package root is not a regular directory`
+        );
+        const manifestStats = await lstat(candidate);
+        assert(
+          manifestStats.isFile() && !manifestStats.isSymbolicLink(),
+          `${name}: installed package manifest is not a regular file`
+        );
+        const manifest = JSON.parse(await readFile(candidate, 'utf8'));
+        const canonicalPackageDirectory = await realpath(packageDirectory);
+        const canonicalManifestPath = await realpath(candidate);
+        assert(
+          isContainedPath(canonicalNodeModulesRoot, canonicalPackageDirectory),
+          `${name}: installed package root resolves outside repository node_modules`
+        );
+        assert(
+          canonicalPackageDirectory === path.resolve(packageDirectory) &&
+            canonicalManifestPath === path.join(canonicalPackageDirectory, 'package.json'),
+          `${name}: installed package path contains an unbound link`
+        );
+        return {
+          manifest,
+          manifestPath: canonicalManifestPath,
+          packageDirectory: canonicalPackageDirectory
+        };
+      } catch (error) {
+        if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+      }
+      if (current === canonicalRepositoryRoot) break;
+      const parent = path.dirname(current);
+      if (parent === current || (parent !== canonicalRepositoryRoot && !isContainedPath(canonicalRepositoryRoot, parent))) {
+        break;
+      }
+      current = parent;
+    }
+    throw new Error(`${fromDirectory}: unable to resolve installed package ${name}`);
+  }
+
+  const reachedInstalled = new Set();
+  const visitedInstalledManifests = new Set();
+  async function verifyInstalledPackage(name, resolved, ancestry) {
+    const expected = accepted.get(name);
+    assert(expected, `Installed npm tree contains unexpected production package ${name}`);
+    assert(resolved.manifest.name === name, `${ancestry}: installed package identity differs`);
+    assert(resolved.manifest.version === expected.version, `${ancestry}: installed version differs`);
+    assertExact(
+      resolved.manifest.dependencies ?? {},
+      expected.dependencies,
+      `${ancestry}: installed dependency metadata differs`
+    );
+    assertExact(
+      resolved.manifest.optionalDependencies ?? {},
+      {},
+      `${ancestry}: installed optional dependencies are not accepted`
+    );
+    assertExact(resolved.manifest.bundledDependencies ?? [], [], `${ancestry}: installed bundled dependencies are not accepted`);
+    assertExact(resolved.manifest.bundleDependencies ?? [], [], `${ancestry}: installed bundle dependencies are not accepted`);
+    assertExact(
+      resolved.manifest.peerDependencies ?? {},
+      expected.peerDependencies,
+      `${ancestry}: installed peer metadata differs`
+    );
+    const installedOptionalPeers = Object.entries(resolved.manifest.peerDependenciesMeta ?? {})
+      .filter(([, metadata]) => metadata.optional === true)
+      .map(([peer]) => peer)
+      .sort();
+    assertExact(
+      installedOptionalPeers,
+      [...(expected.optionalPeers ?? [])].sort(),
+      `${ancestry}: installed optional peers differ`
+    );
+    reachedInstalled.add(name);
+    if (visitedInstalledManifests.has(resolved.manifestPath)) return;
+    visitedInstalledManifests.add(resolved.manifestPath);
+    for (const dependency of Object.keys(expected.dependencies)) {
+      const child = await resolveInstalledManifest(resolved.packageDirectory, dependency);
+      await verifyInstalledPackage(dependency, child, `${ancestry} > ${dependency}`);
+    }
+    for (const peer of Object.keys(expected.peerDependencies).filter((peer) => !(expected.optionalPeers ?? []).includes(peer))) {
+      const expectedPeer = accepted.get(peer);
+      assert(expectedPeer, `${ancestry}: required installed peer ${peer} is outside the accepted closure`);
+      const installedPeer = await resolveInstalledManifest(resolved.packageDirectory, peer);
+      assert(
+        installedPeer.manifest.version === expectedPeer.version,
+        `${ancestry}: required installed peer ${peer} version differs`
+      );
+    }
+  }
+  for (const root of closure.productionRoots) {
+    const installed = await resolveInstalledManifest(packageRoot, root);
+    await verifyInstalledPackage(root, installed, root);
+  }
+  assertExact(
+    [...reachedInstalled].sort(),
+    [...accepted.keys()].sort(),
+    'Installed npm production closure differs from accepted closure'
   );
 }
 

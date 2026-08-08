@@ -2699,6 +2699,59 @@ function classExpressionBindings(sourceFile, helpers) {
     ...componentAliasEdges.flat()
   ]);
   const escapedJsxComponentSymbols = new Set();
+  const nonInvokingReactMetadataProperties = new Set(['displayName', 'propTypes', 'contextType']);
+  function reactMetadataProperty(access) {
+    if (ts.isPropertyAccessExpression(access)) return access.name.text;
+    if (ts.isElementAccessExpression(access) && access.argumentExpression) {
+      return staticPropertyName(access.argumentExpression);
+    }
+    return null;
+  }
+  function isNonInvokingReactMetadataReference(identifier) {
+    const receiver = outerTransparentExpression(identifier);
+    const access = receiver.parent;
+    if (
+      (!ts.isPropertyAccessExpression(access) && !ts.isElementAccessExpression(access)) ||
+      access.expression !== receiver ||
+      !nonInvokingReactMetadataProperties.has(reactMetadataProperty(access))
+    ) {
+      return false;
+    }
+    let current = outerTransparentExpression(access);
+    while (
+      (ts.isPropertyAccessExpression(current.parent) || ts.isElementAccessExpression(current.parent)) &&
+      current.parent.expression === current
+    ) {
+      current = outerTransparentExpression(current.parent);
+    }
+    const parent = current.parent;
+    return !(
+      ((ts.isCallExpression(parent) || ts.isNewExpression(parent)) && parent.expression === current) ||
+      (ts.isTaggedTemplateExpression(parent) && parent.tag === current)
+    );
+  }
+  function isNonClassBearingReactMetadataValue(node) {
+    let current = node;
+    while (current.parent && current.parent !== sourceFile) {
+      const parent = current.parent;
+      if (
+        ts.isBinaryExpression(parent) &&
+        parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        parent.right === current
+      ) {
+        const access = unwrapExpression(parent.left);
+        if (!ts.isPropertyAccessExpression(access) && !ts.isElementAccessExpression(access)) return false;
+        const receiver = unwrapExpression(access.expression);
+        return (
+          ts.isIdentifier(receiver) &&
+          componentConsumerSymbols.has(symbolAt(receiver)) &&
+          nonInvokingReactMetadataProperties.has(reactMetadataProperty(access))
+        );
+      }
+      current = parent;
+    }
+    return false;
+  }
   function collectEscapedJsxComponentSymbols(node) {
     if (ts.isCallExpression(node)) {
       const callee = unwrapExpression(node.expression);
@@ -2736,6 +2789,7 @@ function classExpressionBindings(sourceFile, helpers) {
         !isExportReference &&
         !isReactWrapperInput &&
         !isImmutableComponentAlias &&
+        !isNonInvokingReactMetadataReference(node) &&
         !isTypeOnlyClassHelperReference(node)
       ) {
         escapedJsxComponentSymbols.add(symbol);
@@ -3316,7 +3370,8 @@ function classExpressionBindings(sourceFile, helpers) {
     isCvaCall: (call) => isDirectCvaCall(call),
     isCvaFactoryCall: (call) => ts.isIdentifier(call.expression) && isUnwrittenSymbol(cvaFactorySymbols, call.expression),
     isMergePropsCall: (call) => isImportedHelperCall(call, mergePropsSymbols),
-    isUseRenderCall: (call) => isImportedHelperCall(call, useRenderSymbols)
+    isUseRenderCall: (call) => isImportedHelperCall(call, useRenderSymbols),
+    isNonClassBearingReactMetadataValue
   };
 }
 
@@ -3592,7 +3647,7 @@ export function prefixTailwindClassCandidates(
   const expressionBindings = classExpressionBindings(sourceFile, helpers);
 
   function visit(node) {
-    if (ts.isObjectLiteralExpression(node)) {
+    if (ts.isObjectLiteralExpression(node) && !expressionBindings.isNonClassBearingReactMetadataValue(node)) {
       collectObjectLiteralClassProperties(node, literals, label, expressionBindings);
     }
     if (ts.isJsxSpreadAttribute(node)) {

@@ -708,6 +708,40 @@ describe('UI profile Tailwind prefix normalization', () => {
     expect(
       prefixTailwindClassCandidates('export function Probe({ className }) { return <div className={className} /> }').source
     ).toContain('className={className}');
+    for (const metadataAssignment of [
+      'Probe.displayName = "Probe"',
+      'Probe["displayName"] = "Probe"',
+      'Probe.propTypes = { className: PropTypes.string, options: PropTypes.shape({ className: PropTypes.string }) }',
+      'Probe.contextType = Context'
+    ]) {
+      expect(
+        prefixTailwindClassCandidates(
+          `export function Probe({ className }) { return <div className={className} /> } ${metadataAssignment}`
+        ).source
+      ).toContain('className={className}');
+    }
+    expect(
+      prefixTailwindClassCandidates(
+        'import * as React from "react"; export const Probe = React.forwardRef(function Probe({ className }, ref) { return <div ref={ref} className={className} /> }); Probe.displayName = "Probe"'
+      ).source
+    ).toContain('className={className}');
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'export function Probe({ className }) { return <div className={className} /> } Probe.defaultProps = { className: "flex" }'
+      )
+    ).toThrow('dynamic class expressions are not accepted');
+    for (const metadataInvocation of [
+      'Probe.displayName()',
+      'Probe["displayName"]?.()',
+      'Probe.propTypes.call(null, window.getProps())',
+      'new Probe.contextType()'
+    ]) {
+      expect(() =>
+        prefixTailwindClassCandidates(
+          `export function Probe({ className }) { return <div className={className} /> } ${metadataInvocation}`
+        )
+      ).toThrow('dynamic class expressions are not accepted');
+    }
     expect(prefixTailwindClassCandidates('export function Probe(props) { return <div {...props} /> }').source).toContain(
       '<div {...props} />'
     );
