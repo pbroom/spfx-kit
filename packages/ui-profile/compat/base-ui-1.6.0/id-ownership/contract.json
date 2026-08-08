@@ -13,12 +13,12 @@
     {
       "installedPath": "spfx-id-ownership.mjs",
       "sourcePath": "compat/base-ui-1.6.0/id-ownership/source/spfx-id-ownership.mjs",
-      "sha256": "e35bd8e501f19c54fd310c90ed07d47cc864273e442cf1b65e820c8db4f52566"
+      "sha256": "d29a72759b4f512710607030b03995be2cef831a77ee6aca578d18036fd2d926"
     },
     {
       "installedPath": "spfx-id-ownership.js",
       "sourcePath": "compat/base-ui-1.6.0/id-ownership/source/spfx-id-ownership.js",
-      "sha256": "65458da494a824cbaed5d5eabd3d1fc2621fd0eafb98640b81bd4bd3d5bb01ed"
+      "sha256": "b5404bae5414f5792b0998117addaf9b79003b3b68a39400f1986a15268be4cd"
     },
     {
       "installedPath": "spfx-id-ownership.d.mts",

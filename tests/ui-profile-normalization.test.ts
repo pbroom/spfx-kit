@@ -795,6 +795,89 @@ describe('React 17 UI profile normalization', () => {
     }
   });
 
+  it('follows reachable generic constraints when classifying public ref-bearing wrappers', () => {
+    for (const [declaration, message] of [
+      [
+        'export function Probe<P extends ButtonPrimitive.Props>(props: P) { return <ButtonPrimitive {...props} /> }',
+        'public ref-bearing wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'type PrimitiveProps = ButtonPrimitive.Props\n' +
+          'export function Probe<P extends PrimitiveProps & { label?: string }>(props: P) { return <ButtonPrimitive {...props} /> }',
+        'public ref-bearing wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'export function Probe<Q extends ButtonPrimitive.Props, P extends Q>(props: P) { return <ButtonPrimitive {...props} /> }',
+        'public ref-bearing wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'export function Probe<P extends object = ButtonPrimitive.Props>(props: P) { return <ButtonPrimitive {...props} /> }',
+        'public ref-bearing wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'type PrimitiveProps = ButtonPrimitive.Props\n' +
+          'export function Probe<Q extends PrimitiveProps, P extends object = Q>(props: P) { return <ButtonPrimitive {...props} /> }',
+        'public ref-bearing wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'export function Probe<P extends ButtonPrimitive.Props>(props: P): React.ReactElement\n' +
+          'export function Probe<P extends object>(props: P) { return <ButtonPrimitive {...props} /> }',
+        'public ref-bearing wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'export function Probe<P extends ButtonPrimitive.Props>(props: string extends (string extends infer P ? P : never) ? P : never) { return <ButtonPrimitive {...props} /> }',
+        'public ref-bearing wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'type Comparable<T> = { compareTo(other: T): number }\n' +
+          'export function Probe<P extends ButtonPrimitive.Props & Comparable<P>>(props: P) { return <ButtonPrimitive {...props} /> }',
+        'public ref-bearing wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'export const Probe = <P extends ButtonPrimitive.Props,>(props: P) => <ButtonPrimitive {...props} />',
+        'public ref-bearing arrow wrapper Probe is not normalized with React.forwardRef'
+      ],
+      [
+        'export default function <P extends ButtonPrimitive.Props>(props: P) { return <ButtonPrimitive {...props} /> }',
+        'anonymous default-exported ref-bearing function wrapper is not normalized with React.forwardRef'
+      ],
+      [
+        'export const widgets = { Probe<P extends ButtonPrimitive.Props>(props: P) { return <ButtonPrimitive {...props} /> } }',
+        'public ref-bearing method wrapper widgets.Probe is not normalized with React.forwardRef'
+      ]
+    ]) {
+      expect(() =>
+        normalizeRegistrySource({
+          source:
+            'import * as React from "react"\n' +
+            'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+            `${declaration}\n`,
+          registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+        })
+      ).toThrow(message);
+    }
+
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export function Probe<Q extends ButtonPrimitive.Props, P extends React.HTMLAttributes<HTMLDivElement>>(props: P) { return <div {...props} /> }\n',
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+      })
+    ).not.toThrow();
+
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'export function Probe<P extends ButtonPrimitive.Props>(props: { className?: string } extends infer P ? P : never) { return <div {...props} /> }\n',
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx'
+      })
+    ).not.toThrow();
+  });
+
   it('ignores TypeScript this parameters when inspecting ref-bearing props', () => {
     for (const [declaration, message] of [
       [

@@ -1533,18 +1533,99 @@ function normalizePublicForwardRefs(source, analysisOptions) {
   return { source: normalized, transformed };
 }
 
+function callablePropsType(declaration, parameter, sourceFile, contextualPropsType = '') {
+  const parameterType = parameter?.type?.getText(sourceFile) ?? '';
+  const typeParameters = new Map(
+    (declaration.typeParameters ?? []).map((typeParameter) => [typeParameter.name.text, typeParameter])
+  );
+  const queued = [];
+  const queuedNames = new Set();
+  const constraints = [];
+  const collectInferNames = (node, names) => {
+    if (!node) return;
+    if (ts.isConditionalTypeNode(node)) return;
+    if (ts.isInferTypeNode(node)) names.add(node.typeParameter.name.text);
+    ts.forEachChild(node, (child) => collectInferNames(child, names));
+  };
+  const collectReferences = (node, shadowedNames = new Set()) => {
+    if (!node) return;
+    if (
+      ts.isTypeReferenceNode(node) &&
+      ts.isIdentifier(node.typeName) &&
+      typeParameters.has(node.typeName.text) &&
+      !shadowedNames.has(node.typeName.text)
+    ) {
+      if (!queuedNames.has(node.typeName.text)) {
+        queuedNames.add(node.typeName.text);
+        queued.push(node.typeName.text);
+      }
+    }
+    if (ts.isConditionalTypeNode(node)) {
+      collectReferences(node.checkType, shadowedNames);
+      collectReferences(node.extendsType, shadowedNames);
+      const inferredNames = new Set(shadowedNames);
+      collectInferNames(node.extendsType, inferredNames);
+      collectReferences(node.trueType, inferredNames);
+      collectReferences(node.falseType, shadowedNames);
+      return;
+    }
+    if (ts.isMappedTypeNode(node)) {
+      collectReferences(node.typeParameter.constraint, shadowedNames);
+      const mappedNames = new Set(shadowedNames).add(node.typeParameter.name.text);
+      collectReferences(node.nameType, mappedNames);
+      collectReferences(node.type, mappedNames);
+      return;
+    }
+    if (ts.isInferTypeNode(node) || ts.isTypeParameterDeclaration(node)) {
+      const nestedNames = new Set(shadowedNames).add(node.typeParameter?.name.text ?? node.name.text);
+      collectReferences(node.typeParameter?.constraint ?? node.constraint, nestedNames);
+      collectReferences(node.typeParameter?.default ?? node.default, nestedNames);
+      return;
+    }
+    if (node.typeParameters?.length) {
+      const nestedNames = new Set(shadowedNames);
+      for (const typeParameter of node.typeParameters) nestedNames.add(typeParameter.name.text);
+      ts.forEachChild(node, (child) => collectReferences(child, nestedNames));
+      return;
+    }
+    ts.forEachChild(node, (child) => collectReferences(child, shadowedNames));
+  };
+  collectReferences(parameter?.type);
+  for (let index = 0; index < queued.length; index += 1) {
+    const typeParameter = typeParameters.get(queued[index]);
+    for (const relatedType of [typeParameter?.constraint, typeParameter?.default]) {
+      if (!relatedType) continue;
+      constraints.push(relatedType.getText(sourceFile));
+      collectReferences(relatedType);
+    }
+  }
+  return [...new Set([parameterType, contextualPropsType, ...constraints].filter(Boolean))]
+    .map((type) => `(${type})`)
+    .join(' & ');
+}
+
 function exportedFunctionContract(source, name) {
   const sourceFile = parsedSource(source, 'normalized-function-wrapper.tsx');
-  const declaration = sourceFile.statements.find(
-    (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === name && statement.body
+  const declarations = sourceFile.statements.filter(
+    (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === name
   );
+  const declaration = declarations.find((statement) => statement.body);
   if (!declaration) return null;
   const parameter = declaration.parameters.find(
     (candidate) => !ts.isIdentifier(candidate.name) || candidate.name.text !== 'this'
   );
   return {
     spreadTargets: propsSpreadTargets(declaration, parameter, sourceFile),
-    propsType: parameter?.type?.getText(sourceFile) ?? '',
+    propsType: declarations
+      .map((candidate) => {
+        const candidateParameter = candidate.parameters.find(
+          (item) => !ts.isIdentifier(item.name) || item.name.text !== 'this'
+        );
+        return callablePropsType(candidate, candidateParameter, sourceFile);
+      })
+      .filter(Boolean)
+      .map((type) => `(${type})`)
+      .join(' & '),
     body: declaration.body.getText(sourceFile).slice(1, -1)
   };
 }
@@ -2081,7 +2162,7 @@ function anonymousDefaultFunctionContracts(source) {
     contracts.push({
       kind,
       spreadTargets: propsSpreadTargets(declaration, parameter, sourceFile),
-      propsType: parameter?.type?.getText(sourceFile) ?? '',
+      propsType: callablePropsType(declaration, parameter, sourceFile),
       body: ts.isBlock(declaration.body)
         ? declaration.body.getText(sourceFile).slice(1, -1)
         : `return ${declaration.body.getText(sourceFile)}`
@@ -2114,10 +2195,7 @@ function callableContract(callable, sourceFile, name) {
     name,
     kind: callable.kind,
     spreadTargets: propsSpreadTargets(callable.declaration, parameter, sourceFile),
-    propsType: [parameter.type?.getText(sourceFile), callable.contextualPropsType]
-      .filter(Boolean)
-      .map((type) => `(${type})`)
-      .join(' & '),
+    propsType: callablePropsType(callable.declaration, parameter, sourceFile, callable.contextualPropsType),
     body: ts.isBlock(callable.declaration.body)
       ? callable.declaration.body.getText(sourceFile).slice(1, -1)
       : `return ${callable.declaration.body.getText(sourceFile)}`

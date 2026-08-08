@@ -64,7 +64,14 @@ function useBaseUiIdOwnership() {
 }
 
 function validatedIdPart(value, label) {
-  if (typeof value !== 'string' || value.length === 0 || value.trim() !== value || /[\u0000-\u001f\u007f]/u.test(value)) {
+  if (typeof value !== 'string') {
+    throw new Error(`Base UI ${label} must be a non-empty, trimmed string without control characters`);
+  }
+  const containsControlCharacter = Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint <= 31 || codePoint === 127;
+  });
+  if (value.length === 0 || value.trim() !== value || containsControlCharacter) {
     throw new Error(`Base UI ${label} must be a non-empty, trimmed string without control characters`);
   }
   return value;

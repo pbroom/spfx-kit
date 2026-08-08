@@ -6,7 +6,7 @@
   },
   "baseUiIdOwnershipTransform": {
     "path": "compat/base-ui-1.6.0/id-ownership/contract.json",
-    "sha256": "660f74a5e1f350fbdddd792d00c2d48265f435e6a1b79075bd3327b2c8581870"
+    "sha256": "cdbbc140272e237e3f5450baae8afdaab2f56f14b48835b7bc42f76211b4a2aa"
   },
   "baseUiPopupLifecycleTransform": {
     "path": "compat/base-ui-1.6.0/popup-lifecycle/contract.json",
@@ -814,7 +814,7 @@
       }
     }
   ],
-  "normalizationImplementationSha256": "3236ddb4cea1c5e00980e63f6cbad3d9df6a585e5dc865fb65459bcb729a5339",
+  "normalizationImplementationSha256": "4515bab4b7cb296f182f77dcaa25775b83fa348415bdbd40bc77d97f22fb84a1",
   "ownedSources": [
     {
       "output": {
@@ -844,6 +844,6 @@
     }
   ],
   "profileId": "spfx-react17-base-nova-v1",
-  "provenanceSha256": "2b6b0ee6edc8ad7f8c6f88027fccb9fafa17c1f8fb377d27b6fc00b94c37f9a6",
+  "provenanceSha256": "15ee3700f630c4620b4a84b9a67287280c90070bade7881f415cba062d733643",
   "schemaVersion": 1
 }
