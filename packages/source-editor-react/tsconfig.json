@@ -3,6 +3,12 @@
     "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "Node",
+    "baseUrl": ".",
+    "paths": {
+      "@base-ui/react": ["../ui-profile/.prepared/base-ui/index.d.ts"],
+      "@base-ui/react/*": ["../ui-profile/.prepared/base-ui/*"],
+      "@spfx-kit/source-editor-core": ["../source-editor-core/dist/index.d.ts"]
+    },
     "declaration": true,
     "outDir": "dist",
     "rootDir": "src",
