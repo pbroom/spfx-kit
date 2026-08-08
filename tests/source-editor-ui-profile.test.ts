@@ -34,6 +34,14 @@ describe('source editor UI profile', () => {
 
     const localMirrorPairs = [
       [
+        'packages/ui-profile/normalized/src/components/ui/button.tsx',
+        'packages/source-editor-react/src/ui-profile/components/ui/button.tsx'
+      ],
+      [
+        'packages/ui-profile/normalized/src/components/ui/dropdown-menu.tsx',
+        'packages/source-editor-react/src/ui-profile/components/ui/dropdown-menu.tsx'
+      ],
+      [
         'packages/ui-profile/normalized/src/components/ui/tabs.tsx',
         'packages/source-editor-react/src/ui-profile/components/ui/tabs.tsx'
       ],
@@ -54,6 +62,18 @@ describe('source editor UI profile', () => {
     expect(componentSources).toMatch(/import \* as React from ["']react["']/u);
     expect(componentSources).not.toContain('react/jsx-runtime');
     expect(componentSources).not.toContain('useId(');
+
+    const sourceEditor = await readFile(
+      path.join(repositoryRoot, 'packages/source-editor-react/src/SourceEditorField.tsx'),
+      'utf8'
+    );
+    const packageManifest = JSON.parse(
+      await readFile(path.join(repositoryRoot, 'packages/source-editor-react/package.json'), 'utf8')
+    );
+    expect(sourceEditor).not.toContain('@fluentui/react-components');
+    expect(sourceEditor).not.toContain('.fui-');
+    expect(packageManifest.peerDependencies).not.toHaveProperty('@fluentui/react-components');
+    expect(packageManifest.devDependencies).not.toHaveProperty('@fluentui/react-components');
   });
 
   it('rejects source drift instead of refreshing a downstream snapshot', async () => {

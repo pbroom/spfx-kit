@@ -42,6 +42,17 @@ describe('sync:source-editor', () => {
     const workspaceVendorPath = path.join(appDir, 'src', 'vendor', 'source-editor', 'SourceWorkspaceField.tsx');
     const webpackVendorPath = path.join(appDir, 'src', 'vendor', 'source-editor', 'spfx-monaco-webpack.cjs');
     const profileManifestPath = path.join(appDir, 'src', 'vendor', 'source-editor', 'ui-profile', 'manifest.json');
+    const buttonVendorPath = path.join(appDir, 'src', 'vendor', 'source-editor', 'ui-profile', 'components', 'ui', 'button.tsx');
+    const dropdownMenuVendorPath = path.join(
+      appDir,
+      'src',
+      'vendor',
+      'source-editor',
+      'ui-profile',
+      'components',
+      'ui',
+      'dropdown-menu.tsx'
+    );
     const tabsVendorPath = path.join(appDir, 'src', 'vendor', 'source-editor', 'ui-profile', 'components', 'ui', 'tabs.tsx');
     const coreVendor = await readFile(coreVendorPath, 'utf8');
     const reactVendor = await readFile(reactVendorPath, 'utf8');
@@ -52,6 +63,12 @@ describe('sync:source-editor', () => {
     expect(workspaceVendor).toContain('Vendored from @spfx-kit/source-editor-react@3.0.0');
     expect(webpackVendor).toContain('Vendored from @spfx-kit/source-editor-react@3.0.0');
     expect(await readFile(profileManifestPath, 'utf8')).toContain('source-editor-react17-base-nova-v1');
+    expect(await readFile(buttonVendorPath, 'utf8')).toBe(
+      await readFile(path.join(fixture, 'packages/ui-profile/normalized/src/components/ui/button.tsx'), 'utf8')
+    );
+    expect(await readFile(dropdownMenuVendorPath, 'utf8')).toBe(
+      await readFile(path.join(fixture, 'packages/ui-profile/normalized/src/components/ui/dropdown-menu.tsx'), 'utf8')
+    );
     expect(await readFile(tabsVendorPath, 'utf8')).toBe(
       await readFile(path.join(fixture, 'packages/ui-profile/normalized/src/components/ui/tabs.tsx'), 'utf8')
     );

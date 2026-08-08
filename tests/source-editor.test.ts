@@ -96,6 +96,7 @@ describe('source editor state', () => {
       React.createElement(ProductionSourceEditor, {
         embedded: true,
         fillHeight: true,
+        instanceId: 'static-production-editor',
         label: 'Template HTML',
         language: 'html',
         value: '<article>{{item.title}}</article>',
@@ -113,7 +114,8 @@ describe('source editor state', () => {
       '.bt-floating-editor__shortcut-menu-trigger {\n  min-width: 0;\n  min-height: 28px;\n  column-gap: 6px;'
     );
     expect(productionMarkup).toContain('border-radius: 6px;\n  padding: 4px 8px;');
-    expect(productionMarkup).toContain('.bt-floating-editor__shortcut-menu-trigger.fui-MenuButton:hover:active,');
+    expect(productionMarkup).toContain('.bt-floating-editor__shortcut-menu-item[data-highlighted] {');
+    expect(productionMarkup).not.toContain('.fui-');
     expect(productionMarkup).toContain('border-radius: 4px;\n  padding: 4px 8px;\n  color: #f8fafc;');
     expect(productionMarkup).toContain('font-size: 12px;\n  line-height: 16px;\n  opacity: 1;');
   });
