@@ -1,0 +1,57 @@
+{
+  "kind": "pbroom.spfx-kit.pr-review-audit-event",
+  "schemaVersion": 1,
+  "eventType": "complete_snapshot",
+  "repository": {
+    "nameWithOwner": "pbroom/spfx-kit",
+    "nodeId": "R_repo"
+  },
+  "summary": {
+    "pullRequestCount": 1,
+    "reviewLoopKnownCount": 1,
+    "reviewLoopUnknownCount": 0,
+    "reviewLoopNumberTotal": 1,
+    "threadRootObservationCount": 2,
+    "priorityLabeledThreadRootCount": 1,
+    "unknownPriorityThreadRootCount": 1,
+    "currentUnresolvedPriorityLabeledThreadRootCount": 1,
+    "bySeverity": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 1,
+      "P3": 0,
+      "unknown": 1
+    },
+    "bySource": {
+      "codex": 1,
+      "greptile": 0,
+      "graphite": 0,
+      "github_user": 1,
+      "other_automation": 0,
+      "unknown": 0
+    },
+    "byOrigin": {
+      "review_thread_root": 2
+    },
+    "byClassificationStatus": {
+      "classified": 1,
+      "unknown": 1
+    }
+  },
+  "provenance": {
+    "auditKind": "pbroom.spfx-kit.pr-review-audit",
+    "auditSchemaVersion": 1,
+    "auditId": "analytics-one",
+    "classifier": {
+      "id": "spfx-kit-review-observation-v1",
+      "version": 1
+    },
+    "collectionStatus": "complete"
+  },
+  "confidence": {
+    "completeness": "high",
+    "currentness": "bounded_observation_window",
+    "causalAttribution": "not_assessed",
+    "attestation": "self_consistent_unkeyed_not_origin_authentication"
+  }
+}

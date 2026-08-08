@@ -1,0 +1,281 @@
+{
+  "kind": "pbroom.spfx-kit.pr-review-audit-event",
+  "schemaVersion": 1,
+  "eventType": "complete_snapshot",
+  "eventId": "analytics-one:complete-snapshot",
+  "observedAt": "2026-08-07T12:00:02.000Z",
+  "run": { "id": "analytics-one", "startedAt": "2026-08-07T12:00:00.000Z", "completedAt": "2026-08-07T12:00:02.000Z" },
+  "repository": { "nameWithOwner": "pbroom/spfx-kit", "nodeId": "R_repo" },
+  "sampling": {
+    "cadence": "twice_daily_fixed_utc",
+    "slotId": "twice-daily:2026-08-07T12:00:00.000Z",
+    "expectedAt": "2026-08-07T12:00:00.000Z",
+    "coverageState": "complete",
+    "runnerVersion": "fixture-runner-v1"
+  },
+  "instructions": {
+    "reviewer": {
+      "status": "reported",
+      "id": "reviewer-v3",
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "confidence": "runner_asserted",
+      "provenance": ["trusted-runner-argument"],
+      "reason": null
+    },
+    "fixer": {
+      "status": "unknown",
+      "id": null,
+      "digest": null,
+      "confidence": "unknown",
+      "provenance": [],
+      "reason": "instruction_reference_not_supplied"
+    }
+  },
+  "pullRequests": [
+    {
+      "number": 7,
+      "nodeId": "PR_7",
+      "url": "https://github.com/pbroom/spfx-kit/pull/7",
+      "state": "OPEN",
+      "isDraft": false,
+      "title": "Audit reviews",
+      "createdAt": "2026-08-01T00:00:00Z",
+      "updatedAt": "2026-08-07T11:59:00Z",
+      "authorAssociation": "OWNER",
+      "author": { "id": 1, "login": "author", "type": "User" },
+      "head": { "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "refName": "codex/audit", "repository": "pbroom/spfx-kit" },
+      "base": { "oid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "refName": "main", "repository": "pbroom/spfx-kit" },
+      "merge": { "mergeable": null, "mergeableState": "UNKNOWN", "rebaseable": null },
+      "reviewLoop": {
+        "number": 1,
+        "status": "observed",
+        "reason": null,
+        "definition": "codex-review-fix-loop-v1-reserved-attempts",
+        "exactHeadReviewSubmissionCount": 2,
+        "reviewSubmissionCount": 2,
+        "statusMarkerCommentId": 40,
+        "statusMarkerState": "pushed",
+        "retainedProcessedReviewCount": 1,
+        "confidence": "api_attributed_strict_schema",
+        "provenance": ["audit.pullRequests.issueComments.codex-review-fix-loop:v1"],
+        "causalAttribution": "not_assessed"
+      },
+      "stack": {
+        "classificationStatus": "classified",
+        "parentCandidates": [],
+        "childCandidates": [],
+        "openGraphRole": "isolated",
+        "stackId": null,
+        "position": null,
+        "confidence": "deterministic_observed_open_graph",
+        "method": "same-repository-open-pr-ref-topology-v1",
+        "provenance": ["audit.inventory.openPullRequests"],
+        "causalAttribution": "not_assessed",
+        "reason": null
+      },
+      "findings": [
+        {
+          "id": "review-thread:thread-a",
+          "origin": {
+            "type": "review_thread_root",
+            "classificationStatus": "classified",
+            "nodeId": "thread-a",
+            "commentId": "100",
+            "commentNodeId": "review-comment-100",
+            "reviewId": "20",
+            "reviewNodeId": "review-20",
+            "reviewedCommitOid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "path": "src/value.ts",
+            "line": 3,
+            "provenance": ["audit.pullRequests.reviewThreads", "audit.pullRequests.reviewComments"]
+          },
+          "severity": {
+            "status": "unknown",
+            "value": null,
+            "confidence": "unknown",
+            "method": "explicit-priority-label-v1",
+            "validity": "unknown",
+            "validityReason": "not_assessed"
+          },
+          "source": {
+            "actor": { "id": 3, "login": "reviewer", "type": "User" },
+            "classification": {
+              "status": "classified",
+              "value": "github_user",
+              "confidence": "medium",
+              "method": "rest-review-comment-actor-v1"
+            },
+            "graphqlLogin": "reviewer",
+            "reconciliation": "matched"
+          },
+          "resolution": {
+            "status": "resolved",
+            "isOutdated": false,
+            "resolvedAt": null,
+            "resolvedAtStatus": "unknown",
+            "confidence": "high",
+            "provenance": ["github.reviewThread.isResolved", "github.reviewThread.isOutdated"]
+          },
+          "headRelationship": { "status": "classified", "value": "exact_head", "confidence": "high" },
+          "fixLink": {
+            "status": "unknown",
+            "commitOid": null,
+            "pullRequestNumber": null,
+            "evidenceIds": [],
+            "confidence": "unknown",
+            "causalAttribution": "not_assessed",
+            "reason": "status_marker_has_no_matching_thread_report"
+          }
+        },
+        {
+          "id": "review-thread:thread-b",
+          "origin": {
+            "type": "review_thread_root",
+            "classificationStatus": "classified",
+            "nodeId": "thread-b",
+            "commentId": "101",
+            "commentNodeId": "review-comment-101",
+            "reviewId": "20",
+            "reviewNodeId": "review-20",
+            "reviewedCommitOid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "path": "src/value.ts",
+            "line": 3,
+            "provenance": ["audit.pullRequests.reviewThreads", "audit.pullRequests.reviewComments"]
+          },
+          "severity": {
+            "status": "classified",
+            "value": "P2",
+            "confidence": "high",
+            "method": "explicit-priority-label-v1",
+            "validity": "unknown",
+            "validityReason": "not_assessed"
+          },
+          "source": {
+            "actor": { "id": 199175422, "login": "chatgpt-codex-connector[bot]", "type": "Bot" },
+            "classification": {
+              "status": "classified",
+              "value": "codex",
+              "confidence": "high",
+              "method": "rest-review-comment-actor-v1"
+            },
+            "graphqlLogin": "chatgpt-codex-connector[bot]",
+            "reconciliation": "matched"
+          },
+          "resolution": {
+            "status": "unresolved",
+            "isOutdated": false,
+            "resolvedAt": null,
+            "resolvedAtStatus": "not_applicable",
+            "confidence": "high",
+            "provenance": ["github.reviewThread.isResolved", "github.reviewThread.isOutdated"]
+          },
+          "headRelationship": { "status": "classified", "value": "exact_head", "confidence": "high" },
+          "fixLink": {
+            "status": "reported",
+            "commitOid": null,
+            "pullRequestNumber": null,
+            "evidenceIds": ["40"],
+            "reports": [
+              {
+                "relation": "status_marker_reports_processing",
+                "threadId": "thread-b",
+                "sourceCommentId": 40,
+                "reviewId": "20",
+                "inputHeadOid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "attemptNumber": 1,
+                "result": "pushed",
+                "reportedAt": "2026-08-07T11:55:00.000Z",
+                "workflowRunUrl": null,
+                "workflowRunUrlReason": "not_recorded_per_processed_review"
+              }
+            ],
+            "confidence": "reported_not_verified",
+            "causalAttribution": "not_assessed",
+            "reason": null
+          }
+        }
+      ],
+      "findingSummary": {
+        "threadRootObservationCount": 2,
+        "priorityLabeledThreadRootCount": 1,
+        "unknownPriorityThreadRootCount": 1,
+        "currentUnresolvedPriorityLabeledThreadRootCount": 1,
+        "bySeverity": { "P0": 0, "P1": 0, "P2": 1, "P3": 0, "unknown": 1 },
+        "bySource": { "codex": 1, "greptile": 0, "graphite": 0, "github_user": 1, "other_automation": 0, "unknown": 0 },
+        "byOrigin": { "review_thread_root": 2 },
+        "byClassificationStatus": { "classified": 1, "unknown": 1 }
+      }
+    }
+  ],
+  "summary": {
+    "pullRequestCount": 1,
+    "reviewLoopKnownCount": 1,
+    "reviewLoopUnknownCount": 0,
+    "reviewLoopNumberTotal": 1,
+    "threadRootObservationCount": 2,
+    "priorityLabeledThreadRootCount": 1,
+    "unknownPriorityThreadRootCount": 1,
+    "currentUnresolvedPriorityLabeledThreadRootCount": 1,
+    "bySeverity": { "P0": 0, "P1": 0, "P2": 1, "P3": 0, "unknown": 1 },
+    "bySource": { "codex": 1, "greptile": 0, "graphite": 0, "github_user": 1, "other_automation": 0, "unknown": 0 },
+    "byOrigin": { "review_thread_root": 2 },
+    "byClassificationStatus": { "classified": 1, "unknown": 1 }
+  },
+  "provenance": {
+    "auditKind": "pbroom.spfx-kit.pr-review-audit",
+    "auditSchemaVersion": 1,
+    "auditId": "analytics-one",
+    "auditDigest": "c624c5f08bc72d0e403000d2d6af0106a613fa32a3a734c19978a4e7df06902c",
+    "authenticatedAs": { "id": 42, "login": "auditor", "type": "User" },
+    "apiVersion": "2022-11-28",
+    "classifier": { "id": "spfx-kit-review-observation-v1", "version": 1 },
+    "projector": {
+      "id": "codex-pr-review-audit-event",
+      "version": 1,
+      "implementation": {
+        "kind": "sha256-manifest",
+        "digest": "sha256:1f86189280b7740d488a684e883a993ebda27a755dbfab78b52be1691d911bd9",
+        "files": [
+          {
+            "path": "scripts/codex-pr-review-audit-event.mjs",
+            "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          {
+            "path": "scripts/codex-pr-review-audit.mjs",
+            "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          {
+            "path": "scripts/codex-review-loop.mjs",
+            "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+          },
+          {
+            "path": "scripts/codex-review-priority.mjs",
+            "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        ]
+      }
+    },
+    "collectionStatus": "complete"
+  },
+  "confidence": {
+    "completeness": "high",
+    "currentness": "bounded_observation_window",
+    "causalAttribution": "not_assessed",
+    "attestation": "self_consistent_unkeyed_not_origin_authentication"
+  },
+  "causalAttribution": {
+    "status": "not_claimed",
+    "statement": "This event records observed associations only and does not attribute reviews, resolutions, or fixes causally."
+  },
+  "unknowns": [
+    { "path": "findings.review-thread:thread-a.fixLink", "reason": "status_marker_has_no_matching_thread_report" },
+    { "path": "findings.review-thread:thread-a.resolution.resolvedAt", "reason": "timestamp_not_exposed" },
+    { "path": "findings.review-thread:thread-a.severity", "reason": "no_explicit_priority_label" },
+    { "path": "findings.review-thread:thread-b.fixLink.commitOid", "reason": "output_commit_not_recorded" },
+    { "path": "instructions.fixer", "reason": "instruction_version_not_fully_supplied" },
+    { "path": "pullRequests.7.stack.position", "reason": "complete_stack_not_observed" },
+    { "path": "pullRequests.7.stack.stackId", "reason": "graphite_metadata_not_fetched" }
+  ],
+  "log": { "previousEventDigest": null },
+  "integrity": { "algorithm": "sha256", "digest": "b5391cb1d29a49f91d0fd8c7a8ec704382ac3c543b45e23502f1d24a3b20e47b" }
+}

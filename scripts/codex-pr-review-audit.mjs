@@ -11,6 +11,7 @@ export const AUDIT_SCHEMA_VERSION = 1;
 export const AUDIT_API_VERSION = '2022-11-28';
 export const AUDIT_PROOF_KIND = 'pbroom.spfx-kit.pr-review-audit-proof';
 export const DEFAULT_MAX_AGE_SECONDS = 300;
+export const AUDIT_SCHEMA_V1_MAX_AGE_SECONDS = 3_600;
 export const DEFAULT_PAGE_SIZE = 100;
 export const MAX_PAGES = 10_000;
 export const GITHUB_API_URL = 'https://api.github.com';
@@ -40,6 +41,10 @@ function normalizeLogin(login) {
     .trim()
     .replace(/\[bot\]$/i, '')
     .toLowerCase();
+}
+
+function sameRepositoryIdentity(left, right) {
+  return typeof left === 'string' && typeof right === 'string' && left.toLowerCase() === right.toLowerCase();
 }
 
 function canonicalize(value) {
@@ -116,6 +121,18 @@ function requireInteger(value, context) {
   return Number(value);
 }
 
+function requirePositiveIntegerPrimitive(value, context) {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    fail(`${context} integer was missing or invalid.`, { phase: 'normalize', collection: context });
+  }
+  return value;
+}
+
+function optionalPositiveIntegerPrimitive(value, context) {
+  if (value === null || value === undefined) return null;
+  return requirePositiveIntegerPrimitive(value, context);
+}
+
 function requireString(value, context) {
   if (typeof value !== 'string' || !value) {
     fail(`${context} string was missing or invalid.`, { phase: 'normalize', collection: context });
@@ -156,6 +173,7 @@ function inventoryEntry(value) {
     Number(value.number) < 1 ||
     typeof value.draft !== 'boolean' ||
     String(value.state || '').toLowerCase() !== 'open' ||
+    typeof value.updated_at !== 'string' ||
     !Number.isFinite(Date.parse(value.updated_at))
   ) {
     fail('Open pull-request inventory contained an invalid entry.', { phase: 'inventory' });
@@ -352,12 +370,19 @@ function normalizeReview(value) {
   ) {
     fail('Review response was incomplete.', { phase: 'normalize', collection: 'reviews' });
   }
+  if (value.commit_id !== null && (typeof value.commit_id !== 'string' || !/^[0-9a-f]{40}$/i.test(value.commit_id))) {
+    fail('Review commit identity was invalid.', { phase: 'normalize', collection: 'reviews' });
+  }
+  if (!Number.isSafeInteger(value.id) || value.id < 1) {
+    fail('Review ID was invalid.', { phase: 'normalize', collection: 'reviews' });
+  }
+  const id = value.id;
   return {
-    id: requireInteger(value.id, 'review id'),
+    id,
     nodeId: requireString(value.node_id, 'review node id'),
     state: requireString(value.state, 'review state'),
     body: requireBody(value.body, 'review'),
-    commitId: value.commit_id === null ? null : requireString(value.commit_id, 'review commit id'),
+    commitId: value.commit_id,
     submittedAt: requireTimestamp(value.submitted_at, 'review submittedAt', { nullable: true }),
     authorAssociation: String(value.author_association || ''),
     author: actor(value.user, 'review')
@@ -385,10 +410,10 @@ function normalizeReviewComment(value) {
     fail('Review-comment response was incomplete.', { phase: 'normalize', collection: 'reviewComments' });
   }
   return {
-    id: requireInteger(value.id, 'review comment id'),
+    id: requirePositiveIntegerPrimitive(value.id, 'reviewComments'),
     nodeId: requireString(value.node_id, 'review comment node id'),
-    pullRequestReviewId: requireInteger(value.pull_request_review_id, 'review comment review id'),
-    inReplyToId: optionalInteger(value.in_reply_to_id),
+    pullRequestReviewId: requirePositiveIntegerPrimitive(value.pull_request_review_id, 'reviewComments'),
+    inReplyToId: optionalPositiveIntegerPrimitive(value.in_reply_to_id, 'reviewComments'),
     url: requireString(value.html_url, 'review comment URL'),
     body: requireBody(value.body, 'review comment'),
     path: requireString(value.path, 'review comment path'),
@@ -406,7 +431,12 @@ function normalizeReviewComment(value) {
 }
 
 function normalizeThreadComment(value) {
-  if (!value || !/^\d+$/.test(String(value.fullDatabaseId || '')) || !Object.hasOwn(value, 'body')) {
+  if (
+    !value ||
+    typeof value.fullDatabaseId !== 'string' ||
+    !/^[1-9]\d*$/.test(value.fullDatabaseId) ||
+    !Object.hasOwn(value, 'body')
+  ) {
     fail('Review-thread comment response was incomplete.', {
       phase: 'normalize',
       collection: 'reviewThreadComments'
@@ -663,6 +693,11 @@ function pullRequestRecord(detail, reviews, issueComments, reviewComments, revie
   ) {
     fail('Pull-request merge state was incomplete.', { phase: 'normalize', collection: 'mergeState' });
   }
+  const createdAt = requireTimestamp(detail.created_at, 'pull request createdAt');
+  const updatedAt = requireTimestamp(detail.updated_at, 'pull request updatedAt');
+  if (Date.parse(createdAt) > Date.parse(updatedAt)) {
+    fail('Pull-request timestamps were inconsistent.', { phase: 'normalize', collection: 'pullRequestTimestamps' });
+  }
   return {
     number: requireInteger(detail.number, 'pull request number'),
     nodeId: requireString(detail.node_id, 'pull request node id'),
@@ -670,8 +705,8 @@ function pullRequestRecord(detail, reviews, issueComments, reviewComments, revie
     title: requireString(detail.title, 'pull request title'),
     state: String(detail.state || '').toUpperCase(),
     isDraft: Boolean(detail.draft),
-    createdAt: requireTimestamp(detail.created_at, 'pull request createdAt'),
-    updatedAt: requireTimestamp(detail.updated_at, 'pull request updatedAt'),
+    createdAt,
+    updatedAt,
     authorAssociation: String(detail.author_association || ''),
     author: actor(detail.user, 'pull request'),
     head: refIdentity(detail.head, 'head'),
@@ -696,6 +731,15 @@ async function fetchInventory(client, repository, pageSize, phase) {
   const entries = ensureUnique(result.values.map(inventoryEntry), (item) => item.number, 'openPullRequests').sort(
     (left, right) => left.number - right.number
   );
+  for (const entry of entries) {
+    if (entry.base.repository !== null && !sameRepositoryIdentity(entry.base.repository, repository.nameWithOwner)) {
+      fail('Pull request base repository did not match the audited repository.', {
+        phase,
+        collection: 'openPullRequests',
+        pullRequestNumber: entry.number
+      });
+    }
+  }
   return { entries, pages: result.pages, fingerprint: inventoryFingerprint(entries) };
 }
 
@@ -712,7 +756,22 @@ async function fetchPullRequest(client, repository, inventory, pageSize) {
   ) {
     fail('Pull request changed state or draft status during audit.', { phase: 'detail', pullRequestNumber });
   }
+  if (detail.html_url !== `https://github.com/${repository.nameWithOwner}/pull/${pullRequestNumber}`) {
+    fail('Pull request URL did not match the repository and pull-request identity.', {
+      phase: 'detail',
+      pullRequestNumber
+    });
+  }
   const detailIdentity = inventoryEntry(detail);
+  if (
+    detailIdentity.base.repository !== null &&
+    !sameRepositoryIdentity(detailIdentity.base.repository, repository.nameWithOwner)
+  ) {
+    fail('Pull request base repository did not match the audited repository.', {
+      phase: 'detail',
+      pullRequestNumber
+    });
+  }
   if (canonicalJson(detailIdentity) !== canonicalJson(inventory)) {
     fail('Pull request identity drifted after inventory.', { phase: 'detail', pullRequestNumber });
   }
@@ -765,7 +824,124 @@ async function fetchEvidenceSnapshot(client, repository, inventory, pageSize) {
   for (const entry of inventory.filter((candidate) => !candidate.isDraft)) {
     pullRequests.push(await fetchPullRequest(client, repository, entry, pageSize));
   }
-  return pullRequests.sort((left, right) => left.number - right.number);
+  return ensureUnique(pullRequests, (pullRequest) => pullRequest.nodeId, 'pullRequestNodeIds').sort(
+    (left, right) => left.number - right.number
+  );
+}
+
+function sourceReviewIdentitiesAreConsistent(pullRequests) {
+  const byDatabaseId = new Map();
+  const byNodeId = new Map();
+  const commentByDatabaseId = new Map();
+  const commentByNodeId = new Map();
+  for (const pullRequest of pullRequests) {
+    for (const review of pullRequest.reviews.values) {
+      const databaseTuple = canonicalJson({ nodeId: review.nodeId, pullRequestNumber: pullRequest.number });
+      const nodeTuple = canonicalJson({ databaseId: review.id, pullRequestNumber: pullRequest.number });
+      if (
+        (byDatabaseId.has(review.id) && byDatabaseId.get(review.id) !== databaseTuple) ||
+        (byNodeId.has(review.nodeId) && byNodeId.get(review.nodeId) !== nodeTuple)
+      ) {
+        return false;
+      }
+      byDatabaseId.set(review.id, databaseTuple);
+      byNodeId.set(review.nodeId, nodeTuple);
+    }
+    const reviewsByDatabaseId = new Map(pullRequest.reviews.values.map((review) => [review.id, review]));
+    const reviewsByNodeId = new Map(pullRequest.reviews.values.map((review) => [review.nodeId, review]));
+    const reviewCommentsById = new Map(pullRequest.reviewComments.values.map((comment) => [String(comment.id), comment]));
+    if (pullRequest.reviewComments.values.some((comment) => !reviewsByDatabaseId.has(comment.pullRequestReviewId))) {
+      return false;
+    }
+    for (const comment of pullRequest.reviewComments.values) {
+      if (typeof comment.nodeId !== 'string' || !comment.nodeId) return false;
+      const databaseId = String(comment.id);
+      const databaseTuple = canonicalJson({ nodeId: comment.nodeId, pullRequestNumber: pullRequest.number });
+      const nodeTuple = canonicalJson({ databaseId, pullRequestNumber: pullRequest.number });
+      if (
+        (commentByDatabaseId.has(databaseId) && commentByDatabaseId.get(databaseId) !== databaseTuple) ||
+        (commentByNodeId.has(comment.nodeId) && commentByNodeId.get(comment.nodeId) !== nodeTuple)
+      ) {
+        return false;
+      }
+      commentByDatabaseId.set(databaseId, databaseTuple);
+      commentByNodeId.set(comment.nodeId, nodeTuple);
+    }
+    for (const thread of pullRequest.reviewThreads.values) {
+      const pairedComments = thread.comments.values.map((comment) => ({
+        graphql: comment,
+        rest: reviewCommentsById.get(String(comment.id))
+      }));
+      const rootCandidates = pairedComments.filter(({ rest }) => rest?.inReplyToId === null);
+      if (
+        pairedComments.some(
+          ({ graphql, rest }) => !rest || typeof graphql.nodeId !== 'string' || !graphql.nodeId || graphql.nodeId !== rest.nodeId
+        ) ||
+        rootCandidates.length !== 1 ||
+        pairedComments.some(({ rest }) => rest.inReplyToId !== null && rest.inReplyToId !== rootCandidates[0].rest.id)
+      ) {
+        return false;
+      }
+      for (const { graphql: comment, rest: reviewComment } of pairedComments) {
+        if (comment.review === null) continue;
+        const graphqlReview = comment.review;
+        if (
+          !graphqlReview ||
+          typeof graphqlReview !== 'object' ||
+          Array.isArray(graphqlReview) ||
+          typeof graphqlReview.nodeId !== 'string' ||
+          !graphqlReview.nodeId ||
+          (graphqlReview.id !== null && typeof graphqlReview.id !== 'string') ||
+          (graphqlReview.commitId !== null &&
+            (typeof graphqlReview.commitId !== 'string' || !/^[0-9a-f]{40}$/i.test(graphqlReview.commitId)))
+        ) {
+          return false;
+        }
+        const reviewByNodeId = reviewsByNodeId.get(graphqlReview.nodeId);
+        let reviewByDatabaseId = reviewByNodeId;
+        if (graphqlReview.id !== null) {
+          if (!/^[1-9]\d*$/.test(graphqlReview.id) || !Number.isSafeInteger(Number(graphqlReview.id))) return false;
+          reviewByDatabaseId = reviewsByDatabaseId.get(Number(graphqlReview.id));
+        }
+        if (
+          !reviewByNodeId ||
+          reviewsByDatabaseId.get(reviewComment.pullRequestReviewId) !== reviewByNodeId ||
+          reviewByDatabaseId !== reviewByNodeId ||
+          (graphqlReview.commitId !== null &&
+            reviewByNodeId.commitId !== null &&
+            reviewByNodeId.commitId.toLowerCase() !== graphqlReview.commitId.toLowerCase())
+        ) {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+function requireConsistentSourceReviewIdentities(pullRequests) {
+  if (!sourceReviewIdentitiesAreConsistent(pullRequests)) {
+    fail('Review database and node identities were inconsistent across pull requests.', {
+      phase: 'normalize',
+      collection: 'reviewIdentities'
+    });
+  }
+}
+
+function pairedThreadRoot(pullRequest, thread) {
+  const reviewCommentsById = new Map(pullRequest.reviewComments.values.map((comment) => [String(comment.id), comment]));
+  const pairedComments = thread.comments.values.map((comment) => ({
+    graphql: comment,
+    rest: reviewCommentsById.get(String(comment.id))
+  }));
+  const roots = pairedComments.filter(({ rest }) => rest?.inReplyToId === null);
+  if (roots.length !== 1) {
+    throw new Error(`Audit review thread ${thread.id} does not have exactly one paired REST root comment.`);
+  }
+  if (pairedComments.some(({ rest }) => !rest || (rest.inReplyToId !== null && rest.inReplyToId !== roots[0].rest.id))) {
+    throw new Error(`Audit review thread ${thread.id} contains a reply that does not point to its paired REST root comment.`);
+  }
+  return roots[0].graphql;
 }
 
 function auditSummary(pullRequests) {
@@ -787,7 +963,7 @@ function auditSummary(pullRequests) {
       if (!thread.isResolved) unresolvedThreadCount += 1;
       if (!thread.isResolved && !thread.isOutdated) {
         unresolvedNonOutdatedThreadCount += 1;
-        const root = thread.comments.values[0];
+        const root = pairedThreadRoot(pullRequest, thread);
         if (
           root &&
           normalizeLogin(root.author?.login) === CODEX_REVIEW_ACTOR &&
@@ -853,7 +1029,9 @@ export async function auditRepository({
     repository = parseRepository(repositoryValue);
     if (!token) fail('GITHUB_TOKEN or GH_TOKEN is required; anonymous audits are forbidden.', { phase: 'authentication' });
     if (typeof fetchImpl !== 'function') fail('No fetch implementation is available.', { phase: 'arguments' });
-    if (!String(runId || '').trim()) fail('--run-id must not be empty.', { phase: 'arguments' });
+    if (typeof runId !== 'string' || !runId.trim()) {
+      fail('--run-id must be a nonempty string.', { phase: 'arguments' });
+    }
     if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
       fail('Audit page size must be an integer from 1 to 100.', { phase: 'arguments' });
     }
@@ -864,18 +1042,22 @@ export async function auditRepository({
     });
     if (
       String(repositoryResponse.data?.full_name || '').toLowerCase() !== repository.nameWithOwner.toLowerCase() ||
-      !String(repositoryResponse.data?.node_id || '')
+      typeof repositoryResponse.data?.node_id !== 'string' ||
+      repositoryResponse.data.node_id.length === 0
     ) {
       fail('GitHub repository response did not match --repo.', { phase: 'repository' });
     }
+    repository = parseRepository(repositoryResponse.data.full_name);
     const before = await fetchInventory(client, repository, pageSize, 'inventory-before');
     const selected = before.entries.filter((entry) => !entry.isDraft);
     const firstSnapshot = await fetchEvidenceSnapshot(client, repository, before.entries, pageSize);
+    requireConsistentSourceReviewIdentities(firstSnapshot);
     const middle = await fetchInventory(client, repository, pageSize, 'inventory-middle');
     if (before.fingerprint !== middle.fingerprint) {
       fail('Open pull-request inventory drifted during the first evidence snapshot.', { phase: 'inventory-middle' });
     }
     const pullRequests = await fetchEvidenceSnapshot(client, repository, middle.entries, pageSize);
+    requireConsistentSourceReviewIdentities(pullRequests);
     const after = await fetchInventory(client, repository, pageSize, 'inventory-after');
     if (middle.fingerprint !== after.fingerprint) {
       fail('Open pull-request inventory drifted during audit.', { phase: 'inventory-after' });
@@ -891,7 +1073,7 @@ export async function auditRepository({
       schemaVersion: AUDIT_SCHEMA_VERSION,
       status: 'complete',
       audit: {
-        id: String(runId),
+        id: runId,
         startedAt,
         completedAt,
         apiVersion: AUDIT_API_VERSION,
@@ -900,7 +1082,7 @@ export async function auditRepository({
       },
       repository: {
         nameWithOwner: String(repositoryResponse.data.full_name),
-        nodeId: String(repositoryResponse.data.node_id)
+        nodeId: repositoryResponse.data.node_id
       },
       inventory: {
         filter: { state: 'OPEN', draft: false },
@@ -923,7 +1105,14 @@ export async function auditRepository({
     return record;
   } catch (error) {
     const completedAt = now().toISOString();
-    const incomplete = incompleteRecord({ repository, runId: String(runId || ''), startedAt, completedAt, client, error });
+    const incomplete = incompleteRecord({
+      repository,
+      runId: typeof runId === 'string' ? runId : '',
+      startedAt,
+      completedAt,
+      client,
+      error
+    });
     const wrapped = error instanceof AuditIncompleteError ? error : new AuditIncompleteError(String(error));
     wrapped.record = incomplete;
     throw wrapped;
@@ -968,7 +1157,13 @@ export function verifyAuditRecord(record, { repository, expectedRunId, maxAgeSec
   if (record.repository?.nameWithOwner?.toLowerCase() !== parseRepository(repository).nameWithOwner.toLowerCase()) {
     throw new Error('Audit repository does not match the expected repository.');
   }
-  if (!expectedRunId || record.audit?.id !== expectedRunId) {
+  if (
+    typeof expectedRunId !== 'string' ||
+    !expectedRunId.trim() ||
+    typeof record.audit?.id !== 'string' ||
+    !record.audit.id.trim() ||
+    record.audit.id !== expectedRunId
+  ) {
     throw new Error('Audit run ID does not match this heartbeat invocation.');
   }
   if (
@@ -978,11 +1173,12 @@ export function verifyAuditRecord(record, { repository, expectedRunId, maxAgeSec
     !Number.isSafeInteger(record.audit.requestCount) ||
     record.audit.requestCount < 4 ||
     record.audit.apiVersion !== AUDIT_API_VERSION ||
-    !record.repository?.nodeId
+    typeof record.repository?.nodeId !== 'string' ||
+    record.repository.nodeId.length === 0
   ) {
     throw new Error('Audit authentication or repository provenance is incomplete.');
   }
-  if (!Number.isSafeInteger(maxAgeSeconds) || maxAgeSeconds < 1 || maxAgeSeconds > 3_600) {
+  if (!Number.isSafeInteger(maxAgeSeconds) || maxAgeSeconds < 1 || maxAgeSeconds > AUDIT_SCHEMA_V1_MAX_AGE_SECONDS) {
     throw new Error('--max-age-seconds must be an integer from 1 to 3600.');
   }
   const startedAt = new Date(requiredString(record.audit?.startedAt, 'Audit startedAt is missing.'));
@@ -1038,11 +1234,13 @@ export function verifyAuditRecord(record, { repository, expectedRunId, maxAgeSec
       entry.number < 1 ||
       entry.state !== 'OPEN' ||
       typeof entry.isDraft !== 'boolean' ||
+      typeof entry.updatedAt !== 'string' ||
       !Number.isFinite(Date.parse(entry.updatedAt)) ||
       !/^[0-9a-f]{40}$/i.test(String(entry.head?.oid || '')) ||
       !String(entry.head?.refName || '') ||
       !/^[0-9a-f]{40}$/i.test(String(entry.base?.oid || '')) ||
-      !String(entry.base?.refName || '')
+      !String(entry.base?.refName || '') ||
+      (entry.base.repository !== null && !sameRepositoryIdentity(entry.base.repository, record.repository.nameWithOwner))
     ) {
       throw new Error('Audit open-pull-request identity is invalid.');
     }
@@ -1071,6 +1269,7 @@ export function verifyAuditRecord(record, { repository, expectedRunId, maxAgeSec
     throw new Error('Audit inventory fingerprint does not match the captured identities.');
   }
   const numbers = record.pullRequests.map((pullRequest) => pullRequest.number);
+  const nodeIds = record.pullRequests.map((pullRequest) => pullRequest.nodeId);
   if (
     canonicalJson(numbers) !== canonicalJson([...numbers].sort((left, right) => left - right)) ||
     new Set(numbers).size !== numbers.length ||
@@ -1078,16 +1277,27 @@ export function verifyAuditRecord(record, { repository, expectedRunId, maxAgeSec
   ) {
     throw new Error('Audit pull-request inventory is not unique and deterministically ordered.');
   }
+  if (nodeIds.some((nodeId) => typeof nodeId !== 'string' || !nodeId) || new Set(nodeIds).size !== nodeIds.length) {
+    throw new Error('Audit pull-request node IDs are not globally unique.');
+  }
   for (const pullRequest of record.pullRequests) {
     const inventoryIdentity = record.inventory.openPullRequests.find((entry) => entry.number === pullRequest.number);
     if (
       !Number.isSafeInteger(pullRequest.number) ||
       pullRequest.state !== 'OPEN' ||
       pullRequest.isDraft !== false ||
+      pullRequest.url !== `https://github.com/${record.repository.nameWithOwner}/pull/${pullRequest.number}` ||
+      typeof pullRequest.createdAt !== 'string' ||
+      typeof pullRequest.updatedAt !== 'string' ||
+      !Number.isFinite(Date.parse(pullRequest.createdAt)) ||
+      !Number.isFinite(Date.parse(pullRequest.updatedAt)) ||
+      Date.parse(pullRequest.createdAt) > Date.parse(pullRequest.updatedAt) ||
       !/^[0-9a-f]{40}$/i.test(String(pullRequest.head?.oid || '')) ||
       !pullRequest.head?.refName ||
       !/^[0-9a-f]{40}$/i.test(String(pullRequest.base?.oid || '')) ||
       !pullRequest.base?.refName ||
+      (pullRequest.base.repository !== null &&
+        !sameRepositoryIdentity(pullRequest.base.repository, record.repository.nameWithOwner)) ||
       !pullRequest.merge ||
       (pullRequest.merge.mergeable !== null && typeof pullRequest.merge.mergeable !== 'boolean') ||
       !String(pullRequest.merge.mergeableState || '') ||
@@ -1110,6 +1320,36 @@ export function verifyAuditRecord(record, { repository, expectedRunId, maxAgeSec
     verifyCollection(pullRequest.issueComments, `#${pullRequest.number} issue comments`);
     verifyCollection(pullRequest.reviewComments, `#${pullRequest.number} review comments`);
     verifyCollection(pullRequest.reviewThreads, `#${pullRequest.number} review threads`);
+    if (
+      pullRequest.reviews.values.some(
+        (review) =>
+          !Number.isSafeInteger(review.id) ||
+          review.id < 1 ||
+          typeof review.nodeId !== 'string' ||
+          !review.nodeId ||
+          typeof review.state !== 'string' ||
+          !review.state ||
+          (review.commitId !== null && (typeof review.commitId !== 'string' || !/^[0-9a-f]{40}$/i.test(review.commitId))) ||
+          (review.submittedAt !== null &&
+            (typeof review.submittedAt !== 'string' || !Number.isFinite(Date.parse(review.submittedAt))))
+      )
+    ) {
+      throw new Error(`Audit review schema for pull request #${pullRequest.number} is invalid.`);
+    }
+    if (
+      pullRequest.reviewComments.values.some(
+        (comment) =>
+          !Number.isSafeInteger(comment.id) ||
+          comment.id < 1 ||
+          typeof comment.nodeId !== 'string' ||
+          !comment.nodeId ||
+          !Number.isSafeInteger(comment.pullRequestReviewId) ||
+          comment.pullRequestReviewId < 1 ||
+          (comment.inReplyToId !== null && (!Number.isSafeInteger(comment.inReplyToId) || comment.inReplyToId < 1))
+      )
+    ) {
+      throw new Error(`Audit review-comment schema for pull request #${pullRequest.number} is invalid.`);
+    }
     if (
       !isSortedUnique(
         pullRequest.reviews.values,
@@ -1137,7 +1377,13 @@ export function verifyAuditRecord(record, { repository, expectedRunId, maxAgeSec
     for (const thread of pullRequest.reviewThreads.values) {
       verifyCollection(thread.comments, `#${pullRequest.number} thread ${thread.id} comments`);
       if (
-        !thread.comments.values.every((comment) => /^\d+$/.test(String(comment.id))) ||
+        !thread.comments.values.every(
+          (comment) =>
+            typeof comment.id === 'string' &&
+            /^[1-9]\d*$/.test(comment.id) &&
+            typeof comment.nodeId === 'string' &&
+            comment.nodeId.length > 0
+        ) ||
         !isSortedUnique(
           thread.comments.values,
           (item) => item.id,
@@ -1160,6 +1406,9 @@ export function verifyAuditRecord(record, { repository, expectedRunId, maxAgeSec
     if (canonicalJson(threadCommentIds) !== canonicalJson(reviewCommentIds)) {
       throw new Error(`Audit review-thread membership for pull request #${pullRequest.number} is inconsistent.`);
     }
+  }
+  if (!sourceReviewIdentitiesAreConsistent(record.pullRequests)) {
+    throw new Error('Audit review database and node identities are inconsistent across pull requests.');
   }
   if (canonicalJson(record.summary) !== canonicalJson(auditSummary(record.pullRequests))) {
     throw new Error('Audit summary does not match the inventory.');
