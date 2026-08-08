@@ -9,7 +9,7 @@ import { createSpfxUiHost, SpfxUiHostProvider, type SpfxUiHost, type SpfxUiTheme
 
 export interface SourceWorkspaceDocument extends Omit<
   SourceEditorFieldProps,
-  'embedded' | 'fillHeight' | 'onDraftChange' | 'showShortcuts'
+  'embedded' | 'fillHeight' | 'instanceId' | 'onDraftChange' | 'showShortcuts'
 > {
   id: string;
 }
@@ -403,6 +403,7 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
                 {selectedView === 'split' ? <h3 className="bt-source-workspace__pane-label">{document.label}</h3> : null}
                 <SourceEditorField
                   {...document}
+                  instanceId={`${workspaceInstanceId}:${surfaceId}:${document.id}`}
                   config={{
                     ...baseConfig,
                     inlineModelPath: baseConfig.inlineModelPath
