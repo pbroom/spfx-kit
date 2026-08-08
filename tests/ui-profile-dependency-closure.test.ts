@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,8 +8,8 @@ import { describe, expect, it } from 'vitest';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const verifier = path.join(repositoryRoot, 'packages/ui-profile/scripts/verify-dependency-closure.mjs');
 
-function runVerifier(environment: NodeJS.ProcessEnv = {}) {
-  return spawnSync(process.execPath, [verifier], {
+function runVerifier(environment: NodeJS.ProcessEnv = {}, arguments_: string[] = []) {
+  return spawnSync(process.execPath, [verifier, ...arguments_], {
     cwd: repositoryRoot,
     encoding: 'utf8',
     env: { ...process.env, ...environment }
@@ -77,6 +77,75 @@ describe('UI profile dependency closure', () => {
       expect(result.stderr).toContain('Installed npm tree links production root @base-ui/react');
     } finally {
       rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it('binds physical manifests to the checkout selected by --lockfile', () => {
+    const temporaryRepository = mkdtempSync(path.join(os.tmpdir(), 'spfx-kit-selected-lockfile-'));
+    const temporaryProfile = path.join(temporaryRepository, 'packages', 'ui-profile');
+    const fakeNpm = path.join(temporaryRepository, 'fake-npm.mjs');
+    const closure = JSON.parse(readFileSync(path.join(repositoryRoot, 'packages/ui-profile/dependency-closure.json'), 'utf8'));
+    const accepted = new Map(closure.packages.map((entry: any) => [entry.name, entry]));
+    const installedRoots = Object.fromEntries(
+      closure.productionRoots.map((name: string) => {
+        const entry: any = accepted.get(name);
+        return [
+          name,
+          {
+            version: entry.version,
+            dependencies: Object.fromEntries(
+              Object.keys(entry.dependencies).map((dependency) => [
+                dependency,
+                { version: (accepted.get(dependency) as any).version }
+              ])
+            )
+          }
+        ];
+      })
+    );
+    mkdirSync(temporaryProfile, { recursive: true });
+    copyFileSync(path.join(repositoryRoot, 'package.json'), path.join(temporaryRepository, 'package.json'));
+    copyFileSync(path.join(repositoryRoot, 'package-lock.json'), path.join(temporaryRepository, 'package-lock.json'));
+    copyFileSync(path.join(repositoryRoot, 'packages/ui-profile/package.json'), path.join(temporaryProfile, 'package.json'));
+    writeFileSync(
+      fakeNpm,
+      `if (process.argv.includes("config")) console.log("false"); else console.log(${JSON.stringify(
+        JSON.stringify({ dependencies: { '@spfx-kit/ui-profile': { version: '0.0.0', dependencies: installedRoots } } })
+      )})\n`
+    );
+
+    try {
+      const result = runVerifier({ npm_execpath: fakeNpm }, ['--lockfile', path.join(temporaryRepository, 'package-lock.json')]);
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('Selected lockfile checkout does not contain a bound node_modules root');
+
+      const renamedManifest = JSON.parse(readFileSync(path.join(temporaryProfile, 'package.json'), 'utf8'));
+      renamedManifest.name = '@spfx-kit/renamed-profile';
+      writeFileSync(path.join(temporaryProfile, 'package.json'), `${JSON.stringify(renamedManifest)}\n`);
+      const renamed = runVerifier({ npm_execpath: fakeNpm }, ['--lockfile', path.join(temporaryRepository, 'package-lock.json')]);
+      expect(renamed.status).not.toBe(0);
+      expect(renamed.stderr).toContain('Selected UI profile identity differs');
+    } finally {
+      rmSync(temporaryRepository, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a selected lockfile symlink before reading another checkout', () => {
+    const temporaryRepository = mkdtempSync(path.join(os.tmpdir(), 'spfx-kit-symlinked-lockfile-'));
+    const temporaryProfile = path.join(temporaryRepository, 'packages', 'ui-profile');
+    mkdirSync(temporaryProfile, { recursive: true });
+    copyFileSync(path.join(repositoryRoot, 'package.json'), path.join(temporaryRepository, 'package.json'));
+    copyFileSync(path.join(repositoryRoot, 'packages/ui-profile/package.json'), path.join(temporaryProfile, 'package.json'));
+    symlinkSync(path.join(repositoryRoot, 'package-lock.json'), path.join(temporaryRepository, 'package-lock.json'));
+
+    try {
+      const result = runVerifier({}, ['--lockfile', path.join(temporaryRepository, 'package-lock.json')]);
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('Selected lockfile is not a regular file');
+    } finally {
+      rmSync(temporaryRepository, { recursive: true, force: true });
     }
   });
 

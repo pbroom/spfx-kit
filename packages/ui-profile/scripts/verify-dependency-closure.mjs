@@ -65,11 +65,46 @@ if (!manifestOnly) {
       ? path.resolve(packageRoot, '..', '..', 'package-lock.json')
       : path.resolve(process.cwd(), process.argv[lockfileFlag + 1]);
   await access(lockfilePath);
-  const lock = JSON.parse(await readFile(lockfilePath, 'utf8'));
+  const selectedRepositoryRoot = path.dirname(lockfilePath);
+  const selectedPackageRoot = path.join(selectedRepositoryRoot, 'packages', 'ui-profile');
+  async function readBoundJson(candidate, label) {
+    const stats = await lstat(candidate);
+    assert(stats.isFile() && !stats.isSymbolicLink(), `${label} is not a regular file`);
+    return JSON.parse(await readFile(candidate, 'utf8'));
+  }
+  const lock = await readBoundJson(lockfilePath, 'Selected lockfile');
+  const selectedManifest = await readBoundJson(path.join(selectedPackageRoot, 'package.json'), 'Selected UI profile manifest');
+  const selectedRootManifest = await readBoundJson(
+    path.join(selectedRepositoryRoot, 'package.json'),
+    'Selected repository manifest'
+  );
+  assert(
+    !selectedManifest.overrides && !selectedManifest.resolutions,
+    'Selected UI profile manifest contains forced dependency resolution'
+  );
+  assert(
+    !selectedRootManifest.overrides && !selectedRootManifest.resolutions,
+    'Selected repository manifest contains forced dependency resolution'
+  );
+  assertExact(selectedRootManifest.workspaces ?? [], rootManifest.workspaces ?? [], 'Selected repository workspaces differ');
+  assert(
+    selectedManifest.name === manifest.name && selectedManifest.version === manifest.version,
+    'Selected UI profile identity differs'
+  );
+  assert(selectedManifest.dependencies === undefined, 'Selected tooling-only profile must not declare production dependencies');
+  assertExact(
+    selectedManifest.devDependencies ?? {},
+    manifest.devDependencies,
+    'Selected UI profile development dependencies differ'
+  );
   assert(lock.lockfileVersion === 3, 'Dependency verification requires npm lockfileVersion 3');
   const workspaceKey = 'packages/ui-profile';
   const workspace = lock.packages?.[workspaceKey];
   assert(workspace, `Lockfile does not contain ${workspaceKey}`);
+  assert(
+    workspace.name === selectedManifest.name && workspace.version === selectedManifest.version,
+    'Lockfile UI profile workspace identity differs'
+  );
   assert(!workspace.hasInstallScript, 'UI profile must not use install-time mutation');
   assert(workspace.dependencies === undefined, 'Lockfile workspace must not contain production dependencies');
   assertExact(workspace.devDependencies ?? {}, manifest.devDependencies, 'Lockfile workspace development dependencies differ');
@@ -195,8 +230,44 @@ if (!manifestOnly) {
     }
   }
 
-  const canonicalRepositoryRoot = await realpath(repositoryRoot);
-  const canonicalNodeModulesRoot = await realpath(path.join(repositoryRoot, 'node_modules'));
+  async function boundRealpath(candidate, message) {
+    try {
+      return await realpath(candidate);
+    } catch (error) {
+      throw new Error(message, { cause: error });
+    }
+  }
+  const canonicalRepositoryRoot = await boundRealpath(
+    selectedRepositoryRoot,
+    'Selected lockfile repository root does not resolve'
+  );
+  for (const [candidate, expected, label] of [
+    [lockfilePath, path.join(canonicalRepositoryRoot, 'package-lock.json'), 'Selected lockfile'],
+    [
+      path.join(selectedRepositoryRoot, 'package.json'),
+      path.join(canonicalRepositoryRoot, 'package.json'),
+      'Selected repository manifest'
+    ],
+    [
+      path.join(selectedPackageRoot, 'package.json'),
+      path.join(canonicalRepositoryRoot, 'packages', 'ui-profile', 'package.json'),
+      'Selected UI profile manifest'
+    ]
+  ]) {
+    assert((await realpath(candidate)) === expected, `${label} resolves outside the selected lockfile checkout`);
+  }
+  const canonicalSelectedPackageRoot = await boundRealpath(
+    selectedPackageRoot,
+    'Selected lockfile checkout does not contain the UI profile workspace'
+  );
+  assert(
+    canonicalSelectedPackageRoot === path.join(canonicalRepositoryRoot, 'packages', 'ui-profile'),
+    'Selected UI profile workspace resolves outside the selected lockfile checkout'
+  );
+  const canonicalNodeModulesRoot = await boundRealpath(
+    path.join(selectedRepositoryRoot, 'node_modules'),
+    'Selected lockfile checkout does not contain a bound node_modules root'
+  );
   assert(
     canonicalNodeModulesRoot === path.join(canonicalRepositoryRoot, 'node_modules'),
     'Repository node_modules root resolves outside the repository'
@@ -307,7 +378,7 @@ if (!manifestOnly) {
     }
   }
   for (const root of closure.productionRoots) {
-    const installed = await resolveInstalledManifest(packageRoot, root);
+    const installed = await resolveInstalledManifest(canonicalSelectedPackageRoot, root);
     await verifyInstalledPackage(root, installed, root);
   }
   assertExact(

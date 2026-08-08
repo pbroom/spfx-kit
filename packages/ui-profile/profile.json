@@ -75,7 +75,7 @@
     },
     {
       "path": "scripts/verify-dependency-closure.mjs",
-      "sha256": "761320d135082ee05b5b9814c5e1248bef97685161b89cf7aa01f88306188ef9"
+      "sha256": "7a8dcd7cc30df7669964cc10fc7931ae900fc1669410e51a5c0052e738a49647"
     },
     {
       "path": "scripts/prepare-base-ui.mjs",
