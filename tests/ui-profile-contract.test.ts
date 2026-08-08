@@ -49,6 +49,7 @@ const expectedNormalizedPaths = expectedRegistryIds
 const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'compat-consumers/select-value.tsx',
+  'compat/base-ui-1.6.0/id-ownership/contract.schema.json',
   'tailwind-profile.css',
   'scripts/build-tailwind-css.mjs',
   'scripts/verify-tailwind-css.mjs',
@@ -67,6 +68,7 @@ const expectedCompilerInputPaths = [
   'scripts/prepare-base-ui.mjs',
   'scripts/transform-base-ui-select-value.mjs',
   'scripts/transform-base-ui-popup-lifecycle.mjs',
+  'scripts/transform-base-ui-id-ownership.mjs',
   'scripts/lib/preparation-lock.mjs',
   'tsconfig.base.json',
   'tsconfig.ts53.json',
@@ -274,6 +276,7 @@ interface ProfileManifest {
   dependencyClosure: SnapshotReference;
   baseUiDeclarationTransform: SnapshotReference;
   baseUiPopupLifecycleTransform: SnapshotReference;
+  baseUiIdOwnershipTransform: SnapshotReference;
   ownedSources: Array<{
     source: SnapshotReference;
     output: SnapshotReference;
@@ -412,7 +415,7 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(profileSchema.required).toContain('$schema');
     expect(profileSchema.properties.profileId.const).toBe('spfx-react17-base-nova-v1');
     expect(profileSchema.properties.items).toMatchObject({ minItems: 24, maxItems: 24 });
-    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 24, maxItems: 24, items: false });
+    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 26, maxItems: 26, items: false });
     expect(profileSchema.properties.ownedSources).toMatchObject({ minItems: 2, maxItems: 2, items: false });
     expect(profileSchema.properties.items.uniqueItems).toBe(true);
     expect(profileSchema.$defs.sha256.pattern).toBe('^[a-f0-9]{64}$');
@@ -443,6 +446,7 @@ describe('private offline React 17 UI profile artifacts', () => {
     const dependencyClosureBytes = await readFile(path.join(profileRoot, profile.dependencyClosure.path));
     const baseUiDeclarationTransformBytes = await readFile(path.join(profileRoot, profile.baseUiDeclarationTransform.path));
     const baseUiPopupLifecycleTransformBytes = await readFile(path.join(profileRoot, profile.baseUiPopupLifecycleTransform.path));
+    const baseUiIdOwnershipTransformBytes = await readFile(path.join(profileRoot, profile.baseUiIdOwnershipTransform.path));
 
     expect(profile.schemaVersion).toBe(1);
     expect(profile.profileId).toBe('spfx-react17-base-nova-v1');
@@ -464,6 +468,10 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(profile.baseUiPopupLifecycleTransform).toEqual({
       path: 'compat/base-ui-1.6.0/popup-lifecycle/contract.json',
       sha256: sha256(baseUiPopupLifecycleTransformBytes)
+    });
+    expect(profile.baseUiIdOwnershipTransform).toEqual({
+      path: 'compat/base-ui-1.6.0/id-ownership/contract.json',
+      sha256: sha256(baseUiIdOwnershipTransformBytes)
     });
     expect(profile.ownedSources).toHaveLength(2);
     expect(profile.ownedSources.map(({ source, output }) => [source.path, output.path])).toEqual([

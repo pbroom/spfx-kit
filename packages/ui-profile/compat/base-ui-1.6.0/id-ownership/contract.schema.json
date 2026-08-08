@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spfx-kit.dev/schemas/base-ui-1.6.0-id-ownership-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "contractVersion",
+    "package",
+    "version",
+    "exportPath",
+    "packageManifest",
+    "providerFiles",
+    "supportedShapes"
+  ],
+  "properties": {
+    "$schema": { "const": "./contract.schema.json" },
+    "contractVersion": { "const": "base-ui-1.6.0-spfx-id-ownership-v1" },
+    "package": { "const": "@base-ui/react" },
+    "version": { "const": "1.6.0" },
+    "exportPath": { "const": "./spfx-id-ownership" },
+    "packageManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["installedPath", "originalFileSha256", "transformedFileSha256"],
+      "properties": {
+        "installedPath": { "const": "package.json" },
+        "originalFileSha256": { "$ref": "#/$defs/sha256" },
+        "transformedFileSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "providerFiles": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        { "$ref": "#/$defs/esmRuntime" },
+        { "$ref": "#/$defs/cjsRuntime" },
+        { "$ref": "#/$defs/esmTypes" },
+        { "$ref": "#/$defs/cjsTypes" }
+      ],
+      "items": false
+    },
+    "supportedShapes": {
+      "const": [
+        { "kind": "root", "helper": "useBaseUiOwnedRootId" },
+        { "kind": "keyed-child", "helper": "useBaseUiKeyedChildId" },
+        { "kind": "repeated-child", "helper": "useBaseUiRepeatedChildId", "stableKeyType": "string" },
+        { "kind": "idref", "helper": "useBaseUiIdRef", "targets": "keyed-child" }
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "providerFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["installedPath", "sourcePath", "sha256"],
+      "properties": {
+        "installedPath": { "type": "string" },
+        "sourcePath": { "type": "string" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "esmRuntime": {
+      "allOf": [
+        { "$ref": "#/$defs/providerFile" },
+        {
+          "type": "object",
+          "properties": {
+            "installedPath": { "const": "spfx-id-ownership.mjs" },
+            "sourcePath": { "const": "compat/base-ui-1.6.0/id-ownership/source/spfx-id-ownership.mjs" }
+          }
+        }
+      ]
+    },
+    "cjsRuntime": {
+      "allOf": [
+        { "$ref": "#/$defs/providerFile" },
+        {
+          "type": "object",
+          "properties": {
+            "installedPath": { "const": "spfx-id-ownership.js" },
+            "sourcePath": { "const": "compat/base-ui-1.6.0/id-ownership/source/spfx-id-ownership.js" }
+          }
+        }
+      ]
+    },
+    "esmTypes": {
+      "allOf": [
+        { "$ref": "#/$defs/providerFile" },
+        {
+          "type": "object",
+          "properties": {
+            "installedPath": { "const": "spfx-id-ownership.d.mts" },
+            "sourcePath": { "const": "compat/base-ui-1.6.0/id-ownership/source/spfx-id-ownership.d.mts" }
+          }
+        }
+      ]
+    },
+    "cjsTypes": {
+      "allOf": [
+        { "$ref": "#/$defs/providerFile" },
+        {
+          "type": "object",
+          "properties": {
+            "installedPath": { "const": "spfx-id-ownership.d.ts" },
+            "sourcePath": { "const": "compat/base-ui-1.6.0/id-ownership/source/spfx-id-ownership.d.ts" }
+          }
+        }
+      ]
+    }
+  }
+}
