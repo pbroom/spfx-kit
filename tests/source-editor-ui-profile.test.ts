@@ -29,7 +29,9 @@ describe('source editor UI profile', () => {
 
     for (const file of resolved.files) {
       expect(file.vendorPath).toMatch(/^src\/vendor\/source-editor\/ui-profile\//u);
-      expect(file.source).toBe(await readFile(path.join(repositoryRoot, file.sourcePath), 'utf8'));
+      if (!file.vendorPath.endsWith('/manifest.json')) {
+        expect(file.source).toBe(await readFile(path.join(repositoryRoot, file.sourcePath), 'utf8'));
+      }
     }
 
     const localMirrorPairs = [
@@ -74,6 +76,54 @@ describe('source editor UI profile', () => {
     expect(sourceEditor).not.toContain('.fui-');
     expect(packageManifest.peerDependencies).not.toHaveProperty('@fluentui/react-components');
     expect(packageManifest.devDependencies).not.toHaveProperty('@fluentui/react-components');
+  });
+
+  it('derives the SCSS-only profile without workspace or Tabs source while retaining exact scoped CSS', async () => {
+    const full = await resolveSourceEditorUiProfile(repositoryRoot, 'better-list-spfx');
+    const scssOnly = await resolveSourceEditorUiProfile(repositoryRoot, 'better-text-spfx');
+
+    expect(scssOnly.manifest).toMatchObject({
+      profileKind: 'scss-only',
+      profileId: 'source-editor-scss-react17-base-nova-v1',
+      languages: ['scss'],
+      surfaces: [{ consumer: 'SourceEditorField', components: ['button', 'dropdown-menu'] }],
+      css: {
+        mode: 'canonical-safe-superset',
+        scopeValue: 'skui-9eea46b8e51bf75d',
+        scopeSelector: '[data-spfx-ui-scope="skui-9eea46b8e51bf75d"]'
+      }
+    });
+    expect(scssOnly.files.map((file: { vendorPath: string }) => file.vendorPath)).not.toContain(
+      'src/vendor/source-editor/ui-profile/components/ui/tabs.tsx'
+    );
+    expect(scssOnly.manifest.sourceFiles.map((file: { vendorPath: string }) => file.vendorPath)).not.toContain(
+      'src/vendor/source-editor/SourceWorkspaceField.tsx'
+    );
+    expect(scssOnly.manifest.sourceFiles).toContainEqual(
+      expect.objectContaining({
+        sourcePath: 'packages/source-editor-react/src/sourceEditorMonacoAdapter.scss-only.ts',
+        vendorPath: 'src/vendor/source-editor/sourceEditorMonacoAdapter.ts'
+      })
+    );
+    expect(full.manifest.sourceFiles.map((file: { vendorPath: string }) => file.vendorPath)).toContain(
+      'src/vendor/source-editor/SourceWorkspaceField.tsx'
+    );
+    const fullCss = full.files.find((file: { vendorPath: string }) => file.vendorPath.endsWith('/tailwind-profile.css'));
+    const scssCss = scssOnly.files.find((file: { vendorPath: string }) => file.vendorPath.endsWith('/tailwind-profile.css'));
+    expect(scssCss?.sha256).toBe(fullCss?.sha256);
+    expect(scssCss?.source).toBe(fullCss?.source);
+
+    const fullAdapter = await readFile(
+      path.join(repositoryRoot, 'packages/source-editor-react/src/sourceEditorMonacoAdapter.full.ts'),
+      'utf8'
+    );
+    const scssAdapter = await readFile(
+      path.join(repositoryRoot, 'packages/source-editor-react/src/sourceEditorMonacoAdapter.scss-only.ts'),
+      'utf8'
+    );
+    expect(fullAdapter).toContain('html/html.contribution');
+    expect(scssAdapter).toContain('scss/scss.contribution');
+    expect(scssAdapter).not.toContain('html/html.contribution');
   });
 
   it('rejects source drift instead of refreshing a downstream snapshot', async () => {
