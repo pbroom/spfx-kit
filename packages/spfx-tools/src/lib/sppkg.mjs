@@ -63,6 +63,18 @@ export async function readSppkgComponentManifests(packagePath) {
   return extractSppkgComponentManifests(entries);
 }
 
+export async function readSppkgClientSideAssets(packagePath) {
+  const { entries } = await readSppkgEntries(packagePath);
+  assertRequiredPackageParts(entries);
+  return Object.entries(entries)
+    .filter(
+      ([entryName]) =>
+        entryName.split('/').some((segment) => segment.toLowerCase() === 'clientsideassets') && !entryName.endsWith('/')
+    )
+    .map(([entryName, contents]) => ({ path: entryName, contents }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
 export function readSppkgComponentManifestsFromBytes(packageBytes, packageLabel = 'provided package bytes') {
   const entries = readSppkgEntriesFromBytes(packageBytes, packageLabel);
   return extractSppkgComponentManifests(entries);

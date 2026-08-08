@@ -1,14 +1,22 @@
 #!/usr/bin/env node
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs, required } from '../lib/args.mjs';
+import { writeJson } from '../lib/fs.mjs';
 import { appSlugFromDir } from '../lib/spfx.mjs';
 import { archiveSegmentForTarget, createArchive } from '../lib/export/archive.mjs';
 import { writeExportReadme } from '../lib/export/docs.mjs';
 import { acquireAppExportLock } from '../lib/export/lock.mjs';
 import { configureExportOutput, isJsonOutput, reportExportProgress } from '../lib/export/output.mjs';
 import { exportCdnPackage, exportSingleBundle, exportStagingCdnPackage, exportStandaloneRepo } from '../lib/export/targets.mjs';
+import {
+  bindUiProfileExportClosureToApp,
+  createUiProfileExportClosure,
+  writeUiProfileDeliveryEvidence
+} from '../lib/export/ui-profile-closure.mjs';
 import { withAppliedExportConfig } from '../lib/export/config.mjs';
+import { resolveUiProfileDeliveryArtifact } from '../../../ui-profile/scripts/lib/delivery-artifact.mjs';
 
 const usage = `Usage:
   export-spfx-app --app .spfx-kit/apps/<slug>-spfx --target single,cdn,staging-cdn,standalone [--out <dir>] [--json] [--progress-json]
@@ -59,6 +67,11 @@ async function main() {
 async function runExport({ appDir, args, cdnRelease, localMockCdn, stagingCdnRoot, targets }) {
   const slug = appSlugFromDir(appDir);
   const outDir = path.resolve(args.out || path.join(process.cwd(), '.spfx-kit', 'exports', slug, timestamp()));
+  const profileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../ui-profile');
+  const uiProfileClosure = await bindUiProfileExportClosureToApp(
+    await createUiProfileExportClosure(resolveUiProfileDeliveryArtifact({ packageRoot: profileRoot })),
+    appDir
+  );
   const summary = {
     app: path.relative(process.cwd(), appDir),
     slug,
@@ -73,12 +86,13 @@ async function runExport({ appDir, args, cdnRelease, localMockCdn, stagingCdnRoo
 
   await withAppliedExportConfig(appDir, async ({ exportConfig, restoreAppliedSource }) => {
     if (targets.includes('single')) {
-      summary.targets.push(await exportSingleBundle(appDir, outDir, slug));
+      summary.targets.push(await exportSingleBundle(appDir, outDir, slug, { uiProfileClosure }));
     }
     if (targets.includes('cdn')) {
       summary.targets.push(
         await exportCdnPackage(appDir, outDir, slug, {
-          cdnBasePath: exportConfig?.cdnUrl || undefined
+          cdnBasePath: exportConfig?.cdnUrl || undefined,
+          uiProfileClosure
         })
       );
     }
@@ -87,7 +101,8 @@ async function runExport({ appDir, args, cdnRelease, localMockCdn, stagingCdnRoo
         await exportStagingCdnPackage(appDir, outDir, slug, {
           localMockCdn,
           stagingCdnRoot,
-          releaseLabel: cdnRelease
+          releaseLabel: cdnRelease,
+          uiProfileClosure
         })
       );
     }
@@ -96,10 +111,12 @@ async function runExport({ appDir, args, cdnRelease, localMockCdn, stagingCdnRoo
       // baseline so the standalone repo gets overrides without target-specific
       // includeClientSideAssets or staging CDN changes.
       await restoreAppliedSource();
-      summary.targets.push(await exportStandaloneRepo(appDir, outDir, slug));
+      summary.targets.push(await exportStandaloneRepo(appDir, outDir, slug, { uiProfileClosure }));
     }
   });
 
+  const uiProfileEvidence = await writeUiProfileDeliveryEvidence(outDir, uiProfileClosure, summary.targets, writeJson);
+  if (uiProfileEvidence) summary.uiProfileDelivery = path.basename(uiProfileEvidence);
   summary.archivePath = path.join(outDir, `${slug}-${targets.map((target) => archiveSegmentForTarget(target)).join('-')}.tar.gz`);
   await writeExportReadme(outDir, slug, summary.targets);
   await writeFile(path.join(outDir, 'manifest.json'), `${JSON.stringify(portableManifest(summary, outDir), null, 2)}\n`);

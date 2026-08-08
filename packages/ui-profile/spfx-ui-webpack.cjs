@@ -1,9 +1,11 @@
 'use strict';
 
 const path = require('node:path');
+const { readFileSync } = require('node:fs');
 
 const { resolveUiProfileDeliveryArtifact } = require('./scripts/lib/delivery-artifact.cjs');
 const UI_PROFILE_RULE_MARKER = Symbol.for('spfx-kit.ui-profile.global-css-rule');
+const UI_PROFILE_ASSET_PLUGIN_MARKER = Symbol.for('spfx-kit.ui-profile.delivery-assets-plugin');
 
 module.exports = function configureSpfxUiProfileCss(webpackConfiguration, options = {}) {
   const rules = webpackConfiguration && webpackConfiguration.module && webpackConfiguration.module.rules;
@@ -38,8 +40,47 @@ module.exports = function configureSpfxUiProfileCss(webpackConfiguration, option
     });
   }
 
+  const plugins = webpackConfiguration.plugins || (webpackConfiguration.plugins = []);
+  if (!plugins.some((plugin) => plugin && plugin[UI_PROFILE_ASSET_PLUGIN_MARKER] === artifact.cssSha256)) {
+    plugins.push(createDeliveryAssetsPlugin(artifact));
+  }
+
   return webpackConfiguration;
 };
+
+function createDeliveryAssetsPlugin(artifact) {
+  const cssAssetPath = `spfx-ui-profile/${artifact.cssSha256}.css`;
+  const manifestAssetPath = 'spfx-ui-profile/ui-profile-delivery.json';
+  const cssBytes = readFileSync(artifact.cssPath);
+  const manifestBytes = Buffer.from(
+    `${JSON.stringify({
+      schemaVersion: 1,
+      profileId: artifact.profileId,
+      profileSha256: artifact.profileSha256,
+      provenanceSha256: artifact.provenanceSha256,
+      scopeValue: artifact.scopeValue,
+      css: { path: cssAssetPath, bytes: cssBytes.byteLength, sha256: artifact.cssSha256 }
+    })}\n`
+  );
+  return {
+    [UI_PROFILE_ASSET_PLUGIN_MARKER]: artifact.cssSha256,
+    apply(compiler) {
+      compiler.hooks.emit.tap('SpfxUiProfileDeliveryAssetsPlugin', (compilation) => {
+        emitAsset(compilation, cssAssetPath, cssBytes);
+        emitAsset(compilation, manifestAssetPath, manifestBytes);
+      });
+    }
+  };
+}
+
+function emitAsset(compilation, assetPath, bytes) {
+  const asset = { source: () => bytes, size: () => bytes.byteLength };
+  if (typeof compilation.emitAsset === 'function' && compilation.compiler?.webpack?.sources?.RawSource) {
+    compilation.emitAsset(assetPath, new compilation.compiler.webpack.sources.RawSource(bytes));
+    return;
+  }
+  compilation.assets[assetPath] = asset;
+}
 
 function usesSpCssLoader(rule, modulesEnabled) {
   const loaders = Array.isArray(rule && rule.use) ? rule.use : [rule && rule.use];

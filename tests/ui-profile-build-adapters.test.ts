@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -95,6 +96,25 @@ describe('SPFx UI profile webpack adapter', () => {
     expect(matches(exactCondition, `${artifact.cssPath}?used`)).toBe(true);
     expect(matches(exactCondition, '/repo/src/unrelated.css')).toBe(false);
     expect(webpackConfiguration.module.rules[2].use).toBe(globalRule.use);
+    expect(webpackConfiguration.plugins).toHaveLength(1);
+
+    const emitted: Record<string, Buffer> = {};
+    webpackConfiguration.plugins[0].apply({
+      hooks: {
+        emit: {
+          tap(_name: string, callback: (compilation: any) => void) {
+            const compilation = { assets: {} as Record<string, { source(): Buffer }> };
+            callback(compilation);
+            for (const [name, asset] of Object.entries(compilation.assets)) emitted[name] = asset.source();
+          }
+        }
+      }
+    });
+    expect(emitted[`spfx-ui-profile/${artifact.cssSha256}.css`]).toEqual(readFileSync(artifact.cssPath));
+    expect(JSON.parse(emitted['spfx-ui-profile/ui-profile-delivery.json'].toString('utf8'))).toMatchObject({
+      profileId: artifact.profileId,
+      css: { path: `spfx-ui-profile/${artifact.cssSha256}.css`, sha256: artifact.cssSha256 }
+    });
   });
 
   it('uses the same exact-path adapter through the retained Gulp merge seam', () => {
