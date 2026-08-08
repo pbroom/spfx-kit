@@ -2549,6 +2549,9 @@ function classExpressionBindings(sourceFile, helpers) {
   const reactNamespaceSymbols = new Set();
   const reactMemoSymbols = new Set();
   const reactForwardRefSymbols = new Set();
+  const invalidReactNamespaceSymbols = new Set();
+  const invalidReactWrapperSymbols = new Set();
+  const mutatedReactNamespaceWrapperProperties = new Set();
   const propTypesNamespaceSymbols = new Set();
   const propTypesValidatorSymbols = new Set();
   const propTypesValidatorNames = new Set([
@@ -2638,6 +2641,69 @@ function classExpressionBindings(sourceFile, helpers) {
     }
     collectReactNamespaceAliases(sourceFile);
   }
+  function reactNamespaceWrapperProperty(access) {
+    if (!ts.isPropertyAccessExpression(access) && !ts.isElementAccessExpression(access)) return undefined;
+    const receiver = unwrapExpression(access.expression);
+    if (!ts.isIdentifier(receiver) || !reactNamespaceSymbols.has(symbolAt(receiver))) return undefined;
+    return ts.isPropertyAccessExpression(access)
+      ? access.name.text
+      : staticPropertyName(access.argumentExpression);
+  }
+  function invalidateReactWrapperWriteTarget(target) {
+    const current = unwrapExpression(target);
+    if (ts.isIdentifier(current)) {
+      const symbol = symbolAt(current);
+      if (reactNamespaceSymbols.has(symbol)) invalidReactNamespaceSymbols.add(symbol);
+      if (reactMemoSymbols.has(symbol) || reactForwardRefSymbols.has(symbol)) invalidReactWrapperSymbols.add(symbol);
+      return;
+    }
+    if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+      const property = reactNamespaceWrapperProperty(current);
+      if (property === 'memo' || property === 'forwardRef') {
+        mutatedReactNamespaceWrapperProperties.add(property);
+      } else if (property === null) {
+        mutatedReactNamespaceWrapperProperties.add('memo');
+        mutatedReactNamespaceWrapperProperties.add('forwardRef');
+      }
+      return;
+    }
+    if (ts.isArrayLiteralExpression(current)) {
+      for (const element of current.elements) {
+        if (!ts.isOmittedExpression(element)) invalidateReactWrapperWriteTarget(element);
+      }
+      return;
+    }
+    if (ts.isObjectLiteralExpression(current)) {
+      for (const property of current.properties) {
+        if (ts.isShorthandPropertyAssignment(property)) invalidateReactWrapperWriteTarget(property.name);
+        else if (ts.isPropertyAssignment(property)) invalidateReactWrapperWriteTarget(property.initializer);
+        else if (ts.isSpreadAssignment(property)) invalidateReactWrapperWriteTarget(property.expression);
+      }
+    }
+  }
+  function collectReactWrapperWrites(node) {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+    ) {
+      invalidateReactWrapperWriteTarget(node.left);
+    } else if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)
+    ) {
+      invalidateReactWrapperWriteTarget(node.operand);
+    } else if (ts.isDeleteExpression(node)) {
+      invalidateReactWrapperWriteTarget(node.expression);
+    } else if (
+      (ts.isForInStatement(node) || ts.isForOfStatement(node)) &&
+      !ts.isVariableDeclarationList(node.initializer)
+    ) {
+      invalidateReactWrapperWriteTarget(node.initializer);
+    }
+    ts.forEachChild(node, collectReactWrapperWrites);
+  }
+  collectReactWrapperWrites(sourceFile);
   const exportedBindingSymbols = new Set();
   const topLevelPascalBindingSymbols = new Set();
   const exportedBindingNames = exportedNames(sourceFile.text);
@@ -2665,17 +2731,25 @@ function classExpressionBindings(sourceFile, helpers) {
     const callee = unwrapExpression(call.expression);
     if (ts.isIdentifier(callee)) {
       const calleeSymbol = symbolAt(callee);
-      return reactForwardRefSymbols.has(calleeSymbol) || reactMemoSymbols.has(calleeSymbol);
+      return (
+        !invalidReactWrapperSymbols.has(calleeSymbol) &&
+        (reactForwardRefSymbols.has(calleeSymbol) || reactMemoSymbols.has(calleeSymbol))
+      );
     }
     if (!ts.isPropertyAccessExpression(callee) && !ts.isElementAccessExpression(callee)) return false;
     const receiverExpression = unwrapExpression(callee.expression);
-    if (!ts.isIdentifier(receiverExpression) || !reactNamespaceSymbols.has(symbolAt(receiverExpression))) return false;
+    if (!ts.isIdentifier(receiverExpression)) return false;
+    const receiverSymbol = symbolAt(receiverExpression);
+    if (!reactNamespaceSymbols.has(receiverSymbol) || invalidReactNamespaceSymbols.has(receiverSymbol)) return false;
     const property = ts.isPropertyAccessExpression(callee)
       ? callee.name.text
       : ts.isStringLiteralLike(callee.argumentExpression)
         ? callee.argumentExpression.text
         : undefined;
-    return property === 'forwardRef' || property === 'memo';
+    return (
+      (property === 'forwardRef' || property === 'memo') &&
+      !mutatedReactNamespaceWrapperProperties.has(property)
+    );
   }
   const jsxComponentSymbols = new Set();
   function collectJsxComponentSymbols(node) {

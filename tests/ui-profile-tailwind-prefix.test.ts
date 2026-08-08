@@ -619,6 +619,26 @@ describe('UI profile Tailwind prefix normalization', () => {
     expect(() =>
       normalizeRegistrySource({ registrySourcePath: 'registry/base-nova/ui/probe.tsx', source: shadowedNamespace })
     ).toThrow('dynamic class expressions are not accepted');
+    for (const mutatedReactWrapper of [
+      'import React from "react"; const R: any = React; R.memo = (render) => render(getProps()); export const Probe = R.memo(({ className }) => <div className={className} />)',
+      'import React from "react"; const R = React; (R as any)["forwardRef"] = (render) => render(getProps()); export const Probe = R.forwardRef(({ className }, ref) => <div ref={ref} className={className} />)',
+      'import React from "react"; const R = React; const Alias = R; (R as any).memo = helper; export const Probe = Alias.memo(({ className }) => <div className={className} />)',
+      'import { memo } from "react"; (memo as any) = helper; export const Probe = memo(({ className }) => <div className={className} />)'
+    ]) {
+      expect(() => prefixTailwindClassCandidates(mutatedReactWrapper)).toThrow('dynamic class expressions are not accepted');
+      expect(() =>
+        normalizeRegistrySource({ registrySourcePath: 'registry/base-nova/ui/probe.tsx', source: mutatedReactWrapper })
+      ).toThrow('dynamic class expressions are not accepted');
+    }
+    const immutableDefaultReactAlias =
+      'import React from "react"; const R = React; export const Probe = R.memo(({ className }) => <div className={className} />)';
+    expect(prefixTailwindClassCandidates(immutableDefaultReactAlias).source).toContain('className={className}');
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source: immutableDefaultReactAlias
+      })
+    ).not.toThrow();
     const unexportedAssignment =
       'let Probe; Probe = ({ className }) => <div className={className} />; ' +
       'export function Outer() { return Probe(getProps()) }';
