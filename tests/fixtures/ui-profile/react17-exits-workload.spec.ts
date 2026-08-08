@@ -27,13 +27,32 @@ import {
   TooltipProvider,
   TooltipTrigger
 } from '../../../packages/ui-profile/normalized/src/components/ui/tooltip';
+import {
+  SpfxUiHostProvider,
+  createSpfxUiHost,
+  mapSharePointTheme,
+  type SpfxUiHost
+} from '../../../packages/ui-profile/normalized/src/lib/ui-root';
+import profile from '../../../packages/ui-profile/profile.json';
 
 const h = React.createElement;
 let container: HTMLDivElement;
+let mountPoint: HTMLDivElement;
+let host: SpfxUiHost;
 
 beforeEach(() => {
-  container = document.createElement('div');
-  document.body.appendChild(container);
+  mountPoint = document.createElement('div');
+  document.body.appendChild(mountPoint);
+  host = createSpfxUiHost({
+    mountPoint,
+    portalParent: mountPoint,
+    targetDocument: document,
+    instanceId: 'react17-exit-root',
+    profileId: profile.profileId,
+    scopeValue: profile.css.scopeValue,
+    theme: mapSharePointTheme(testSharePointTheme(false))
+  });
+  container = host.appRoot as HTMLDivElement;
   const nativeMatches = Element.prototype.matches;
   vi.spyOn(Element.prototype, 'matches').mockImplementation(function matches(selector: string): boolean {
     if (selector === ':focus-visible') return this === document.activeElement;
@@ -53,7 +72,8 @@ afterEach(() => {
   act(() => {
     ReactDom.unmountComponentAtNode(container);
   });
-  document.body.replaceChildren();
+  host.dispose();
+  mountPoint.remove();
   vi.restoreAllMocks();
 });
 
@@ -195,6 +215,7 @@ it('runs a controlled Select through trigger, item selection, and value display'
     return h(
       Select,
       {
+        id: host.idFor('controlled-select-root'),
         value,
         onValueChange: (next: string) => {
           changes.push(next);
@@ -202,7 +223,12 @@ it('runs a controlled Select through trigger, item selection, and value display'
         }
       },
       h(SelectTrigger, { 'aria-label': 'Controlled select' }, h(SelectValue, { placeholder: 'Choose an option' })),
-      h(SelectContent, null, h(SelectItem, { value: 'alpha' }, 'Alpha'), h(SelectItem, { value: 'beta' }, 'Beta'))
+      h(
+        SelectContent,
+        { id: host.idFor('controlled-select-content') },
+        h(SelectItem, { value: 'alpha' }, 'Alpha'),
+        h(SelectItem, { value: 'beta' }, 'Beta')
+      )
     );
   }
 
@@ -224,7 +250,7 @@ it('runs a controlled Select through trigger, item selection, and value display'
 
   expect(changes).toEqual(['beta']);
   expect(trigger.textContent).toContain('beta');
-  expect(document.body.querySelector('[data-slot="select-content"]')?.hasAttribute('data-closed')).toBe(true);
+  expect(host.portalHost.querySelector('[data-slot="select-content"]')?.hasAttribute('data-closed')).toBe(true);
   expect(trigger.getAttribute('aria-expanded')).toBe('false');
 });
 
@@ -242,7 +268,7 @@ it('forwards the Dialog trigger ref, traps focus, closes on Escape, and returns 
         h(DialogTrigger, { ref: dialogTriggerRef }, 'Open dialog'),
         h(
           DialogContent,
-          { showCloseButton: false },
+          { id: host.idFor('compatibility-dialog-content'), showCloseButton: false },
           h(DialogTitle, null, 'Compatibility dialog'),
           h(Button, { type: 'button', 'aria-label': 'Dialog first' }, 'First action'),
           h(Button, { type: 'button', 'aria-label': 'Dialog last' }, 'Last action')
@@ -256,7 +282,7 @@ it('forwards the Dialog trigger ref, traps focus, closes on Escape, and returns 
   click(dialogTriggerRef.current as HTMLButtonElement);
   await settle();
 
-  const content = document.body.querySelector<HTMLElement>('[data-slot="dialog-content"]');
+  const content = host.portalHost.querySelector<HTMLElement>('[data-slot="dialog-content"]');
   const first = getButton('Dialog first');
   const last = getButton('Dialog last');
   expect(content).not.toBeNull();
@@ -278,7 +304,7 @@ it('forwards the Dialog trigger ref, traps focus, closes on Escape, and returns 
     );
   });
   await settle();
-  expect(document.body.querySelector('[data-slot="dialog-content"]')).toBeNull();
+  expect(host.portalHost.querySelector('[data-slot="dialog-content"]')).toBeNull();
   expect(document.activeElement).toBe(dialogTriggerRef.current);
 });
 
@@ -295,7 +321,7 @@ it('opens Tooltip content when its trigger receives keyboard focus', async () =>
           onOpenChange: (open: boolean, details: { reason: string }) => openChanges.push({ open, reason: details.reason })
         },
         h(TooltipTrigger, { ref: tooltipTriggerRef }, 'Tooltip target'),
-        h(TooltipContent, null, 'Keyboard tooltip')
+        h(TooltipContent, { id: host.idFor('keyboard-tooltip-content') }, 'Keyboard tooltip')
       )
     )
   );
@@ -308,7 +334,7 @@ it('opens Tooltip content when its trigger receives keyboard focus', async () =>
   await settle();
   expect(document.activeElement).toBe(tooltipTriggerRef.current);
   expect(openChanges).toEqual([{ open: true, reason: 'trigger-focus' }]);
-  expect(document.body.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain('Keyboard tooltip');
+  expect(host.portalHost.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain('Keyboard tooltip');
 });
 
 it('hands Tooltip activity between triggers and closes a genuinely unmounted active trigger', async () => {
@@ -325,14 +351,14 @@ it('hands Tooltip activity between triggers and closes a genuinely unmounted act
             Tooltip,
             null,
             h(TooltipTrigger, { 'aria-label': 'First tooltip trigger' }, 'First tooltip trigger'),
-            h(TooltipContent, null, 'First tooltip content')
+            h(TooltipContent, { id: host.idFor('handoff-first-tooltip-content') }, 'First tooltip content')
           )
         : null,
       h(
         Tooltip,
         null,
         h(TooltipTrigger, { 'aria-label': 'Second tooltip trigger' }, 'Second tooltip trigger'),
-        h(TooltipContent, null, 'Second tooltip content')
+        h(TooltipContent, { id: host.idFor('handoff-second-tooltip-content') }, 'Second tooltip content')
       )
     );
   }
@@ -390,7 +416,7 @@ it('keeps Tooltip open across a same-tick replacement trigger with the same id',
           { id: 'stable-tooltip-trigger', key: revision, 'aria-label': 'Stable replacement trigger' },
           `Stable trigger ${revision}`
         ),
-        h(TooltipContent, null, 'Stable replacement content')
+        h(TooltipContent, { id: host.idFor('stable-replacement-tooltip-content') }, 'Stable replacement content')
       )
     );
   }
@@ -426,7 +452,7 @@ it('reconciles a new trigger id onto the same Tooltip element', async () => {
         Tooltip,
         null,
         h(TooltipTrigger, { id, 'aria-label': 'Renamed tooltip trigger' }, 'Renamed tooltip trigger'),
-        h(TooltipContent, null, 'Renamed tooltip content')
+        h(TooltipContent, { id: host.idFor('renamed-tooltip-content') }, 'Renamed tooltip content')
       )
     );
   }
@@ -472,7 +498,7 @@ it('retains Tooltip ownership when an active-trigger unmount close is canceled',
         showTrigger
           ? h(TooltipTrigger, { id: 'cancel-close-trigger', 'aria-label': 'Cancelable trigger' }, 'Cancelable trigger')
           : null,
-        h(TooltipContent, null, 'Canceled close content')
+        h(TooltipContent, { id: host.idFor('canceled-close-tooltip-content') }, 'Canceled close content')
       )
     );
   }
@@ -489,8 +515,26 @@ it('retains Tooltip ownership when an active-trigger unmount close is canceled',
 
 function render(element: React.ReactElement): void {
   act(() => {
-    ReactDom.render(element, container);
+    ReactDom.render(h(SpfxUiHostProvider, { host }, element), container);
   });
+}
+
+function testSharePointTheme(isInverted: boolean) {
+  return {
+    isInverted,
+    palette: {
+      white: isInverted ? '#111111' : '#ffffff',
+      neutralPrimary: isInverted ? '#ffffff' : '#222222',
+      neutralSecondary: isInverted ? '#c8c8c8' : '#666666',
+      neutralLight: isInverted ? '#555555' : '#d8d8d8',
+      neutralLighter: isInverted ? '#444444' : '#eeeeee',
+      neutralLighterAlt: isInverted ? '#333333' : '#f6f6f6',
+      themePrimary: '#0f6cbd',
+      themeDarkAlt: '#115ea3',
+      themeLighter: '#deecf9',
+      redDark: '#a4262c'
+    }
+  };
 }
 
 function getButton(accessibleName: string): HTMLButtonElement {

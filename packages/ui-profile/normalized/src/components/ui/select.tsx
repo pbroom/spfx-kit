@@ -1,12 +1,19 @@
 "use client"
 
+import { useSpfxUiRequiredId } from "../../lib/ui-root"
+import { useSpfxUiOwnedRender, useSpfxUiPortalHost, useSpfxUiPortalId } from "../../lib/ui-root"
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 import * as React from "react"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
 
 import { cn } from "../../lib/utils"
 
-const Select = SelectPrimitive.Root
+function Select<Value, Multiple extends boolean | undefined = false>({
+  id,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  return <SelectPrimitive.Root id={useSpfxUiRequiredId(id, "Select.Root")} {...props} />
+}
 
 const SelectGroup = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Group>,
@@ -91,7 +98,7 @@ const SelectContent = React.forwardRef<
   ...props
 }, ref) {
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal id={useSpfxUiPortalId(props.id)} container={useSpfxUiPortalHost()}>
       <SelectPrimitive.Positioner
         side={side}
         sideOffset={sideOffset}
@@ -108,7 +115,7 @@ const SelectContent = React.forwardRef<
             "skui:relative skui:isolate skui:z-50 skui:max-h-(--available-height) skui:w-(--anchor-width) skui:min-w-36 skui:origin-(--transform-origin) skui:overflow-x-hidden skui:overflow-y-auto skui:rounded-lg skui:bg-popover skui:text-popover-foreground skui:shadow-md skui:ring-1 skui:ring-foreground/10 skui:duration-100 skui:data-[align-trigger=true]:animate-none skui:data-[side=bottom]:slide-in-from-top-2 skui:data-[side=inline-end]:slide-in-from-left-2 skui:data-[side=inline-start]:slide-in-from-right-2 skui:data-[side=left]:slide-in-from-right-2 skui:data-[side=right]:slide-in-from-left-2 skui:data-[side=top]:slide-in-from-bottom-2 skui:data-open:animate-in skui:data-open:fade-in-0 skui:data-open:zoom-in-95 skui:data-closed:animate-out skui:data-closed:fade-out-0 skui:data-closed:zoom-out-95",
             className
           )}
-          {...props}
+          {...props} id={props.id} render={useSpfxUiOwnedRender(props.render, props.id, "SelectContent")}
         >
           <SelectScrollUpButton />
           <SelectPrimitive.List>{children}</SelectPrimitive.List>

@@ -1,5 +1,6 @@
 "use client"
 
+import { useSpfxUiOwnedPortalRender, useSpfxUiOwnedRender, useSpfxUiPortalHost, useSpfxUiPortalId } from "../../lib/ui-root"
 import { CheckIcon, ChevronRightIcon } from "lucide-react"
 import * as React from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
@@ -11,7 +12,7 @@ function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
 }
 
 function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
-  return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />
+  return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} id={useSpfxUiPortalId(props.id)} container={useSpfxUiPortalHost()} render={useSpfxUiOwnedPortalRender(props.render, props.id, "DropdownMenuPortal")} />
 }
 
 const DropdownMenuTrigger = React.forwardRef<
@@ -39,7 +40,7 @@ const DropdownMenuContent = React.forwardRef<
   ...props
 }, ref) {
   return (
-    <MenuPrimitive.Portal>
+    <MenuPrimitive.Portal id={useSpfxUiPortalId(props.id)} container={useSpfxUiPortalHost()}>
       <MenuPrimitive.Positioner
         className="skui:isolate skui:z-50 skui:outline-none"
         align={align}
@@ -54,7 +55,7 @@ const DropdownMenuContent = React.forwardRef<
             "skui:z-50 skui:max-h-(--available-height) skui:w-(--anchor-width) skui:min-w-32 skui:origin-(--transform-origin) skui:overflow-x-hidden skui:overflow-y-auto skui:rounded-lg skui:bg-popover skui:p-1 skui:text-popover-foreground skui:shadow-md skui:ring-1 skui:ring-foreground/10 skui:duration-100 skui:outline-none skui:data-[side=bottom]:slide-in-from-top-2 skui:data-[side=inline-end]:slide-in-from-left-2 skui:data-[side=inline-start]:slide-in-from-right-2 skui:data-[side=left]:slide-in-from-right-2 skui:data-[side=right]:slide-in-from-left-2 skui:data-[side=top]:slide-in-from-bottom-2 skui:data-open:animate-in skui:data-open:fade-in-0 skui:data-open:zoom-in-95 skui:data-closed:animate-out skui:data-closed:overflow-hidden skui:data-closed:fade-out-0 skui:data-closed:zoom-out-95",
             className
           )}
-          {...props}
+          {...props} id={props.id} render={useSpfxUiOwnedRender(props.render, props.id, "DropdownMenuContent")}
         />
       </MenuPrimitive.Positioner>
     </MenuPrimitive.Portal>

@@ -9,6 +9,13 @@ import {
   ComboboxItem,
   ComboboxList
 } from '../../../packages/ui-profile/normalized/src/components/ui/combobox';
+import {
+  SpfxUiHostProvider,
+  createSpfxUiHost,
+  mapSharePointTheme,
+  type SpfxUiHost
+} from '../../../packages/ui-profile/normalized/src/lib/ui-root';
+import profile from '../../../packages/ui-profile/profile.json';
 // @ts-expect-error plain .mjs exact-scale workload fixture without type declarations
 import { FONT_OPTIONS } from './font-options.mjs';
 
@@ -19,10 +26,35 @@ interface PublicFontOption {
 }
 
 let container: HTMLDivElement;
+let mountPoint: HTMLDivElement;
+let host: SpfxUiHost;
 
 beforeEach(() => {
-  container = document.createElement('div');
-  document.body.appendChild(container);
+  mountPoint = document.createElement('div');
+  document.body.appendChild(mountPoint);
+  host = createSpfxUiHost({
+    mountPoint,
+    portalParent: mountPoint,
+    targetDocument: document,
+    instanceId: 'combobox-workload-root',
+    profileId: profile.profileId,
+    scopeValue: profile.css.scopeValue,
+    theme: mapSharePointTheme({
+      palette: {
+        white: '#ffffff',
+        neutralPrimary: '#222222',
+        neutralSecondary: '#666666',
+        neutralLight: '#d8d8d8',
+        neutralLighter: '#eeeeee',
+        neutralLighterAlt: '#f6f6f6',
+        themePrimary: '#0f6cbd',
+        themeDarkAlt: '#115ea3',
+        themeLighter: '#deecf9',
+        redDark: '#a4262c'
+      }
+    })
+  });
+  container = host.appRoot as HTMLDivElement;
   if (typeof HTMLElement.prototype.scrollIntoView === 'function') {
     vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => undefined);
   } else {
@@ -37,7 +69,8 @@ afterEach(() => {
   act(() => {
     ReactDom.unmountComponentAtNode(container);
   });
-  container.remove();
+  host.dispose();
+  mountPoint.remove();
   vi.restoreAllMocks();
 });
 
@@ -48,23 +81,28 @@ it('opens, filters, keyboard-selects, and tears down with all 1,940 synthetic pu
   act(() => {
     ReactDom.render(
       React.createElement(
-        Combobox,
-        {
-          items: options,
-          itemToStringLabel: (option: PublicFontOption) => option.label,
-          itemToStringValue: (option: PublicFontOption) => option.value,
-          onValueChange: (option: PublicFontOption | null) => selected.push(option)
-        },
-        React.createElement(ComboboxInput, {
-          'aria-label': 'Public exact-scale font workload',
-          showClear: false,
-          showTrigger: true
-        }),
+        SpfxUiHostProvider,
+        { host },
         React.createElement(
-          ComboboxContent,
-          null,
-          React.createElement(ComboboxList, null, (option: PublicFontOption, index: number) =>
-            React.createElement(ComboboxItem, { index, key: option.id, value: option }, option.label)
+          Combobox,
+          {
+            id: host.idFor('font-combobox-root'),
+            items: options,
+            itemToStringLabel: (option: PublicFontOption) => option.label,
+            itemToStringValue: (option: PublicFontOption) => option.value,
+            onValueChange: (option: PublicFontOption | null) => selected.push(option)
+          },
+          React.createElement(ComboboxInput, {
+            'aria-label': 'Public exact-scale font workload',
+            showClear: false,
+            showTrigger: true
+          }),
+          React.createElement(
+            ComboboxContent,
+            { id: host.idFor('font-combobox-content') },
+            React.createElement(ComboboxList, null, (option: PublicFontOption, index: number) =>
+              React.createElement(ComboboxItem, { index, key: option.id, value: option }, option.label)
+            )
           )
         )
       ),
@@ -86,8 +124,8 @@ it('opens, filters, keyboard-selects, and tears down with all 1,940 synthetic pu
   );
   await settle();
 
-  expect(document.body.querySelector('[data-slot="combobox-content"]')).not.toBeNull();
-  expect(document.body.querySelectorAll('[data-slot="combobox-item"]')).toHaveLength(1_940);
+  expect(host.portalHost.querySelector('[data-slot="combobox-content"]')).not.toBeNull();
+  expect(host.portalHost.querySelectorAll('[data-slot="combobox-item"]')).toHaveLength(1_940);
 
   act(() => {
     (input as HTMLInputElement).value = 'Font Family 1939';
@@ -115,8 +153,8 @@ it('opens, filters, keyboard-selects, and tears down with all 1,940 synthetic pu
     ReactDom.unmountComponentAtNode(container);
   });
   await settle();
-  expect(document.body.querySelector('[data-slot="combobox-content"]')).toBeNull();
-  expect(document.body.querySelectorAll('[data-slot="combobox-item"]')).toHaveLength(0);
+  expect(host.portalHost.querySelector('[data-slot="combobox-content"]')).toBeNull();
+  expect(host.portalHost.querySelectorAll('[data-slot="combobox-item"]')).toHaveLength(0);
 });
 
 async function settle(): Promise<void> {

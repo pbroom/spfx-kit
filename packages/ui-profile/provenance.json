@@ -1,7 +1,7 @@
 {
   "$schema": "./provenance.schema.json",
   "schemaVersion": 1,
-  "generatorVersion": "1.2.0",
+  "generatorVersion": "1.3.0",
   "profileId": "spfx-react17-base-nova-v1",
   "registry": {
     "preset": "base-nova",
@@ -66,7 +66,7 @@
   },
   "typescriptMatrix": ["5.3.3", "5.8.3"],
   "normalization": {
-    "contractVersion": "react17-classic-jsx-skui-v2",
+    "contractVersion": "react17-classic-jsx-skui-v4",
     "configuration": {
       "tailwindPrefix": "skui",
       "rtl": false,
@@ -74,7 +74,7 @@
       "fontHeadingMarker": "font-heading"
     },
     "implementation": "scripts/lib/profile.mjs",
-    "implementationSha256": "4076013a149ff873127782d147bc8d8c07d743aae0f91384e09d9bd68d0f72be"
+    "implementationSha256": "3236ddb4cea1c5e00980e63f6cbad3d9df6a585e5dc865fb65459bcb729a5339"
   },
   "registryIds": [
     "button",

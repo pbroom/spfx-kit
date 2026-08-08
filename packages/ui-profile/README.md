@@ -74,9 +74,39 @@ React 17 equivalents. Both TypeScript matrix runs list and reject React or
 scheduler type files outside their lockfile-resolved roots. This narrow bridge
 does not alter the Lab, Workbench, or SPFx runtime. The profile ID plus its
 manifest and provenance digests identifies an exact generation.
-This workspace does not wire components or the compiled artifact into an app,
-implement portal ownership, or establish Vite, Heft, Gulp, browser, package, or
-standalone-export proof.
+The generated tree now includes the reviewed `SpfxUiHost` contract. A consumer
+creates its app root and portal host before `ReactDOM.render`, supplies the
+owning `Document`, the manifest's digest scope, a host-stable instance identity,
+and mapped SharePoint theme tokens, then renders through
+`SpfxUiHostProvider`. Every normalized Base UI portal is forced through that
+owned portal host after caller prop spreads, so it cannot fall back to or be
+redirected to global `document.body`. The app root and portal host receive the
+same scope, theme identity, and semantic variables. Consumers must supply every
+portalized content surface and every Select or Combobox root an ID from
+`host.idFor(...)` or `useSpfxUiId(...)`. The generated wrappers derive their
+own portal-node IDs from the content ID and bind Base UI's Select/Combobox
+hidden form controls to the root ID. A missing or foreign contracted ID fails
+closed at render time. `host.deriveElementId(parentOwnedId, semanticPart)` is
+the only accepted way to derive a child identifier from an owned element; it
+validates the parent against the current host and preserves deterministic IDs
+across remounts. Element IDs and portal IDs have separate validated namespaces,
+so neither an ordinary element ID nor another web part instance's portal ID can
+cross the portal boundary. The Lab canary additionally supplies owned IDs to every
+representative trigger, title, description, and menu item it renders; extending
+that fail-closed requirement across every normalized Base UI primitive remains
+an explicit integration gate rather than a claim of this slice.
+Disposal removes only the two nodes created by the contract.
+
+The SharePoint theme adapter is structural and does not create a production
+dependency on SPFx packages. This first host contract deliberately accepts an
+`HTMLElement` portal host. Shadow-root styling remains a later, separately
+evidenced integration boundary. Consumers must unmount React before disposing
+the host.
+
+The Lab query-route canary establishes same-document Vite/browser proof for two
+concurrent roots and their generated components. It does not yet establish
+secondary-document or independent-bundle browser proof, Heft/Gulp package
+proof, SharePoint workbench proof, or standalone-export proof.
 Its public 1,940-option Combobox fixture proves exact-scale cardinality and
 basic DOM behavior only; it does not claim the real-font workload required for
 the final ADR-0001 Phase 1 exit.

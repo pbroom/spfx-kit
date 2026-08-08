@@ -47,11 +47,11 @@
     },
     {
       "path": "scripts/lib/generate-profile.mjs",
-      "sha256": "1529e56adfbd52c2b716dfa987d16faea45b9043db3b60706664807f2827f220"
+      "sha256": "0177d96176ecc4f06b8aa135ee09967238e74bfb682ec2b460b8a70f5409e92b"
     },
     {
       "path": "scripts/lib/profile-update-intake.mjs",
-      "sha256": "08a385db8983bee9b475559029bc9036c644a0e3973e7713f924cbc7cf891751"
+      "sha256": "c97a9b95e59519abe23318f38baaea5e05d3b25f696a1a7c1c62ea76ab2f9b6d"
     },
     {
       "path": "scripts/lib/typecheck-generated-profile.mjs",
@@ -59,7 +59,7 @@
     },
     {
       "path": "scripts/lib/generate-validated-profile.mjs",
-      "sha256": "adf40bef2870dac4d62cb4083b71bfd4f981c2e8e432fa00fde4896c80a43094"
+      "sha256": "96ac5ebb2471cbd875b1ad119d26d4e0bcb233971b6ab728d58a18a71b643ca9"
     },
     {
       "path": "scripts/lib/generation-transaction.mjs",
@@ -71,7 +71,7 @@
     },
     {
       "path": "scripts/lib/generated-tree-closure.mjs",
-      "sha256": "de6f77c97aab8f5987d10f9358aa09c1bebebe233d29aab4ffa80a945849577a"
+      "sha256": "d60869936bfb4dff1699f4edd0ce7576633a0a4de76f4a5673c1b74a600e2376"
     },
     {
       "path": "scripts/verify-dependency-closure.mjs",
@@ -115,7 +115,7 @@
     },
     "artifact": {
       "path": "generated/tailwind-profile.css",
-      "sha256": "cc5ed5745180583005f60b650bdff79c560de825a6cf1046bf362bb27085400c"
+      "sha256": "b02865f7607f96ce38dad4a32003103f0ed2717b0e981ae74894f5ad75abb6f8"
     },
     "candidateCount": 609,
     "compiler": {
@@ -144,9 +144,9 @@
       "path": "scripts/lib/scope-tailwind-css.mjs",
       "sha256": "0fa68a7fb45f214b17bd149c05aab73028fe158e15339052fb01261e6360a308"
     },
-    "scopeSeedSha256": "1b71e5f9b22a62328620a72bb6f76b6238771333d4a596e214f6ccd024603208",
-    "scopeSelector": "[data-spfx-ui-scope=\"skui-1b71e5f9b22a6232\"]",
-    "scopeValue": "skui-1b71e5f9b22a6232",
+    "scopeSeedSha256": "0a159937d0cdd39e3a7a0becfb977361c7f674b59128d13bbdef3788a54fc5ca",
+    "scopeSelector": "[data-spfx-ui-scope=\"skui-0a159937d0cdd39e\"]",
+    "scopeValue": "skui-0a159937d0cdd39e",
     "structuralMarkers": [
       "skui:group/accordion-trigger",
       "skui:group/alert",
@@ -173,7 +173,7 @@
     "path": "dependency-closure.json",
     "sha256": "071df6ff0af2debfd0cbbdbdbd372ad6d94230242e6a3cb0f4f9e70c347ef736"
   },
-  "generatorVersion": "1.2.0",
+  "generatorVersion": "1.3.0",
   "items": [
     {
       "canonical": {
@@ -340,11 +340,13 @@
         {
           "path": "normalized/src/components/ui/select.tsx",
           "registrySourcePath": "registry/base-nova/ui/select.tsx",
-          "sha256": "7a1798bc2b5373cf7a7c91846511f5674479ca8f6000788da45da06aab26eeeb",
+          "sha256": "c175dfb8d3f45fde78e3eb653b2a1ec19698bb7f44ebb46eef1b35314f03478b",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "route-portals-through-owned-host",
+            "require-owned-base-ui-root-id",
             "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
@@ -366,12 +368,14 @@
         {
           "path": "normalized/src/components/ui/combobox.tsx",
           "registrySourcePath": "registry/base-nova/ui/combobox.tsx",
-          "sha256": "4b6f007ae5f2001c763595723af3474fda78da939d9900d1b14464e8f5de8670",
+          "sha256": "356af67145a6bf1ab87576086a8e30f290808204e6341ad26f55559f2fd46383",
           "transformations": [
             "normalize-line-endings",
             "pin-base-ui-combobox-subpath",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "route-portals-through-owned-host",
+            "require-owned-base-ui-root-id",
             "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
@@ -471,11 +475,12 @@
         {
           "path": "normalized/src/components/ui/dropdown-menu.tsx",
           "registrySourcePath": "registry/base-nova/ui/dropdown-menu.tsx",
-          "sha256": "507cf9fd5f0d8128e705720d169ab71abb1adf8ee7205d7f92fd227f317d674d",
+          "sha256": "230acf536abe2c392af10b04933e6c28882f5d8b7ed640e4564ddfc509ecc83a",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "route-portals-through-owned-host",
             "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
@@ -497,11 +502,12 @@
         {
           "path": "normalized/src/components/ui/dialog.tsx",
           "registrySourcePath": "registry/base-nova/ui/dialog.tsx",
-          "sha256": "f66604d10c61845f89200cae621a6fd392073403bb550565496a7e183d0d6042",
+          "sha256": "27d4adc88b3209d3af0383dcdc738a8eca8917801b66aea81f1447c7a1ceaca3",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "route-portals-through-owned-host",
             "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
@@ -523,11 +529,12 @@
         {
           "path": "normalized/src/components/ui/sheet.tsx",
           "registrySourcePath": "registry/base-nova/ui/sheet.tsx",
-          "sha256": "f7756ac8c3304f49c267ce2d5cd51695151067e5a6bb513dfe5275aa0ec5b0fd",
+          "sha256": "17b56c091ca2ef68364963aa14719ea8cf1d35be69ec367895def587f4468941",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
             "resolve-lucide-icon-placeholders",
+            "route-portals-through-owned-host",
             "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
@@ -549,10 +556,11 @@
         {
           "path": "normalized/src/components/ui/popover.tsx",
           "registrySourcePath": "registry/base-nova/ui/popover.tsx",
-          "sha256": "1fd58dc3285de68d0992b659b4a481761976d57641dc209441bffde1ca569ab4",
+          "sha256": "dd0cb2af6c85724d6adb1fb95d3ec339837712356ecf5315fc15190bfda9c0f1",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "route-portals-through-owned-host",
             "prefix-tailwind-utilities",
             "react17-forward-ref-public-wrappers"
           ],
@@ -574,10 +582,11 @@
         {
           "path": "normalized/src/components/ui/tooltip.tsx",
           "registrySourcePath": "registry/base-nova/ui/tooltip.tsx",
-          "sha256": "aa859c5e5e1290cdba1dec8bb0e668855cff2207dd31b436ae3542837cf49d96",
+          "sha256": "4eec946c88adfe59b90a9a4bac2b1386481202ccf895ce2dacd8f94a833947a0",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
+            "route-portals-through-owned-host",
             "prefix-tailwind-utilities",
             "bind-react-namespace",
             "react17-forward-ref-public-wrappers"
@@ -793,8 +802,36 @@
       }
     }
   ],
-  "normalizationImplementationSha256": "4076013a149ff873127782d147bc8d8c07d743aae0f91384e09d9bd68d0f72be",
+  "normalizationImplementationSha256": "3236ddb4cea1c5e00980e63f6cbad3d9df6a585e5dc865fb65459bcb729a5339",
+  "ownedSources": [
+    {
+      "output": {
+        "path": "normalized/src/lib/spfx-theme.ts",
+        "sha256": "ae4ad87e790d3d7c0190a84a0662331cf2320eae5badddb813e517869b87b9dc"
+      },
+      "source": {
+        "path": "owned/src/lib/spfx-theme.ts",
+        "sha256": "ae4ad87e790d3d7c0190a84a0662331cf2320eae5badddb813e517869b87b9dc"
+      },
+      "transformations": [
+        "copy-owned-host-contract"
+      ]
+    },
+    {
+      "output": {
+        "path": "normalized/src/lib/ui-root.tsx",
+        "sha256": "f62f80725805c348dc4d623970d91fda6684591ee9ea7a3d70ee45ed9ab5c70f"
+      },
+      "source": {
+        "path": "owned/src/lib/ui-root.tsx",
+        "sha256": "f62f80725805c348dc4d623970d91fda6684591ee9ea7a3d70ee45ed9ab5c70f"
+      },
+      "transformations": [
+        "copy-owned-host-contract"
+      ]
+    }
+  ],
   "profileId": "spfx-react17-base-nova-v1",
-  "provenanceSha256": "b9580ee9caca9537f8de1ebb6079b384a52aaa3de86742245836c35a69482703",
+  "provenanceSha256": "2b6b0ee6edc8ad7f8c6f88027fccb9fafa17c1f8fb377d27b6fc00b94c37f9a6",
   "schemaVersion": 1
 }

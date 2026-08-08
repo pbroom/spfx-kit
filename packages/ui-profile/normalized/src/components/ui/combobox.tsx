@@ -1,5 +1,7 @@
 "use client"
 
+import { useSpfxUiRequiredId } from "../../lib/ui-root"
+import { useSpfxUiOwnedRender, useSpfxUiPortalHost, useSpfxUiPortalId } from "../../lib/ui-root"
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react"
 import * as React from "react"
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox"
@@ -13,7 +15,12 @@ import {
   InputGroupInput,
 } from "./input-group"
 
-const Combobox = ComboboxPrimitive.Root
+function Combobox<Value, Multiple extends boolean | undefined = false>({
+  id,
+  ...props
+}: ComboboxPrimitive.Root.Props<Value, Multiple>) {
+  return <ComboboxPrimitive.Root id={useSpfxUiRequiredId(id, "Combobox.Root")} {...props} />
+}
 
 function ComboboxValue({ ...props }: ComboboxPrimitive.Value.Props) {
   return <ComboboxPrimitive.Value data-slot="combobox-value" {...props} />
@@ -120,7 +127,7 @@ const ComboboxContent = React.forwardRef<
   ...props
 }, ref) {
   return (
-    <ComboboxPrimitive.Portal>
+    <ComboboxPrimitive.Portal id={useSpfxUiPortalId(props.id)} container={useSpfxUiPortalHost()}>
       <ComboboxPrimitive.Positioner
         side={side}
         sideOffset={sideOffset}
@@ -137,7 +144,7 @@ const ComboboxContent = React.forwardRef<
             "skui:group/combobox-content skui:relative skui:max-h-(--available-height) skui:w-(--anchor-width) skui:max-w-(--available-width) skui:min-w-[calc(var(--anchor-width)+--spacing(7))] skui:origin-(--transform-origin) skui:overflow-hidden skui:rounded-lg skui:bg-popover skui:text-popover-foreground skui:shadow-md skui:ring-1 skui:ring-foreground/10 skui:duration-100 skui:data-[chips=true]:min-w-(--anchor-width) skui:data-[side=bottom]:slide-in-from-top-2 skui:data-[side=inline-end]:slide-in-from-left-2 skui:data-[side=inline-start]:slide-in-from-right-2 skui:data-[side=left]:slide-in-from-right-2 skui:data-[side=right]:slide-in-from-left-2 skui:data-[side=top]:slide-in-from-bottom-2 skui:*:data-[slot=input-group]:m-1 skui:*:data-[slot=input-group]:mb-0 skui:*:data-[slot=input-group]:h-8 skui:*:data-[slot=input-group]:border-input/30 skui:*:data-[slot=input-group]:bg-input/30 skui:*:data-[slot=input-group]:shadow-none skui:data-open:animate-in skui:data-open:fade-in-0 skui:data-open:zoom-in-95 skui:data-closed:animate-out skui:data-closed:fade-out-0 skui:data-closed:zoom-out-95",
             className
           )}
-          {...props}
+          {...props} id={props.id} render={useSpfxUiOwnedRender(props.render, props.id, "ComboboxContent")}
         />
       </ComboboxPrimitive.Positioner>
     </ComboboxPrimitive.Portal>

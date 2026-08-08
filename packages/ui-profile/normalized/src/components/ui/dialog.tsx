@@ -1,5 +1,6 @@
 "use client"
 
+import { useSpfxUiOwnedPortalRender, useSpfxUiOwnedRender, useSpfxUiPortalHost, useSpfxUiPortalId } from "../../lib/ui-root"
 import { XIcon } from "lucide-react"
 import * as React from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
@@ -21,7 +22,7 @@ const DialogTrigger = React.forwardRef<
 })
 
 function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
+  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} id={useSpfxUiPortalId(props.id)} container={useSpfxUiPortalHost()} render={useSpfxUiOwnedPortalRender(props.render, props.id, "DialogPortal")} />
 }
 
 const DialogClose = React.forwardRef<
@@ -66,7 +67,7 @@ const DialogContent = React.forwardRef<
   ...props
 }, ref) {
   return (
-    <DialogPortal>
+    <DialogPortal id={props.id}>
       <DialogOverlay />
       <DialogPrimitive.Popup
         ref={ref}
@@ -75,7 +76,7 @@ const DialogContent = React.forwardRef<
           "skui:fixed skui:top-1/2 skui:left-1/2 skui:z-50 skui:grid skui:w-full skui:max-w-[calc(100%-2rem)] skui:-translate-x-1/2 skui:-translate-y-1/2 skui:gap-4 skui:rounded-xl skui:bg-popover skui:p-4 skui:text-sm skui:text-popover-foreground skui:ring-1 skui:ring-foreground/10 skui:duration-100 skui:outline-none skui:sm:max-w-sm skui:data-open:animate-in skui:data-open:fade-in-0 skui:data-open:zoom-in-95 skui:data-closed:animate-out skui:data-closed:fade-out-0 skui:data-closed:zoom-out-95",
           className
         )}
-        {...props}
+        {...props} id={props.id} render={useSpfxUiOwnedRender(props.render, props.id, "DialogContent")}
       >
         {children}
         {showCloseButton && (

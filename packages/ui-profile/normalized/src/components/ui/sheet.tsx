@@ -1,5 +1,6 @@
 "use client"
 
+import { useSpfxUiOwnedPortalRender, useSpfxUiOwnedRender, useSpfxUiPortalHost, useSpfxUiPortalId } from "../../lib/ui-root"
 import { XIcon } from "lucide-react"
 import * as React from "react"
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
@@ -30,7 +31,7 @@ const SheetClose = React.forwardRef<
 })
 
 function SheetPortal({ ...props }: SheetPrimitive.Portal.Props) {
-  return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
+  return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} id={useSpfxUiPortalId(props.id)} container={useSpfxUiPortalHost()} render={useSpfxUiOwnedPortalRender(props.render, props.id, "SheetPortal")} />
 }
 
 const SheetOverlay = React.forwardRef<
@@ -65,7 +66,7 @@ const SheetContent = React.forwardRef<
   ...props
 }, ref) {
   return (
-    <SheetPortal>
+    <SheetPortal id={props.id}>
       <SheetOverlay />
       <SheetPrimitive.Popup
         ref={ref}
@@ -75,7 +76,7 @@ const SheetContent = React.forwardRef<
           "skui:fixed skui:z-50 skui:flex skui:flex-col skui:gap-4 skui:bg-popover skui:bg-clip-padding skui:text-sm skui:text-popover-foreground skui:shadow-lg skui:transition skui:duration-200 skui:ease-in-out skui:data-ending-style:opacity-0 skui:data-starting-style:opacity-0 skui:data-[side=bottom]:inset-x-0 skui:data-[side=bottom]:bottom-0 skui:data-[side=bottom]:h-auto skui:data-[side=bottom]:border-t skui:data-[side=bottom]:data-ending-style:translate-y-[2.5rem] skui:data-[side=bottom]:data-starting-style:translate-y-[2.5rem] skui:data-[side=left]:inset-y-0 skui:data-[side=left]:left-0 skui:data-[side=left]:h-full skui:data-[side=left]:w-3/4 skui:data-[side=left]:border-r skui:data-[side=left]:data-ending-style:translate-x-[-2.5rem] skui:data-[side=left]:data-starting-style:translate-x-[-2.5rem] skui:data-[side=right]:inset-y-0 skui:data-[side=right]:right-0 skui:data-[side=right]:h-full skui:data-[side=right]:w-3/4 skui:data-[side=right]:border-l skui:data-[side=right]:data-ending-style:translate-x-[2.5rem] skui:data-[side=right]:data-starting-style:translate-x-[2.5rem] skui:data-[side=top]:inset-x-0 skui:data-[side=top]:top-0 skui:data-[side=top]:h-auto skui:data-[side=top]:border-b skui:data-[side=top]:data-ending-style:translate-y-[-2.5rem] skui:data-[side=top]:data-starting-style:translate-y-[-2.5rem] skui:data-[side=left]:sm:max-w-sm skui:data-[side=right]:sm:max-w-sm",
           className
         )}
-        {...props}
+        {...props} id={props.id} render={useSpfxUiOwnedRender(props.render, props.id, "SheetContent")}
       >
         {children}
         {showCloseButton && (
