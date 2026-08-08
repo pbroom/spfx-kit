@@ -8,7 +8,7 @@ export const SOURCE_EDITOR_VENDOR_TARGETS = [
   'better-list-spfx'
 ];
 
-export const SOURCE_EDITOR_VENDOR_FILES = [
+const SOURCE_EDITOR_COMMON_VENDOR_FILES = [
   {
     packageName: '@spfx-kit/source-editor-core',
     sourcePath: 'packages/source-editor-core/src/index.ts',
@@ -23,17 +23,67 @@ export const SOURCE_EDITOR_VENDOR_FILES = [
   },
   {
     packageName: '@spfx-kit/source-editor-react',
-    sourcePath: 'packages/source-editor-react/src/SourceWorkspaceField.tsx',
-    packagePath: 'packages/source-editor-react/package.json',
-    vendorPath: 'src/vendor/source-editor/SourceWorkspaceField.tsx'
-  },
-  {
-    packageName: '@spfx-kit/source-editor-react',
     sourcePath: 'packages/source-editor-react/spfx-monaco-webpack.cjs',
     packagePath: 'packages/source-editor-react/package.json',
     vendorPath: 'src/vendor/source-editor/spfx-monaco-webpack.cjs'
   }
 ];
+
+const SOURCE_EDITOR_WORKSPACE_VENDOR_FILE = {
+  packageName: '@spfx-kit/source-editor-react',
+  sourcePath: 'packages/source-editor-react/src/SourceWorkspaceField.tsx',
+  packagePath: 'packages/source-editor-react/package.json',
+  vendorPath: 'src/vendor/source-editor/SourceWorkspaceField.tsx'
+};
+
+const SOURCE_EDITOR_MONACO_ADAPTERS = Object.freeze({
+  full: {
+    packageName: '@spfx-kit/source-editor-react',
+    sourcePath: 'packages/source-editor-react/src/sourceEditorMonacoAdapter.full.ts',
+    packagePath: 'packages/source-editor-react/package.json',
+    vendorPath: 'src/vendor/source-editor/sourceEditorMonacoAdapter.ts'
+  },
+  'scss-only': {
+    packageName: '@spfx-kit/source-editor-react',
+    sourcePath: 'packages/source-editor-react/src/sourceEditorMonacoAdapter.scss-only.ts',
+    packagePath: 'packages/source-editor-react/package.json',
+    vendorPath: 'src/vendor/source-editor/sourceEditorMonacoAdapter.ts'
+  }
+});
+
+export const SOURCE_EDITOR_CONSUMER_PROFILES = Object.freeze({
+  'better-list-spfx': Object.freeze({
+    key: 'full',
+    profileId: 'source-editor-react17-base-nova-v1',
+    languages: Object.freeze(['html', 'scss']),
+    surfaces: Object.freeze([
+      Object.freeze({ consumer: 'SourceEditorField', components: Object.freeze(['button', 'dropdown-menu']) }),
+      Object.freeze({ consumer: 'SourceWorkspaceField', components: Object.freeze(['tabs']) })
+    ])
+  }),
+  'better-divider-spfx': Object.freeze({
+    key: 'scss-only',
+    profileId: 'source-editor-scss-react17-base-nova-v1',
+    languages: Object.freeze(['scss']),
+    surfaces: Object.freeze([
+      Object.freeze({ consumer: 'SourceEditorField', components: Object.freeze(['button', 'dropdown-menu']) })
+    ])
+  }),
+  'better-text-spfx': Object.freeze({
+    key: 'scss-only',
+    profileId: 'source-editor-scss-react17-base-nova-v1',
+    languages: Object.freeze(['scss']),
+    surfaces: Object.freeze([
+      Object.freeze({ consumer: 'SourceEditorField', components: Object.freeze(['button', 'dropdown-menu']) })
+    ])
+  })
+});
+
+export const SOURCE_EDITOR_VENDOR_FILES = Object.freeze([
+  ...SOURCE_EDITOR_COMMON_VENDOR_FILES,
+  SOURCE_EDITOR_WORKSPACE_VENDOR_FILE,
+  SOURCE_EDITOR_MONACO_ADAPTERS.full
+]);
 
 export const LEGACY_SOURCE_EDITOR_VENDOR_PATH = 'src/vendor/source-editor-core/index.ts';
 export const SOURCE_EDITOR_UI_PROFILE_MANIFEST_PATH = 'packages/source-editor-react/ui-profile.json';
@@ -106,7 +156,23 @@ export function createSourceEditorVendor(source, version, packageName = '@spfx-k
   };
 }
 
-export async function resolveSourceEditorUiProfile(rootDir) {
+export function sourceEditorConsumerProfile(appName) {
+  const profile = SOURCE_EDITOR_CONSUMER_PROFILES[appName];
+  assert(profile, `Unsupported source editor vendor target: ${appName}`);
+  return profile;
+}
+
+export function sourceEditorVendorFilesForTarget(appName) {
+  const profile = sourceEditorConsumerProfile(appName);
+  return Object.freeze([
+    ...SOURCE_EDITOR_COMMON_VENDOR_FILES,
+    SOURCE_EDITOR_MONACO_ADAPTERS[profile.key],
+    ...(profile.key === 'full' ? [SOURCE_EDITOR_WORKSPACE_VENDOR_FILE] : [])
+  ]);
+}
+
+export async function resolveSourceEditorUiProfile(rootDir, appName = 'better-list-spfx') {
+  const consumerProfile = sourceEditorConsumerProfile(appName);
   const manifestFile = await readOwnedFile(rootDir, SOURCE_EDITOR_UI_PROFILE_MANIFEST_PATH, 'source editor UI profile');
   const manifest = parseManifest(manifestFile.source);
   const packageManifest = JSON.parse(
@@ -157,20 +223,74 @@ export async function resolveSourceEditorUiProfile(rootDir) {
     );
   }
 
+  const selectedFiles = manifest.files.filter(
+    (file) => consumerProfile.key === 'full' || !file.sourcePath.endsWith('/components/ui/tabs.tsx')
+  );
   const files = [];
-  for (const file of manifest.files) {
+  for (const file of selectedFiles) {
     const resolved = await readOwnedFile(rootDir, file.sourcePath, `source editor UI profile file ${file.sourcePath}`);
     assertDigest(resolved.source, file.sha256, `Source editor UI profile file ${file.sourcePath}`);
     files.push({ ...file, source: resolved.source });
   }
+  const cssFile = selectedFiles.find((file) => file.sourcePath.endsWith('/generated/tailwind-profile.css'));
+  assert(cssFile, 'Source editor UI profile scoped CSS artifact is missing');
+  const sourceFiles = [];
+  for (const file of sourceEditorVendorFilesForTarget(appName)) {
+    const resolved = await readOwnedFile(rootDir, file.sourcePath, `source editor profile file ${file.sourcePath}`);
+    sourceFiles.push({
+      sourcePath: file.sourcePath,
+      vendorPath: file.vendorPath,
+      sha256: sourceEditorDigest(resolved.source)
+    });
+  }
+  const consumerManifest = {
+    schemaVersion: 1,
+    profileKind: consumerProfile.key,
+    profileId: consumerProfile.profileId,
+    packageVersion: manifest.packageVersion,
+    languages: consumerProfile.languages,
+    surfaces: consumerProfile.surfaces,
+    sourceProfile: {
+      path: SOURCE_EDITOR_UI_PROFILE_MANIFEST_PATH,
+      sha256: sourceEditorDigest(manifestFile.source)
+    },
+    upstream: manifest.upstream,
+    preparedBaseUi: manifest.preparedBaseUi,
+    css: {
+      mode: 'canonical-safe-superset',
+      note: 'The exact manifest-verified scoped CSS is shared; JavaScript and Monaco graphs remain profile-specific.',
+      sourcePath: cssFile.sourcePath,
+      vendorPath: cssFile.vendorPath,
+      sha256: cssFile.sha256,
+      scopeValue: upstreamProfile.css.scopeValue,
+      scopeSelector: upstreamProfile.css.scopeSelector
+    },
+    sourceFiles,
+    files: selectedFiles
+  };
+  const consumerManifestSource = canonicalJson(consumerManifest);
   files.push({
     sourcePath: SOURCE_EDITOR_UI_PROFILE_MANIFEST_PATH,
     vendorPath: SOURCE_EDITOR_UI_PROFILE_VENDOR_PATH,
-    sha256: sourceEditorDigest(manifestFile.source),
-    source: manifestFile.source
+    sha256: sourceEditorDigest(consumerManifestSource),
+    source: consumerManifestSource
   });
 
-  return Object.freeze({ manifest, files: Object.freeze(files) });
+  return Object.freeze({ manifest: Object.freeze(consumerManifest), files: Object.freeze(files) });
+}
+
+function canonicalJson(value) {
+  return `${JSON.stringify(sortJson(value), null, 2)}\n`;
+}
+
+function sortJson(value) {
+  if (Array.isArray(value)) return value.map(sortJson);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort((left, right) => left.localeCompare(right, 'en'))
+      .map((key) => [key, sortJson(value[key])])
+  );
 }
 
 function parseManifest(source) {
