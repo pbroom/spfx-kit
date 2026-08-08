@@ -11,6 +11,11 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@base-ui/react": ["../../packages/ui-profile/.prepared/base-ui/index.d.ts"],
+      "@base-ui/react/*": ["../../packages/ui-profile/.prepared/base-ui/*"]
+    },
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
