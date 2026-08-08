@@ -76,6 +76,7 @@ describe('source editor UI profile', () => {
     expect(sourceEditor).not.toContain('.fui-');
     expect(packageManifest.peerDependencies).not.toHaveProperty('@fluentui/react-components');
     expect(packageManifest.devDependencies).not.toHaveProperty('@fluentui/react-components');
+    expect(packageManifest.scripts.prebuild).toBe('npm --workspace @spfx-kit/ui-profile run profile:prepare:base-ui');
   });
 
   it('derives the SCSS-only profile without workspace or Tabs source while retaining exact scoped CSS', async () => {

@@ -13,3 +13,4 @@ packages/ui-profile/generated/tailwind-profile.css
 packages/ui-profile/normalized
 packages/ui-profile/profile.json
 packages/ui-profile/snapshots
+packages/source-editor-react/src/ui-profile

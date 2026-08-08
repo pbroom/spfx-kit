@@ -14,6 +14,7 @@
     "./spfx-webpack": "./spfx-monaco-webpack.cjs"
   },
   "scripts": {
+    "prebuild": "npm --workspace @spfx-kit/ui-profile run profile:prepare:base-ui",
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
