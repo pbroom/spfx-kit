@@ -82,12 +82,19 @@ describe('source editor UI profile', () => {
   it('derives the SCSS-only profile without workspace or Tabs source while retaining exact scoped CSS', async () => {
     const full = await resolveSourceEditorUiProfile(repositoryRoot, 'better-list-spfx');
     const scssOnly = await resolveSourceEditorUiProfile(repositoryRoot, 'better-text-spfx');
+    const divider = await resolveSourceEditorUiProfile(repositoryRoot, 'better-divider-spfx');
 
     expect(scssOnly.manifest).toMatchObject({
       profileKind: 'scss-only',
       profileId: 'source-editor-scss-react17-base-nova-v1',
       languages: ['scss'],
-      surfaces: [{ consumer: 'SourceEditorField', components: ['button', 'dropdown-menu'] }],
+      surfaces: [
+        { consumer: 'SourceEditorField', components: ['button', 'dropdown-menu'] },
+        {
+          consumer: 'BetterTextPropertyPane',
+          components: ['combobox', 'input', 'input-group', 'select', 'textarea']
+        }
+      ],
       css: {
         mode: 'canonical-safe-superset',
         scopeValue: 'skui-7dbbe5a120453773',
@@ -97,6 +104,29 @@ describe('source editor UI profile', () => {
     expect(scssOnly.files.map((file: { vendorPath: string }) => file.vendorPath)).not.toContain(
       'src/vendor/source-editor/ui-profile/components/ui/tabs.tsx'
     );
+    for (const component of ['combobox', 'input-group', 'input', 'select', 'textarea']) {
+      expect(scssOnly.files.map((file: { vendorPath: string }) => file.vendorPath)).toContain(
+        `src/vendor/source-editor/ui-profile/components/ui/${component}.tsx`
+      );
+      expect(divider.files.map((file: { vendorPath: string }) => file.vendorPath)).not.toContain(
+        `src/vendor/source-editor/ui-profile/components/ui/${component}.tsx`
+      );
+    }
+    expect(divider.manifest.surfaces).toEqual([{ consumer: 'SourceEditorField', components: ['button', 'dropdown-menu'] }]);
+    expect(divider.manifest).not.toHaveProperty('runtimeContract');
+    expect(full.manifest).not.toHaveProperty('runtimeContract');
+    const runtimeContract = scssOnly.files.find(
+      (file: { vendorPath: string }) => file.vendorPath === 'src/vendor/source-editor/ui-profile/profile-contract.ts'
+    );
+    expect(runtimeContract?.source).toContain(
+      'export const SPFX_UI_PROFILE_ID = "source-editor-scss-react17-base-nova-v1" as const;'
+    );
+    expect(runtimeContract?.source).toContain('export const SPFX_UI_SCOPE_VALUE = "skui-7dbbe5a120453773" as const;');
+    expect(scssOnly.manifest.runtimeContract).toEqual({
+      vendorPath: runtimeContract?.vendorPath,
+      sha256: sourceEditorDigest(runtimeContract?.source ?? '')
+    });
+    expect(scssOnly.manifest.preparedBaseUi.deliveryFiles).toHaveLength(16);
     expect(scssOnly.manifest.sourceFiles.map((file: { vendorPath: string }) => file.vendorPath)).not.toContain(
       'src/vendor/source-editor/SourceWorkspaceField.tsx'
     );

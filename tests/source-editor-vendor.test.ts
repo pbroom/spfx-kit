@@ -38,6 +38,8 @@ describe('sync:source-editor', () => {
       'export const adapter = "scss-only";\n'
     );
     await writeFile(path.join(reactDir, 'spfx-monaco-webpack.cjs'), 'module.exports = function configure() {};\n');
+    await writeFile(path.join(reactDir, 'spfx-ui-profile-gulp.cjs'), 'module.exports = function register() {};\n');
+    await writeFile(path.join(reactDir, 'spfx-ui-profile-prepare.mjs'), 'export async function prepare() {}\n');
     await writeFile(path.join(appDir, 'package.json'), '{"name":"better-divider-spfx"}\n');
     await writeFile(path.join(textAppDir, 'package.json'), '{"name":"better-text-spfx"}\n');
     await writeFile(path.join(listAppDir, 'package.json'), '{"name":"better-list-spfx"}\n');
@@ -66,6 +68,7 @@ describe('sync:source-editor', () => {
       'dropdown-menu.tsx'
     );
     const tabsVendorPath = path.join(appDir, 'src', 'vendor', 'source-editor', 'ui-profile', 'components', 'ui', 'tabs.tsx');
+    const textVendorRoot = path.join(textAppDir, 'src', 'vendor', 'source-editor');
     const coreVendor = await readFile(coreVendorPath, 'utf8');
     const reactVendor = await readFile(reactVendorPath, 'utf8');
     const adapterVendor = await readFile(adapterVendorPath, 'utf8');
@@ -83,6 +86,20 @@ describe('sync:source-editor', () => {
     );
     await expect(readFile(workspaceVendorPath, 'utf8')).rejects.toThrow();
     await expect(readFile(tabsVendorPath, 'utf8')).rejects.toThrow();
+    for (const component of ['combobox', 'input-group', 'input', 'select', 'textarea']) {
+      expect(await readFile(path.join(textVendorRoot, 'ui-profile', 'components', 'ui', `${component}.tsx`), 'utf8')).toBe(
+        await readFile(path.join(fixture, 'packages/ui-profile/normalized/src/components/ui', `${component}.tsx`), 'utf8')
+      );
+      await expect(
+        readFile(path.join(appDir, 'src/vendor/source-editor/ui-profile/components/ui', `${component}.tsx`), 'utf8')
+      ).rejects.toThrow();
+    }
+    expect(await readFile(path.join(textVendorRoot, 'ui-profile', 'profile-contract.ts'), 'utf8')).toContain(
+      'SPFX_UI_SCOPE_VALUE'
+    );
+    expect(await readFile(path.join(textVendorRoot, 'spfx-ui-profile-gulp.cjs'), 'utf8')).toContain(
+      'Vendored from @spfx-kit/source-editor-react@3.0.0'
+    );
 
     const listVendorRoot = path.join(listAppDir, 'src', 'vendor', 'source-editor');
     expect(await readFile(path.join(listVendorRoot, 'SourceWorkspaceField.tsx'), 'utf8')).toContain(
@@ -118,7 +135,6 @@ describe('sync:source-editor', () => {
     expect(runCli(fixture).status).toBe(0);
     await expect(readFile(tabsVendorPath, 'utf8')).rejects.toThrow();
 
-    const textVendorRoot = path.join(textAppDir, 'src', 'vendor', 'source-editor');
     await writeFile(path.join(appDir, 'src', 'vendor', 'source-editor', 'transaction-marker.txt'), 'divider-before\n');
     await writeFile(path.join(textVendorRoot, 'transaction-marker.txt'), 'text-before\n');
     const dividerBefore = await snapshotTree(path.join(appDir, 'src', 'vendor', 'source-editor'));
@@ -165,6 +181,18 @@ async function writeUiProfileFixture(fixture: string, packageVersion: string) {
     ...canonicalManifest.preparedBaseUi.contracts.map((contract: { path: string }) => contract.path),
     ...canonicalManifest.files.map((file: { sourcePath: string }) => file.sourcePath)
   ]);
+  for (const component of ['combobox', 'input-group', 'input', 'select', 'textarea']) {
+    copiedPaths.add(`packages/ui-profile/normalized/src/components/ui/${component}.tsx`);
+  }
+  for (const binding of canonicalManifest.preparedBaseUi.contracts) {
+    const contract = JSON.parse(await readFile(path.join(repoRoot, binding.path), 'utf8'));
+    for (const file of contract.providerFiles ?? []) copiedPaths.add(`packages/ui-profile/${file.sourcePath}`);
+    for (const file of contract.files ?? []) {
+      if (file.upstreamPath) copiedPaths.add(`packages/ui-profile/${file.upstreamPath}`);
+      if (file.originalPath) copiedPaths.add(`packages/ui-profile/${file.originalPath}`);
+      if (file.transformedPath) copiedPaths.add(`packages/ui-profile/${file.transformedPath}`);
+    }
+  }
   for (const relativePath of copiedPaths) {
     const target = path.join(fixture, relativePath);
     await mkdir(path.dirname(target), { recursive: true });
@@ -185,7 +213,9 @@ async function copySourceFixture(fixture: string) {
     'packages/source-editor-react/src/SourceWorkspaceField.tsx',
     'packages/source-editor-react/src/sourceEditorMonacoAdapter.full.ts',
     'packages/source-editor-react/src/sourceEditorMonacoAdapter.scss-only.ts',
-    'packages/source-editor-react/spfx-monaco-webpack.cjs'
+    'packages/source-editor-react/spfx-monaco-webpack.cjs',
+    'packages/source-editor-react/spfx-ui-profile-gulp.cjs',
+    'packages/source-editor-react/spfx-ui-profile-prepare.mjs'
   ];
   for (const relativePath of paths) {
     const target = path.join(fixture, relativePath);

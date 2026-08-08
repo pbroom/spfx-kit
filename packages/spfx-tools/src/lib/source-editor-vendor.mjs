@@ -29,6 +29,21 @@ const SOURCE_EDITOR_COMMON_VENDOR_FILES = [
   }
 ];
 
+const BETTER_TEXT_UI_BUILD_VENDOR_FILES = Object.freeze([
+  {
+    packageName: '@spfx-kit/source-editor-react',
+    sourcePath: 'packages/source-editor-react/spfx-ui-profile-prepare.mjs',
+    packagePath: 'packages/source-editor-react/package.json',
+    vendorPath: 'src/vendor/source-editor/spfx-ui-profile-prepare.mjs'
+  },
+  {
+    packageName: '@spfx-kit/source-editor-react',
+    sourcePath: 'packages/source-editor-react/spfx-ui-profile-gulp.cjs',
+    packagePath: 'packages/source-editor-react/package.json',
+    vendorPath: 'src/vendor/source-editor/spfx-ui-profile-gulp.cjs'
+  }
+]);
+
 const SOURCE_EDITOR_WORKSPACE_VENDOR_FILE = {
   packageName: '@spfx-kit/source-editor-react',
   sourcePath: 'packages/source-editor-react/src/SourceWorkspaceField.tsx',
@@ -74,7 +89,11 @@ export const SOURCE_EDITOR_CONSUMER_PROFILES = Object.freeze({
     profileId: 'source-editor-scss-react17-base-nova-v1',
     languages: Object.freeze(['scss']),
     surfaces: Object.freeze([
-      Object.freeze({ consumer: 'SourceEditorField', components: Object.freeze(['button', 'dropdown-menu']) })
+      Object.freeze({ consumer: 'SourceEditorField', components: Object.freeze(['button', 'dropdown-menu']) }),
+      Object.freeze({
+        consumer: 'BetterTextPropertyPane',
+        components: Object.freeze(['combobox', 'input', 'input-group', 'select', 'textarea'])
+      })
     ])
   })
 });
@@ -138,6 +157,36 @@ const SOURCE_EDITOR_UI_PROFILE_PAIRS = Object.freeze([
   }
 ]);
 
+const BETTER_TEXT_UI_PROFILE_PAIRS = Object.freeze([
+  {
+    sourcePath: 'packages/ui-profile/normalized/src/components/ui/combobox.tsx',
+    vendorPath: `${UI_PROFILE_FILE_PREFIX}components/ui/combobox.tsx`,
+    authority: { kind: 'registry-item', id: 'combobox', path: 'normalized/src/components/ui/combobox.tsx' }
+  },
+  {
+    sourcePath: 'packages/ui-profile/normalized/src/components/ui/input-group.tsx',
+    vendorPath: `${UI_PROFILE_FILE_PREFIX}components/ui/input-group.tsx`,
+    authority: { kind: 'registry-item', id: 'input-group', path: 'normalized/src/components/ui/input-group.tsx' }
+  },
+  {
+    sourcePath: 'packages/ui-profile/normalized/src/components/ui/input.tsx',
+    vendorPath: `${UI_PROFILE_FILE_PREFIX}components/ui/input.tsx`,
+    authority: { kind: 'registry-item', id: 'input', path: 'normalized/src/components/ui/input.tsx' }
+  },
+  {
+    sourcePath: 'packages/ui-profile/normalized/src/components/ui/select.tsx',
+    vendorPath: `${UI_PROFILE_FILE_PREFIX}components/ui/select.tsx`,
+    authority: { kind: 'registry-item', id: 'select', path: 'normalized/src/components/ui/select.tsx' }
+  },
+  {
+    sourcePath: 'packages/ui-profile/normalized/src/components/ui/textarea.tsx',
+    vendorPath: `${UI_PROFILE_FILE_PREFIX}components/ui/textarea.tsx`,
+    authority: { kind: 'registry-item', id: 'textarea', path: 'normalized/src/components/ui/textarea.tsx' }
+  }
+]);
+
+const UI_PROFILE_RUNTIME_CONTRACT_VENDOR_PATH = `${UI_PROFILE_FILE_PREFIX}profile-contract.ts`;
+
 export function sourceEditorDigest(source) {
   return createHash('sha256').update(source).digest('hex');
 }
@@ -167,7 +216,8 @@ export function sourceEditorVendorFilesForTarget(appName) {
   return Object.freeze([
     ...SOURCE_EDITOR_COMMON_VENDOR_FILES,
     SOURCE_EDITOR_MONACO_ADAPTERS[profile.key],
-    ...(profile.key === 'full' ? [SOURCE_EDITOR_WORKSPACE_VENDOR_FILE] : [])
+    ...(profile.key === 'full' ? [SOURCE_EDITOR_WORKSPACE_VENDOR_FILE] : []),
+    ...(appName === 'better-text-spfx' ? BETTER_TEXT_UI_BUILD_VENDOR_FILES : [])
   ]);
 }
 
@@ -223,9 +273,28 @@ export async function resolveSourceEditorUiProfile(rootDir, appName = 'better-li
     );
   }
 
-  const selectedFiles = manifest.files.filter(
-    (file) => consumerProfile.key === 'full' || !file.sourcePath.endsWith('/components/ui/tabs.tsx')
+  const requestedComponents = new Set(consumerProfile.surfaces.flatMap((surface) => surface.components));
+  const availablePairs = [
+    ...SOURCE_EDITOR_UI_PROFILE_PAIRS,
+    ...(appName === 'better-text-spfx' ? BETTER_TEXT_UI_PROFILE_PAIRS : [])
+  ];
+  const selectedPairs = availablePairs.filter(
+    (pair) =>
+      pair.authority.kind !== 'registry-item' ||
+      !pair.sourcePath.includes('/components/ui/') ||
+      requestedComponents.has(pair.authority.id)
   );
+  const manifestFiles = new Map(manifest.files.map((file) => [file.sourcePath, file]));
+  const selectedFiles = selectedPairs.map((pair) => {
+    const declared = manifestFiles.get(pair.sourcePath);
+    if (declared) return declared;
+    const authority = authoritativeProfileEntry(upstreamProfile, pair.authority);
+    assert(
+      authority?.path === pair.authority.path && SHA256_PATTERN.test(authority.sha256),
+      `Source editor UI profile file ${pair.sourcePath} is absent from the authoritative upstream profile`
+    );
+    return { sourcePath: pair.sourcePath, vendorPath: pair.vendorPath, sha256: authority.sha256 };
+  });
   const files = [];
   for (const file of selectedFiles) {
     const resolved = await readOwnedFile(rootDir, file.sourcePath, `source editor UI profile file ${file.sourcePath}`);
@@ -255,7 +324,13 @@ export async function resolveSourceEditorUiProfile(rootDir, appName = 'better-li
       sha256: sourceEditorDigest(manifestFile.source)
     },
     upstream: manifest.upstream,
-    preparedBaseUi: manifest.preparedBaseUi,
+    preparedBaseUi:
+      appName === 'better-text-spfx'
+        ? {
+            ...manifest.preparedBaseUi,
+            deliveryFiles: await resolvePreparedBaseUiDeliveryFiles(rootDir, manifest, files)
+          }
+        : manifest.preparedBaseUi,
     css: {
       mode: 'canonical-safe-superset',
       note: 'The exact manifest-verified scoped CSS is shared; JavaScript and Monaco graphs remain profile-specific.',
@@ -268,6 +343,19 @@ export async function resolveSourceEditorUiProfile(rootDir, appName = 'better-li
     sourceFiles,
     files: selectedFiles
   };
+  if (appName === 'better-text-spfx') {
+    const runtimeContractSource = createRuntimeProfileContract(consumerManifest);
+    consumerManifest.runtimeContract = {
+      vendorPath: UI_PROFILE_RUNTIME_CONTRACT_VENDOR_PATH,
+      sha256: sourceEditorDigest(runtimeContractSource)
+    };
+    files.push({
+      sourcePath: 'generated:source-editor-ui-profile-contract',
+      vendorPath: UI_PROFILE_RUNTIME_CONTRACT_VENDOR_PATH,
+      sha256: consumerManifest.runtimeContract.sha256,
+      source: runtimeContractSource
+    });
+  }
   const consumerManifestSource = canonicalJson(consumerManifest);
   files.push({
     sourcePath: SOURCE_EDITOR_UI_PROFILE_MANIFEST_PATH,
@@ -277,6 +365,89 @@ export async function resolveSourceEditorUiProfile(rootDir, appName = 'better-li
   });
 
   return Object.freeze({ manifest: Object.freeze(consumerManifest), files: Object.freeze(files) });
+}
+
+function createRuntimeProfileContract(manifest) {
+  return [
+    '// Generated by `npm run sync:source-editor`; do not edit directly.',
+    `export const SPFX_UI_PROFILE_ID = ${JSON.stringify(manifest.profileId)} as const;`,
+    `export const SPFX_UI_SCOPE_VALUE = ${JSON.stringify(manifest.css.scopeValue)} as const;`,
+    `export const SPFX_UI_SCOPE_SELECTOR = ${JSON.stringify(manifest.css.scopeSelector)} as const;`,
+    "export const SPFX_UI_SCOPE_ATTRIBUTE = 'data-spfx-ui-scope' as const;",
+    ''
+  ].join('\n');
+}
+
+async function resolvePreparedBaseUiDeliveryFiles(rootDir, manifest, outputFiles) {
+  const delivery = [];
+  const closureFile = await readOwnedFile(
+    rootDir,
+    manifest.preparedBaseUi.dependencyClosurePath,
+    'prepared Base UI dependency closure'
+  );
+  assertDigest(
+    closureFile.source,
+    manifest.preparedBaseUi.dependencyClosureSha256,
+    'Prepared Base UI dependency closure'
+  );
+  const closureRelativePath = manifest.preparedBaseUi.dependencyClosurePath.replace(/^packages\/ui-profile\//u, '');
+  const closureEntry = {
+    sourcePath: manifest.preparedBaseUi.dependencyClosurePath,
+    vendorPath: `${UI_PROFILE_FILE_PREFIX}${closureRelativePath}`,
+    sha256: manifest.preparedBaseUi.dependencyClosureSha256,
+    source: closureFile.source
+  };
+  outputFiles.push(closureEntry);
+  delivery.push({
+    sourcePath: closureEntry.sourcePath,
+    vendorPath: closureEntry.vendorPath,
+    sha256: closureEntry.sha256
+  });
+  for (const binding of manifest.preparedBaseUi.contracts) {
+    const contractFile = await readOwnedFile(rootDir, binding.path, `prepared Base UI contract ${binding.path}`);
+    assertDigest(contractFile.source, binding.sha256, `Prepared Base UI contract ${binding.path}`);
+    const relativeContractPath = binding.path.replace(/^packages\/ui-profile\//u, '');
+    const contractEntry = {
+      sourcePath: binding.path,
+      vendorPath: `${UI_PROFILE_FILE_PREFIX}${relativeContractPath}`,
+      sha256: binding.sha256,
+      source: contractFile.source
+    };
+    outputFiles.push(contractEntry);
+    delivery.push({
+      sourcePath: contractEntry.sourcePath,
+      vendorPath: contractEntry.vendorPath,
+      sha256: contractEntry.sha256
+    });
+
+    const contract = JSON.parse(contractFile.source);
+    const fixtures = [];
+    if (Array.isArray(contract.providerFiles)) {
+      fixtures.push(...contract.providerFiles.map((file) => [file.sourcePath, file.sha256]));
+    }
+    if (Array.isArray(contract.files)) {
+      for (const file of contract.files) {
+        if (file.upstreamPath) fixtures.push([file.upstreamPath, file.upstreamSha256]);
+        if (file.originalPath) fixtures.push([file.originalPath, file.originalSha256]);
+        if (file.transformedPath) fixtures.push([file.transformedPath, file.transformedSha256]);
+      }
+    }
+    for (const [profilePath, sha256] of fixtures) {
+      const sourcePath = `packages/ui-profile/${profilePath}`;
+      const fixture = await readOwnedFile(rootDir, sourcePath, `prepared Base UI fixture ${sourcePath}`);
+      assertDigest(fixture.source, sha256, `Prepared Base UI fixture ${sourcePath}`);
+      const entry = {
+        sourcePath,
+        vendorPath: `${UI_PROFILE_FILE_PREFIX}${profilePath}`,
+        sha256,
+        source: fixture.source
+      };
+      outputFiles.push(entry);
+      delivery.push({ sourcePath: entry.sourcePath, vendorPath: entry.vendorPath, sha256: entry.sha256 });
+    }
+  }
+  delivery.sort((left, right) => left.vendorPath.localeCompare(right.vendorPath, 'en'));
+  return delivery;
 }
 
 function canonicalJson(value) {
