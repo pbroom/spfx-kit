@@ -312,6 +312,7 @@ and Better List standalone repositories:
 ```sh
 npm run sync:source-editor
 npm run sync:source-editor -- --check
+npm run sync:source-editor -- --check --require-all
 ```
 
 Build the lab:
@@ -475,6 +476,14 @@ The three Better app repositories also vendor the framework-neutral
 `@spfx-kit/source-editor-react` control under `src/vendor/source-editor/`.
 Each generated file pins the canonical package version and SHA-256 digest, so
 the apps remain standalone while `sync:source-editor -- --check` detects drift.
+Better List receives the full workspace profile with Tabs and HTML + SCSS
+Monaco contributions. Better Text and Better Divider receive the shared
+SCSS-only field profile with Button and Dropdown Menu, without workspace, Tabs,
+or HTML source. Both profiles intentionally reuse the exact manifest-verified
+scoped CSS artifact as a safe superset; their generated manifests record that
+choice and every selected source digest. `--require-all` makes acceptance fail
+before writing when any of the three managed consumer metadata records is
+missing.
 
 Do not use git submodules for apps; a submodule entry would be tracked by the
 public repo and break the `guard:public` safety model.

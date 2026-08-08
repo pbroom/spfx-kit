@@ -9,6 +9,8 @@ import type {
   SourceEditorSnippet,
   SourceEditorValidator
 } from './sourceEditorCore';
+import { defaultSourceEditorMonacoAdapter } from './sourceEditorMonacoAdapter';
+import type { SourceEditorMonacoAdapter } from './sourceEditorMonacoAdapter';
 import { Button } from './ui-profile/components/ui/button';
 import {
   DropdownMenu,
@@ -20,10 +22,7 @@ import {
 import { useSpfxUiHost, useSpfxUiId } from './ui-profile/lib/ui-root';
 
 type MonacoApi = typeof BundledMonaco;
-
-export interface SourceEditorMonacoAdapter {
-  load: (language: SourceEditorLanguage) => Promise<MonacoApi>;
-}
+export type { SourceEditorMonacoAdapter } from './sourceEditorMonacoAdapter';
 
 export interface SourceEditorFieldProps {
   /** Stable caller-owned identity unique within the current UI host. */
@@ -95,33 +94,6 @@ const floatingResizeZones: Array<{ direction: ResizeDirection; label: string }> 
 ];
 const minFloatingWidth = 360;
 const minFloatingHeight = 260;
-const defaultMonacoAdapter: SourceEditorMonacoAdapter = {
-  async load(language) {
-    await import(
-      /* webpackChunkName: "source-editor-monaco" */
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore Monaco's ESM core-feature entrypoint is runtime-only and has no declaration file.
-      'monaco-editor/esm/vs/editor/edcore.main.js'
-    );
-    const monaco = await import(
-      /* webpackChunkName: "source-editor-monaco" */
-      'monaco-editor/esm/vs/editor/editor.api'
-    );
-    if (language === 'html') {
-      await import(
-        /* webpackChunkName: "source-editor-monaco" */
-        'monaco-editor/esm/vs/basic-languages/html/html.contribution'
-      );
-    } else {
-      await import(
-        /* webpackChunkName: "source-editor-monaco" */
-        'monaco-editor/esm/vs/basic-languages/scss/scss.contribution'
-      );
-    }
-    return monaco;
-  }
-};
-
 export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> = (props) => {
   const sourceEditorInstanceId = requireSourceEditorInstanceId(props.instanceId);
   const baseConfig = props.configuration || props.config || {};
@@ -144,7 +116,7 @@ export const SourceEditorField: React.FunctionComponent<SourceEditorFieldProps> 
   const floatingModelPath =
     baseConfig.floatingModelPath || `source-editor.${sourceEditorInstanceIdRef.current}.floating.${props.language}`;
   const toolbarLabel = baseConfig.toolbarLabel || `${props.language.toLocaleUpperCase()} editor shortcuts`;
-  const monacoAdapter = baseConfig.monacoAdapter || defaultMonacoAdapter;
+  const monacoAdapter = baseConfig.monacoAdapter || defaultSourceEditorMonacoAdapter;
   const [draft, setDraft] = React.useState(props.value || '');
   const sourceDiagnostics = React.useMemo(() => getSourceDiagnostics(draft, maxBytes, validate), [draft, maxBytes, validate]);
   const [editorReady, setEditorReady] = React.useState(false);
