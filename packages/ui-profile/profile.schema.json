@@ -16,6 +16,8 @@
     "dependencyClosure",
     "baseUiDeclarationTransform",
     "baseUiPopupLifecycleTransform",
+    "baseUiIdOwnershipTransform",
+    "ownedSources",
     "items"
   ],
   "properties": {
@@ -27,11 +29,12 @@
     "normalizationImplementationSha256": { "$ref": "#/$defs/sha256" },
     "compilerInputs": {
       "type": "array",
-      "minItems": 24,
-      "maxItems": 24,
+      "minItems": 26,
+      "maxItems": 26,
       "prefixItems": [
         { "$ref": "#/$defs/compilerBridge" },
         { "$ref": "#/$defs/selectValueCompatibilityProbe" },
+        { "$ref": "#/$defs/idOwnershipContractSchema" },
         { "$ref": "#/$defs/tailwindCssEntry" },
         { "$ref": "#/$defs/tailwindCssBuildImplementation" },
         { "$ref": "#/$defs/tailwindCssVerificationImplementation" },
@@ -50,6 +53,7 @@
         { "$ref": "#/$defs/baseUiPreparationImplementation" },
         { "$ref": "#/$defs/selectValueTransformImplementation" },
         { "$ref": "#/$defs/popupLifecycleTransformImplementation" },
+        { "$ref": "#/$defs/idOwnershipTransformImplementation" },
         { "$ref": "#/$defs/preparationLockImplementation" },
         { "$ref": "#/$defs/tsconfigBase" },
         { "$ref": "#/$defs/tsconfigTs53" },
@@ -61,6 +65,14 @@
     "dependencyClosure": { "$ref": "#/$defs/snapshot" },
     "baseUiDeclarationTransform": { "$ref": "#/$defs/snapshot" },
     "baseUiPopupLifecycleTransform": { "$ref": "#/$defs/snapshot" },
+    "baseUiIdOwnershipTransform": { "$ref": "#/$defs/snapshot" },
+    "ownedSources": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [{ "$ref": "#/$defs/ownedThemeSource" }, { "$ref": "#/$defs/ownedRootSource" }],
+      "items": false
+    },
     "items": {
       "type": "array",
       "minItems": 24,
@@ -80,6 +92,46 @@
         "sha256": { "$ref": "#/$defs/sha256" }
       }
     },
+    "ownedThemeSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "output", "transformations"],
+      "properties": {
+        "source": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            { "type": "object", "properties": { "path": { "const": "owned/src/lib/spfx-theme.ts" } } }
+          ]
+        },
+        "output": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            { "type": "object", "properties": { "path": { "const": "normalized/src/lib/spfx-theme.ts" } } }
+          ]
+        },
+        "transformations": { "const": ["copy-owned-host-contract"] }
+      }
+    },
+    "ownedRootSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "output", "transformations"],
+      "properties": {
+        "source": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            { "type": "object", "properties": { "path": { "const": "owned/src/lib/ui-root.tsx" } } }
+          ]
+        },
+        "output": {
+          "allOf": [
+            { "$ref": "#/$defs/snapshot" },
+            { "type": "object", "properties": { "path": { "const": "normalized/src/lib/ui-root.tsx" } } }
+          ]
+        },
+        "transformations": { "const": ["copy-owned-host-contract"] }
+      }
+    },
     "compilerBridge": {
       "allOf": [
         { "$ref": "#/$defs/snapshot" },
@@ -90,6 +142,12 @@
       "allOf": [
         { "$ref": "#/$defs/snapshot" },
         { "type": "object", "properties": { "path": { "const": "compat-consumers/select-value.tsx" } } }
+      ]
+    },
+    "idOwnershipContractSchema": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "compat/base-ui-1.6.0/id-ownership/contract.schema.json" } } }
       ]
     },
     "tailwindCssEntry": {
@@ -218,6 +276,15 @@
         {
           "type": "object",
           "properties": { "path": { "const": "scripts/transform-base-ui-popup-lifecycle.mjs" } }
+        }
+      ]
+    },
+    "idOwnershipTransformImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        {
+          "type": "object",
+          "properties": { "path": { "const": "scripts/transform-base-ui-id-ownership.mjs" } }
         }
       ]
     },

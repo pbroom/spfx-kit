@@ -43,11 +43,13 @@ const expectedRegistryIds = [
 
 const expectedNormalizedPaths = expectedRegistryIds
   .map((id) => (id === 'utils' ? 'normalized/src/lib/utils.ts' : `normalized/src/components/ui/${id}.tsx`))
+  .concat('normalized/src/lib/spfx-theme.ts', 'normalized/src/lib/ui-root.tsx')
   .sort();
 
 const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'compat-consumers/select-value.tsx',
+  'compat/base-ui-1.6.0/id-ownership/contract.schema.json',
   'tailwind-profile.css',
   'scripts/build-tailwind-css.mjs',
   'scripts/verify-tailwind-css.mjs',
@@ -66,6 +68,7 @@ const expectedCompilerInputPaths = [
   'scripts/prepare-base-ui.mjs',
   'scripts/transform-base-ui-select-value.mjs',
   'scripts/transform-base-ui-popup-lifecycle.mjs',
+  'scripts/transform-base-ui-id-ownership.mjs',
   'scripts/lib/preparation-lock.mjs',
   'tsconfig.base.json',
   'tsconfig.ts53.json',
@@ -273,6 +276,12 @@ interface ProfileManifest {
   dependencyClosure: SnapshotReference;
   baseUiDeclarationTransform: SnapshotReference;
   baseUiPopupLifecycleTransform: SnapshotReference;
+  baseUiIdOwnershipTransform: SnapshotReference;
+  ownedSources: Array<{
+    source: SnapshotReference;
+    output: SnapshotReference;
+    transformations: string[];
+  }>;
   items: ProfileItem[];
 }
 
@@ -406,7 +415,8 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(profileSchema.required).toContain('$schema');
     expect(profileSchema.properties.profileId.const).toBe('spfx-react17-base-nova-v1');
     expect(profileSchema.properties.items).toMatchObject({ minItems: 24, maxItems: 24 });
-    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 24, maxItems: 24, items: false });
+    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 26, maxItems: 26, items: false });
+    expect(profileSchema.properties.ownedSources).toMatchObject({ minItems: 2, maxItems: 2, items: false });
     expect(profileSchema.properties.items.uniqueItems).toBe(true);
     expect(profileSchema.$defs.sha256.pattern).toBe('^[a-f0-9]{64}$');
     expect(profileSchema.$defs.item.additionalProperties).toBe(false);
@@ -436,6 +446,7 @@ describe('private offline React 17 UI profile artifacts', () => {
     const dependencyClosureBytes = await readFile(path.join(profileRoot, profile.dependencyClosure.path));
     const baseUiDeclarationTransformBytes = await readFile(path.join(profileRoot, profile.baseUiDeclarationTransform.path));
     const baseUiPopupLifecycleTransformBytes = await readFile(path.join(profileRoot, profile.baseUiPopupLifecycleTransform.path));
+    const baseUiIdOwnershipTransformBytes = await readFile(path.join(profileRoot, profile.baseUiIdOwnershipTransform.path));
 
     expect(profile.schemaVersion).toBe(1);
     expect(profile.profileId).toBe('spfx-react17-base-nova-v1');
@@ -458,9 +469,26 @@ describe('private offline React 17 UI profile artifacts', () => {
       path: 'compat/base-ui-1.6.0/popup-lifecycle/contract.json',
       sha256: sha256(baseUiPopupLifecycleTransformBytes)
     });
+    expect(profile.baseUiIdOwnershipTransform).toEqual({
+      path: 'compat/base-ui-1.6.0/id-ownership/contract.json',
+      sha256: sha256(baseUiIdOwnershipTransformBytes)
+    });
+    expect(profile.ownedSources).toHaveLength(2);
+    expect(profile.ownedSources.map(({ source, output }) => [source.path, output.path])).toEqual([
+      ['owned/src/lib/spfx-theme.ts', 'normalized/src/lib/spfx-theme.ts'],
+      ['owned/src/lib/ui-root.tsx', 'normalized/src/lib/ui-root.tsx']
+    ]);
+    for (const ownedHostSource of profile.ownedSources) {
+      expect(ownedHostSource.transformations).toEqual(['copy-owned-host-contract']);
+      const ownedHostSourceBytes = await readFile(path.join(profileRoot, ownedHostSource.source.path));
+      const ownedHostOutputBytes = await readFile(path.join(profileRoot, ownedHostSource.output.path));
+      expect(ownedHostSource.source.sha256).toBe(sha256(ownedHostSourceBytes));
+      expect(ownedHostSource.output.sha256).toBe(sha256(ownedHostOutputBytes));
+      expect(ownedHostOutputBytes.equals(ownedHostSourceBytes)).toBe(true);
+    }
     expect(profile.items.map((item) => item.id)).toEqual(expectedRegistryIds);
 
-    const outputPaths = new Set<string>();
+    const outputPaths = new Set<string>(profile.ownedSources.map(({ output }) => output.path));
     for (const item of profile.items) {
       const rawBytes = await readFile(path.join(profileRoot, item.raw.path));
       const canonicalBytes = await readFile(path.join(profileRoot, item.canonical.path));
@@ -481,6 +509,83 @@ describe('private offline React 17 UI profile artifacts', () => {
       }
     }
     expect([...outputPaths].sort()).toEqual(expectedNormalizedPaths);
+  });
+
+  it('forces every accepted Base UI portal surface through the generated owned host', async () => {
+    const expectedPortalCounts = new Map([
+      ['combobox', 1],
+      ['dialog', 1],
+      ['dropdown-menu', 2],
+      ['popover', 1],
+      ['select', 1],
+      ['sheet', 1],
+      ['tooltip', 1]
+    ]);
+    const expectedBridgeCounts = new Map([
+      ['dialog', 1],
+      ['sheet', 1]
+    ]);
+    const expectedPortalRenderCounts = new Map([
+      ['dialog', 1],
+      ['dropdown-menu', 1],
+      ['sheet', 1]
+    ]);
+    const expectedPopupNames = new Map([
+      ['combobox', 'ComboboxContent'],
+      ['dialog', 'DialogContent'],
+      ['dropdown-menu', 'DropdownMenuContent'],
+      ['popover', 'PopoverContent'],
+      ['select', 'SelectContent'],
+      ['sheet', 'SheetContent'],
+      ['tooltip', 'TooltipContent']
+    ]);
+    const expectedPrimitiveNames = new Map([
+      ['combobox', 'ComboboxPrimitive'],
+      ['dialog', 'DialogPrimitive'],
+      ['dropdown-menu', 'MenuPrimitive'],
+      ['popover', 'PopoverPrimitive'],
+      ['select', 'SelectPrimitive'],
+      ['sheet', 'SheetPrimitive'],
+      ['tooltip', 'TooltipPrimitive']
+    ]);
+    for (const [component, expectedCount] of expectedPortalCounts) {
+      const source = await readFile(path.join(profileRoot, `normalized/src/components/ui/${component}.tsx`), 'utf8');
+      const primitiveName = expectedPrimitiveNames.get(component);
+      expect(source).toContain('useSpfxUiOwnedRender');
+      expect(source).toContain('useSpfxUiPortalHost');
+      expect(source).toContain('useSpfxUiPortalId');
+      expect(source.match(/<[A-Za-z]+Primitive\.Portal(?=[\s>])/gu)).toHaveLength(expectedCount);
+      expect(source.match(new RegExp(`<${primitiveName}\\.Portal(?=[\\s>])`, 'gu'))).toHaveLength(expectedCount);
+      expect(source.match(new RegExp(`<${primitiveName}\\.Popup(?=[\\s>])`, 'gu'))).toHaveLength(1);
+      expect(source.match(/container=\{useSpfxUiPortalHost\(\)\}/gu)).toHaveLength(expectedCount);
+      expect(source.match(/id=\{useSpfxUiPortalId\(props\.id\)\}/gu)).toHaveLength(expectedCount);
+      expect(source.match(/<[A-Za-z]+Portal id=\{props\.id\}>/gu) ?? []).toHaveLength(expectedBridgeCounts.get(component) ?? 0);
+      expect(source.match(/render=\{useSpfxUiOwnedPortalRender\(/gu) ?? []).toHaveLength(
+        expectedPortalRenderCounts.get(component) ?? 0
+      );
+      expect(source).toContain(`render={useSpfxUiOwnedRender(props.render, props.id, "${expectedPopupNames.get(component)}")}`);
+      expect(source).not.toContain('document.body');
+      expect(source).not.toMatch(/id=\{"?mui-/u);
+    }
+  });
+
+  it('fails closed instead of allowing Select and Combobox root ID fallbacks', async () => {
+    for (const component of ['select', 'combobox']) {
+      const source = await readFile(path.join(profileRoot, `normalized/src/components/ui/${component}.tsx`), 'utf8');
+      const publicName = component === 'select' ? 'Select' : 'Combobox';
+      expect(source).toContain('import { useSpfxUiRequiredId } from "../../lib/ui-root"');
+      expect(source).toContain(`useSpfxUiRequiredId(id, "${publicName}.Root")`);
+      expect(source).not.toContain(`const ${publicName} = ${publicName}Primitive.Root`);
+    }
+  });
+
+  it('owns every semantic CSS variable on both root surfaces through one theme contract', async () => {
+    const cssEntry = await readFile(path.join(profileRoot, 'tailwind-profile.css'), 'utf8');
+    const rootSource = await readFile(path.join(profileRoot, 'normalized/src/lib/ui-root.tsx'), 'utf8');
+    const cssVariables = new Set(cssEntry.match(/--spfx-ui-[a-z0-9-]+/gu) ?? []);
+    const hostVariables = new Set(rootSource.match(/--spfx-ui-[a-z0-9-]+/gu) ?? []);
+    expect(cssVariables.size).toBeGreaterThan(0);
+    expect(hostVariables).toEqual(cssVariables);
   });
 
   it('records a closed, integrity-pinned production dependency graph with one React 17 runtime', async () => {

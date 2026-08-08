@@ -1,0 +1,40 @@
+{
+  "$schema": "./contract.schema.json",
+  "contractVersion": "base-ui-1.6.0-spfx-id-ownership-v1",
+  "package": "@base-ui/react",
+  "version": "1.6.0",
+  "exportPath": "./spfx-id-ownership",
+  "packageManifest": {
+    "installedPath": "package.json",
+    "originalFileSha256": "20cecb1f4eb5dd608eb62955486adc0bae6e219394ea0e04ff2b7c349e99eed0",
+    "transformedFileSha256": "958215b115cb4a6fba0e4017ba7255e1b22d659500f4ca63ef8bb7f2d4c75315"
+  },
+  "providerFiles": [
+    {
+      "installedPath": "spfx-id-ownership.mjs",
+      "sourcePath": "compat/base-ui-1.6.0/id-ownership/source/spfx-id-ownership.mjs",
+      "sha256": "d29a72759b4f512710607030b03995be2cef831a77ee6aca578d18036fd2d926"
+    },
+    {
+      "installedPath": "spfx-id-ownership.js",
+      "sourcePath": "compat/base-ui-1.6.0/id-ownership/source/spfx-id-ownership.js",
+      "sha256": "b5404bae5414f5792b0998117addaf9b79003b3b68a39400f1986a15268be4cd"
+    },
+    {
+      "installedPath": "spfx-id-ownership.d.mts",
+      "sourcePath": "compat/base-ui-1.6.0/id-ownership/source/spfx-id-ownership.d.mts",
+      "sha256": "5156007294af6fd34194bda00f4c9a0d9d604041d72f2a9a154e0959dc07c94d"
+    },
+    {
+      "installedPath": "spfx-id-ownership.d.ts",
+      "sourcePath": "compat/base-ui-1.6.0/id-ownership/source/spfx-id-ownership.d.ts",
+      "sha256": "5156007294af6fd34194bda00f4c9a0d9d604041d72f2a9a154e0959dc07c94d"
+    }
+  ],
+  "supportedShapes": [
+    { "kind": "root", "helper": "useBaseUiOwnedRootId" },
+    { "kind": "keyed-child", "helper": "useBaseUiKeyedChildId" },
+    { "kind": "repeated-child", "helper": "useBaseUiRepeatedChildId", "stableKeyType": "string" },
+    { "kind": "idref", "helper": "useBaseUiIdRef", "targets": "keyed-child" }
+  ]
+}

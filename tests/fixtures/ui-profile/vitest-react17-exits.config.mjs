@@ -23,7 +23,11 @@ export default {
   },
   test: {
     environment: 'happy-dom',
-    include: ['tests/fixtures/ui-profile/react17-exits-workload.spec.ts', 'tests/fixtures/ui-profile/combobox-workload.spec.ts'],
+    include: [
+      'tests/fixtures/ui-profile/react17-exits-workload.spec.ts',
+      'tests/fixtures/ui-profile/combobox-workload.spec.ts',
+      'tests/fixtures/ui-profile/host-contract-workload.spec.ts'
+    ],
     server: {
       deps: {
         inline: true

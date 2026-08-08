@@ -38,6 +38,7 @@ const expectedIds = [...REGISTRY_IDS];
 const expectedCompilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'compat-consumers/select-value.tsx',
+  'compat/base-ui-1.6.0/id-ownership/contract.schema.json',
   'tailwind-profile.css',
   'scripts/build-tailwind-css.mjs',
   'scripts/verify-tailwind-css.mjs',
@@ -56,6 +57,7 @@ const expectedCompilerInputPaths = [
   'scripts/prepare-base-ui.mjs',
   'scripts/transform-base-ui-select-value.mjs',
   'scripts/transform-base-ui-popup-lifecycle.mjs',
+  'scripts/transform-base-ui-id-ownership.mjs',
   'scripts/lib/preparation-lock.mjs',
   'tsconfig.base.json',
   'tsconfig.ts53.json',
@@ -123,18 +125,19 @@ const expectedCssToolchain = {
 const expectedScripts = {
   'css:build': 'node ./scripts/build-tailwind-css.mjs',
   'css:verify': 'node ./scripts/verify-tailwind-css.mjs',
+  'delivery:verify': 'node ./scripts/verify-delivery-artifact.mjs',
   'profile:update:network': 'node ./scripts/update-profile.mjs --allow-network',
   'profile:regenerate': 'node ./scripts/regenerate-profile.mjs',
   'profile:verify': 'node ./scripts/verify-profile.mjs',
   'profile:verify:closure': 'node ./scripts/verify-dependency-closure.mjs',
   'profile:verify:base-ui':
-    'node ./scripts/transform-base-ui-select-value.mjs --verify-fixtures && node ./scripts/transform-base-ui-popup-lifecycle.mjs --verify-fixtures',
+    'node ./scripts/transform-base-ui-select-value.mjs --verify-fixtures && node ./scripts/transform-base-ui-popup-lifecycle.mjs --verify-fixtures && node ./scripts/transform-base-ui-id-ownership.mjs --verify-fixtures',
   'profile:prepare:base-ui': 'node ./scripts/prepare-base-ui.mjs',
   'typecheck:ts53': 'node ./scripts/typecheck.mjs typescript 5.3.3 ./tsconfig.ts53.json',
   'typecheck:ts58': 'node ./scripts/typecheck.mjs typescript-5-8 5.8.3 ./tsconfig.ts58.json',
   typecheck: 'npm run profile:prepare:base-ui && npm run typecheck:ts53 && npm run typecheck:ts58',
   verify: 'npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure',
-  build: 'npm run verify && npm run typecheck'
+  build: 'npm run verify && npm run delivery:verify && npm run typecheck'
 };
 
 function assert(condition, message) {
@@ -149,11 +152,11 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === '1db7992670e1c8cd71d021976f4e83d2fb39c853ce9b12dfdc9c5dbc71267138',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === '3a05e925d45ba023b2d9d627711e0d9adca717f5a3f72d539eaddce2e1501794',
   'profile.schema.json identity differs'
 );
 assert(
-  sha256(Buffer.from(canonicalJson(provenanceSchema))) === '89208086e782b025d5abf7f4cad63b0dc7731e5aca2007fb862af49350ab74d6',
+  sha256(Buffer.from(canonicalJson(provenanceSchema))) === '3c7011e554de1eb7e01399f4239ddde69dea1ebb73c64c1b747042c634468e61',
   'provenance.schema.json identity differs'
 );
 assert(validateProfile(profile), `profile.json schema errors: ${ajv.errorsText(validateProfile.errors)}`);
@@ -220,6 +223,32 @@ assert(
     sha256(await readFile(path.join(packageRoot, profile.baseUiPopupLifecycleTransform.path))),
   'Base UI popup lifecycle transform digest differs'
 );
+assert(
+  profile.baseUiIdOwnershipTransform.path === 'compat/base-ui-1.6.0/id-ownership/contract.json',
+  'Base UI ID ownership transform path differs'
+);
+assert(
+  profile.baseUiIdOwnershipTransform.sha256 ===
+    sha256(await readFile(path.join(packageRoot, profile.baseUiIdOwnershipTransform.path))),
+  'Base UI ID ownership transform digest differs'
+);
+assert(Array.isArray(profile.ownedSources) && profile.ownedSources.length === 2, 'Owned host source inventory differs');
+assertExact(
+  profile.ownedSources.map(({ source, output }) => [source.path, output.path]),
+  [
+    ['owned/src/lib/spfx-theme.ts', 'normalized/src/lib/spfx-theme.ts'],
+    ['owned/src/lib/ui-root.tsx', 'normalized/src/lib/ui-root.tsx']
+  ],
+  'Owned host source paths'
+);
+for (const ownedHostSource of profile.ownedSources) {
+  assertExact(ownedHostSource.transformations, ['copy-owned-host-contract'], 'Owned host source transformations');
+  const ownedHostSourceBytes = await readFile(path.join(packageRoot, ownedHostSource.source.path));
+  const ownedHostOutputBytes = await readFile(path.join(packageRoot, ownedHostSource.output.path));
+  assert(ownedHostSource.source.sha256 === sha256(ownedHostSourceBytes), 'Owned host source digest differs');
+  assert(ownedHostSource.output.sha256 === sha256(ownedHostOutputBytes), 'Owned host output digest differs');
+  assert(ownedHostOutputBytes.equals(ownedHostSourceBytes), 'Owned host output is not an exact source copy');
+}
 assert(provenance.profileId === PROFILE_ID, 'Provenance profile ID differs');
 assert(provenance.registry.preset === 'base-nova', 'Registry preset differs');
 assert(provenance.registry.cli.version === '4.16.1', 'shadcn version differs');

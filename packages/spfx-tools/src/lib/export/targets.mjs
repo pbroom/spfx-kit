@@ -6,7 +6,7 @@ import { writeAppRepoFiles } from '../app-repo-files.mjs';
 import { copyPortableSpfxSource, exists, listFilesRecursive, readJson, writeJson } from '../fs.mjs';
 import { cdnBasePathForSlug, standalonePackageName, setCdnBasePath, setIncludeClientSideAssets } from '../spfx.mjs';
 import { detectSpfxToolchain, standaloneScriptsForToolchain } from '../spfx-toolchain.mjs';
-import { verifySppkg } from '../sppkg.mjs';
+import { expectedSppkgPath, verifySppkg } from '../sppkg.mjs';
 import {
   clearGeneratedCdnOutputs,
   createImmutableCdnReleaseId,
@@ -27,10 +27,18 @@ import {
 } from './docs.mjs';
 import { childStdio, reportTargetProgress } from './output.mjs';
 import { describeTarget, exportDirNameForTarget } from './archive.mjs';
+import {
+  clearUiProfileBuildOutputs,
+  materializeStandaloneUiProfileClosure,
+  verifyEmbeddedUiProfileClosure,
+  verifyExternalUiProfileClosure,
+  withUiProfileTargetProof
+} from './ui-profile-closure.mjs';
 
-export async function exportSingleBundle(appDir, outDir, slug) {
+export async function exportSingleBundle(appDir, outDir, slug, options = {}) {
   reportTargetProgress('single', 'configuring', 0.08, 'Configuring embedded SharePoint package.');
   await setIncludeClientSideAssets(appDir, true);
+  await clearUiProfileBuildOutputs(appDir, clearGeneratedCdnOutputs, expectedSppkgPath);
   reportTargetProgress('single', 'building', 0.18, 'Running ship build for embedded bundle.');
   runShip(appDir);
   reportTargetProgress('single', 'assembling', 0.82, 'Copying SharePoint package into export.');
@@ -39,7 +47,13 @@ export async function exportSingleBundle(appDir, outDir, slug) {
   const packageFile = await copyExpectedSppkg(appDir, targetDir);
   const readmeFile = await writeSingleBundleReadme(targetDir, slug, path.basename(packageFile));
   reportTargetProgress('single', 'packaging', 0.94, 'Reading embedded bundle package contents.');
-  const target = await describeTarget('single', path.basename(packageFile), targetDir, [packageFile, readmeFile]);
+  const proof = options.uiProfileClosure
+    ? await verifyEmbeddedUiProfileClosure(packageFile, options.uiProfileClosure)
+    : null;
+  const target = withUiProfileTargetProof(
+    await describeTarget('single', path.basename(packageFile), targetDir, [packageFile, readmeFile]),
+    proof
+  );
   reportTargetProgress('single', 'complete', 1, 'Single bundle package assembled.');
   return target;
 }
@@ -49,9 +63,16 @@ export async function exportCdnPackage(appDir, outDir, slug, options = {}) {
   const cdnBasePath =
     options.cdnBasePath || cdnBasePathForSlug(slug, process.env.SPFX_KIT_CDN_BASE_URL || 'https://cdn.example.com/spfx');
   reportTargetProgress('cdn', 'building', 0.18, 'Running ship build for CDN assets.');
+  await clearUiProfileBuildOutputs(appDir, clearGeneratedCdnOutputs, expectedSppkgPath);
   const build = options.build
     ? await options.build(appDir, cdnBasePath)
-    : await buildExternalAssetsPackage(appDir, cdnBasePath);
+    : await buildExternalAssetsPackage(appDir, cdnBasePath, {
+        outputsAlreadyCleared: true,
+        uiProfileClosure: options.uiProfileClosure
+      });
+  const uiProfileDelivery = options.uiProfileClosure
+    ? build.uiProfileDelivery || (await verifyExternalUiProfileClosure(build, options.uiProfileClosure))
+    : null;
 
   reportTargetProgress('cdn', 'assembling', 0.68, 'Collecting package, assets, and manifests.');
   const targetDir = path.join(outDir, 'cdn');
@@ -75,7 +96,10 @@ export async function exportCdnPackage(appDir, outDir, slug, options = {}) {
 
   const files = [readmeFile, packageFile, ...(await listFilesRecursive(releaseDir)), ...(await listFilesRecursive(handoffDir))];
   reportTargetProgress('cdn', 'packaging', 0.94, 'Reading CDN package contents.');
-  const target = await describeTarget('cdn', 'SPFx + CDN JS package', targetDir, files);
+  const target = withUiProfileTargetProof(
+    await describeTarget('cdn', 'SPFx + CDN JS package', targetDir, files),
+    uiProfileDelivery
+  );
   reportTargetProgress('cdn', 'complete', 1, 'SPFx + CDN JS package assembled.');
   return target;
 }
@@ -89,7 +113,9 @@ export async function exportStagingCdnPackage(appDir, outDir, slug, options) {
     : stagingCdnBasePath(options?.stagingCdnRoot, slug, releaseId);
   reportTargetProgress('staging-cdn', 'configuring', 0.08, 'Configuring immutable staging CDN package.');
   reportTargetProgress('staging-cdn', 'building', 0.18, 'Running ship build for staging CDN assets.');
-  const build = await buildExternalAssetsPackage(appDir, cdnBasePath, { clearGeneratedOutputs: true });
+  const build = await buildExternalAssetsPackage(appDir, cdnBasePath, {
+    uiProfileClosure: options?.uiProfileClosure
+  });
 
   return assembleStagingCdnPackage(build, outDir, slug, {
     allowLocalMockCdn,
@@ -152,7 +178,10 @@ export async function assembleStagingCdnPackage(
     ...(await listFilesRecursive(manifestDir))
   ];
   reportTargetProgress('staging-cdn', 'packaging', 0.94, 'Recording staging CDN proof artifact.');
-  const target = await describeTarget('staging-cdn', 'Validated staging CDN package', targetDir, files);
+  const target = withUiProfileTargetProof(
+    await describeTarget('staging-cdn', 'Validated staging CDN package', targetDir, files),
+    build.uiProfileDelivery || null
+  );
   target.cdnBasePath = cdnBasePath;
   target.releaseLabel = releaseLabel;
   target.releaseId = releaseId;
@@ -165,20 +194,24 @@ export async function assembleStagingCdnPackage(
 export async function buildExternalAssetsPackage(appDir, cdnBasePath, options = {}) {
   await setIncludeClientSideAssets(appDir, false);
   await setCdnBasePath(appDir, cdnBasePath);
-  if (options.clearGeneratedOutputs) {
-    await clearGeneratedCdnOutputs(appDir);
+  if (!options.outputsAlreadyCleared) {
+    await clearUiProfileBuildOutputs(appDir, clearGeneratedCdnOutputs, expectedSppkgPath);
   }
   await (options.ship || runShip)(appDir);
   const { packagePath } = await verifySppkg(appDir);
-  return {
+  const build = {
     packageFile: packagePath,
     releaseAssetsDir: path.join(appDir, 'release', 'assets'),
     releaseManifestDir: path.join(appDir, 'release', 'manifests'),
     deployAssetsDir: path.join(appDir, 'temp', 'deploy')
   };
+  if (options.uiProfileClosure) {
+    build.uiProfileDelivery = await verifyExternalUiProfileClosure(build, options.uiProfileClosure);
+  }
+  return build;
 }
 
-export async function exportStandaloneRepo(appDir, outDir, slug) {
+export async function exportStandaloneRepo(appDir, outDir, slug, options = {}) {
   reportTargetProgress('standalone', 'assembling', 0.12, 'Copying standalone SPFx source.');
   const targetDir = path.join(outDir, exportDirNameForTarget('standalone', slug));
   await copyPortableSpfxSource(appDir, targetDir);
@@ -194,7 +227,13 @@ export async function exportStandaloneRepo(appDir, outDir, slug) {
   await createStandalonePackageLock(targetDir);
   reportTargetProgress('standalone', 'packaging', 0.94, 'Reading standalone repo contents.');
   const files = await listFilesRecursive(targetDir);
-  const target = await describeTarget('standalone', `${slug}-repo`, targetDir, files);
+  const proof = options.uiProfileClosure
+    ? await materializeStandaloneUiProfileClosure(appDir, targetDir, options.uiProfileClosure)
+    : null;
+  const target = withUiProfileTargetProof(
+    await describeTarget('standalone', `${slug}-repo`, targetDir, files),
+    proof
+  );
   reportTargetProgress('standalone', 'complete', 1, 'Standalone repo staged.');
   return target;
 }

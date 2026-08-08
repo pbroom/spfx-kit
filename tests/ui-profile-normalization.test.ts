@@ -136,7 +136,10 @@ describe('React 17 UI profile normalization', () => {
         'import { Combobox as ComboboxPrimitive } from "@base-ui/react"\n' +
         'const packageLabel = "@base-ui/react"\n' +
         '// Example: from "@base-ui/react"\n' +
-        'export { ComboboxPrimitive, packageLabel }\n',
+        'const Combobox = ComboboxPrimitive.Root\n' +
+        'export const Portal = ({ ...props }: ComboboxPrimitive.Portal.Props) => <ComboboxPrimitive.Portal {...props} />\n' +
+        'export function ComboboxContent({ ...props }: ComboboxPrimitive.Popup.Props) { return <Portal><ComboboxPrimitive.Popup {...props} /></Portal> }\n' +
+        'export { Combobox, packageLabel }\n',
       registrySourcePath: 'registry/base-nova/ui/combobox.tsx'
     });
 
@@ -144,6 +147,177 @@ describe('React 17 UI profile normalization', () => {
     expect(result.source).toContain('const packageLabel = "@base-ui/react"');
     expect(result.source).toContain('// Example: from "@base-ui/react"');
     expect(result.transformations).toContain('pin-base-ui-combobox-subpath');
+    expect(result.source).toContain('useSpfxUiRequiredId(id, "Combobox.Root")');
+    expect(result.transformations).toContain('require-owned-base-ui-root-id');
+    expect(result.source).toContain('<Portal id={props.id}>');
+  });
+
+  it('fails closed when a Select or Combobox root can fall back to a Base UI generated ID', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Select as SelectPrimitive } from "@base-ui/react/select"\n' +
+          'export const Select = wrap(SelectPrimitive.Root)\n' +
+          'export function SelectContent({ ...props }: SelectPrimitive.Popup.Props) {\n' +
+          '  return <SelectPrimitive.Portal><SelectPrimitive.Popup {...props} /></SelectPrimitive.Portal>\n' +
+          '}\n',
+        registrySourcePath: 'registry/base-nova/ui/select.tsx'
+      })
+    ).toThrow('expected one Select Base UI Root alias, found 0');
+  });
+
+  it('routes every Base UI portal through the owned host after caller prop spreads', () => {
+    const result = normalizeRegistrySource({
+      source:
+        'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+        'export function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {\n' +
+        '  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />\n' +
+        '}\n' +
+        'export function DialogContent({ ...props }: DialogPrimitive.Popup.Props) {\n' +
+        '  return <DialogPortal><DialogPrimitive.Popup {...props} /></DialogPortal>\n' +
+        '}\n',
+      registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+    });
+
+    expect(result.source).toContain(
+      'import { useSpfxUiOwnedPortalRender, useSpfxUiOwnedRender, useSpfxUiPortalHost, useSpfxUiPortalId } from "../../lib/ui-root"'
+    );
+    expect(result.source).toContain(
+      '{...props} id={useSpfxUiPortalId(props.id)} container={useSpfxUiPortalHost()} render={useSpfxUiOwnedPortalRender(props.render, props.id, "DialogPortal")}'
+    );
+    expect(result.source).toContain('<DialogPortal id={props.id}>');
+    expect(result.source).toContain(
+      '{...props} id={props.id} render={useSpfxUiOwnedRender(props.render, props.id, "DialogContent")}'
+    );
+    expect(result.transformations).toContain('route-portals-through-owned-host');
+  });
+
+  it('fails closed when a portal profile changes its expected ownership shape', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'export function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) { return <div {...props} /> }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('expected 1 Base UI Portal surfaces, found 0');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'export function DialogPortal() { return <DialogPrimitive.Portal container={document.body} /> }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('upstream Base UI Portal container ownership is not accepted');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'export function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) { return <DialogPrimitive.Portal id="host-id" {...props} /> }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('upstream Base UI Portal ID ownership is not accepted');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'export function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) { return <DialogPrimitive.Portal render={<section />} {...props} /> }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('upstream Base UI Portal render ownership is not accepted');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'export function DialogPortal() { return <DialogPrimitive.Portal /> }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('requires an enclosing ...props binding');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'export function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) { return <DialogPrimitive.Portal {...props} /> }\n' +
+          'export function DialogContent({ ...props }: DialogPrimitive.Popup.Props) { return <DialogPortal><DialogPrimitive.Popup render={<section />} {...props} /></DialogPortal> }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('upstream DialogContent popup ID or render ownership is not accepted');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'export function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) { return <DialogPrimitive.Portal {...props} /> }\n' +
+          'export function PortalBridge({ ...props }: DialogPrimitive.Portal.Props) { return <DialogPortal {...props} /> }\n' +
+          'export function DialogContent({ ...props }: DialogPrimitive.Popup.Props) { return <PortalBridge><DialogPrimitive.Popup {...props} /></PortalBridge> }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('local Base UI Portal wrapper DialogPortal must be invoked directly by an owned popup function');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'export function DialogContent({ ...props }: DialogPrimitive.Popup.Props) { return <DialogPrimitive.Portal {...props}><DialogPrimitive.Popup {...props} /></DialogPrimitive.Portal> }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('DialogContent owned Base UI Portal must not spread popup props');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'export function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) { return <OtherPrimitive.Portal {...props} /> }\n' +
+          'export function DialogContent({ ...props }: DialogPrimitive.Popup.Props) { return <DialogPortal><DialogPrimitive.Popup {...props} /></DialogPortal> }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('Base UI Portal target must be DialogPrimitive.Portal');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'export function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) { return <DialogPrimitive.Portal {...props} /> }\n' +
+          'export function DialogContent({ ...props }: DialogPrimitive.Popup.Props) { return <DialogPortal><OtherPrimitive.Popup {...props} /></DialogPortal> }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('Base UI Popup target must be DialogPrimitive.Popup');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'function OwnedPortal({ ...props }: DialogPrimitive.Portal.Props) { return <DialogPrimitive.Portal {...props} /> }\n' +
+          'const DialogPortal = DialogPrimitive.Portal\n' +
+          'export function DialogContent({ ...props }: DialogPrimitive.Popup.Props) { return <OwnedPortal><DialogPrimitive.Popup {...props} /></OwnedPortal> }\n' +
+          'export { DialogPortal }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('runtime Base UI Portal member must not escape its owned wrapper');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/popover"\n' +
+          'export function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) { return <DialogPrimitive.Portal {...props} /> }\n' +
+          'export function DialogContent({ ...props }: DialogPrimitive.Popup.Props) { return <DialogPortal><DialogPrimitive.Popup {...props} /></DialogPortal> }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('Base UI portal ownership requires only import { Dialog as DialogPrimitive }');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'export function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) { return <DialogPrimitive.Portal {...props} /> }\n' +
+          'export function DialogContent({ ...props }: DialogPrimitive.Popup.Props) { return <DialogPortal><DialogPrimitive.Popup {...props} /></DialogPortal> }\n' +
+          'export { DialogPrimitive }\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('DialogPrimitive must not escape as a runtime value');
+    expect(() =>
+      normalizeRegistrySource({
+        source:
+          'import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"\n' +
+          'export function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) { return <DialogPrimitive.Portal {...props} /> }\n' +
+          'export function DialogContent({ ...props }: DialogPrimitive.Popup.Props) { return <DialogPortal><DialogPrimitive.Popup {...props} /></DialogPortal> }\n' +
+          'export const RawPortal = (eval)("DialogPrimitive").Portal\n',
+        registrySourcePath: 'registry/base-nova/ui/dialog.tsx'
+      })
+    ).toThrow('direct eval is not accepted in an owned Base UI portal module');
   });
 
   it('binds the classic React namespace for fragments and normalizes declaration exports that forward refs', () => {

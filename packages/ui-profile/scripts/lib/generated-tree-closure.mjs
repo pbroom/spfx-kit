@@ -16,6 +16,7 @@ export const PROFILE_EXTERNAL_MODULE_SUBPATHS = Object.freeze([
   '@base-ui/react/popover',
   '@base-ui/react/select',
   '@base-ui/react/separator',
+  '@base-ui/react/spfx-id-ownership',
   '@base-ui/react/switch',
   '@base-ui/react/tabs',
   '@base-ui/react/toggle',
@@ -224,6 +225,11 @@ export async function assertGeneratedTreeClosure({
   assert(typeof outputRoot === 'string' && path.isAbsolute(outputRoot), 'Generated tree root must be absolute');
   assert(profile && typeof profile === 'object' && Array.isArray(profile.items), 'Generated profile items are missing');
   const emittedPaths = new Set();
+  for (const ownedSource of profile.ownedSources ?? []) {
+    const outputPath = assertSafeEmittedPath(ownedSource.output?.path);
+    assert(!emittedPaths.has(outputPath), `Duplicate owned normalized path ${outputPath}`);
+    emittedPaths.add(outputPath);
+  }
   for (const item of profile.items) {
     assert(Array.isArray(item.normalized), `${item.id}: normalized sources are missing`);
     for (const output of item.normalized) {

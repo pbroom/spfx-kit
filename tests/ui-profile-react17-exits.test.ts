@@ -127,7 +127,7 @@ describe('normalized React 17 first-PR component exits', () => {
       );
       const message = `${result.stdout ?? ''}${result.stderr ?? ''}`;
       expect(result.status, message).toBe(0);
-      expect(message).toMatch(/13 passed/);
+      expect(message).toMatch(/20 passed/);
     },
     EXIT_HARNESS_OUTER_TIMEOUT_MS
   );

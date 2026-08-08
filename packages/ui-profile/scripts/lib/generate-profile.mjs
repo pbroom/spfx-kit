@@ -5,6 +5,7 @@ import {
   GENERATOR_VERSION,
   PROFILE_ID,
   PROFILE_SCHEMA_VERSION,
+  assertReact17Source,
   assertRegistryIds,
   assertTailwindCompilerClosure,
   canonicalJson,
@@ -18,6 +19,7 @@ import { compileTailwindCss } from './compile-tailwind-css.mjs';
 const compilerInputPaths = [
   'compat-consumers/react17-base-ui-jsx.d.ts',
   'compat-consumers/select-value.tsx',
+  'compat/base-ui-1.6.0/id-ownership/contract.schema.json',
   'tailwind-profile.css',
   'scripts/build-tailwind-css.mjs',
   'scripts/verify-tailwind-css.mjs',
@@ -36,10 +38,22 @@ const compilerInputPaths = [
   'scripts/prepare-base-ui.mjs',
   'scripts/transform-base-ui-select-value.mjs',
   'scripts/transform-base-ui-popup-lifecycle.mjs',
+  'scripts/transform-base-ui-id-ownership.mjs',
   'scripts/lib/preparation-lock.mjs',
   'tsconfig.base.json',
   'tsconfig.ts53.json',
   'tsconfig.ts58.json'
+];
+
+const ownedSourceDefinitions = [
+  {
+    sourcePath: 'owned/src/lib/spfx-theme.ts',
+    outputPath: 'normalized/src/lib/spfx-theme.ts'
+  },
+  {
+    sourcePath: 'owned/src/lib/ui-root.tsx',
+    outputPath: 'normalized/src/lib/ui-root.tsx'
+  }
 ];
 
 export async function generateProfile({ packageRoot, rawRoot, outputRoot, provenance, provenanceBytes }) {
@@ -54,6 +68,25 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
   const items = [];
   const outputPaths = new Set();
   const snapshots = [];
+  const ownedSources = [];
+
+  for (const definition of ownedSourceDefinitions) {
+    const sourceBytes = await readFile(path.join(packageRoot, definition.sourcePath));
+    const source = sourceBytes.toString('utf8');
+    assertReact17Source(source, definition.sourcePath);
+    if (outputPaths.has(definition.outputPath)) {
+      throw new Error(`Duplicate owned normalized output ${definition.outputPath}`);
+    }
+    outputPaths.add(definition.outputPath);
+    const outputAbsolute = path.join(outputRoot, definition.outputPath);
+    await mkdir(path.dirname(outputAbsolute), { recursive: true });
+    await writeFile(outputAbsolute, sourceBytes);
+    ownedSources.push({
+      source: { path: definition.sourcePath, sha256: sha256(sourceBytes) },
+      output: { path: definition.outputPath, sha256: sha256(sourceBytes) },
+      transformations: ['copy-owned-host-contract']
+    });
+  }
 
   for (const id of provenance.registryIds) {
     const rawBytes = await readFile(path.join(rawRoot, `${id}.json`));
@@ -146,7 +179,12 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
       path: 'compat/base-ui-1.6.0/popup-lifecycle/contract.json',
       sha256: sha256(await readFile(path.join(packageRoot, 'compat', 'base-ui-1.6.0', 'popup-lifecycle', 'contract.json')))
     },
+    baseUiIdOwnershipTransform: {
+      path: 'compat/base-ui-1.6.0/id-ownership/contract.json',
+      sha256: sha256(await readFile(path.join(packageRoot, 'compat', 'base-ui-1.6.0', 'id-ownership', 'contract.json')))
+    },
     css,
+    ownedSources,
     items
   };
   await writeFile(path.join(outputRoot, 'profile.json'), canonicalJson(profile));
