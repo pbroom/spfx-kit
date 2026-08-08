@@ -66,6 +66,12 @@ describe('SPFx toolchain model', () => {
     expect(standaloneScriptsForToolchain('heft').ship).toContain('heft package-solution');
     expect(standaloneScriptsForToolchain('heft').ship).not.toContain('gulp');
     expect(standaloneScriptsForToolchain('heft', { monaco: true }).ship).toContain('copy-monaco-assets.mjs');
+    expect(standaloneScriptsForToolchain('heft', { uiProfile: true }).build).toMatch(
+      /^node scripts\/verify-ui-profile\.mjs && heft/u
+    );
+    expect(standaloneScriptsForToolchain('gulp', { uiProfile: true }).ship).toMatch(
+      /^node scripts\/verify-ui-profile\.mjs && gulp/u
+    );
   });
 
   it('preserves a managed Heft app tsconfig instead of rewriting it to the Gulp compiler shim', async () => {

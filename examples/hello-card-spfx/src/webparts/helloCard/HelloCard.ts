@@ -5,6 +5,7 @@ import { IPropertyPaneConfiguration, PropertyPaneChoiceGroup, PropertyPaneTextFi
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
 import { FluentProvider, Text, webLightTheme } from '@fluentui/react-components';
 import * as strings from 'WebPartStrings';
+import '../../../../../packages/ui-profile/generated/tailwind-profile.css';
 
 export interface IHelloCardProps {
   title: string;
