@@ -2013,7 +2013,7 @@ function classCandidateTokens(value, label) {
       throw new Error(`${label}: unsupported shadcn class marker ${marker.base}`);
     }
     const normalizedUtility = marker
-      ? `${REPLACED_SHADCN_CLASS_MARKERS.get(marker.base) ?? marker.base}${marker.important ? '!' : ''}`
+      ? `${marker.leadingImportant ? '!' : ''}${REPLACED_SHADCN_CLASS_MARKERS.get(marker.base) ?? marker.base}${marker.trailingImportant ? '!' : ''}`
       : utility;
     if (marker && !REPLACED_SHADCN_CLASS_MARKERS.has(marker.base)) {
       throw new Error(`${label}: unsupported shadcn class marker ${marker.base}`);
@@ -2030,14 +2030,16 @@ function classCandidateTokens(value, label) {
 }
 
 function splitShadcnClassMarker(utility) {
-  const important = utility.endsWith('!');
-  const withoutImportant = important ? utility.slice(0, -1) : utility;
+  const leadingImportant = utility.startsWith('!');
+  const trailingImportant = utility.endsWith('!');
+  const withoutImportant = utility.slice(leadingImportant ? 1 : 0, trailingImportant ? -1 : undefined);
   const modifierStart = withoutImportant.indexOf('/');
   const base = modifierStart === -1 ? withoutImportant : withoutImportant.slice(0, modifierStart);
   if (!/^cn-[a-z0-9-]+$/u.test(base)) return undefined;
   return {
     base,
-    important,
+    leadingImportant,
+    trailingImportant,
     modifier: modifierStart === -1 ? '' : withoutImportant.slice(modifierStart)
   };
 }
@@ -2374,9 +2376,89 @@ function collectCvaVariantLiterals(options, sourceFile, literals, label) {
   }
 }
 
+const protectedClassHelperModules = new Map([
+  ['class-variance-authority', 'cva'],
+  ['@base-ui/react/merge-props', 'mergeProps'],
+  ['@base-ui/react/use-render', 'useRender']
+]);
+
+function protectedClassHelperForModule(moduleName) {
+  return protectedClassHelperModules.get(moduleName) ?? (/(?:^|\/)lib\/utils$/u.test(moduleName) ? 'cn' : undefined);
+}
+
+function assertSupportedClassHelperModuleForms(sourceFile, label) {
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isImportEqualsDeclaration(statement) &&
+      !statement.isTypeOnly &&
+      ts.isExternalModuleReference(statement.moduleReference) &&
+      statement.moduleReference.expression &&
+      ts.isStringLiteralLike(statement.moduleReference.expression) &&
+      protectedClassHelperForModule(statement.moduleReference.expression.text)
+    ) {
+      throw new Error(
+        `${label}: ${statement.moduleReference.expression.text} value ImportEquals declarations are not accepted`
+      );
+    }
+    if (
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteralLike(statement.moduleSpecifier) &&
+      protectedClassHelperForModule(statement.moduleSpecifier.text) &&
+      statement.importClause &&
+      !statement.importClause.isTypeOnly
+    ) {
+      const moduleName = statement.moduleSpecifier.text;
+      const expectedImport = protectedClassHelperForModule(moduleName);
+      if (statement.importClause.name || ts.isNamespaceImport(statement.importClause.namedBindings)) {
+        throw new Error(`${label}: ${moduleName} namespace and default imports are not accepted`);
+      }
+      if (statement.importClause.namedBindings && ts.isNamedImports(statement.importClause.namedBindings)) {
+        for (const element of statement.importClause.namedBindings.elements) {
+          if (element.isTypeOnly) continue;
+          const importedName = element.propertyName?.text ?? element.name.text;
+          if (importedName !== expectedImport) {
+            throw new Error(`${label}: ${moduleName} value imports must use ${expectedImport}`);
+          }
+        }
+      }
+    }
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteralLike(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text !== 'class-variance-authority' &&
+      protectedClassHelperForModule(statement.moduleSpecifier.text) &&
+      !statement.isTypeOnly
+    ) {
+      const hasValueExport =
+        !statement.exportClause ||
+        ts.isNamespaceExport(statement.exportClause) ||
+        statement.exportClause.elements.some((element) => !element.isTypeOnly);
+      if (hasValueExport) {
+        throw new Error(`${label}: ${statement.moduleSpecifier.text} value re-exports are not accepted`);
+      }
+    }
+  }
+  function visit(node) {
+    const dependency = dependencyCall(node);
+    if (
+      dependency &&
+      ['require', 'dynamic-import'].includes(dependency.kind) &&
+      dependency.moduleName &&
+      protectedClassHelperForModule(dependency.moduleName)
+    ) {
+      throw new Error(`${label}: ${dependency.moduleName} ${dependency.kind} acquisition is not accepted`);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+}
+
 function importedClassHelperBindings(sourceFile) {
   const cn = new Set();
   const cva = new Set();
+  const mergeProps = new Set();
+  const useRender = new Set();
   let unsupportedCvaImport = false;
   for (const statement of sourceFile.statements) {
     if (
@@ -2398,9 +2480,33 @@ function importedClassHelperBindings(sourceFile) {
       const importedName = element.propertyName?.text ?? element.name.text;
       if (importedName === 'cva' && specifier === 'class-variance-authority') cva.add(element.name.text);
       if (importedName === 'cn' && /(?:^|\/)lib\/utils$/u.test(specifier)) cn.add(element.name.text);
+      if (importedName === 'mergeProps' && specifier === '@base-ui/react/merge-props') {
+        mergeProps.add(element.name.text);
+      }
+      if (importedName === 'useRender' && specifier === '@base-ui/react/use-render') {
+        useRender.add(element.name.text);
+      }
     }
   }
-  return { cn, cva, unsupportedCvaImport };
+  return { cn, cva, mergeProps, useRender, unsupportedCvaImport };
+}
+
+function isTypeOnlyClassHelperReference(identifier) {
+  let current = identifier;
+  while (current.parent) {
+    current = current.parent;
+    if (
+      ts.isExpressionWithTypeArguments(current) &&
+      ts.isHeritageClause(current.parent) &&
+      current.parent.token === ts.SyntaxKind.ExtendsKeyword &&
+      (ts.isClassDeclaration(current.parent.parent) || ts.isClassExpression(current.parent.parent))
+    ) {
+      return false;
+    }
+    if (ts.isTypeNode(current)) return true;
+    if (ts.isExpression(current) || ts.isStatement(current)) return false;
+  }
+  return false;
 }
 
 function classExpressionBindings(sourceFile, helpers) {
@@ -2421,6 +2527,7 @@ function classExpressionBindings(sourceFile, helpers) {
     .getTypeChecker();
   const consumerClassSymbols = new Set();
   const consumerPropsSymbols = new Set();
+  const sourceOwnedPropsSymbols = new Set();
   const cnSymbols = new Set();
   const cvaSymbols = new Set();
   const cvaFactorySymbols = new Set();
@@ -2439,6 +2546,214 @@ function classExpressionBindings(sourceFile, helpers) {
     const symbol = node && symbolAt(node);
     if (symbol) collection.add(symbol);
   };
+  const reactNamespaceSymbols = new Set();
+  const reactMemoSymbols = new Set();
+  const reactForwardRefSymbols = new Set();
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isImportEqualsDeclaration(statement) &&
+      !statement.isTypeOnly &&
+      ts.isExternalModuleReference(statement.moduleReference) &&
+      statement.moduleReference.expression?.text === 'react'
+    ) {
+      addSymbol(reactNamespaceSymbols, statement.name);
+      continue;
+    }
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== 'react' ||
+      !statement.importClause ||
+      statement.importClause.isTypeOnly
+    ) {
+      continue;
+    }
+    if (statement.importClause.name) addSymbol(reactNamespaceSymbols, statement.importClause.name);
+    const bindings = statement.importClause.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) {
+      addSymbol(reactNamespaceSymbols, bindings.name);
+    } else if (bindings) {
+      for (const specifier of bindings.elements) {
+        if (specifier.isTypeOnly) continue;
+        const importedName = (specifier.propertyName ?? specifier.name).text;
+        if (importedName === 'memo') addSymbol(reactMemoSymbols, specifier.name);
+        if (importedName === 'forwardRef') addSymbol(reactForwardRefSymbols, specifier.name);
+      }
+    }
+  }
+  let addedReactNamespaceAlias = true;
+  while (addedReactNamespaceAlias) {
+    addedReactNamespaceAlias = false;
+    function collectReactNamespaceAliases(node) {
+      if (ts.isVariableDeclaration(node) && isConstVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+        const initializer = unwrapExpression(node.initializer);
+        const initializerSymbol = ts.isIdentifier(initializer) ? symbolAt(initializer) : undefined;
+        const aliasSymbol = symbolAt(node.name);
+        if (initializerSymbol && reactNamespaceSymbols.has(initializerSymbol) && aliasSymbol && !reactNamespaceSymbols.has(aliasSymbol)) {
+          reactNamespaceSymbols.add(aliasSymbol);
+          addedReactNamespaceAlias = true;
+        }
+      }
+      ts.forEachChild(node, collectReactNamespaceAliases);
+    }
+    collectReactNamespaceAliases(sourceFile);
+  }
+  const exportedBindingSymbols = new Set();
+  const topLevelPascalBindingSymbols = new Set();
+  const exportedBindingNames = exportedNames(sourceFile.text);
+  for (const statement of sourceFile.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && /^[A-Z]/u.test(declaration.name.text)) {
+          addSymbol(topLevelPascalBindingSymbols, declaration.name);
+        }
+        if (ts.isIdentifier(declaration.name) && exportedBindingNames.has(declaration.name.text)) {
+          addSymbol(exportedBindingSymbols, declaration.name);
+        }
+      }
+      continue;
+    }
+    if (
+      (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+      statement.name
+    ) {
+      if (/^[A-Z]/u.test(statement.name.text)) addSymbol(topLevelPascalBindingSymbols, statement.name);
+      if (exportedBindingNames.has(statement.name.text)) addSymbol(exportedBindingSymbols, statement.name);
+    }
+  }
+  function isGenuineReactWrapperCall(call) {
+    const callee = unwrapExpression(call.expression);
+    if (ts.isIdentifier(callee)) {
+      const calleeSymbol = symbolAt(callee);
+      return reactForwardRefSymbols.has(calleeSymbol) || reactMemoSymbols.has(calleeSymbol);
+    }
+    if (!ts.isPropertyAccessExpression(callee) && !ts.isElementAccessExpression(callee)) return false;
+    const receiverExpression = unwrapExpression(callee.expression);
+    if (!ts.isIdentifier(receiverExpression) || !reactNamespaceSymbols.has(symbolAt(receiverExpression))) return false;
+    const property = ts.isPropertyAccessExpression(callee)
+      ? callee.name.text
+      : ts.isStringLiteralLike(callee.argumentExpression)
+        ? callee.argumentExpression.text
+        : undefined;
+    return property === 'forwardRef' || property === 'memo';
+  }
+  const jsxComponentSymbols = new Set();
+  function collectJsxComponentSymbols(node) {
+    if (
+      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+      ts.isIdentifier(node.tagName) &&
+      /^[A-Z]/u.test(node.tagName.text)
+    ) {
+      addSymbol(jsxComponentSymbols, node.tagName);
+    }
+    ts.forEachChild(node, collectJsxComponentSymbols);
+  }
+  collectJsxComponentSymbols(sourceFile);
+  const componentAliasEdges = [];
+  const defaultExportedWrapperInputSymbols = new Set();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!isConstVariableDeclaration(declaration) || !ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+      const initializer = unwrapExpression(declaration.initializer);
+      if (!ts.isIdentifier(initializer)) continue;
+      const sourceSymbol = symbolAt(initializer);
+      const targetSymbol = symbolAt(declaration.name);
+      if (sourceSymbol && targetSymbol) componentAliasEdges.push([sourceSymbol, targetSymbol]);
+    }
+  }
+  function collectReactWrapperAliasEdges(node) {
+    if (ts.isCallExpression(node) && isGenuineReactWrapperCall(node) && node.arguments[0]) {
+      const input = unwrapExpression(node.arguments[0]);
+      const targetSymbol = wrapperResultSymbol(node);
+      if (ts.isIdentifier(input)) {
+        const sourceSymbol = symbolAt(input);
+        if (sourceSymbol && targetSymbol) {
+          componentAliasEdges.push([sourceSymbol, targetSymbol]);
+        } else if (sourceSymbol && wrapperResultIsDefaultExport(node)) {
+          defaultExportedWrapperInputSymbols.add(sourceSymbol);
+        }
+      }
+    }
+    ts.forEachChild(node, collectReactWrapperAliasEdges);
+  }
+  collectReactWrapperAliasEdges(sourceFile);
+  const publicComponentSymbols = new Set([
+    ...exportedBindingSymbols,
+    ...jsxComponentSymbols,
+    ...defaultExportedWrapperInputSymbols
+  ]);
+  let addedPublicComponent = true;
+  while (addedPublicComponent) {
+    addedPublicComponent = false;
+    for (const [sourceSymbol, targetSymbol] of componentAliasEdges) {
+      if (publicComponentSymbols.has(targetSymbol) && !publicComponentSymbols.has(sourceSymbol)) {
+        publicComponentSymbols.add(sourceSymbol);
+        addedPublicComponent = true;
+      }
+    }
+  }
+  const componentConsumerSymbols = new Set([
+    ...topLevelPascalBindingSymbols,
+    ...publicComponentSymbols,
+    ...componentAliasEdges.flat()
+  ]);
+  const escapedJsxComponentSymbols = new Set();
+  function collectEscapedJsxComponentSymbols(node) {
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapExpression(node.expression);
+      if (ts.isIdentifier(callee) && callee.text === 'eval') {
+        for (const symbol of componentConsumerSymbols) escapedJsxComponentSymbols.add(symbol);
+      }
+    }
+    if (ts.isIdentifier(node)) {
+      const symbol = symbolAt(node);
+      const isJsxTag =
+        ((ts.isJsxOpeningElement(node.parent) ||
+          ts.isJsxSelfClosingElement(node.parent) ||
+          ts.isJsxClosingElement(node.parent)) &&
+          node.parent.tagName === node) ||
+        false;
+      const isExportReference =
+        ts.isExportSpecifier(node.parent) ||
+        (ts.isExportAssignment(node.parent) && unwrapExpression(node.parent.expression) === node);
+      const isReactWrapperInput =
+        ts.isCallExpression(node.parent) &&
+        isGenuineReactWrapperCall(node.parent) &&
+        node.parent.arguments[0] &&
+        unwrapExpression(node.parent.arguments[0]) === node;
+      const aliasExpression = outerTransparentExpression(node);
+      const isImmutableComponentAlias =
+        ts.isVariableDeclaration(aliasExpression.parent) &&
+        aliasExpression.parent.initializer === aliasExpression &&
+        ts.isIdentifier(aliasExpression.parent.name) &&
+        isConstVariableDeclaration(aliasExpression.parent);
+      if (
+        symbol &&
+        componentConsumerSymbols.has(symbol) &&
+        !isDeclarationOrPropertyName(node) &&
+        !isJsxTag &&
+        !isExportReference &&
+        !isReactWrapperInput &&
+        !isImmutableComponentAlias &&
+        !isTypeOnlyClassHelperReference(node)
+      ) {
+        escapedJsxComponentSymbols.add(symbol);
+      }
+    }
+    ts.forEachChild(node, collectEscapedJsxComponentSymbols);
+  }
+  collectEscapedJsxComponentSymbols(sourceFile);
+  let propagatedComponentEscape = true;
+  while (propagatedComponentEscape) {
+    propagatedComponentEscape = false;
+    for (const [sourceSymbol, targetSymbol] of componentAliasEdges) {
+      if (escapedJsxComponentSymbols.has(targetSymbol) && !escapedJsxComponentSymbols.has(sourceSymbol)) {
+        escapedJsxComponentSymbols.add(sourceSymbol);
+        propagatedComponentEscape = true;
+      }
+    }
+  }
   const addConsumerDefault = (node, expression, ambiguous = false) => {
     const symbol = node && symbolAt(node);
     if (!symbol) return;
@@ -2448,22 +2763,206 @@ function classExpressionBindings(sourceFile, helpers) {
     consumerDefaults.set(symbol, current);
   };
 
+  function symbolHasUnsafeRuntimeReference(symbol, declarationName) {
+    let unsafe = false;
+    function visit(node) {
+      if (unsafe) return;
+      if (ts.isIdentifier(node) && node !== declarationName && symbolAt(node) === symbol) {
+        const isJsxTag =
+          (ts.isJsxOpeningElement(node.parent) ||
+            ts.isJsxSelfClosingElement(node.parent) ||
+            ts.isJsxClosingElement(node.parent)) &&
+          node.parent.tagName === node;
+        if (!isJsxTag && !isTypeOnlyClassHelperReference(node)) {
+          unsafe = true;
+          return;
+        }
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(sourceFile);
+    return unsafe;
+  }
+
+  function wrapperContainerExpression(expression) {
+    let current = outerTransparentExpression(expression);
+    while (
+      ts.isPropertyAssignment(current.parent) &&
+      current.parent.initializer === current &&
+      ts.isObjectLiteralExpression(current.parent.parent)
+    ) {
+      current = outerTransparentExpression(current.parent.parent);
+    }
+    return current;
+  }
+
+  function wrapperResultSymbol(expression) {
+    const current = wrapperContainerExpression(expression);
+    if (
+      ts.isVariableDeclaration(current.parent) &&
+      current.parent.initializer === current &&
+      ts.isIdentifier(current.parent.name)
+    ) {
+      return symbolAt(current.parent.name);
+    }
+    if (
+      ts.isBinaryExpression(current.parent) &&
+      current.parent.right === current &&
+      current.parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(current.parent.left)
+    ) {
+      return symbolAt(current.parent.left);
+    }
+    return undefined;
+  }
+
+  function wrapperResultIsDefaultExport(expression) {
+    const current = wrapperContainerExpression(expression);
+    return ts.isExportAssignment(current.parent) && unwrapExpression(current.parent.expression) === current;
+  }
+
+  function wrapperResultHasThisEscape(expression) {
+    const wrapperPath = [];
+    let wrapperNode = outerTransparentExpression(expression);
+    let rootObject;
+    while (
+      ts.isPropertyAssignment(wrapperNode.parent) &&
+      wrapperNode.parent.initializer === wrapperNode &&
+      ts.isObjectLiteralExpression(wrapperNode.parent.parent)
+    ) {
+      const propertyName = ts.isComputedPropertyName(wrapperNode.parent.name)
+        ? staticPropertyName(wrapperNode.parent.name.expression)
+        : propertyNameText(wrapperNode.parent.name, sourceFile);
+      if (propertyName === null) return true;
+      wrapperPath.unshift(propertyName);
+      rootObject = wrapperNode.parent.parent;
+      wrapperNode = outerTransparentExpression(rootObject);
+    }
+    if (!rootObject) return false;
+    const objectPaths = new Map([[rootObject, []]]);
+    function collectObjectPaths(object, basePath) {
+      for (const property of object.properties) {
+        if (!ts.isPropertyAssignment(property)) continue;
+        const propertyName = ts.isComputedPropertyName(property.name)
+          ? staticPropertyName(property.name.expression)
+          : propertyNameText(property.name, sourceFile);
+        const value = unwrapExpression(property.initializer);
+        if (propertyName === null || !ts.isObjectLiteralExpression(value)) continue;
+        const childPath = [...basePath, propertyName];
+        objectPaths.set(value, childPath);
+        collectObjectPaths(value, childPath);
+      }
+    }
+    collectObjectPaths(rootObject, []);
+    function owningObjectPath(thisNode) {
+      for (let ancestor = thisNode.parent; ancestor && ancestor !== rootObject; ancestor = ancestor.parent) {
+        if (ts.isArrowFunction(ancestor)) continue;
+        if (
+          (ts.isMethodDeclaration(ancestor) || ts.isGetAccessorDeclaration(ancestor) || ts.isSetAccessorDeclaration(ancestor)) &&
+          ts.isObjectLiteralExpression(ancestor.parent)
+        ) {
+          return objectPaths.get(ancestor.parent);
+        }
+        if (ts.isFunctionExpression(ancestor)) {
+          const functionExpression = outerTransparentExpression(ancestor);
+          if (
+            ts.isPropertyAssignment(functionExpression.parent) &&
+            functionExpression.parent.initializer === functionExpression &&
+            ts.isObjectLiteralExpression(functionExpression.parent.parent)
+          ) {
+            return objectPaths.get(functionExpression.parent.parent);
+          }
+          return undefined;
+        }
+        if (ts.isFunctionDeclaration(ancestor)) return undefined;
+      }
+      return undefined;
+    }
+    const isPrefix = (left, right) =>
+      left.length <= right.length && left.every((part, index) => part === right[index]);
+    let found = false;
+    function visit(node) {
+      if (found) return;
+      if (node.kind === ts.SyntaxKind.ThisKeyword) {
+        const basePath = owningObjectPath(node);
+        const accessPath = [];
+        let access = node;
+        let unprovable = false;
+        while (access.parent) {
+          if (ts.isPropertyAccessExpression(access.parent) && access.parent.expression === access) {
+            accessPath.push(access.parent.name.text);
+            access = access.parent;
+            continue;
+          }
+          if (ts.isElementAccessExpression(access.parent) && access.parent.expression === access) {
+            const propertyName = staticPropertyName(access.parent.argumentExpression);
+            if (propertyName === null) unprovable = true;
+            else accessPath.push(propertyName);
+            access = access.parent;
+            continue;
+          }
+          break;
+        }
+        if (!basePath || unprovable) {
+          found = true;
+          return;
+        }
+        const absolutePath = [...basePath, ...accessPath];
+        found = isPrefix(absolutePath, wrapperPath) || isPrefix(wrapperPath, absolutePath);
+        return;
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(rootObject);
+    return found;
+  }
+
   function parameterBelongsToPublicComponent(parameter) {
     const owner = parameter.parent;
     if (ts.isFunctionDeclaration(owner)) {
       if (owner.parent !== sourceFile) return false;
-      if (owner.name) return /^[A-Z]/u.test(owner.name.text);
+      if (owner.name) {
+        const ownerSymbol = symbolAt(owner.name);
+        return (
+          /^[A-Z]/u.test(owner.name.text) &&
+          publicComponentSymbols.has(ownerSymbol) &&
+          !escapedJsxComponentSymbols.has(ownerSymbol)
+        );
+      }
       return owner.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ?? false;
     }
-    if (
-      ts.isFunctionExpression(owner) &&
-      owner.name &&
-      /^[A-Z]/u.test(owner.name.text) &&
-      ts.isCallExpression(owner.parent) &&
-      owner.parent.arguments.includes(owner)
-    ) {
-      const callee = unwrapExpression(owner.parent.expression);
-      if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'forwardRef') return true;
+    if (ts.isArrowFunction(owner) || ts.isFunctionExpression(owner)) {
+      let wrapped = outerTransparentExpression(owner);
+      let reactWrapped = false;
+      while (ts.isCallExpression(wrapped.parent) && wrapped.parent.arguments.includes(wrapped)) {
+        const wrapperCall = wrapped.parent;
+        if (!isGenuineReactWrapperCall(wrapperCall)) break;
+        reactWrapped = true;
+        wrapped = outerTransparentExpression(wrapperCall);
+      }
+      if (reactWrapped) {
+        if (ts.isFunctionExpression(owner) && owner.name) {
+          const callbackSymbol = symbolAt(owner.name);
+          if (callbackSymbol && symbolHasUnsafeRuntimeReference(callbackSymbol, owner.name)) return false;
+        }
+        if (wrapperResultHasThisEscape(wrapped)) return false;
+        const resultSymbol = wrapperResultSymbol(wrapped);
+        if (resultSymbol) {
+          return publicComponentSymbols.has(resultSymbol) && !escapedJsxComponentSymbols.has(resultSymbol);
+        }
+        return wrapperResultIsDefaultExport(wrapped);
+      }
+      const expression = outerTransparentExpression(owner);
+      if (
+        ts.isBinaryExpression(expression.parent) &&
+        expression.parent.right === expression &&
+        expression.parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(expression.parent.left) &&
+        /^[A-Z]/u.test(expression.parent.left.text) &&
+        exportedBindingSymbols.has(symbolAt(expression.parent.left))
+      ) {
+        return true;
+      }
     }
     if (!ts.isArrowFunction(owner) && !ts.isFunctionExpression(owner)) return false;
     const declaration = owner.parent;
@@ -2471,8 +2970,18 @@ function classExpressionBindings(sourceFile, helpers) {
       ts.isVariableDeclaration(declaration) &&
       ts.isIdentifier(declaration.name) &&
       /^[A-Z]/u.test(declaration.name.text) &&
-      declaration.parent.parent.parent === sourceFile
+      declaration.parent.parent.parent === sourceFile &&
+      publicComponentSymbols.has(symbolAt(declaration.name)) &&
+      !escapedJsxComponentSymbols.has(symbolAt(declaration.name))
     );
+  }
+
+  function parameterBelongsToSourceOwnedCallback(parameter) {
+    const owner = parameter.parent;
+    if (!ts.isArrowFunction(owner) && !ts.isFunctionExpression(owner)) return false;
+    const callback = outerTransparentExpression(owner);
+    if (!ts.isCallExpression(callback.parent) || !callback.parent.arguments.includes(callback)) return false;
+    return true;
   }
 
   function addParameterObjectDefault(parameter, bindingElement) {
@@ -2685,11 +3194,18 @@ function classExpressionBindings(sourceFile, helpers) {
 
   function visit(node) {
     if (ts.isParameter(node)) {
-      if (!node.dotDotDotToken && !node.initializer && ts.isIdentifier(node.name) && node.name.text === 'props') {
+      if (
+        !node.dotDotDotToken &&
+        !node.initializer &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === 'props'
+      ) {
         const symbol = symbolAt(node.name);
-        if (symbol && ts.isFunctionLike(node.parent)) {
+        if (symbol && ts.isFunctionLike(node.parent) && parameterBelongsToPublicComponent(node)) {
           consumerPropsSymbols.add(symbol);
           bareConsumerPropsByFunction.set(node.parent, symbol);
+        } else if (symbol && parameterBelongsToSourceOwnedCallback(node)) {
+          sourceOwnedPropsSymbols.add(symbol);
         }
       }
       if (ts.isObjectBindingPattern(node.name) && parameterBelongsToPublicComponent(node)) {
@@ -2727,12 +3243,24 @@ function classExpressionBindings(sourceFile, helpers) {
     }
     if (ts.isIdentifier(node)) {
       const symbol = symbolAt(node);
-      if (symbol && cvaSymbols.has(symbol)) {
+      const importedHelper = cnSymbols.has(symbol)
+        ? 'cn'
+        : cvaSymbols.has(symbol)
+          ? 'cva'
+          : mergePropsSymbols.has(symbol)
+            ? 'mergeProps'
+            : useRenderSymbols.has(symbol)
+              ? 'useRender'
+              : undefined;
+      if (symbol && importedHelper) {
         const use = outerTransparentExpression(node);
-        const isImportBinding = ts.isImportSpecifier(node.parent) && node.parent.name === node;
+        const isImportBinding =
+          ts.isImportSpecifier(node.parent) && (node.parent.name === node || node.parent.propertyName === node);
         const isDirectCall = ts.isCallExpression(use.parent) && use.parent.expression === use;
-        if (!isImportBinding && !isDirectCall) {
-          throw new Error(`${sourceFile.fileName}: imported cva binding is used through an unsupported access path`);
+        if (!isImportBinding && !isDirectCall && !isTypeOnlyClassHelperReference(node)) {
+          throw new Error(
+            `${sourceFile.fileName}: imported ${importedHelper} binding is used through an unsupported access path`
+          );
         }
       }
       if (symbol && consumerPropsSymbols.has(symbol) && !isApprovedConsumerPropsUse(node)) {
@@ -2745,7 +3273,12 @@ function classExpressionBindings(sourceFile, helpers) {
     }
     if (ts.isCallExpression(node)) {
       const callee = unwrapExpression(node.expression);
-      if (ts.isIdentifier(callee) && callee.text === 'eval') markEnclosingBareConsumerPropsUnsafe(node);
+      if (ts.isIdentifier(callee) && callee.text === 'eval') {
+        markEnclosingBareConsumerPropsUnsafe(node);
+        if (cnSymbols.size + cvaSymbols.size + mergePropsSymbols.size + useRenderSymbols.size > 0) {
+          throw new Error(`${sourceFile.fileName}: direct eval with imported class helpers is not accepted`);
+        }
+      }
     }
     ts.forEachChild(node, visit);
   }
@@ -2766,6 +3299,10 @@ function classExpressionBindings(sourceFile, helpers) {
         !writtenSymbols.has(symbol) &&
         !unsafeConsumerPropsSymbols.has(symbol)
       );
+    },
+    isSourceOwnedProps: (identifier) => {
+      const symbol = symbolAt(identifier);
+      return Boolean(symbol && sourceOwnedPropsSymbols.has(symbol));
     },
     consumerClassDefaults: (identifier) => {
       const symbol = symbolAt(identifier);
@@ -2915,6 +3452,9 @@ function collectUseRenderClassBag(call, literals, label, expressionBindings) {
 
 function collectJsxSpreadClassLiterals(attribute, literals, label, expressionBindings, deferAmbiguous) {
   const expression = unwrapExpression(attribute.expression);
+  if (ts.isIdentifier(expression) && expressionBindings.isSourceOwnedProps(expression)) {
+    throw new Error(`${label}: source-owned callback props cannot be used as a JSX prop bag`);
+  }
   if (ts.isIdentifier(expression) && expressionBindings.isConsumerProps(expression)) return;
   if (!ts.isObjectLiteralExpression(expression)) {
     if (deferAmbiguous) return;
@@ -3004,6 +3544,12 @@ function assertNoCvaValueReexports(sourceFile, helpers, label) {
           if (helpers.cva.has(localName)) {
             throw new Error(`${label}: imported cva binding cannot be re-exported`);
           }
+          if (helpers.cn.has(localName)) {
+            throw new Error(`${label}: imported cn binding cannot be re-exported`);
+          }
+          if (helpers.mergeProps.has(localName) || helpers.useRender.has(localName)) {
+            throw new Error(`${label}: imported Base UI class helper binding cannot be re-exported`);
+          }
         }
       }
     }
@@ -3011,6 +3557,15 @@ function assertNoCvaValueReexports(sourceFile, helpers, label) {
       const expression = unwrapExpression(statement.expression);
       if (ts.isIdentifier(expression) && helpers.cva.has(expression.text)) {
         throw new Error(`${label}: imported cva binding cannot be re-exported`);
+      }
+      if (ts.isIdentifier(expression) && helpers.cn.has(expression.text)) {
+        throw new Error(`${label}: imported cn binding cannot be re-exported`);
+      }
+      if (
+        ts.isIdentifier(expression) &&
+        (helpers.mergeProps.has(expression.text) || helpers.useRender.has(expression.text))
+      ) {
+        throw new Error(`${label}: imported Base UI class helper binding cannot be re-exported`);
       }
     }
   }
@@ -3023,12 +3578,17 @@ export function prefixTailwindClassCandidates(
 ) {
   const sourceFile = parsedSource(source, label);
   const literals = new Set();
+  assertSupportedClassHelperModuleForms(sourceFile, label);
   const helpers = importedClassHelperBindings(sourceFile);
   if (helpers.unsupportedCvaImport) {
     throw new Error(`${label}: class-variance-authority namespace and default imports are not accepted`);
   }
   assertNoCvaValueReexports(sourceFile, helpers, label);
-  assertClassHelperBindingsAreNotShadowed(sourceFile, new Set([...helpers.cn, ...helpers.cva]), label);
+  assertClassHelperBindingsAreNotShadowed(
+    sourceFile,
+    new Set([...helpers.cn, ...helpers.cva, ...helpers.mergeProps, ...helpers.useRender]),
+    label
+  );
   const expressionBindings = classExpressionBindings(sourceFile, helpers);
 
   function visit(node) {

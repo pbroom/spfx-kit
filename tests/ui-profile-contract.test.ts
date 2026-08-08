@@ -569,6 +569,21 @@ describe('offline profile verifier', () => {
     expect(verifierMessage(mutated)).toContain('Forced peer resolution must remain disabled');
   });
 
+  it('inspects the installed dependency tree instead of trusting only the lockfile', async () => {
+    const root = await copyProfile();
+    const extraneousRoot = path.join(root, 'node_modules', 'profile-extraneous');
+    await mkdir(extraneousRoot, { recursive: true });
+    await writeCanonicalJson(extraneousRoot, 'package.json', {
+      name: 'profile-extraneous',
+      version: '1.0.0'
+    });
+
+    const result = runOfflineClosureVerifier(root);
+
+    expect(result.status).not.toBe(0);
+    expect(verifierMessage(result)).toMatch(/extraneous|dependency tree/i);
+  });
+
   it('rejects an incomplete production-root inventory in verification and generation', async () => {
     const root = await copyProfile();
     const closure = await readJson<DependencyClosure>(root, 'dependency-closure.json');

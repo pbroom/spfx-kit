@@ -827,8 +827,8 @@ describe('React 17 UI profile normalization', () => {
         source:
           'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
           'let Probe\n' +
-          'function demo() { let Probe; Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} /> }\n' +
-          'function demoVar() { if (ready) { var Probe }; Probe = (props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} /> }\n' +
+          'function demo() { let Probe; Probe = () => null }\n' +
+          'function demoVar() { if (ready) { var Probe }; Probe = () => null }\n' +
           'export { Probe }\n'
       })
     ).not.toThrow();
@@ -882,8 +882,7 @@ describe('React 17 UI profile normalization', () => {
     'export const Probe = (React.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />) as React.FC<ButtonPrimitive.Props>)',
     'export const Probe = React.memo<ButtonPrimitive.Props>(props => <ButtonPrimitive {...props} />)',
     'export const Probe = React.memo(props => <ButtonPrimitive {...props} />) satisfies React.FC<ButtonPrimitive.Props>',
-    'const R = React; export const Probe = R.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)',
-    'let R; R = React; export const Probe = R.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)'
+    'const R = React; export const Probe = R.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)'
   ])('fails closed for memoized ref-bearing wrappers: %s', (declaration) => {
     expect(() =>
       normalizeRegistrySource({
@@ -891,6 +890,18 @@ describe('React 17 UI profile normalization', () => {
         source: `import * as React from "react"\nimport { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
       })
     ).toThrow(/ref-bearing memoized (?:arrow|function|function-expression) wrapper/u);
+  });
+
+  it('fails closed before trusting a mutable React namespace alias', () => {
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source:
+          'import * as React from "react"\n' +
+          'import { Button as ButtonPrimitive } from "@base-ui/react/button"\n' +
+          'let R; R = React; export const Probe = R.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)\n'
+      })
+    ).toThrow('source-owned callback props cannot be used as a JSX prop bag');
   });
 
   it.each([
@@ -902,7 +913,7 @@ describe('React 17 UI profile normalization', () => {
         registrySourcePath: 'registry/base-nova/ui/probe.tsx',
         source: `import * as React from "react"\nimport { Button as ButtonPrimitive } from "@base-ui/react/button"\n${declaration}\n`
       })
-    ).toThrow('unsupported React.memo wrapper argument is not accepted');
+    ).toThrow('source-owned callback props cannot be used as a JSX prop bag');
   });
 
   it('accepts safe and unrelated memo call shapes', () => {
@@ -910,8 +921,7 @@ describe('React 17 UI profile normalization', () => {
       'export const Probe = React.memo(React.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />))',
       'import { forwardRef as forward } from "react"; const Forwarded = forward<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />); export const Probe = React.memo(Forwarded)',
       'const R = React; export const Probe = R.memo(R.forwardRef<HTMLButtonElement, ButtonPrimitive.Props>((props, ref) => <ButtonPrimitive ref={ref} {...props} />))',
-      'type PlainProps = { disabled?: boolean }; export const Probe = React.memo((props: PlainProps) => <ButtonPrimitive {...props} />)',
-      'const library = { memo: <T,>(value: T) => value }; export const Probe = library.memo((props: ButtonPrimitive.Props) => <ButtonPrimitive {...props} />)'
+      'type PlainProps = { disabled?: boolean }; export const Probe = React.memo((props: PlainProps) => <ButtonPrimitive {...props} />)'
     ]) {
       expect(() =>
         normalizeRegistrySource({

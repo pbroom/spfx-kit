@@ -154,7 +154,6 @@ if (!manifestOnly) {
     '--all',
     '--workspace',
     '@spfx-kit/ui-profile',
-    '--package-lock-only',
     '--json',
     strictPeerResolutionArgument
   ];
