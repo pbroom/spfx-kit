@@ -7,12 +7,12 @@
   },
   "main": "lib/index.js",
   "scripts": {
-    "build": "heft test --clean --production && heft package-solution --production",
+    "build": "node ../../packages/ui-profile/scripts/verify-delivery-artifact.mjs && heft test --clean --production && heft package-solution --production",
     "clean": "heft clean",
     "test": "heft test",
     "serve": "heft start --clean",
     "start": "heft start --clean",
-    "ship": "heft test --clean --production && heft package-solution --production",
+    "ship": "node ../../packages/ui-profile/scripts/verify-delivery-artifact.mjs && heft test --clean --production && heft package-solution --production",
     "eject-webpack": "heft eject-webpack"
   },
   "dependencies": {
