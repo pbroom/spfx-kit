@@ -125,6 +125,7 @@ const expectedCssToolchain = {
 const expectedScripts = {
   'css:build': 'node ./scripts/build-tailwind-css.mjs',
   'css:verify': 'node ./scripts/verify-tailwind-css.mjs',
+  'delivery:verify': 'node ./scripts/verify-delivery-artifact.mjs',
   'profile:update:network': 'node ./scripts/update-profile.mjs --allow-network',
   'profile:regenerate': 'node ./scripts/regenerate-profile.mjs',
   'profile:verify': 'node ./scripts/verify-profile.mjs',
@@ -136,7 +137,7 @@ const expectedScripts = {
   'typecheck:ts58': 'node ./scripts/typecheck.mjs typescript-5-8 5.8.3 ./tsconfig.ts58.json',
   typecheck: 'npm run profile:prepare:base-ui && npm run typecheck:ts53 && npm run typecheck:ts58',
   verify: 'npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure',
-  build: 'npm run verify && npm run typecheck'
+  build: 'npm run verify && npm run delivery:verify && npm run typecheck'
 };
 
 function assert(condition, message) {

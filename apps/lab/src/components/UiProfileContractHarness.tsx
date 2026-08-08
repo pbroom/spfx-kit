@@ -1,7 +1,6 @@
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
-import profile from '../../../../packages/ui-profile/profile.json';
-import '../../../../packages/ui-profile/generated/tailwind-profile.css';
+import { profileId, scopeValue } from 'virtual:spfx-ui-profile-delivery';
 import { Badge } from '../../../../packages/ui-profile/normalized/src/components/ui/badge';
 import {
   Dialog,
@@ -340,8 +339,8 @@ function createMountedRootController(
       portalParent: fixture.portalParent,
       targetDocument: fixture.mountPoint.ownerDocument,
       instanceId,
-      profileId: profile.profileId,
-      scopeValue: profile.css.scopeValue,
+      profileId,
+      scopeValue,
       theme: themes[initialTheme]
     });
     ReactDom.render(

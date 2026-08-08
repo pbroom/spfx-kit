@@ -54,26 +54,27 @@ export function spfxVersionFromPackage(packageJson) {
   );
 }
 
-export function standaloneScriptsForToolchain(toolchain, { monaco = false } = {}) {
+export function standaloneScriptsForToolchain(toolchain, { monaco = false, uiProfile = false } = {}) {
   const copyMonaco = monaco ? ' && node scripts/copy-monaco-assets.mjs --app .' : '';
+  const verifyUiProfile = uiProfile ? 'node scripts/verify-ui-profile.mjs && ' : '';
   if (toolchain === 'heft') {
     return {
-      build: 'heft test --clean --production && heft package-solution --production',
+      build: `${verifyUiProfile}heft test --clean --production && heft package-solution --production`,
       clean: 'heft clean',
       test: 'heft test',
       serve: 'heft start --clean',
       start: 'heft start --clean',
-      ship: `heft test --clean --production${copyMonaco} && heft package-solution --production`,
+      ship: `${verifyUiProfile}heft test --clean --production${copyMonaco} && heft package-solution --production`,
       'eject-webpack': 'heft eject-webpack'
     };
   }
   if (toolchain === 'gulp') {
     return {
-      build: 'gulp bundle',
+      build: `${verifyUiProfile}gulp bundle`,
       clean: 'gulp clean',
       test: 'gulp test',
       serve: 'gulp serve',
-      ship: `gulp clean && gulp bundle --ship${copyMonaco} && gulp package-solution --ship`
+      ship: `${verifyUiProfile}gulp clean && gulp bundle --ship${copyMonaco} && gulp package-solution --ship`
     };
   }
   throw new Error(`Cannot generate standalone scripts for SPFx toolchain: ${toolchain}`);
