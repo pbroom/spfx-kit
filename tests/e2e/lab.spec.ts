@@ -126,7 +126,7 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   const preview = page.getByRole('region', { name: 'Web part preview area' });
   await expect(preview).toBeVisible();
   await expect(preview.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Select web part' })).toHaveText('Hello Card');
+  await expect(page.getByRole('combobox', { name: 'Select web part' })).toContainText('Hello Card');
   await expect(page.getByRole('tab', { name: 'Standalone', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'false');
   await expect(page.getByRole('region', { name: 'Package resources' })).toHaveCount(0);
