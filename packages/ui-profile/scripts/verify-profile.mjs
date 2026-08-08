@@ -153,7 +153,7 @@ assert(
   'profile.schema.json identity differs'
 );
 assert(
-  sha256(Buffer.from(canonicalJson(provenanceSchema))) === 'f0eae4e9c3185b9bdec559c51ab814bc7145ae0df3f4bd748254f72872596d9d',
+  sha256(Buffer.from(canonicalJson(provenanceSchema))) === '89208086e782b025d5abf7f4cad63b0dc7731e5aca2007fb862af49350ab74d6',
   'provenance.schema.json identity differs'
 );
 assert(validateProfile(profile), `profile.json schema errors: ${ajv.errorsText(validateProfile.errors)}`);

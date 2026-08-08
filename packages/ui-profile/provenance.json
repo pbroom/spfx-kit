@@ -57,7 +57,7 @@
       "integrity": "sha512-7bziOlRqH0hJx80h/3mbicLW7o8qLsH5+RaLR2t+OHM3D0JlWGODQKQ4cxbK7WlvmUxpcj6Kgu6EKqjrGFe3QQ=="
     }
   },
-  "tailwindCompilerClosureSha256": "d6f6eb30ddf06feab95c95ea5262af3d31a95ae2b6ab3ba2c450c93edcad4726",
+  "tailwindCompilerClosureSha256": "69d2578c8b570be1f3c2bdcde507a3c4d49b30531bacdd6f62b2398872a5e0ce",
   "dependencyResolutionPins": {
     "@floating-ui/core": "1.7.5",
     "@floating-ui/dom": "1.7.6",
@@ -74,7 +74,7 @@
       "fontHeadingMarker": "font-heading"
     },
     "implementation": "scripts/lib/profile.mjs",
-    "implementationSha256": "daac81c193053273c2df03a30dd05dbe0488ad3b7063d607afddfa07b5352b94"
+    "implementationSha256": "4076013a149ff873127782d147bc8d8c07d743aae0f91384e09d9bd68d0f72be"
   },
   "registryIds": [
     "button",

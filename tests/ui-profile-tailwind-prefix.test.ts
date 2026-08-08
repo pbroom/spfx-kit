@@ -4,7 +4,11 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
-import { prefixTailwindClassCandidates, tailwindCompilerClosureSha256 } from '../packages/ui-profile/scripts/lib/profile.mjs';
+import {
+  normalizeRegistrySource,
+  prefixTailwindClassCandidates,
+  tailwindCompilerClosureSha256
+} from '../packages/ui-profile/scripts/lib/profile.mjs';
 
 const require = createRequire(import.meta.url);
 const tailwindCli = path.join(path.dirname(require.resolve('@tailwindcss/cli/package.json')), 'dist', 'index.mjs');
@@ -54,7 +58,13 @@ describe('UI profile Tailwind prefix normalization', () => {
     expect(prefixTailwindClassCandidates('<div className="dark:cn-font-heading! sm:cn-menu-target!" />').source).toBe(
       '<div className="skui:dark:font-heading!" />'
     );
+    expect(prefixTailwindClassCandidates('<div className="dark:!cn-font-heading !cn-menu-target" />').source).toBe(
+      '<div className="skui:dark:!font-heading" />'
+    );
     expect(() => prefixTailwindClassCandidates('<div className="hover:cn-future-marker!" />')).toThrow(
+      'unsupported shadcn class marker cn-future-marker'
+    );
+    expect(() => prefixTailwindClassCandidates('<div className="hover:!cn-future-marker" />')).toThrow(
       'unsupported shadcn class marker cn-future-marker'
     );
     expect(() => prefixTailwindClassCandidates('<div className="dark:cn-font-heading/50" />')).toThrow(
@@ -82,7 +92,7 @@ describe('UI profile Tailwind prefix normalization', () => {
     );
     expect(
       prefixTailwindClassCandidates(
-        'import { cn } from "./lib/utils";\nfunction Probe({ className }) { return <div className={cn(active && "flex", className)} /> }'
+        'import { cn } from "./lib/utils";\nexport function Probe({ className }) { return <div className={cn(active && "flex", className)} /> }'
       ).source
     ).toContain('cn(active && "skui:flex", className)');
   });
@@ -96,17 +106,17 @@ describe('UI profile Tailwind prefix normalization', () => {
     );
     expect(() =>
       prefixTailwindClassCandidates(
-        'import { cn } from "./lib/utils"; function Probe({ className }) { return <div className={cn(flag && getClass(), className)} /> }'
+        'import { cn } from "./lib/utils"; export function Probe({ className }) { return <div className={cn(flag && getClass(), className)} /> }'
       )
     ).toThrow('dynamic class expressions are not accepted');
     expect(() =>
       prefixTailwindClassCandidates(
-        'import { cn } from "./lib/utils"; function Probe({ className }) { return <div className={cn(flag || "flex", className)} /> }'
+        'import { cn } from "./lib/utils"; export function Probe({ className }) { return <div className={cn(flag || "flex", className)} /> }'
       )
     ).toThrow('dynamic class expressions are not accepted');
     expect(() =>
       prefixTailwindClassCandidates(
-        'import { cn } from "./lib/utils"; const fallback = getClass(); function Probe({ className }) { return <div className={cn(fallback, className)} /> }'
+        'import { cn } from "./lib/utils"; const fallback = getClass(); export function Probe({ className }) { return <div className={cn(fallback, className)} /> }'
       )
     ).toThrow('dynamic class expressions are not accepted');
     expect(() =>
@@ -116,55 +126,56 @@ describe('UI profile Tailwind prefix normalization', () => {
     ).toThrow('dynamic class expressions are not accepted');
     expect(() =>
       prefixTailwindClassCandidates(
-        'import { cva } from "class-variance-authority"; const styles = cva("flex"); function Probe(styles) { return <div className={styles()} /> }'
+        'import { cva } from "class-variance-authority"; const styles = cva("flex"); export function Probe(styles) { return <div className={styles()} /> }'
       )
     ).toThrow('dynamic class expressions are not accepted');
     expect(() =>
       prefixTailwindClassCandidates(
-        'function Probe({ className }) { className = getClass(); return <div className={className} /> }'
+        'export function Probe({ className }) { className = getClass(); return <div className={className} /> }'
       )
     ).toThrow('dynamic class expressions are not accepted');
 
     expect(
       prefixTailwindClassCandidates(
-        'import { cn } from "./lib/utils"; const className = "unrelated"; function Probe({ className: rootClass }) { return <div className={cn("flex", rootClass)} /> }'
+        'import { cn } from "./lib/utils"; const className = "unrelated"; export function Probe({ className: rootClass }) { return <div className={cn("flex", rootClass)} /> }'
       ).source
     ).toContain('cn("skui:flex", rootClass)');
   });
 
   it('normalizes static consumer class defaults and rejects dynamic defaults', () => {
     expect(
-      prefixTailwindClassCandidates('function Probe({ className = "flex" }) { return <div className={className} /> }').source
+      prefixTailwindClassCandidates('export function Probe({ className = "flex" }) { return <div className={className} /> }')
+        .source
     ).toContain('className = "skui:flex"');
     expect(
       prefixTailwindClassCandidates(
-        'function Probe({ className: rootClass = "hidden" }) { return <div className={rootClass} /> }'
+        'export function Probe({ className: rootClass = "hidden" }) { return <div className={rootClass} /> }'
       ).source
     ).toContain('rootClass = "skui:hidden"');
     expect(() =>
-      prefixTailwindClassCandidates('function Probe({ className = getClass() }) { return <div className={className} /> }')
+      prefixTailwindClassCandidates('export function Probe({ className = getClass() }) { return <div className={className} /> }')
     ).toThrow('dynamic class expressions are not accepted');
     expect(() =>
       prefixTailwindClassCandidates(
-        'function Probe({ className: rootClass = getClass() }) { return <div className={rootClass} /> }'
+        'export function Probe({ className: rootClass = getClass() }) { return <div className={rootClass} /> }'
       )
     ).toThrow('dynamic class expressions are not accepted');
     expect(
       prefixTailwindClassCandidates(
-        'function Probe({ className } = { className: "block" }) { return <div className={className} /> }'
+        'export function Probe({ className } = { className: "block" }) { return <div className={className} /> }'
       ).source
     ).toContain('{ className: "skui:block" }');
     expect(() =>
       prefixTailwindClassCandidates(
-        'function Probe({ className } = { className: getClass() }) { return <div className={className} /> }'
+        'export function Probe({ className } = { className: getClass() }) { return <div className={className} /> }'
       )
     ).toThrow('dynamic class expressions are not accepted');
     expect(() =>
-      prefixTailwindClassCandidates('function Probe({ className } = getProps()) { return <div className={className} /> }')
+      prefixTailwindClassCandidates('export function Probe({ className } = getProps()) { return <div className={className} /> }')
     ).toThrow('consumer className default must be a static object or class value');
     expect(() =>
       prefixTailwindClassCandidates(
-        'function Probe({ className } = { __proto__: { className: "flex" } }) { return <div className={className} /> }'
+        'export function Probe({ className } = { __proto__: { className: "flex" } }) { return <div className={className} /> }'
       )
     ).toThrow('consumer className default must be a static object or class value');
     expect(prefixTailwindClassCandidates('function helper({ className = getClass() }) { return null }').source).toBe(
@@ -175,12 +186,12 @@ describe('UI profile Tailwind prefix normalization', () => {
   it('does not trust bare parameters named className as consumer class strings', () => {
     expect(() =>
       prefixTailwindClassCandidates(
-        'import { cn } from "./lib/utils"; function Probe(...className) { return <div className={cn(className)} /> }'
+        'import { cn } from "./lib/utils"; export function Probe(...className) { return <div className={cn(className)} /> }'
       )
     ).toThrow('dynamic class expressions are not accepted');
     expect(() =>
       prefixTailwindClassCandidates(
-        'import { cn } from "./lib/utils"; function Probe(className) { return <div className={cn(className)} /> }'
+        'import { cn } from "./lib/utils"; export function Probe(className) { return <div className={cn(className)} /> }'
       )
     ).toThrow('dynamic class expressions are not accepted');
   });
@@ -212,7 +223,7 @@ describe('UI profile Tailwind prefix normalization', () => {
 
     expect(
       prefixTailwindClassCandidates(
-        `${prefix}function Probe({ className, variant, size }) { return <div className={styles({ variant, size, className })} /> }`
+        `${prefix}export function Probe({ className, variant, size }) { return <div className={styles({ variant, size, className })} /> }`
       ).source
     ).toContain('styles({ variant, size, className })');
   });
@@ -253,6 +264,25 @@ describe('UI profile Tailwind prefix normalization', () => {
         'export type { VariantProps } from "class-variance-authority"; export type Props = { value: string }'
       ).source
     ).toContain('export type { VariantProps }');
+    expect(() =>
+      prefixTailwindClassCandidates('import CVA = require("class-variance-authority"); export const styles = CVA.cva("flex")')
+    ).toThrow('class-variance-authority value ImportEquals declarations are not accepted');
+    expect(() =>
+      prefixTailwindClassCandidates('const { cva } = require("class-variance-authority"); export const styles = cva("flex")')
+    ).toThrow('class-variance-authority require acquisition is not accepted');
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'export async function styles() { const { cva } = await import("class-variance-authority"); return cva("flex") }'
+      )
+    ).toThrow('class-variance-authority dynamic-import acquisition is not accepted');
+    expect(
+      prefixTailwindClassCandidates(
+        'import type CVA = require("class-variance-authority"); export type Props = CVA.VariantProps<() => string>'
+      ).source
+    ).toContain('import type CVA = require');
+    expect(() =>
+      prefixTailwindClassCandidates('import { cva } from "class-variance-authority"; export const leaked = eval("cva")')
+    ).toThrow('direct eval with imported class helpers is not accepted');
   });
 
   it('normalizes explicit className values in object APIs', () => {
@@ -261,7 +291,7 @@ describe('UI profile Tailwind prefix normalization', () => {
     );
     expect(
       prefixTailwindClassCandidates(
-        'import { cn } from "./lib/utils"; function Probe({ className }) { return mergeProps({ className: cn("flex", className) }, props) }'
+        'import { cn } from "./lib/utils"; export function Probe({ className }) { return mergeProps({ className: cn("flex", className) }, props) }'
       ).source
     ).toContain('className: cn("skui:flex", className)');
     expect(() => prefixTailwindClassCandidates('mergeProps({ className: getClass() }, props)')).toThrow(
@@ -280,7 +310,7 @@ describe('UI profile Tailwind prefix normalization', () => {
       prefixTailwindClassCandidates('mergeProps({ className: "flex", onClick() {}, ["role"]: "button" }, props)').source
     ).toContain('className: "skui:flex"');
     expect(
-      prefixTailwindClassCandidates('function Probe({ className }) { return mergeProps({ className }, props) }').source
+      prefixTailwindClassCandidates('export function Probe({ className }) { return mergeProps({ className }, props) }').source
     ).toContain('mergeProps({ className }, props)');
   });
 
@@ -300,9 +330,54 @@ describe('UI profile Tailwind prefix normalization', () => {
     expect(() => prefixTailwindClassCandidates(`${renderImport}useRender({ ...options })`)).toThrow(
       'useRender options contain an ambiguous props source'
     );
+    expect(() =>
+      prefixTailwindClassCandidates(`${mergeImport}const mp = mergeProps; const key = "className"; mp({ [key]: "flex" }, props)`)
+    ).toThrow('imported mergeProps binding is used through an unsupported access path');
+    expect(() => prefixTailwindClassCandidates(`${mergeImport}mergeProps.call(null, { className: "flex" }, props)`)).toThrow(
+      'imported mergeProps binding is used through an unsupported access path'
+    );
+    expect(() =>
+      prefixTailwindClassCandidates(
+        `${mergeImport}export function Probe(props) { const mp = eval("mergeProps"); return mp({ className: "flex" }, props) }`
+      )
+    ).toThrow('direct eval with imported class helpers is not accepted');
+    expect(() => prefixTailwindClassCandidates(`${mergeImport}class Bridge extends mergeProps {}`)).toThrow(
+      'imported mergeProps binding is used through an unsupported access path'
+    );
+    expect(() => prefixTailwindClassCandidates(`${renderImport}const render = useRender; render({ props })`)).toThrow(
+      'imported useRender binding is used through an unsupported access path'
+    );
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'import * as Merge from "@base-ui/react/merge-props"; Merge.mergeProps({ className: "flex" }, props)'
+      )
+    ).toThrow('@base-ui/react/merge-props namespace and default imports are not accepted');
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'const { mergeProps } = require("@base-ui/react/merge-props"); mergeProps({ className: "flex" }, props)'
+      )
+    ).toThrow('@base-ui/react/merge-props require acquisition is not accepted');
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'import Merge = require("@base-ui/react/merge-props"); Merge.mergeProps({ className: "flex" }, props)'
+      )
+    ).toThrow('@base-ui/react/merge-props value ImportEquals declarations are not accepted');
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'export { mergeProps } from "@base-ui/react/merge-props"; export { useRender } from "@base-ui/react/use-render"'
+      )
+    ).toThrow('@base-ui/react/merge-props value re-exports are not accepted');
+    expect(() =>
+      prefixTailwindClassCandidates('import { mergeProps } from "@base-ui/react/merge-props"; export { mergeProps }')
+    ).toThrow('imported Base UI class helper binding cannot be re-exported');
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'import { mergeProps as mp } from "@base-ui/react/merge-props"; const key = "className"; mp({ [key]: "flex" }, props)'
+      )
+    ).toThrow('class-bearing prop bag contains an ambiguous computed property');
     expect(
       prefixTailwindClassCandidates(
-        `${mergeImport}function Probe({ ...props }) { return mergeProps({ ...{ className: "flex" } }, props) }`
+        `${mergeImport}export function Probe({ ...props }) { return mergeProps({ ...{ className: "flex" } }, props) }`
       ).source
     ).toContain('className: "skui:flex"');
 
@@ -310,7 +385,7 @@ describe('UI profile Tailwind prefix normalization', () => {
       import { mergeProps } from "@base-ui/react/merge-props"
       import { useRender } from "@base-ui/react/use-render"
       import { cn } from "./lib/utils"
-      function Badge({ className, ...props }) {
+      export function Badge({ className, ...props }) {
         return useRender({
           props: mergeProps({ className: cn("flex", className) }, props),
         })
@@ -333,6 +408,21 @@ describe('UI profile Tailwind prefix normalization', () => {
     expect(result).toContain('cn("skui:flex")');
     expect(result).toContain('cva(["skui:block", "skui:items-center"]');
     expect(result).toContain('className: ["skui:hover:bg-primary", "skui:text-sm"]');
+  });
+
+  it('rejects unsupported imported cn acquisition and access paths', () => {
+    expect(() => prefixTailwindClassCandidates('import { cn } from "./lib/utils"; const join = cn; join("flex")')).toThrow(
+      'imported cn binding is used through an unsupported access path'
+    );
+    expect(() => prefixTailwindClassCandidates('const { cn } = require("./lib/utils"); cn("flex")')).toThrow(
+      './lib/utils require acquisition is not accepted'
+    );
+    expect(() => prefixTailwindClassCandidates('import { cn } from "./lib/utils"; export { cn }')).toThrow(
+      'imported cn binding cannot be re-exported'
+    );
+    expect(
+      prefixTailwindClassCandidates('import type { ClassValue } from "./lib/utils"; export type Props = ClassValue').source
+    ).toContain('import type { ClassValue }');
   });
 
   it('rejects ambiguous cva option and compound-variant properties', () => {
@@ -365,79 +455,81 @@ describe('UI profile Tailwind prefix normalization', () => {
     expect(() => prefixTailwindClassCandidates('<div {...sharedProps} />')).toThrow(
       'JSX spread must be a consumer prop bag or static object literal'
     );
-    expect(prefixTailwindClassCandidates('function Probe(props) { return <div {...props} /> }').source).toContain(
+    expect(prefixTailwindClassCandidates('export function Probe(props) { return <div {...props} /> }').source).toContain(
       '<div {...props} />'
     );
-    expect(prefixTailwindClassCandidates('function Probe({ className, ...rest }) { return <div {...rest} /> }').source).toContain(
-      '<div {...rest} />'
-    );
     expect(
-      prefixTailwindClassCandidates('function Probe(props) { return <div data-id={props.id} {...props} /> }').source
+      prefixTailwindClassCandidates('export function Probe({ className, ...rest }) { return <div {...rest} /> }').source
+    ).toContain('<div {...rest} />');
+    expect(
+      prefixTailwindClassCandidates('export function Probe(props) { return <div data-id={props.id} {...props} /> }').source
     ).toContain('data-id={props.id} {...props}');
     expect(
       prefixTailwindClassCandidates(
-        'function Probe(props) { const { id } = props; const [first] = props; return <div data-id={id ?? first} {...props} /> }'
+        'export function Probe(props) { const { id } = props; const [first] = props; return <div data-id={id ?? first} {...props} /> }'
       ).source
     ).toContain('data-id={id ?? first} {...props}');
     expect(
       prefixTailwindClassCandidates(
-        'function Probe(props) { let id, first; ({ id } = props); [first] = props; return <div data-id={id ?? first} {...props} /> }'
+        'export function Probe(props) { let id, first; ({ id } = props); [first] = props; return <div data-id={id ?? first} {...props} /> }'
       ).source
     ).toContain('data-id={id ?? first} {...props}');
     expect(
       prefixTailwindClassCandidates(
-        'function Probe(props) { return <><div {...(props)} /><div {...(props as Props)} /><div {...(props satisfies Props)} /></> }'
+        'export function Probe(props) { return <><div {...(props)} /><div {...(props as Props)} /><div {...(props satisfies Props)} /></> }'
       ).source
     ).toContain('<div {...(props satisfies Props)} />');
     expect(
-      prefixTailwindClassCandidates('function Probe(props) { return <div {...{ ...(props as Props) }} /> }').source
+      prefixTailwindClassCandidates('export function Probe(props) { return <div {...{ ...(props as Props) }} /> }').source
     ).toContain('<div {...{ ...(props as Props) }} />');
     expect(() =>
-      prefixTailwindClassCandidates('function Probe(props) { props = getProps(); return <div {...props} /> }')
+      prefixTailwindClassCandidates('export function Probe(props) { props = getProps(); return <div {...props} /> }')
     ).toThrow('JSX spread must be a consumer prop bag or static object literal');
     expect(() =>
-      prefixTailwindClassCandidates('function Probe(props = { className: "flex" }) { return <div {...props} /> }')
+      prefixTailwindClassCandidates('export function Probe(props = { className: "flex" }) { return <div {...props} /> }')
     ).toThrow('JSX spread must be a consumer prop bag or static object literal');
     expect(() =>
-      prefixTailwindClassCandidates('function Probe(props) { props.className = "flex"; return <div {...props} /> }')
+      prefixTailwindClassCandidates('export function Probe(props) { props.className = "flex"; return <div {...props} /> }')
     ).toThrow('JSX spread must be a consumer prop bag or static object literal');
     expect(() =>
-      prefixTailwindClassCandidates('function Probe(props) { delete props.className; return <div {...props} /> }')
+      prefixTailwindClassCandidates('export function Probe(props) { delete props.className; return <div {...props} /> }')
     ).toThrow('JSX spread must be a consumer prop bag or static object literal');
-    expect(() => prefixTailwindClassCandidates('function Probe(props) { mutate(props); return <div {...props} /> }')).toThrow(
-      'JSX spread must be a consumer prop bag or static object literal'
-    );
     expect(() =>
-      prefixTailwindClassCandidates('function Probe(props) { let alias; alias = props; return <div {...props} /> }')
+      prefixTailwindClassCandidates('export function Probe(props) { mutate(props); return <div {...props} /> }')
     ).toThrow('JSX spread must be a consumer prop bag or static object literal');
-    expect(() => prefixTailwindClassCandidates('function Probe(props) { props.mutate(); return <div {...props} /> }')).toThrow(
-      'JSX spread must be a consumer prop bag or static object literal'
-    );
-    expect(() => prefixTailwindClassCandidates('function Probe(props) { props["mutate"](); return <div {...props} /> }')).toThrow(
-      'JSX spread must be a consumer prop bag or static object literal'
-    );
-    expect(() => prefixTailwindClassCandidates('function Probe(props) { props.mutate?.(); return <div {...props} /> }')).toThrow(
-      'JSX spread must be a consumer prop bag or static object literal'
-    );
+    expect(() =>
+      prefixTailwindClassCandidates('export function Probe(props) { let alias; alias = props; return <div {...props} /> }')
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() =>
+      prefixTailwindClassCandidates('export function Probe(props) { props.mutate(); return <div {...props} /> }')
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() =>
+      prefixTailwindClassCandidates('export function Probe(props) { props["mutate"](); return <div {...props} /> }')
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() =>
+      prefixTailwindClassCandidates('export function Probe(props) { props.mutate?.(); return <div {...props} /> }')
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
     expect(() =>
       prefixTailwindClassCandidates(
-        'function Probe(props) { const alias = props; alias.className = "flex"; return <div {...props} /> }'
+        'export function Probe(props) { const alias = props; alias.className = "flex"; return <div {...props} /> }'
       )
     ).toThrow('JSX spread must be a consumer prop bag or static object literal');
     expect(() =>
       prefixTailwindClassCandidates(
-        'function Probe(props) { Object.assign(props, { className: "flex" }); return <div {...props} /> }'
+        'export function Probe(props) { Object.assign(props, { className: "flex" }); return <div {...props} /> }'
       )
     ).toThrow('JSX spread must be a consumer prop bag or static object literal');
     expect(() =>
-      prefixTailwindClassCandidates('function Probe(props) { arguments[0].className = "flex"; return <div {...props} /> }')
-    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
-    expect(() =>
-      prefixTailwindClassCandidates('const Probe = (props) => { eval("props.className = \'flex\'"); return <div {...props} /> }')
+      prefixTailwindClassCandidates('export function Probe(props) { arguments[0].className = "flex"; return <div {...props} /> }')
     ).toThrow('JSX spread must be a consumer prop bag or static object literal');
     expect(() =>
       prefixTailwindClassCandidates(
-        'const Probe = (props) => { ((eval))("props.className = \'flex\'"); return <div {...props} /> }'
+        'export const Probe = (props) => { eval("props.className = \'flex\'"); return <div {...props} /> }'
+      )
+    ).toThrow('JSX spread must be a consumer prop bag or static object literal');
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'export const Probe = (props) => { ((eval))("props.className = \'flex\'"); return <div {...props} /> }'
       )
     ).toThrow('JSX spread must be a consumer prop bag or static object literal');
   });
@@ -498,12 +590,197 @@ describe('UI profile Tailwind prefix normalization', () => {
         'const entries = getEntries(); export function Probe() { return entries.map(({ className }) => <div className={className} />) }'
       )
     ).toThrow('dynamic class expressions are not accepted');
+    const callbackProps =
+      'const entries = getEntries(); export function Probe() { return entries.map((props) => <div {...props} />) }';
+    expect(() => prefixTailwindClassCandidates(callbackProps)).toThrow(
+      'source-owned callback props cannot be used as a JSX prop bag'
+    );
+    expect(() =>
+      normalizeRegistrySource({ registrySourcePath: 'registry/base-nova/ui/probe.tsx', source: callbackProps })
+    ).toThrow('source-owned callback props cannot be used as a JSX prop bag');
+    const fakeMemo =
+      'const helper = { memo(render) { return render(getProps()) } }; ' +
+      'export const Probe = helper.memo(({ className }) => <div className={className} />)';
+    expect(() => prefixTailwindClassCandidates(fakeMemo)).toThrow('dynamic class expressions are not accepted');
+    expect(() => normalizeRegistrySource({ registrySourcePath: 'registry/base-nova/ui/probe.tsx', source: fakeMemo })).toThrow(
+      'dynamic class expressions are not accepted'
+    );
+    const shadowedMemo =
+      'import { memo } from "react"; function wrap(memo) { ' +
+      'return memo(({ className }) => <div className={className} />) }; export const Probe = wrap(helper)';
+    expect(() => prefixTailwindClassCandidates(shadowedMemo)).toThrow('dynamic class expressions are not accepted');
+    expect(() =>
+      normalizeRegistrySource({ registrySourcePath: 'registry/base-nova/ui/probe.tsx', source: shadowedMemo })
+    ).toThrow('dynamic class expressions are not accepted');
+    const shadowedNamespace =
+      'import * as React from "react"; function seed() { const R = React }; const R = helper; ' +
+      'export const Probe = R.memo(({ className }) => <div className={className} />)';
+    expect(() => prefixTailwindClassCandidates(shadowedNamespace)).toThrow('dynamic class expressions are not accepted');
+    expect(() =>
+      normalizeRegistrySource({ registrySourcePath: 'registry/base-nova/ui/probe.tsx', source: shadowedNamespace })
+    ).toThrow('dynamic class expressions are not accepted');
+    for (const mutatedReactWrapper of [
+      'import React from "react"; const R: any = React; R.memo = (render) => render(getProps()); export const Probe = R.memo(({ className }) => <div className={className} />)',
+      'import React from "react"; const R = React; (R as any)["forwardRef"] = (render) => render(getProps()); export const Probe = R.forwardRef(({ className }, ref) => <div ref={ref} className={className} />)',
+      'import React from "react"; const R = React; const Alias = R; (R as any).memo = helper; export const Probe = Alias.memo(({ className }) => <div className={className} />)',
+      'import { memo } from "react"; (memo as any) = helper; export const Probe = memo(({ className }) => <div className={className} />)'
+    ]) {
+      expect(() => prefixTailwindClassCandidates(mutatedReactWrapper)).toThrow('dynamic class expressions are not accepted');
+      expect(() =>
+        normalizeRegistrySource({ registrySourcePath: 'registry/base-nova/ui/probe.tsx', source: mutatedReactWrapper })
+      ).toThrow('dynamic class expressions are not accepted');
+    }
+    const immutableDefaultReactAlias =
+      'import React from "react"; const R = React; export const Probe = R.memo(({ className }) => <div className={className} />)';
+    expect(prefixTailwindClassCandidates(immutableDefaultReactAlias).source).toContain('className={className}');
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source: immutableDefaultReactAlias
+      })
+    ).not.toThrow();
+    const unexportedAssignment =
+      'let Probe; Probe = ({ className }) => <div className={className} />; ' +
+      'export function Outer() { return Probe(getProps()) }';
+    expect(() => prefixTailwindClassCandidates(unexportedAssignment)).toThrow('dynamic class expressions are not accepted');
+    expect(() =>
+      normalizeRegistrySource({
+        registrySourcePath: 'registry/base-nova/ui/probe.tsx',
+        source: unexportedAssignment
+      })
+    ).toThrow('dynamic class expressions are not accepted');
+    for (const unexportedDeclaration of [
+      'function Probe({ className }) { return <div className={className} /> } export function Outer() { return Probe(window.getProps()) }',
+      'const Probe = ({ className }) => <div className={className} />; export function Outer() { return Probe(window.getProps()) }',
+      'export function Probe({ className }) { return <div className={className} /> } export function Outer() { return Probe(window.getProps()) }'
+    ]) {
+      expect(() => prefixTailwindClassCandidates(unexportedDeclaration)).toThrow('dynamic class expressions are not accepted');
+      expect(() =>
+        normalizeRegistrySource({ registrySourcePath: 'registry/base-nova/ui/probe.tsx', source: unexportedDeclaration })
+      ).toThrow('dynamic class expressions are not accepted');
+    }
+    expect(
+      prefixTailwindClassCandidates(
+        'function Probe({ className }) { return <div className={className} /> } export function Outer() { return <Probe /> }'
+      ).source
+    ).toContain('className={className}');
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'function Probe({ className }) { return <div className={className} /> } export function Outer() { return <><Probe />{Probe(window.getProps())}</> }'
+      )
+    ).toThrow('dynamic class expressions are not accepted');
+    for (const escapedComponent of [
+      'const Invoke = Probe; Invoke(window.getProps())',
+      'const invoke = Probe; invoke(window.getProps())',
+      'Probe.call(null, window.getProps())',
+      'Probe.apply(null, [window.getProps()])',
+      'window.items.map(Probe)',
+      'eval("Probe")(window.getProps())'
+    ]) {
+      expect(() =>
+        prefixTailwindClassCandidates(
+          `function Probe({ className }) { return <div className={className} /> } export function Outer() { return <Probe /> } ${escapedComponent}`
+        )
+      ).toThrow('dynamic class expressions are not accepted');
+    }
+    expect(
+      prefixTailwindClassCandidates('function Probe({ className }) { return <div className={className} /> } export default Probe')
+        .source
+    ).toContain('className={className}');
+    for (const escapedWrapper of [
+      'import { memo } from "react"; export const Probe = memo(function Inner({ className }) { if (window.recur) return Inner(window.getProps()); return <div className={className} /> })',
+      'import * as React from "react"; export const Probe = React.memo(({ className }) => <div className={className} />); Probe.type(window.getProps())',
+      'import * as React from "react"; export const Probe = React.forwardRef(({ className }, ref) => <div ref={ref} className={className} />); Probe.render(window.getProps(), null)',
+      'import * as React from "react"; export const Parts = { Probe: React.memo(({ className }) => <div className={className} />), attack() { return this.Probe.type(window.getProps()) } }',
+      'import * as React from "react"; export const Parts = { Probe: React.forwardRef(({ className }, ref) => <div ref={ref} className={className} />), attack() { return this.Probe.render(window.getProps(), null) } }',
+      'import * as React from "react"; export default { Probe: React.memo(({ className }) => <div className={className} />), attack() { return this.Probe.type(window.getProps()) } }',
+      'import * as React from "react"; export default { nested: { Probe: React.forwardRef(({ className }, ref) => <div ref={ref} className={className} />), attack() { return this.Probe.render(window.getProps(), null) } } }',
+      'import * as React from "react"; export const Probe = React.memo(({ className }) => <div className={className} />); const { type: Invoke } = Probe; Invoke(window.getProps())',
+      'import * as React from "react"; export const Probe = React.forwardRef(({ className }, ref) => <div ref={ref} className={className} />); const Alias = Probe; const { render: Invoke } = Alias; Invoke(window.getProps(), null)',
+      'import * as React from "react"; export const Parts = { Probe: React.memo(({ className }) => <div className={className} />) }; const { Probe: { type: Invoke } } = Parts; Invoke(window.getProps())'
+    ]) {
+      expect(() => prefixTailwindClassCandidates(escapedWrapper)).toThrow('dynamic class expressions are not accepted');
+      expect(() =>
+        normalizeRegistrySource({ registrySourcePath: 'registry/base-nova/ui/probe.tsx', source: escapedWrapper })
+      ).toThrow('dynamic class expressions are not accepted');
+    }
+    for (const aliasInitializer of ['Inner', '(Inner)', 'Inner as C', 'Inner satisfies C', 'Inner!']) {
+      const defaultAliasWrapper =
+        'import * as React from "react"; const Inner = ({ className }) => <div className={className} />; ' +
+        `type C = typeof Inner; const Alias = ${aliasInitializer}; export default React.memo(Alias)`;
+      expect(prefixTailwindClassCandidates(defaultAliasWrapper).source).toContain('className={className}');
+      expect(() =>
+        normalizeRegistrySource({ registrySourcePath: 'registry/base-nova/ui/probe.tsx', source: defaultAliasWrapper })
+      ).not.toThrow();
+    }
+    const safeWrapperObject =
+      'import * as React from "react"; export const Parts = { label: "safe", Probe: React.memo(({ className }) => <div className={className} />), describe() { return this.label } }';
+    expect(prefixTailwindClassCandidates(safeWrapperObject).source).toContain('className={className}');
+    expect(() =>
+      normalizeRegistrySource({ registrySourcePath: 'registry/base-nova/ui/probe.tsx', source: safeWrapperObject })
+    ).not.toThrow();
+    const safeNestedWrapperObject =
+      'import * as React from "react"; export const Parts = { nested: { Probe: React.memo(({ className }) => <div className={className} />) }, other: { Probe: "safe" }, describe() { return this.other.Probe } }';
+    expect(prefixTailwindClassCandidates(safeNestedWrapperObject).source).toContain('className={className}');
+    expect(() =>
+      normalizeRegistrySource({ registrySourcePath: 'registry/base-nova/ui/probe.tsx', source: safeNestedWrapperObject })
+    ).not.toThrow();
     expect(
       prefixTailwindClassCandidates('export function Probe({ className }) { return <div className={className} /> }').source
     ).toContain('className={className}');
+    for (const metadataAssignment of [
+      'Probe.displayName = "Probe"',
+      'Probe["displayName"] = "Probe"',
+      'import * as PropTypes from "prop-types"; Probe.propTypes = { className: PropTypes.string, options: PropTypes.shape({ className: PropTypes.string }).isRequired }',
+      'Probe.contextType = Context'
+    ]) {
+      expect(
+        prefixTailwindClassCandidates(
+          `export function Probe({ className }) { return <div className={className} /> } ${metadataAssignment}`
+        ).source
+      ).toContain('className={className}');
+    }
     expect(
       prefixTailwindClassCandidates(
-        'export const Probe = React.forwardRef(function Probe({ className }, ref) { return <div ref={ref} className={className} /> })'
+        'import * as React from "react"; export const Probe = React.forwardRef(function Probe({ className }, ref) { return <div ref={ref} className={className} /> }); Probe.displayName = "Probe"'
+      ).source
+    ).toContain('className={className}');
+    expect(() =>
+      prefixTailwindClassCandidates(
+        'export function Probe({ className }) { return <div className={className} /> } Probe.defaultProps = { className: "flex" }'
+      )
+    ).toThrow('dynamic class expressions are not accepted');
+    for (const metadataInvocation of [
+      'Probe.displayName()',
+      'Probe["displayName"]?.()',
+      'Probe.propTypes.call(null, window.getProps())',
+      'new Probe.contextType()'
+    ]) {
+      expect(() =>
+        prefixTailwindClassCandidates(
+          `export function Probe({ className }) { return <div className={className} /> } ${metadataInvocation}`
+        )
+      ).toThrow('dynamic class expressions are not accepted');
+    }
+    for (const executableMetadata of [
+      'Probe.propTypes = (() => { mount(React.createElement("div", { className: "flex" })); return {} })() as any',
+      'Probe.propTypes = evil({ className: "flex" }) as any',
+      'Probe.propTypes = (() => ({ className: getClass() })) as any',
+      'Probe.propTypes = { validator: evil({ className: getClass() }) } as any',
+      'Probe.propTypes = { get className() { return "flex" } } as any'
+    ]) {
+      expect(() =>
+        prefixTailwindClassCandidates(
+          `export function Probe({ className }) { return <div className={className} /> } ${executableMetadata}`
+        )
+      ).toThrow('dynamic class expressions are not accepted');
+    }
+    expect(prefixTailwindClassCandidates('export function Probe(props) { return <div {...props} /> }').source).toContain(
+      '<div {...props} />'
+    );
+    expect(
+      prefixTailwindClassCandidates(
+        'import * as React from "react"; export const Probe = React.forwardRef(function Probe({ className }, ref) { return <div ref={ref} className={className} /> })'
       ).source
     ).toContain('className={className}');
   });

@@ -1,4 +1,4 @@
-import { access, readFile } from 'node:fs/promises';
+import { access, lstat, readFile, realpath } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,11 +65,46 @@ if (!manifestOnly) {
       ? path.resolve(packageRoot, '..', '..', 'package-lock.json')
       : path.resolve(process.cwd(), process.argv[lockfileFlag + 1]);
   await access(lockfilePath);
-  const lock = JSON.parse(await readFile(lockfilePath, 'utf8'));
+  const selectedRepositoryRoot = path.dirname(lockfilePath);
+  const selectedPackageRoot = path.join(selectedRepositoryRoot, 'packages', 'ui-profile');
+  async function readBoundJson(candidate, label) {
+    const stats = await lstat(candidate);
+    assert(stats.isFile() && !stats.isSymbolicLink(), `${label} is not a regular file`);
+    return JSON.parse(await readFile(candidate, 'utf8'));
+  }
+  const lock = await readBoundJson(lockfilePath, 'Selected lockfile');
+  const selectedManifest = await readBoundJson(path.join(selectedPackageRoot, 'package.json'), 'Selected UI profile manifest');
+  const selectedRootManifest = await readBoundJson(
+    path.join(selectedRepositoryRoot, 'package.json'),
+    'Selected repository manifest'
+  );
+  assert(
+    !selectedManifest.overrides && !selectedManifest.resolutions,
+    'Selected UI profile manifest contains forced dependency resolution'
+  );
+  assert(
+    !selectedRootManifest.overrides && !selectedRootManifest.resolutions,
+    'Selected repository manifest contains forced dependency resolution'
+  );
+  assertExact(selectedRootManifest.workspaces ?? [], rootManifest.workspaces ?? [], 'Selected repository workspaces differ');
+  assert(
+    selectedManifest.name === manifest.name && selectedManifest.version === manifest.version,
+    'Selected UI profile identity differs'
+  );
+  assert(selectedManifest.dependencies === undefined, 'Selected tooling-only profile must not declare production dependencies');
+  assertExact(
+    selectedManifest.devDependencies ?? {},
+    manifest.devDependencies,
+    'Selected UI profile development dependencies differ'
+  );
   assert(lock.lockfileVersion === 3, 'Dependency verification requires npm lockfileVersion 3');
   const workspaceKey = 'packages/ui-profile';
   const workspace = lock.packages?.[workspaceKey];
   assert(workspace, `Lockfile does not contain ${workspaceKey}`);
+  assert(
+    workspace.name === selectedManifest.name && workspace.version === selectedManifest.version,
+    'Lockfile UI profile workspace identity differs'
+  );
   assert(!workspace.hasInstallScript, 'UI profile must not use install-time mutation');
   assert(workspace.dependencies === undefined, 'Lockfile workspace must not contain production dependencies');
   assertExact(workspace.devDependencies ?? {}, manifest.devDependencies, 'Lockfile workspace development dependencies differ');
@@ -148,24 +183,21 @@ if (!manifestOnly) {
     `Effective npm config legacy-peer-deps must be false (received ${JSON.stringify(npmPeerResolution)})`
   );
 
-  const npmArguments = [
-    'ls',
-    '--omit=dev',
-    '--all',
-    '--workspace',
-    '@spfx-kit/ui-profile',
-    '--package-lock-only',
-    '--json',
-    strictPeerResolutionArgument
-  ];
+  const npmArguments = ['ls', '--all', '--workspace', '@spfx-kit/ui-profile', '--json', strictPeerResolutionArgument];
   let npmResult;
+  let npmFailure;
   try {
     npmResult = await runNpm(npmArguments);
   } catch (error) {
-    const stdout = error.stdout || '{}';
-    const tree = JSON.parse(stdout);
-    const problems = tree.problems ?? [error.message];
-    throw new Error(`npm dependency tree is invalid: ${problems.join('; ')}`, { cause: error });
+    npmFailure = error;
+    const stdout = error.stdout;
+    assert(stdout, `npm dependency tree could not be inspected: ${error.message}`);
+    try {
+      JSON.parse(stdout);
+    } catch {
+      throw new Error('npm dependency tree did not produce valid JSON', { cause: error });
+    }
+    npmResult = { stdout };
   }
   const tree = JSON.parse(npmResult.stdout);
   const problems = [...(tree.problems ?? [])];
@@ -179,11 +211,179 @@ if (!manifestOnly) {
     }
   }
   collectProblems(tree);
+  if (npmFailure && problems.length === 0) problems.push(npmFailure.message);
   assert(problems.length === 0, `npm dependency tree problems: ${[...new Set(problems)].join('; ')}`);
   const installedProfile = tree.dependencies?.['@spfx-kit/ui-profile'];
+  assert(installedProfile, 'Installed npm tree omits the UI profile workspace');
+  for (const root of closure.productionRoots) {
+    const installed = installedProfile.dependencies?.[root];
+    const expected = accepted.get(root);
+    assert(installed, `Installed npm tree omits production root ${root}`);
+    assert(installed.link !== true, `Installed npm tree links production root ${root}`);
+    assert(installed.version === expected.version, `${root}: installed root version differs`);
+    for (const dependency of Object.keys(expected.dependencies)) {
+      assert(
+        installed.dependencies?.[dependency]?.version === accepted.get(dependency)?.version,
+        `${root}: installed dependency edge ${dependency} differs from the accepted closure`
+      );
+    }
+  }
+
+  async function boundRealpath(candidate, message) {
+    try {
+      return await realpath(candidate);
+    } catch (error) {
+      throw new Error(message, { cause: error });
+    }
+  }
+  const canonicalRepositoryRoot = await boundRealpath(
+    selectedRepositoryRoot,
+    'Selected lockfile repository root does not resolve'
+  );
+  for (const [candidate, expected, label] of [
+    [lockfilePath, path.join(canonicalRepositoryRoot, 'package-lock.json'), 'Selected lockfile'],
+    [
+      path.join(selectedRepositoryRoot, 'package.json'),
+      path.join(canonicalRepositoryRoot, 'package.json'),
+      'Selected repository manifest'
+    ],
+    [
+      path.join(selectedPackageRoot, 'package.json'),
+      path.join(canonicalRepositoryRoot, 'packages', 'ui-profile', 'package.json'),
+      'Selected UI profile manifest'
+    ]
+  ]) {
+    assert((await realpath(candidate)) === expected, `${label} resolves outside the selected lockfile checkout`);
+  }
+  const canonicalSelectedPackageRoot = await boundRealpath(
+    selectedPackageRoot,
+    'Selected lockfile checkout does not contain the UI profile workspace'
+  );
   assert(
-    installedProfile === undefined || Object.keys(installedProfile.dependencies ?? {}).length === 0,
-    'Tooling-only UI profile leaked dependencies into the production install tree'
+    canonicalSelectedPackageRoot === path.join(canonicalRepositoryRoot, 'packages', 'ui-profile'),
+    'Selected UI profile workspace resolves outside the selected lockfile checkout'
+  );
+  const canonicalNodeModulesRoot = await boundRealpath(
+    path.join(selectedRepositoryRoot, 'node_modules'),
+    'Selected lockfile checkout does not contain a bound node_modules root'
+  );
+  assert(
+    canonicalNodeModulesRoot === path.join(canonicalRepositoryRoot, 'node_modules'),
+    'Repository node_modules root resolves outside the repository'
+  );
+  function isContainedPath(root, candidate) {
+    const relative = path.relative(root, candidate);
+    return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  }
+
+  async function resolveInstalledManifest(fromDirectory, name) {
+    let current = path.resolve(fromDirectory);
+    assert(
+      current === canonicalRepositoryRoot || isContainedPath(canonicalRepositoryRoot, current),
+      `${fromDirectory}: installed dependency resolution starts outside the repository`
+    );
+    while (true) {
+      const packageDirectory = path.join(current, 'node_modules', ...name.split('/'));
+      const candidate = path.join(packageDirectory, 'package.json');
+      try {
+        const packageStats = await lstat(packageDirectory);
+        assert(
+          packageStats.isDirectory() && !packageStats.isSymbolicLink(),
+          `${name}: installed package root is not a regular directory`
+        );
+        const manifestStats = await lstat(candidate);
+        assert(
+          manifestStats.isFile() && !manifestStats.isSymbolicLink(),
+          `${name}: installed package manifest is not a regular file`
+        );
+        const manifest = JSON.parse(await readFile(candidate, 'utf8'));
+        const canonicalPackageDirectory = await realpath(packageDirectory);
+        const canonicalManifestPath = await realpath(candidate);
+        assert(
+          isContainedPath(canonicalNodeModulesRoot, canonicalPackageDirectory),
+          `${name}: installed package root resolves outside repository node_modules`
+        );
+        assert(
+          canonicalPackageDirectory === path.resolve(packageDirectory) &&
+            canonicalManifestPath === path.join(canonicalPackageDirectory, 'package.json'),
+          `${name}: installed package path contains an unbound link`
+        );
+        return {
+          manifest,
+          manifestPath: canonicalManifestPath,
+          packageDirectory: canonicalPackageDirectory
+        };
+      } catch (error) {
+        if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+      }
+      if (current === canonicalRepositoryRoot) break;
+      const parent = path.dirname(current);
+      if (parent === current || (parent !== canonicalRepositoryRoot && !isContainedPath(canonicalRepositoryRoot, parent))) {
+        break;
+      }
+      current = parent;
+    }
+    throw new Error(`${fromDirectory}: unable to resolve installed package ${name}`);
+  }
+
+  const reachedInstalled = new Set();
+  const visitedInstalledManifests = new Set();
+  async function verifyInstalledPackage(name, resolved, ancestry) {
+    const expected = accepted.get(name);
+    assert(expected, `Installed npm tree contains unexpected production package ${name}`);
+    assert(resolved.manifest.name === name, `${ancestry}: installed package identity differs`);
+    assert(resolved.manifest.version === expected.version, `${ancestry}: installed version differs`);
+    assertExact(
+      resolved.manifest.dependencies ?? {},
+      expected.dependencies,
+      `${ancestry}: installed dependency metadata differs`
+    );
+    assertExact(
+      resolved.manifest.optionalDependencies ?? {},
+      {},
+      `${ancestry}: installed optional dependencies are not accepted`
+    );
+    assertExact(resolved.manifest.bundledDependencies ?? [], [], `${ancestry}: installed bundled dependencies are not accepted`);
+    assertExact(resolved.manifest.bundleDependencies ?? [], [], `${ancestry}: installed bundle dependencies are not accepted`);
+    assertExact(
+      resolved.manifest.peerDependencies ?? {},
+      expected.peerDependencies,
+      `${ancestry}: installed peer metadata differs`
+    );
+    const installedOptionalPeers = Object.entries(resolved.manifest.peerDependenciesMeta ?? {})
+      .filter(([, metadata]) => metadata.optional === true)
+      .map(([peer]) => peer)
+      .sort();
+    assertExact(
+      installedOptionalPeers,
+      [...(expected.optionalPeers ?? [])].sort(),
+      `${ancestry}: installed optional peers differ`
+    );
+    reachedInstalled.add(name);
+    if (visitedInstalledManifests.has(resolved.manifestPath)) return;
+    visitedInstalledManifests.add(resolved.manifestPath);
+    for (const dependency of Object.keys(expected.dependencies)) {
+      const child = await resolveInstalledManifest(resolved.packageDirectory, dependency);
+      await verifyInstalledPackage(dependency, child, `${ancestry} > ${dependency}`);
+    }
+    for (const peer of Object.keys(expected.peerDependencies).filter((peer) => !(expected.optionalPeers ?? []).includes(peer))) {
+      const expectedPeer = accepted.get(peer);
+      assert(expectedPeer, `${ancestry}: required installed peer ${peer} is outside the accepted closure`);
+      const installedPeer = await resolveInstalledManifest(resolved.packageDirectory, peer);
+      assert(
+        installedPeer.manifest.version === expectedPeer.version,
+        `${ancestry}: required installed peer ${peer} version differs`
+      );
+    }
+  }
+  for (const root of closure.productionRoots) {
+    const installed = await resolveInstalledManifest(canonicalSelectedPackageRoot, root);
+    await verifyInstalledPackage(root, installed, root);
+  }
+  assertExact(
+    [...reachedInstalled].sort(),
+    [...accepted.keys()].sort(),
+    'Installed npm production closure differs from accepted closure'
   );
 }
 
