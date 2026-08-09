@@ -1,21 +1,49 @@
 import * as React from 'react';
-import { Pin16Filled, Pin16Regular } from '@fluentui/react-icons';
-import {
-  Button,
-  Drawer,
-  DrawerBody,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerHeaderTitle,
-  Dropdown,
-  Field,
-  Input,
-  Option,
-  Switch,
-  Textarea
-} from '@fluentui/react-components';
-import { Check, ChevronRight, Download, FolderInput, RefreshCw, Save, X } from 'lucide-react';
+import { Check, Download, FolderInput, Pin, PinOff, RefreshCw, Save, X } from 'lucide-react';
 import type { LabWebPart } from '@spfx-kit/spfx-lab-runtime';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '../../../../packages/ui-profile/normalized/src/components/ui/accordion';
+import { Alert, AlertDescription, AlertTitle } from '../../../../packages/ui-profile/normalized/src/components/ui/alert';
+import { Button } from '../../../../packages/ui-profile/normalized/src/components/ui/button';
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+  FieldTitle
+} from '../../../../packages/ui-profile/normalized/src/components/ui/field';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText
+} from '../../../../packages/ui-profile/normalized/src/components/ui/input-group';
+import { Input } from '../../../../packages/ui-profile/normalized/src/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '../../../../packages/ui-profile/normalized/src/components/ui/select';
+import { Separator } from '../../../../packages/ui-profile/normalized/src/components/ui/separator';
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle
+} from '../../../../packages/ui-profile/normalized/src/components/ui/sheet';
+import { Spinner } from '../../../../packages/ui-profile/normalized/src/components/ui/spinner';
+import { Switch } from '../../../../packages/ui-profile/normalized/src/components/ui/switch';
+import { Textarea } from '../../../../packages/ui-profile/normalized/src/components/ui/textarea';
+import { useSpfxUiDerivedId } from '../../../../packages/ui-profile/normalized/src/lib/ui-root';
 import {
   ExportPackageFormat,
   labApiWriteHeaders,
@@ -49,6 +77,7 @@ interface AppManagementRow {
 }
 
 export interface AppManagementSidebarProps {
+  contentId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   webPartsByAppId: Map<string, LabWebPart[]>;
@@ -58,6 +87,7 @@ export interface AppManagementSidebarProps {
   onTogglePinned: (appId: string) => void;
   onOpenImport: () => void;
   onOpenExport: (targets: ExportPackageFormat[]) => void;
+  triggerId: string;
 }
 
 const EMPTY_EXPORT_CONFIG: ManagedAppExportConfig = {
@@ -113,8 +143,31 @@ function isPinShortcut(event: React.KeyboardEvent<HTMLElement>): boolean {
   );
 }
 
+interface AppSettingsFieldProps {
+  children: (controlId: string, descriptionId: string) => React.ReactNode;
+  className?: string;
+  description?: React.ReactNode;
+  label: React.ReactNode;
+  name: string;
+  ownerId: string;
+}
+
+function AppSettingsField({ children, className, description, label, name, ownerId }: AppSettingsFieldProps): JSX.Element {
+  const controlId = useSpfxUiDerivedId(ownerId, name);
+  const descriptionId = useSpfxUiDerivedId(controlId, 'description');
+
+  return (
+    <Field className={className}>
+      <FieldLabel htmlFor={controlId}>{label}</FieldLabel>
+      {children(controlId, descriptionId)}
+      {description ? <FieldDescription id={descriptionId}>{description}</FieldDescription> : null}
+    </Field>
+  );
+}
+
 export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Element {
   const {
+    contentId,
     open,
     onOpenChange,
     webPartsByAppId,
@@ -123,7 +176,8 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
     pinnedAppId,
     onTogglePinned,
     onOpenImport,
-    onOpenExport
+    onOpenExport,
+    triggerId
   } = props;
   const [managedApps, setManagedApps] = React.useState<ManagedLabApp[]>([]);
   const [status, setStatus] = React.useState<AppManagementStatus>({ phase: 'idle', message: '' });
@@ -134,15 +188,34 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
   const [localCdnInventory, setLocalCdnInventory] = React.useState<LocalCdnBucketInventory>();
   const [sidebarSelectedAppId, setSidebarSelectedAppId] = React.useState(selectedAppId);
   const [selectedAppPickerOpen, setSelectedAppPickerOpen] = React.useState(false);
+  const [versionPickerOpen, setVersionPickerOpen] = React.useState(false);
+  const [categoriesPickerOpen, setCategoriesPickerOpen] = React.useState(false);
   const [pinAnnouncement, setPinAnnouncement] = React.useState('');
   const refreshInFlightRef = React.useRef(false);
   const mutationInFlightRef = React.useRef(false);
   const syncSuccessTimerRef = React.useRef<number | undefined>(undefined);
-  const activeAppOptionIdRef = React.useRef(selectedAppId);
+  const selectedAppContentRef = React.useRef<HTMLDivElement>(null);
+  const titleId = useSpfxUiDerivedId(contentId, 'title');
+  const descriptionId = useSpfxUiDerivedId(contentId, 'description');
+  const selectedAppHeadingId = useSpfxUiDerivedId(contentId, 'selected-app-heading');
+  const exportConfigHeadingId = useSpfxUiDerivedId(contentId, 'export-config-heading');
+  const appActionsHeadingId = useSpfxUiDerivedId(contentId, 'app-actions-heading');
+  const selectedAppSelectId = useSpfxUiDerivedId(contentId, 'selected-app');
+  const selectedAppSelectContentId = useSpfxUiDerivedId(selectedAppSelectId, 'content');
+  const connectionSwitchId = useSpfxUiDerivedId(contentId, 'connection');
+  const versionSelectId = useSpfxUiDerivedId(contentId, 'version');
+  const versionSelectContentId = useSpfxUiDerivedId(versionSelectId, 'content');
+  const categoriesSelectId = useSpfxUiDerivedId(contentId, 'categories');
+  const categoriesSelectContentId = useSpfxUiDerivedId(categoriesSelectId, 'content');
+  const listingAccordionId = useSpfxUiDerivedId(contentId, 'catalog-listing');
+  const visualsAccordionId = useSpfxUiDerivedId(contentId, 'catalog-visuals');
+  const supportAccordionId = useSpfxUiDerivedId(contentId, 'catalog-support');
 
   React.useEffect(() => {
     if (!open) {
       setSelectedAppPickerOpen(false);
+      setVersionPickerOpen(false);
+      setCategoriesPickerOpen(false);
     }
   }, [open]);
 
@@ -216,7 +289,6 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
   React.useEffect(() => {
     if (open) {
       setSidebarSelectedAppId(selectedAppId);
-      activeAppOptionIdRef.current = selectedAppId;
       setStatus({ phase: 'idle', message: '' });
       void refreshManagedApps();
     }
@@ -483,524 +555,644 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
     onTogglePinned(appId);
     setPinAnnouncement(nextPinnedAppId ? `${app.title} pinned as the startup app.` : `${app.title} is no longer pinned.`);
   };
+  const handleSelectedAppPickerKeyDown = (event: React.KeyboardEvent<HTMLElement>): void => {
+    if (!selectedAppPickerOpen || !isPinShortcut(event)) {
+      return;
+    }
+    const activeAppId =
+      selectedAppContentRef.current?.querySelector<HTMLElement>('[data-highlighted][data-app-id]')?.dataset.appId ||
+      selectedApp?.id ||
+      '';
+    if (!webPartsByAppId.has(activeAppId)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    togglePinnedAppWithAnnouncement(activeAppId);
+  };
   const activeLocalCdnManifestUrl =
     localCdnInventory && activeLocalCdnRelease ? publicLocalCdnManifestUrl(localCdnInventory, activeLocalCdnRelease) : undefined;
   const sourceRepositoryUrl = selectedManagedApp?.version.repositoryUrl;
 
   return (
-    <Drawer
-      className="app-management-sidebar"
-      id="app-management-sidebar"
-      modalType="modal"
-      onOpenChange={(_event, data) => {
-        if (!data.open) {
-          setSelectedAppPickerOpen(false);
-        }
-        onOpenChange(data.open);
-      }}
+    <Sheet
       open={open}
-      position="start"
-      size="medium"
-      type="overlay"
+      triggerId={triggerId}
+      onOpenChange={(nextOpen, eventDetails) => {
+        if (
+          !nextOpen &&
+          eventDetails.reason === 'escape-key' &&
+          (selectedAppPickerOpen || versionPickerOpen || categoriesPickerOpen)
+        ) {
+          eventDetails.cancel();
+          setSelectedAppPickerOpen(false);
+          setVersionPickerOpen(false);
+          setCategoriesPickerOpen(false);
+          return;
+        }
+        if (!nextOpen) {
+          setSelectedAppPickerOpen(false);
+          setVersionPickerOpen(false);
+          setCategoriesPickerOpen(false);
+        }
+        onOpenChange(nextOpen);
+      }}
     >
-      <DrawerHeader>
-        <DrawerHeaderTitle
-          action={
-            <Button
-              appearance="subtle"
-              aria-label="Close app settings sidebar"
-              icon={<X size={16} />}
-              onClick={() => onOpenChange(false)}
-            />
-          }
-        >
-          App settings
-        </DrawerHeaderTitle>
-      </DrawerHeader>
+      <SheetContent
+        aria-describedby={descriptionId}
+        aria-labelledby={titleId}
+        className="app-management-sidebar"
+        data-sidebar="sidebar"
+        id={contentId}
+        side="left"
+        showCloseButton={false}
+        onKeyDown={handleSelectedAppPickerKeyDown}
+      >
+        <SheetHeader className="app-management-sidebar__header">
+          <SheetTitle id={titleId}>App settings</SheetTitle>
+          <SheetDescription className="visually-hidden" id={descriptionId}>
+            Manage the selected Lab app, its export settings, and package actions.
+          </SheetDescription>
+          <SheetClose
+            aria-label="Close app settings sidebar"
+            render={<Button className="app-management-sidebar__close" size="icon-sm" variant="ghost" />}
+          >
+            <X />
+          </SheetClose>
+        </SheetHeader>
 
-      <DrawerBody className="app-management-sidebar__body">
-        <section aria-labelledby="selected-app-heading" className="app-management-sidebar__section">
-          <h2 id="selected-app-heading">Selected App</h2>
-          <Field label="App" size="small">
-            <Dropdown
-              aria-label="Selected app"
-              disabled={busy || !appRows.length}
-              open={selectedAppPickerOpen}
-              selectedOptions={selectedApp ? [selectedApp.id] : []}
-              value={selectedApp?.title || ''}
-              onActiveOptionChange={(_event, data) => {
-                activeAppOptionIdRef.current = data.nextOption?.value || selectedApp?.id || '';
-              }}
-              onKeyDown={(event) => {
-                if (!selectedAppPickerOpen || !isPinShortcut(event)) {
-                  return;
-                }
-                const activeAppId = activeAppOptionIdRef.current;
-                if (!webPartsByAppId.has(activeAppId)) {
-                  return;
-                }
-                event.preventDefault();
-                event.stopPropagation();
-                togglePinnedAppWithAnnouncement(activeAppId);
-              }}
-              onOpenChange={(_event, data) => {
-                setSelectedAppPickerOpen(data.open);
-                if (data.open) {
-                  activeAppOptionIdRef.current = selectedApp?.id || '';
-                }
-              }}
-              onOptionSelect={(_event, data) => {
-                if (data.optionValue) {
-                  setSidebarSelectedAppId(data.optionValue);
-                  if (webPartsByAppId.has(data.optionValue)) {
-                    onSelectApp(data.optionValue);
-                  }
-                }
-              }}
-            >
-              {appRows.map((app) => {
-                const appLoaded = webPartsByAppId.has(app.id);
-                const appPinned = pinnedAppId === app.id;
-                return (
-                  <div
-                    className={`webpart-option-row ${appPinned ? 'webpart-option-row--pinned' : ''}`}
-                    key={app.id}
-                    role="presentation"
-                  >
-                    <Option
-                      aria-label={`${app.title}. ${
-                        appLoaded
-                          ? `${appPinned ? 'Pinned' : 'Not pinned'}. Press Alt+P to ${appPinned ? 'unpin' : 'pin'}.`
-                          : 'Pin unavailable.'
-                      }`}
-                      className="webpart-option"
-                      text={app.title}
-                      value={app.id}
-                    >
-                      <span className="webpart-option__label">{app.title}</span>
-                    </Option>
-                  </div>
-                );
-              })}
-            </Dropdown>
-          </Field>
-          {selectedApp ? (
-            <Button
-              aria-label={`${pinnedAppId === selectedApp.id ? 'Unpin' : 'Pin'} ${selectedApp.title} as startup app`}
-              aria-pressed={pinnedAppId === selectedApp.id}
-              disabled={!webPartsByAppId.has(selectedApp.id)}
-              icon={pinnedAppId === selectedApp.id ? <Pin16Filled /> : <Pin16Regular />}
-              onClick={() => togglePinnedAppWithAnnouncement(selectedApp.id)}
-            >
-              {pinnedAppId === selectedApp.id ? 'Unpin startup app' : 'Pin as startup app'}
-            </Button>
-          ) : null}
-          <span aria-live="polite" className="visually-hidden" role="status">
-            {pinAnnouncement}
-          </span>
-
-          {selectedApp ? (
-            <div className="app-management-sidebar__app-controls">
-              {!selectedManagedApp ? (
-                <p className="app-management-sidebar__hint">
-                  This loaded app is not managed by SPFx Kit. Active state, source version, and export config are unavailable.
-                </p>
-              ) : null}
-              <Switch
-                aria-label={`${connected ? 'Active' : 'Inactive'}: ${selectedApp.title}`}
-                checked={connected}
-                disabled={selectedAppBusy || !selectedManagedApp || !canToggleConnection}
-                label={selectedManagedApp ? (connected ? 'Active' : 'Inactive') : 'Active status unavailable'}
-                onChange={(_event, data) => {
-                  if (selectedManagedApp) {
-                    void runConnectionAction(selectedManagedApp, data.checked);
-                  }
-                }}
-              />
-
-              <Field hint={selectedManagedApp?.version.detail} label="Version" size="small">
-                <Dropdown
-                  aria-label={`Source version for ${selectedApp.title}`}
-                  disabled={selectedAppBusy || !selectedManagedApp?.version.canSelect}
-                  selectedOptions={selectedManagedApp ? [selectedManagedApp.version.selected] : []}
-                  value={selectedManagedApp ? versionDropdownLabel(selectedManagedApp) : 'Local / unmanaged'}
-                  onOptionSelect={(_event, data) => {
-                    if (
-                      selectedManagedApp &&
-                      data.optionValue &&
-                      (data.optionValue !== selectedManagedApp.version.selected ||
-                        selectedManagedApp.version.updateAvailable ||
-                        (data.optionValue === 'latest' && !selectedManagedApp.version.autoUpdate))
-                    ) {
-                      void runVersionAction(selectedManagedApp.id, data.optionValue);
+        <div className="app-management-sidebar__body" data-sidebar="content">
+          <section aria-labelledby={selectedAppHeadingId} className="app-management-sidebar__section">
+            <h2 id={selectedAppHeadingId}>Selected App</h2>
+            <AppSettingsField label="App" name="selected-app" ownerId={contentId}>
+              {(controlId) => (
+                <Select
+                  id={controlId}
+                  disabled={busy || !appRows.length}
+                  items={Object.fromEntries(appRows.map((app) => [app.id, app.title]))}
+                  open={selectedAppPickerOpen}
+                  value={selectedApp?.id || null}
+                  onOpenChange={setSelectedAppPickerOpen}
+                  onValueChange={(nextValue) => {
+                    if (nextValue) {
+                      setSidebarSelectedAppId(nextValue);
+                      if (webPartsByAppId.has(nextValue)) {
+                        onSelectApp(nextValue);
+                      }
                     }
                   }}
                 >
-                  {(selectedManagedApp?.version.options || []).map((option) => (
-                    <Option key={option.id} text={option.label} value={option.id}>
-                      {option.label}
-                    </Option>
-                  ))}
-                </Dropdown>
-              </Field>
-            </div>
-          ) : (
-            <p className="app-management-sidebar__empty">No workspace apps found.</p>
-          )}
-        </section>
-
-        <section aria-labelledby="export-config-heading" className="app-management-sidebar__section">
-          <h2 id="export-config-heading">App export config</h2>
-          <div className="app-management-sidebar__config-grid">
-            <Field label="App Name" size="small">
-              <Input
-                aria-label="Export app name"
-                disabled={!selectedManagedApp || selectedAppBusy}
-                value={exportConfig.appName}
-                onChange={(_event, data) => updateExportConfig('appName', data.value)}
-              />
-            </Field>
-            <Field label="File Name" size="small">
-              <div className="app-management-sidebar__file-name-control">
-                <Input
-                  aria-describedby="export-file-name-description"
-                  aria-label="Export file name"
-                  className="app-management-sidebar__file-name-input"
-                  disabled={!selectedManagedApp || selectedAppBusy}
-                  value={fileNameStem(exportConfig.fileName)}
-                  onChange={(_event, data) => updateExportConfig('fileName', `${fileNameStem(data.value)}${SPPKG_EXTENSION}`)}
-                />
-                <span aria-hidden="true" className="app-management-sidebar__file-name-overlay">
-                  <span className="app-management-sidebar__file-name-mirror">{fileNameStem(exportConfig.fileName)}</span>
-                  <span className="app-management-sidebar__file-name-suffix">{SPPKG_EXTENSION}</span>
-                </span>
-                <span className="visually-hidden" id="export-file-name-description">
-                  The {SPPKG_EXTENSION} extension is added automatically.
-                </span>
-              </div>
-            </Field>
-            <Field label="Version" size="small">
-              <Input
-                aria-label="Export version"
-                disabled={!selectedManagedApp || selectedAppBusy}
-                value={exportConfig.version}
-                onChange={(_event, data) => updateExportConfig('version', data.value)}
-              />
-            </Field>
-            <Field className="app-management-sidebar__wide-field" label="GitHub source repository" size="small">
-              {sourceRepositoryUrl ? (
-                <a
-                  aria-label={`Open GitHub source repository for ${selectedApp?.title || selectedManagedApp?.id || 'selected app'}`}
-                  className="app-management-sidebar__url-link"
-                  href={sourceRepositoryUrl}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  {sourceRepositoryUrl}
-                </a>
-              ) : (
-                <span className="app-management-sidebar__url-unavailable">No tracked GitHub source repository.</span>
+                  <SelectTrigger aria-label="Selected app" size="sm" onKeyDown={handleSelectedAppPickerKeyDown}>
+                    <SelectValue>{selectedApp?.title || ''}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent
+                    align="start"
+                    id={selectedAppSelectContentId}
+                    ref={selectedAppContentRef}
+                    onKeyDown={handleSelectedAppPickerKeyDown}
+                  >
+                    <SelectGroup>
+                      {appRows.map((app) => {
+                        const appLoaded = webPartsByAppId.has(app.id);
+                        const appPinned = pinnedAppId === app.id;
+                        return (
+                          <SelectItem
+                            aria-label={`${app.title}. ${
+                              appLoaded
+                                ? `${appPinned ? 'Pinned' : 'Not pinned'}. Press Alt+P to ${appPinned ? 'unpin' : 'pin'}.`
+                                : 'Pin unavailable.'
+                            }`}
+                            data-app-id={app.id}
+                            key={app.id}
+                            value={app.id}
+                            onKeyDown={handleSelectedAppPickerKeyDown}
+                          >
+                            {app.title}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               )}
-            </Field>
-            <Field
-              className="app-management-sidebar__wide-field"
-              hint="Selected immutable release used only by the Lab's loopback CDN runtime."
-              label="Active local CDN runtime manifest"
-              size="small"
-            >
-              {activeLocalCdnManifestUrl ? (
-                <a
-                  aria-label={`Open active local CDN runtime manifest for ${selectedApp?.title || selectedManagedApp?.id || 'selected app'}`}
-                  className="app-management-sidebar__url-link"
-                  href={activeLocalCdnManifestUrl}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  {activeLocalCdnManifestUrl}
-                </a>
-              ) : (
-                <span className="app-management-sidebar__url-unavailable">No local CDN release is selected.</span>
-              )}
-            </Field>
-            <Field className="app-management-sidebar__wide-field" label="Deployment CDN URL" size="small">
-              <Input
-                aria-label="Export CDN URL"
-                disabled={!selectedManagedApp || selectedAppBusy}
-                type="url"
-                value={exportConfig.cdnUrl}
-                onChange={(_event, data) => updateExportConfig('cdnUrl', data.value)}
-              />
-            </Field>
-          </div>
+            </AppSettingsField>
+            {selectedApp ? (
+              <Button
+                aria-label={`${pinnedAppId === selectedApp.id ? 'Unpin' : 'Pin'} ${selectedApp.title} as startup app`}
+                aria-pressed={pinnedAppId === selectedApp.id}
+                disabled={!webPartsByAppId.has(selectedApp.id)}
+                variant="outline"
+                onClick={() => togglePinnedAppWithAnnouncement(selectedApp.id)}
+              >
+                {pinnedAppId === selectedApp.id ? <PinOff data-icon="inline-start" /> : <Pin data-icon="inline-start" />}
+                {pinnedAppId === selectedApp.id ? 'Unpin startup app' : 'Pin as startup app'}
+              </Button>
+            ) : null}
+            <span aria-live="polite" className="visually-hidden" role="status">
+              {pinAnnouncement}
+            </span>
 
-          <div className="app-management-sidebar__catalog-intro">
-            <h3>App catalog details</h3>
-            <p>Optional information shown on the SharePoint app details page. Leave a field blank to omit it from the package.</p>
-          </div>
-
-          <div className="app-management-sidebar__catalog-groups">
-            <details className="app-management-sidebar__catalog-group">
-              <summary>
-                <span className="app-management-sidebar__catalog-summary-label">
-                  <ChevronRight aria-hidden="true" className="app-management-sidebar__catalog-chevron" size={15} />
-                  <span>Listing &amp; About</span>
-                </span>
-                <small>Optional</small>
-              </summary>
-              <div className="app-management-sidebar__catalog-fields">
-                <Field
-                  hint="The concise description used by the package and app listing. Existing Description values are preserved here."
-                  label="Short description"
-                  size="small"
-                >
-                  <Textarea
-                    aria-label="App catalog short description"
-                    disabled={!selectedManagedApp || selectedAppBusy}
-                    resize="vertical"
-                    value={exportConfig.description}
-                    onChange={(_event, data) => updateExportConfig('description', data.value)}
-                  />
-                </Field>
-                <Field hint="Additional About content for the SharePoint app details page." label="Long description" size="small">
-                  <Textarea
-                    aria-label="App catalog long description"
-                    disabled={!selectedManagedApp || selectedAppBusy}
-                    resize="vertical"
-                    value={exportConfig.longDescription}
-                    onChange={(_event, data) => updateExportConfig('longDescription', data.value)}
-                  />
-                </Field>
-                <Field hint="Optional YouTube or Vimeo video for the app details page." label="Video URL" size="small">
-                  <Input
-                    aria-label="App catalog video URL"
-                    disabled={!selectedManagedApp || selectedAppBusy}
-                    type="url"
-                    value={exportConfig.videoUrl}
-                    onChange={(_event, data) => updateExportConfig('videoUrl', data.value)}
-                  />
-                </Field>
-              </div>
-            </details>
-
-            <details className="app-management-sidebar__catalog-group">
-              <summary>
-                <span className="app-management-sidebar__catalog-summary-label">
-                  <ChevronRight aria-hidden="true" className="app-management-sidebar__catalog-chevron" size={15} />
-                  <span>Visuals</span>
-                </span>
-                <small>Optional</small>
-              </summary>
-              <div className="app-management-sidebar__catalog-fields">
-                <Field
-                  hint="Fabric icon name or image URL/path used in the web part toolbox. This does not set the App Catalog listing image."
-                  label="Toolbox icon"
-                  size="small"
-                >
-                  <Input
-                    aria-label="Web part toolbox icon"
-                    disabled={!selectedManagedApp || selectedAppBusy}
-                    value={exportConfig.appIcon}
-                    onChange={(_event, data) => updateExportConfig('appIcon', data.value)}
-                  />
-                </Field>
-                <Field
-                  hint="Package-directory-relative path to the PNG bundled for the App Catalog listing."
-                  label="App Catalog icon"
-                  size="small"
-                >
-                  <Input
-                    aria-label="App catalog icon path"
-                    disabled={!selectedManagedApp || selectedAppBusy}
-                    value={exportConfig.catalogIconPath}
-                    onChange={(_event, data) => updateExportConfig('catalogIconPath', data.value)}
-                  />
-                </Field>
-                <Field
-                  hint="Up to five package-directory-relative PNG paths or credential-free HTTPS image URLs, one per line."
-                  label="Screenshots"
-                  size="small"
-                >
-                  <Textarea
-                    aria-label="App catalog screenshot paths"
-                    className="app-management-sidebar__path-list"
-                    disabled={!selectedManagedApp || selectedAppBusy}
-                    resize="vertical"
-                    value={exportConfig.screenshotPaths.join('\n')}
-                    onChange={(_event, data) => updateExportConfig('screenshotPaths', linesToValues(data.value))}
-                  />
-                </Field>
-              </div>
-            </details>
-
-            <details className="app-management-sidebar__catalog-group">
-              <summary>
-                <span className="app-management-sidebar__catalog-summary-label">
-                  <ChevronRight aria-hidden="true" className="app-management-sidebar__catalog-chevron" size={15} />
-                  <span>Details &amp; Support</span>
-                </span>
-                <small>Optional</small>
-              </summary>
-              <div className="app-management-sidebar__catalog-fields">
-                <Field hint="Choose up to three categories." label="Categories" size="small">
-                  <Dropdown
-                    aria-label="App catalog categories"
-                    disabled={!selectedManagedApp || selectedAppBusy}
-                    multiselect
-                    placeholder="Select categories"
-                    selectedOptions={exportConfig.categories}
-                    value={categorySelectionLabel(exportConfig.categories)}
-                    onOptionSelect={(_event, data) => {
-                      if (data.selectedOptions.length <= MAX_CATALOG_CATEGORIES) {
-                        updateExportConfig('categories', data.selectedOptions);
+            {selectedApp ? (
+              <div className="app-management-sidebar__app-controls">
+                {!selectedManagedApp ? (
+                  <p className="app-management-sidebar__hint">
+                    This loaded app is not managed by SPFx Kit. Active state, source version, and export config are unavailable.
+                  </p>
+                ) : null}
+                <Field data-disabled={selectedAppBusy || !selectedManagedApp || !canToggleConnection} orientation="horizontal">
+                  <Switch
+                    checked={connected}
+                    disabled={selectedAppBusy || !selectedManagedApp || !canToggleConnection}
+                    id={connectionSwitchId}
+                    onCheckedChange={(checked) => {
+                      if (selectedManagedApp) {
+                        void runConnectionAction(selectedManagedApp, checked);
                       }
                     }}
-                  >
-                    {CATALOG_CATEGORY_OPTIONS.map((category) => (
-                      <Option
-                        disabled={
-                          exportConfig.categories.length >= MAX_CATALOG_CATEGORIES && !exportConfig.categories.includes(category)
+                  />
+                  <FieldLabel htmlFor={connectionSwitchId}>
+                    {selectedManagedApp ? (connected ? 'Active' : 'Inactive') : 'Active status unavailable'}
+                  </FieldLabel>
+                </Field>
+
+                <AppSettingsField
+                  description={selectedManagedApp?.version.detail}
+                  label="Version"
+                  name="version"
+                  ownerId={contentId}
+                >
+                  {(controlId) => (
+                    <Select
+                      id={controlId}
+                      disabled={selectedAppBusy || !selectedManagedApp?.version.canSelect}
+                      items={Object.fromEntries(
+                        (selectedManagedApp?.version.options || []).map((option) => [option.id, option.label])
+                      )}
+                      open={versionPickerOpen}
+                      value={selectedManagedApp?.version.selected || null}
+                      onOpenChange={setVersionPickerOpen}
+                      onValueChange={(nextValue) => {
+                        if (
+                          selectedManagedApp &&
+                          nextValue &&
+                          (nextValue !== selectedManagedApp.version.selected ||
+                            selectedManagedApp.version.updateAvailable ||
+                            (nextValue === 'latest' && !selectedManagedApp.version.autoUpdate))
+                        ) {
+                          void runVersionAction(selectedManagedApp.id, nextValue);
                         }
-                        key={category}
-                        text={category}
-                        value={category}
-                      >
-                        {category}
-                      </Option>
-                    ))}
-                  </Dropdown>
-                </Field>
-                <Field label="Developer or organization name" size="small">
-                  <Input
-                    aria-label="App catalog developer name"
-                    disabled={!selectedManagedApp || selectedAppBusy}
-                    value={exportConfig.developerName}
-                    onChange={(_event, data) => updateExportConfig('developerName', data.value)}
-                  />
-                </Field>
-                <Field label="Website URL" size="small">
-                  <Input
-                    aria-label="App catalog developer website URL"
-                    disabled={!selectedManagedApp || selectedAppBusy}
-                    type="url"
-                    value={exportConfig.developerWebsiteUrl}
-                    onChange={(_event, data) => updateExportConfig('developerWebsiteUrl', data.value)}
-                  />
-                </Field>
-                <Field label="Privacy URL" size="small">
-                  <Input
-                    aria-label="App catalog privacy URL"
-                    disabled={!selectedManagedApp || selectedAppBusy}
-                    type="url"
-                    value={exportConfig.privacyUrl}
-                    onChange={(_event, data) => updateExportConfig('privacyUrl', data.value)}
-                  />
-                </Field>
-                <Field label="Terms-of-use URL" size="small">
-                  <Input
-                    aria-label="App catalog terms of use URL"
-                    disabled={!selectedManagedApp || selectedAppBusy}
-                    type="url"
-                    value={exportConfig.termsOfUseUrl}
-                    onChange={(_event, data) => updateExportConfig('termsOfUseUrl', data.value)}
-                  />
-                </Field>
-                <Field hint="Microsoft Partner Network identifier, when applicable." label="Partner ID" size="small">
-                  <Input
-                    aria-label="App catalog partner ID"
-                    disabled={!selectedManagedApp || selectedAppBusy}
-                    value={exportConfig.partnerId}
-                    onChange={(_event, data) => updateExportConfig('partnerId', data.value)}
-                  />
-                </Field>
-                <p className="app-management-sidebar__hint">
-                  This export writes the package’s default metadata. App Catalog administrators can override listing details, and
-                  localized listing text remains managed in the app’s source files. Publisher, support URL, and featured status
-                  are catalog-admin settings rather than SPFx package fields.
-                </p>
+                      }}
+                    >
+                      <SelectTrigger aria-label={`Source version for ${selectedApp.title}`} size="sm">
+                        <SelectValue>
+                          {selectedManagedApp ? versionDropdownLabel(selectedManagedApp) : 'Local / unmanaged'}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent align="start" id={versionSelectContentId}>
+                        <SelectGroup>
+                          {(selectedManagedApp?.version.options || []).map((option) => (
+                            <SelectItem key={option.id} value={option.id}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </AppSettingsField>
               </div>
-            </details>
-          </div>
-          <Button
-            appearance="primary"
-            aria-label="Save app export config"
-            disabled={!selectedManagedApp || selectedAppBusy}
-            icon={<Save size={14} />}
-            onClick={() => void saveExportConfig()}
-          >
-            Save
-          </Button>
-        </section>
-
-        <section aria-labelledby="app-actions-heading" className="app-management-sidebar__section">
-          <h2 id="app-actions-heading">App actions</h2>
-          <div className="app-management-sidebar__actions">
-            <Button disabled={busy} icon={<FolderInput size={14} />} onClick={onOpenImport}>
-              Import
-            </Button>
-            <Button
-              disabled={!selectedAppLoaded || busy}
-              icon={<Download size={14} />}
-              onClick={() => onOpenExport(['standalone'])}
-            >
-              Download standalone
-            </Button>
-            <Button disabled={!selectedAppLoaded || busy} icon={<Download size={14} />} onClick={() => onOpenExport(['cdn'])}>
-              Download CDN-ready
-            </Button>
-          </div>
-        </section>
-
-        {status.phase !== 'idle' ? (
-          <section
-            aria-live={status.phase === 'error' ? 'assertive' : 'polite'}
-            className={`app-management-sidebar__status app-management-sidebar__status--${status.phase}`}
-            role={status.phase === 'error' ? 'alert' : 'status'}
-          >
-            <span aria-hidden="true" className="app-management-sidebar__status-icon">
-              {status.phase === 'complete' ? (
-                <Check size={13} />
-              ) : status.phase === 'error' ? (
-                <X size={13} />
-              ) : (
-                <RefreshCw size={13} />
-              )}
-            </span>
-            <span>
-              <strong>{status.message}</strong>
-              {status.detail ? <small>{status.detail}</small> : null}
-            </span>
+            ) : (
+              <p className="app-management-sidebar__empty">No workspace apps found.</p>
+            )}
           </section>
-        ) : null}
-      </DrawerBody>
+          <Separator />
 
-      <DrawerFooter className="app-management-sidebar__footer">
-        <span className="app-management-sidebar__sync-meta">
-          {lastSyncedAt ? (
-            <time dateTime={lastSyncedAt.toISOString()} title={lastSyncedAt.toLocaleString()}>
-              Last synced {formatSyncTimestamp(lastSyncedAt)}
-            </time>
+          <section aria-labelledby={exportConfigHeadingId} className="app-management-sidebar__section">
+            <h2 id={exportConfigHeadingId}>App export config</h2>
+            <div className="app-management-sidebar__config-grid">
+              <AppSettingsField label="App Name" name="export-app-name" ownerId={contentId}>
+                {(controlId) => (
+                  <Input
+                    aria-label="Export app name"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    id={controlId}
+                    value={exportConfig.appName}
+                    onChange={(event) => updateExportConfig('appName', event.currentTarget.value)}
+                  />
+                )}
+              </AppSettingsField>
+              <AppSettingsField
+                description={`The ${SPPKG_EXTENSION} extension is added automatically.`}
+                label="File Name"
+                name="export-file-name"
+                ownerId={contentId}
+              >
+                {(controlId, fieldDescriptionId) => (
+                  <InputGroup className="app-management-sidebar__file-name-control">
+                    <InputGroupInput
+                      aria-describedby={fieldDescriptionId}
+                      aria-label="Export file name"
+                      disabled={!selectedManagedApp || selectedAppBusy}
+                      id={controlId}
+                      value={fileNameStem(exportConfig.fileName)}
+                      onChange={(event) =>
+                        updateExportConfig('fileName', `${fileNameStem(event.currentTarget.value)}${SPPKG_EXTENSION}`)
+                      }
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupText>{SPPKG_EXTENSION}</InputGroupText>
+                    </InputGroupAddon>
+                  </InputGroup>
+                )}
+              </AppSettingsField>
+              <AppSettingsField label="Version" name="export-version" ownerId={contentId}>
+                {(controlId) => (
+                  <Input
+                    aria-label="Export version"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    id={controlId}
+                    value={exportConfig.version}
+                    onChange={(event) => updateExportConfig('version', event.currentTarget.value)}
+                  />
+                )}
+              </AppSettingsField>
+              <Field className="app-management-sidebar__wide-field">
+                <FieldTitle>GitHub source repository</FieldTitle>
+                {sourceRepositoryUrl ? (
+                  <a
+                    aria-label={`Open GitHub source repository for ${selectedApp?.title || selectedManagedApp?.id || 'selected app'}`}
+                    className="app-management-sidebar__url-link"
+                    href={sourceRepositoryUrl}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {sourceRepositoryUrl}
+                  </a>
+                ) : (
+                  <span className="app-management-sidebar__url-unavailable">No tracked GitHub source repository.</span>
+                )}
+              </Field>
+              <Field className="app-management-sidebar__wide-field">
+                <FieldTitle>Active local CDN runtime manifest</FieldTitle>
+                {activeLocalCdnManifestUrl ? (
+                  <a
+                    aria-label={`Open active local CDN runtime manifest for ${selectedApp?.title || selectedManagedApp?.id || 'selected app'}`}
+                    className="app-management-sidebar__url-link"
+                    href={activeLocalCdnManifestUrl}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {activeLocalCdnManifestUrl}
+                  </a>
+                ) : (
+                  <span className="app-management-sidebar__url-unavailable">No local CDN release is selected.</span>
+                )}
+                <FieldDescription>Selected immutable release used only by the Lab's loopback CDN runtime.</FieldDescription>
+              </Field>
+              <AppSettingsField
+                className="app-management-sidebar__wide-field"
+                label="Deployment CDN URL"
+                name="export-cdn-url"
+                ownerId={contentId}
+              >
+                {(controlId) => (
+                  <Input
+                    aria-label="Export CDN URL"
+                    disabled={!selectedManagedApp || selectedAppBusy}
+                    id={controlId}
+                    type="url"
+                    value={exportConfig.cdnUrl}
+                    onChange={(event) => updateExportConfig('cdnUrl', event.currentTarget.value)}
+                  />
+                )}
+              </AppSettingsField>
+            </div>
+
+            <div className="app-management-sidebar__catalog-intro">
+              <h3>App catalog details</h3>
+              <p>
+                Optional information shown on the SharePoint app details page. Leave a field blank to omit it from the package.
+              </p>
+            </div>
+
+            <Accordion className="app-management-sidebar__catalog-groups" multiple>
+              <AccordionItem className="app-management-sidebar__catalog-group" id={listingAccordionId} value="listing">
+                <AccordionTrigger>
+                  <span>Listing &amp; About</span>
+                  <small>Optional</small>
+                </AccordionTrigger>
+                <AccordionContent className="app-management-sidebar__catalog-fields">
+                  <AppSettingsField
+                    description="The concise description used by the package and app listing. Existing Description values are preserved here."
+                    label="Short description"
+                    name="catalog-short-description"
+                    ownerId={contentId}
+                  >
+                    {(controlId, fieldDescriptionId) => (
+                      <Textarea
+                        aria-describedby={fieldDescriptionId}
+                        aria-label="App catalog short description"
+                        disabled={!selectedManagedApp || selectedAppBusy}
+                        id={controlId}
+                        value={exportConfig.description}
+                        onChange={(event) => updateExportConfig('description', event.currentTarget.value)}
+                      />
+                    )}
+                  </AppSettingsField>
+                  <AppSettingsField
+                    description="Additional About content for the SharePoint app details page."
+                    label="Long description"
+                    name="catalog-long-description"
+                    ownerId={contentId}
+                  >
+                    {(controlId, fieldDescriptionId) => (
+                      <Textarea
+                        aria-describedby={fieldDescriptionId}
+                        aria-label="App catalog long description"
+                        disabled={!selectedManagedApp || selectedAppBusy}
+                        id={controlId}
+                        value={exportConfig.longDescription}
+                        onChange={(event) => updateExportConfig('longDescription', event.currentTarget.value)}
+                      />
+                    )}
+                  </AppSettingsField>
+                  <AppSettingsField
+                    description="Optional YouTube or Vimeo video for the app details page."
+                    label="Video URL"
+                    name="catalog-video-url"
+                    ownerId={contentId}
+                  >
+                    {(controlId, fieldDescriptionId) => (
+                      <Input
+                        aria-describedby={fieldDescriptionId}
+                        aria-label="App catalog video URL"
+                        disabled={!selectedManagedApp || selectedAppBusy}
+                        id={controlId}
+                        type="url"
+                        value={exportConfig.videoUrl}
+                        onChange={(event) => updateExportConfig('videoUrl', event.currentTarget.value)}
+                      />
+                    )}
+                  </AppSettingsField>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem className="app-management-sidebar__catalog-group" id={visualsAccordionId} value="visuals">
+                <AccordionTrigger>
+                  <span>Visuals</span>
+                  <small>Optional</small>
+                </AccordionTrigger>
+                <AccordionContent className="app-management-sidebar__catalog-fields">
+                  <AppSettingsField
+                    description="Fabric icon name or image URL/path used in the web part toolbox. This does not set the App Catalog listing image."
+                    label="Toolbox icon"
+                    name="catalog-toolbox-icon"
+                    ownerId={contentId}
+                  >
+                    {(controlId, fieldDescriptionId) => (
+                      <Input
+                        aria-describedby={fieldDescriptionId}
+                        aria-label="Web part toolbox icon"
+                        disabled={!selectedManagedApp || selectedAppBusy}
+                        id={controlId}
+                        value={exportConfig.appIcon}
+                        onChange={(event) => updateExportConfig('appIcon', event.currentTarget.value)}
+                      />
+                    )}
+                  </AppSettingsField>
+                  <AppSettingsField
+                    description="Package-directory-relative path to the PNG bundled for the App Catalog listing."
+                    label="App Catalog icon"
+                    name="catalog-icon"
+                    ownerId={contentId}
+                  >
+                    {(controlId, fieldDescriptionId) => (
+                      <Input
+                        aria-describedby={fieldDescriptionId}
+                        aria-label="App catalog icon path"
+                        disabled={!selectedManagedApp || selectedAppBusy}
+                        id={controlId}
+                        value={exportConfig.catalogIconPath}
+                        onChange={(event) => updateExportConfig('catalogIconPath', event.currentTarget.value)}
+                      />
+                    )}
+                  </AppSettingsField>
+                  <AppSettingsField
+                    description="Up to five package-directory-relative PNG paths or credential-free HTTPS image URLs, one per line."
+                    label="Screenshots"
+                    name="catalog-screenshots"
+                    ownerId={contentId}
+                  >
+                    {(controlId, fieldDescriptionId) => (
+                      <Textarea
+                        aria-describedby={fieldDescriptionId}
+                        aria-label="App catalog screenshot paths"
+                        className="app-management-sidebar__path-list"
+                        disabled={!selectedManagedApp || selectedAppBusy}
+                        id={controlId}
+                        value={exportConfig.screenshotPaths.join('\n')}
+                        onChange={(event) => updateExportConfig('screenshotPaths', linesToValues(event.currentTarget.value))}
+                      />
+                    )}
+                  </AppSettingsField>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem className="app-management-sidebar__catalog-group" id={supportAccordionId} value="support">
+                <AccordionTrigger>
+                  <span>Details &amp; Support</span>
+                  <small>Optional</small>
+                </AccordionTrigger>
+                <AccordionContent className="app-management-sidebar__catalog-fields">
+                  <AppSettingsField
+                    description="Choose up to three categories."
+                    label="Categories"
+                    name="categories"
+                    ownerId={contentId}
+                  >
+                    {(controlId, fieldDescriptionId) => (
+                      <Select
+                        id={controlId}
+                        disabled={!selectedManagedApp || selectedAppBusy}
+                        items={Object.fromEntries(CATALOG_CATEGORY_OPTIONS.map((category) => [category, category]))}
+                        multiple
+                        open={categoriesPickerOpen}
+                        value={exportConfig.categories}
+                        onOpenChange={setCategoriesPickerOpen}
+                        onValueChange={(nextCategories) => {
+                          if (nextCategories.length <= MAX_CATALOG_CATEGORIES) {
+                            updateExportConfig('categories', nextCategories);
+                          }
+                        }}
+                      >
+                        <SelectTrigger aria-describedby={fieldDescriptionId} aria-label="App catalog categories" size="sm">
+                          <SelectValue placeholder="Select categories">
+                            {(values) => categorySelectionLabel(values as string[])}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent align="start" id={categoriesSelectContentId}>
+                          <SelectGroup>
+                            {CATALOG_CATEGORY_OPTIONS.map((category) => (
+                              <SelectItem
+                                disabled={
+                                  exportConfig.categories.length >= MAX_CATALOG_CATEGORIES &&
+                                  !exportConfig.categories.includes(category)
+                                }
+                                key={category}
+                                value={category}
+                              >
+                                {category}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </AppSettingsField>
+                  <AppSettingsField label="Developer or organization name" name="catalog-developer-name" ownerId={contentId}>
+                    {(controlId) => (
+                      <Input
+                        aria-label="App catalog developer name"
+                        disabled={!selectedManagedApp || selectedAppBusy}
+                        id={controlId}
+                        value={exportConfig.developerName}
+                        onChange={(event) => updateExportConfig('developerName', event.currentTarget.value)}
+                      />
+                    )}
+                  </AppSettingsField>
+                  <AppSettingsField label="Website URL" name="catalog-website-url" ownerId={contentId}>
+                    {(controlId) => (
+                      <Input
+                        aria-label="App catalog developer website URL"
+                        disabled={!selectedManagedApp || selectedAppBusy}
+                        id={controlId}
+                        type="url"
+                        value={exportConfig.developerWebsiteUrl}
+                        onChange={(event) => updateExportConfig('developerWebsiteUrl', event.currentTarget.value)}
+                      />
+                    )}
+                  </AppSettingsField>
+                  <AppSettingsField label="Privacy URL" name="catalog-privacy-url" ownerId={contentId}>
+                    {(controlId) => (
+                      <Input
+                        aria-label="App catalog privacy URL"
+                        disabled={!selectedManagedApp || selectedAppBusy}
+                        id={controlId}
+                        type="url"
+                        value={exportConfig.privacyUrl}
+                        onChange={(event) => updateExportConfig('privacyUrl', event.currentTarget.value)}
+                      />
+                    )}
+                  </AppSettingsField>
+                  <AppSettingsField label="Terms-of-use URL" name="catalog-terms-url" ownerId={contentId}>
+                    {(controlId) => (
+                      <Input
+                        aria-label="App catalog terms of use URL"
+                        disabled={!selectedManagedApp || selectedAppBusy}
+                        id={controlId}
+                        type="url"
+                        value={exportConfig.termsOfUseUrl}
+                        onChange={(event) => updateExportConfig('termsOfUseUrl', event.currentTarget.value)}
+                      />
+                    )}
+                  </AppSettingsField>
+                  <AppSettingsField
+                    description="Microsoft Partner Network identifier, when applicable."
+                    label="Partner ID"
+                    name="catalog-partner-id"
+                    ownerId={contentId}
+                  >
+                    {(controlId, fieldDescriptionId) => (
+                      <Input
+                        aria-describedby={fieldDescriptionId}
+                        aria-label="App catalog partner ID"
+                        disabled={!selectedManagedApp || selectedAppBusy}
+                        id={controlId}
+                        value={exportConfig.partnerId}
+                        onChange={(event) => updateExportConfig('partnerId', event.currentTarget.value)}
+                      />
+                    )}
+                  </AppSettingsField>
+                  <p className="app-management-sidebar__hint">
+                    This export writes the package’s default metadata. App Catalog administrators can override listing details,
+                    and localized listing text remains managed in the app’s source files. Publisher, support URL, and featured
+                    status are catalog-admin settings rather than SPFx package fields.
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+            <Button
+              aria-label="Save app export config"
+              disabled={!selectedManagedApp || selectedAppBusy}
+              onClick={() => void saveExportConfig()}
+            >
+              <Save data-icon="inline-start" />
+              Save
+            </Button>
+          </section>
+
+          <Separator />
+          <section aria-labelledby={appActionsHeadingId} className="app-management-sidebar__section">
+            <h2 id={appActionsHeadingId}>App actions</h2>
+            <div className="app-management-sidebar__actions">
+              <Button disabled={busy} variant="outline" onClick={onOpenImport}>
+                <FolderInput data-icon="inline-start" />
+                Import
+              </Button>
+              <Button disabled={!selectedAppLoaded || busy} variant="outline" onClick={() => onOpenExport(['standalone'])}>
+                <Download data-icon="inline-start" />
+                Download standalone
+              </Button>
+              <Button disabled={!selectedAppLoaded || busy} variant="outline" onClick={() => onOpenExport(['cdn'])}>
+                <Download data-icon="inline-start" />
+                Download CDN-ready
+              </Button>
+            </div>
+          </section>
+
+          {status.phase !== 'idle' ? (
+            <Alert
+              aria-live={status.phase === 'error' ? 'assertive' : 'polite'}
+              className={`app-management-sidebar__status app-management-sidebar__status--${status.phase}`}
+              role={status.phase === 'error' ? 'alert' : 'status'}
+              variant={status.phase === 'error' ? 'destructive' : 'default'}
+            >
+              {status.phase === 'complete' ? <Check /> : status.phase === 'error' ? <X /> : <Spinner />}
+              <AlertTitle>{status.message}</AlertTitle>
+              {status.detail ? <AlertDescription>{status.detail}</AlertDescription> : null}
+            </Alert>
           ) : null}
-          <Button
-            appearance="subtle"
-            aria-label="Re-sync apps"
-            disabled={busy || status.phase === 'loading'}
-            icon={showSyncSuccess ? <Check size={14} /> : <RefreshCw size={14} />}
-            onClick={() => void syncManagedApps()}
-          >
-            Re-sync
-          </Button>
-        </span>
-        {status.reloadRecommended ? (
-          <Button appearance="primary" icon={<RefreshCw size={14} />} onClick={() => window.location.reload()}>
-            Reload lab
-          </Button>
-        ) : (
-          <Button appearance="secondary" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-        )}
-      </DrawerFooter>
-    </Drawer>
+        </div>
+
+        <SheetFooter className="app-management-sidebar__footer" data-sidebar="footer">
+          <span className="app-management-sidebar__sync-meta">
+            {lastSyncedAt ? (
+              <time dateTime={lastSyncedAt.toISOString()} title={lastSyncedAt.toLocaleString()}>
+                Last synced {formatSyncTimestamp(lastSyncedAt)}
+              </time>
+            ) : null}
+            <Button
+              aria-label="Re-sync apps"
+              disabled={busy || status.phase === 'loading'}
+              size="sm"
+              variant="ghost"
+              onClick={() => void syncManagedApps()}
+            >
+              {showSyncSuccess ? <Check data-icon="inline-start" /> : <RefreshCw data-icon="inline-start" />}
+              Re-sync
+            </Button>
+          </span>
+          {status.reloadRecommended ? (
+            <Button onClick={() => window.location.reload()}>
+              <RefreshCw data-icon="inline-start" />
+              Reload lab
+            </Button>
+          ) : (
+            <SheetClose render={<Button variant="outline" />}>Close</SheetClose>
+          )}
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 

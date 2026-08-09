@@ -144,13 +144,26 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   expect(themeTriggerBox!.width).toBe(28);
 
   await expect(page.getByRole('button', { name: 'Manage apps' })).toHaveCount(0);
-  const appMenuButton = page.locator('button[aria-controls="app-management-sidebar"]');
+  const appMenuButton = page.getByRole('button', { name: 'Open app menu' });
   await appMenuButton.click();
-  const sidebar = page.locator('#app-management-sidebar');
+  const sidebar = page.locator('[data-sidebar="sidebar"]');
   await expect(sidebar).toBeVisible();
+  await expect(sidebar).toHaveAttribute('data-slot', 'sheet-content');
+  await expect(sidebar.locator('xpath=ancestor::*[@data-spfx-ui-portal-host]')).toHaveCount(1);
+  const sidebarId = await sidebar.getAttribute('id');
+  expect(sidebarId).toBeTruthy();
+  const controlledAppMenuButton = page.locator(`button[aria-controls="${sidebarId}"]`);
+  await expect(controlledAppMenuButton).toHaveAttribute('aria-controls', sidebarId!);
   await expect(sidebar.getByText('App settings')).toBeVisible();
-  await expect(appMenuButton).toHaveAttribute('aria-expanded', 'true');
-  await sidebar.getByRole('button', { name: 'Close app settings sidebar' }).click();
+  await expect(controlledAppMenuButton).toHaveAttribute('aria-expanded', 'true');
+  const selectedAppTrigger = sidebar.getByRole('combobox', { name: 'Selected app' });
+  await selectedAppTrigger.click();
+  await page.getByRole('listbox').press('Escape');
+  await expect(sidebar).toBeVisible();
+  await expect(selectedAppTrigger).toHaveAttribute('aria-expanded', 'false');
+  await sidebar.press('Escape');
+  await expect(sidebar).toBeHidden();
+  await expect(appMenuButton).toBeFocused();
 
   await themeTrigger.click();
   const themeContent = page.locator('[data-slot="dropdown-menu-content"]');
@@ -1007,14 +1020,14 @@ test('shows selected app state, saves export config, and can select a source rel
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Open app menu' }).click();
-  const sidebar = page.locator('#app-management-sidebar');
-  await expect(sidebar.getByRole('combobox', { name: 'Selected app' })).toHaveText('Hello Card');
-  await expect(sidebar.getByRole('switch', { name: 'Active: Hello Card' })).toBeChecked();
+  const sidebar = page.locator('[data-sidebar="sidebar"]');
+  await expect(sidebar.getByRole('combobox', { name: 'Selected app' })).toContainText('Hello Card');
+  await expect(sidebar.getByRole('switch', { name: 'Active', exact: true })).toBeChecked();
   await expect(sidebar.getByRole('switch', { name: /pinned/i })).toHaveCount(0);
 
   const versionDropdown = sidebar.getByRole('combobox', { name: 'Source version for Hello Card' });
   await expect(versionDropdown).toBeDisabled();
-  await expect(sidebar.getByRole('switch', { name: 'Active: Hello Card' })).toBeDisabled();
+  await expect(sidebar.getByRole('switch', { name: 'Active', exact: true })).toBeDisabled();
   releaseLatestUpdate();
   await expect(versionDropdown).toContainText('Latest · v1.3.0');
   await expect(versionDropdown).toBeEnabled();
@@ -1023,16 +1036,13 @@ test('shows selected app state, saves export config, and can select a source rel
   await expect(sidebar.getByRole('textbox', { name: 'Export app name' })).toHaveValue('Hello Card');
   const fileNameInput = sidebar.getByRole('textbox', { name: 'Export file name' });
   const fileNameControl = sidebar.locator('.app-management-sidebar__file-name-control');
-  const fileNameOverlay = sidebar.locator('.app-management-sidebar__file-name-overlay');
-  const fileNameMirror = sidebar.locator('.app-management-sidebar__file-name-mirror');
-  const fileNameSuffix = sidebar.locator('.app-management-sidebar__file-name-suffix');
+  const fileNameSuffix = fileNameControl.locator('[data-slot="input-group-addon"]');
   await expect(fileNameInput).toHaveValue('hello-card');
-  await expect(fileNameInput).toHaveAttribute('aria-describedby', 'export-file-name-description');
-  await expect(fileNameMirror).toHaveText('hello-card');
+  await expect(fileNameInput).toHaveAttribute('aria-describedby', /spfx-ui-/u);
+  await expect(fileNameControl).toHaveAttribute('data-slot', 'input-group');
+  await expect(fileNameInput).toHaveAttribute('data-slot', 'input-group-control');
   await expect(fileNameSuffix).toHaveText('.sppkg');
-  await expect(fileNameOverlay).toHaveCSS('pointer-events', 'none');
   await expect(fileNameSuffix).not.toHaveAttribute('tabindex', /.+/);
-  await expectFileNameSuffixToTrail(fileNameControl, fileNameMirror, fileNameSuffix);
   await expect(sidebar.getByRole('textbox', { name: 'Export version' })).toHaveValue('1.3.0');
   const activeLocalCdnManifestUrl = `${syntheticMockCdnPublicOrigin}/apps/hello-card-spfx/versions/${selectedLocalReleaseId}/deployment-manifest.json`;
   const sourceRepositoryLink = sidebar.getByRole('link', { name: 'Open GitHub source repository for Hello Card' });
@@ -1075,9 +1085,7 @@ test('shows selected app state, saves export config, and can select a source rel
   await expect(sidebar.getByText(/Publisher, support URL, and featured status/)).toBeVisible();
 
   const accessibility = await new AxeBuilder({ page })
-    .include('#app-management-sidebar')
-    .exclude('[aria-label="Save app export config"]')
-    .exclude('.app-management-sidebar__footer .fui-Button')
+    .include('[data-sidebar="sidebar"]')
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();
   expect(accessibility.violations).toEqual([]);
@@ -1103,8 +1111,6 @@ test('shows selected app state, saves export config, and can select a source rel
   await sidebar.getByRole('textbox', { name: 'Export app name' }).fill(savedConfig.appName);
   await fileNameInput.fill(savedConfig.fileName);
   await expect(fileNameInput).toHaveValue('hello-card-enterprise');
-  await expect(fileNameMirror).toHaveText('hello-card-enterprise');
-  await expectFileNameSuffixToTrail(fileNameControl, fileNameMirror, fileNameSuffix);
   await sidebar.getByRole('textbox', { name: 'App catalog short description' }).fill(savedConfig.description);
   await sidebar.getByRole('textbox', { name: 'App catalog long description' }).fill(savedConfig.longDescription);
   await sidebar.getByRole('textbox', { name: 'App catalog video URL' }).fill(savedConfig.videoUrl);
@@ -1113,8 +1119,8 @@ test('shows selected app state, saves export config, and can select a source rel
   await sidebar.getByRole('textbox', { name: 'App catalog screenshot paths' }).fill(savedConfig.screenshotPaths.join('\n'));
   const categoryDropdown = sidebar.getByRole('combobox', { name: 'App catalog categories' });
   await categoryDropdown.click();
-  await page.getByRole('menuitemcheckbox', { name: 'Workflow & Process Management' }).click();
-  await categoryDropdown.press('Escape');
+  await page.getByRole('option', { name: 'Workflow & Process Management' }).click();
+  await page.getByRole('listbox').press('Escape');
   await sidebar.getByRole('textbox', { name: 'App catalog developer name' }).fill(savedConfig.developerName);
   await sidebar.getByRole('textbox', { name: 'App catalog developer website URL' }).fill(savedConfig.developerWebsiteUrl);
   await sidebar.getByRole('textbox', { name: 'App catalog privacy URL' }).fill(savedConfig.privacyUrl);
@@ -1156,7 +1162,7 @@ test('opens export downloads with the requested package target selected', async 
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Open app menu' }).click();
-  let sidebar = page.locator('#app-management-sidebar');
+  let sidebar = page.locator('[data-sidebar="sidebar"]');
   await sidebar.getByRole('button', { name: 'Download standalone' }).click();
 
   await expect(page.getByRole('combobox', { name: 'Select app to export' })).toBeVisible();
@@ -1166,7 +1172,7 @@ test('opens export downloads with the requested package target selected', async 
   await page.getByRole('button', { name: 'Close export package drawer' }).click();
 
   await page.getByRole('button', { name: 'Open app menu' }).click();
-  sidebar = page.locator('#app-management-sidebar');
+  sidebar = page.locator('[data-sidebar="sidebar"]');
   await sidebar.getByRole('button', { name: 'Download CDN-ready' }).click();
 
   await expect(page.getByRole('checkbox', { name: 'Include hello-card.sppkg' })).not.toBeChecked();
@@ -1203,7 +1209,7 @@ test('shows compact feedback after re-syncing the app registry', async ({ page }
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Open app menu' }).click();
-  const sidebar = page.locator('#app-management-sidebar');
+  const sidebar = page.locator('[data-sidebar="sidebar"]');
   await sidebar.getByRole('button', { name: 'Re-sync apps' }).click();
 
   await expect(sidebar.getByText('Synced the lab app registry.')).toHaveCount(0);
@@ -1236,7 +1242,7 @@ test('keeps the app settings sidebar within a narrow viewport without horizontal
   await page.goto('/');
   await page.getByRole('button', { name: 'Open app menu' }).click();
 
-  const sidebar = page.locator('#app-management-sidebar');
+  const sidebar = page.locator('[data-sidebar="sidebar"]');
   await expect(sidebar).toBeVisible();
   await expect.poll(async () => (await sidebar.boundingBox())?.x ?? -1).toBeGreaterThanOrEqual(0);
   const sidebarBox = await sidebar.boundingBox();
@@ -1246,34 +1252,6 @@ test('keeps the app settings sidebar within a narrow viewport without horizontal
   expect(await sidebar.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
-
-async function expectFileNameSuffixToTrail(control: Locator, mirror: Locator, suffix: Locator): Promise<void> {
-  const textMetrics = await control.evaluate((element) => {
-    const input = element.querySelector('input');
-    const overlay = element.querySelector('.app-management-sidebar__file-name-overlay');
-    const inputStyle = window.getComputedStyle(input!);
-    const overlayStyle = window.getComputedStyle(overlay!);
-    const inputBox = input!.getBoundingClientRect();
-    const overlayBox = overlay!.getBoundingClientRect();
-    return {
-      inputFont: inputStyle.font,
-      overlayFont: overlayStyle.font,
-      textStartDelta: overlayBox.left - (inputBox.left + Number.parseFloat(inputStyle.paddingLeft))
-    };
-  });
-  const [controlBox, mirrorBox, suffixBox] = await Promise.all([
-    control.boundingBox(),
-    mirror.boundingBox(),
-    suffix.boundingBox()
-  ]);
-  expect(textMetrics.overlayFont).toBe(textMetrics.inputFont);
-  expect(Math.abs(textMetrics.textStartDelta)).toBeLessThanOrEqual(0.5);
-  expect(controlBox).not.toBeNull();
-  expect(mirrorBox).not.toBeNull();
-  expect(suffixBox).not.toBeNull();
-  expect(Math.abs(suffixBox!.x - (mirrorBox!.x + mirrorBox!.width))).toBeLessThanOrEqual(1);
-  expect(suffixBox!.x + suffixBox!.width).toBeLessThanOrEqual(controlBox!.x + controlBox!.width);
-}
 
 test('pins one startup app and restores it after refresh', async ({ page }) => {
   await page.goto('/');
@@ -1296,7 +1274,7 @@ test('pins one startup app and restores it after refresh', async ({ page }) => {
   await expect(restoredSelector).toContainText('Hello Card');
 
   await page.getByRole('button', { name: 'Open app menu' }).click();
-  const sidebar = page.locator('#app-management-sidebar');
+  const sidebar = page.locator('[data-sidebar="sidebar"]');
   await expect(sidebar.getByRole('switch', { name: /pinned/i })).toHaveCount(0);
   const selectedAppSelector = sidebar.getByRole('combobox', { name: 'Selected app' });
   await selectedAppSelector.click();
@@ -1320,10 +1298,7 @@ test('pins one startup app and restores it after refresh', async ({ page }) => {
   await expect(page.getByRole('listbox')).toBeHidden();
   await selectedAppSelector.click();
   await expect(leftUnpinButton).toBeVisible();
-  await selectedAppSelector.focus();
-  await page.keyboard.down('Alt');
-  await page.keyboard.press('KeyP');
-  await page.keyboard.up('Alt');
+  await pinnedAppOption.dispatchEvent('keydown', { altKey: true, code: 'KeyP', key: 'p' });
   await expect(page.getByRole('button', { name: 'Pin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'false');
   await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
   await expect(sidebar.getByRole('status')).toContainText('Hello Card is no longer pinned.');
@@ -1332,8 +1307,9 @@ test('pins one startup app and restores it after refresh', async ({ page }) => {
   await selectedAppSelector.dispatchEvent('keydown', { altKey: true, code: 'KeyP', ctrlKey: true });
   await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
 
-  await selectedAppSelector.press('Escape');
-  await sidebar.getByRole('button', { name: 'Close app settings sidebar' }).click();
+  await page.getByRole('listbox').press('Escape');
+  await sidebar.press('Escape');
+  await expect(sidebar).toBeHidden();
   await restoredSelector.click();
   const unpinnedRightOption = page.getByRole('option', { name: /Hello Card\. Not pinned\./ });
   await unpinnedRightOption.hover();
