@@ -204,6 +204,10 @@ function isExcludedDependency(name, exclusions) {
 function assertAllowedProductionDependency(specifier, label, policy) {
   const dependency = dependencyIdentity(specifier, label);
   assert(!isExcludedDependency(dependency.name, policy.excludedDependencies), `${label} uses excluded dependency ${dependency.name}`);
+  assert(
+    Object.hasOwn(policy.directProductionDependencies, dependency.name),
+    `${label} uses undeclared production dependency ${dependency.name}`
+  );
   const expectedVersion = policy.directProductionDependencies[dependency.name];
   assert(expectedVersion, `${label} uses undeclared production dependency ${dependency.name}`);
   if (dependency.version) {
