@@ -200,8 +200,12 @@ export async function acquireBaseUiRecoveryClaim(
       if (await pathExists(claimRoot)) {
         await assertRecoveryOuterBinding(lockRoot, outerIdentity, ownerToken);
         let existing;
+        let existingIdentity;
         try {
+          existingIdentity = await stat(claimRoot);
           existing = await readRecoveryClaim(lockRoot);
+          const afterReadIdentity = await stat(claimRoot);
+          if (!sameDirectoryIdentity(existingIdentity, afterReadIdentity)) continue;
         } catch (error) {
           if (error && typeof error === 'object' && error.code === 'ENOENT' && !(await pathExists(claimRoot))) continue;
           throw new Error(`Base UI recovery claim metadata is unreadable at ${claimRoot}`, { cause: error });
@@ -222,12 +226,22 @@ export async function acquireBaseUiRecoveryClaim(
           throw error;
         }
         let moved;
+        let movedIdentity;
         try {
+          movedIdentity = await stat(quarantineRoot);
           moved = await readClaimDirectory(quarantineRoot);
+          const afterMovedReadIdentity = await stat(quarantineRoot);
+          if (!sameDirectoryIdentity(movedIdentity, afterMovedReadIdentity)) {
+            throw new Error('Base UI recovery claim identity changed while validating quarantine');
+          }
         } catch (error) {
           throw new Error(`Unexpected recovery claim was preserved at ${quarantineRoot}`, { cause: error });
         }
-        if (moved.token !== existing.token || moved.ownerToken !== existing.ownerToken) {
+        if (
+          !sameDirectoryIdentity(existingIdentity, movedIdentity) ||
+          moved.token !== existing.token ||
+          moved.ownerToken !== existing.ownerToken
+        ) {
           throw new Error(`Unexpected recovery claim was preserved at ${quarantineRoot}`);
         }
         ownedQuarantines.push({ target: quarantineRoot, claim: existing });

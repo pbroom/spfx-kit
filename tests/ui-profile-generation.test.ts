@@ -396,7 +396,7 @@ describe('Base UI preparation lock transaction', () => {
         afterStaleClaimRead: async () => {
           await acquireBaseUiRecoveryClaim(fixture.lockRoot, fixture.owner.token, {
             pid: 303,
-            token: 'live-replacement-claim',
+            token: 'stale-claim-before-race',
             startedAt: '2026-08-06T00:00:02.000Z',
             isProcessAlive: () => false
           });
@@ -407,7 +407,8 @@ describe('Base UI preparation lock transaction', () => {
     const retained = (await readdir(fixture.lockRoot)).filter((name) => name.startsWith('.recovery-claim-stale-'));
     expect(retained).toHaveLength(1);
     expect(JSON.parse(await readFile(path.join(fixture.lockRoot, retained[0], 'claim.json'), 'utf8'))).toMatchObject({
-      token: 'live-replacement-claim',
+      pid: 303,
+      token: 'stale-claim-before-race',
       ownerToken: fixture.owner.token
     });
     await expect(readFile(path.join(fixture.lockRoot, 'recovery-claim/claim.json'), 'utf8')).rejects.toThrow();
