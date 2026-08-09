@@ -55,11 +55,15 @@
     },
     {
       "path": "scripts/lib/generate-profile.mjs",
-      "sha256": "1d53c504fce184dbb3ad9c24555a82f0db43bf1a27d5d31d535a8bc1e25e89d2"
+      "sha256": "e539ebe91f9322fc5a1a946fa3b87153dc64161ae043057976ec49d9e89004ff"
     },
     {
       "path": "scripts/lib/profile-update-intake.mjs",
-      "sha256": "b7132ba7e830c19e70bb6dba388164d644c836c2bf4c71563d6d3b6e0448e11c"
+      "sha256": "985b54367e1fdb4094ca795acab42d36057dc485d58c6d9432bd500d8a87dd36"
+    },
+    {
+      "path": "scripts/lib/shadcn-registry-worker.mjs",
+      "sha256": "617c572520433162759b828b38090cc32927e9f8dea48e7ddcf3431baf99ecb6"
     },
     {
       "path": "scripts/lib/typecheck-generated-profile.mjs",
@@ -67,7 +71,7 @@
     },
     {
       "path": "scripts/lib/generate-validated-profile.mjs",
-      "sha256": "b6149cbda859ffbcd9977e4a65947660224eff2f5b253f563d598fb5499e959a"
+      "sha256": "e4f1f2c3ecdb1e5932546f886273cfc91bffe01096b4e1065acc162d551218d0"
     },
     {
       "path": "scripts/lib/generation-transaction.mjs",

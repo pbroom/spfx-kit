@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -13,7 +14,8 @@ import {
   assertPinnedShadcnToolchain,
   shadcnRuntimeClosureSha256,
   fetchPinnedRegistrySnapshots,
-  fetchValidatedProfileUpdateSnapshots
+  fetchValidatedProfileUpdateSnapshots,
+  runPinnedRegistryCliIntake
 } from '../packages/ui-profile/scripts/lib/profile-update-intake.mjs';
 // @ts-expect-error plain .mjs module without type declarations
 import { canonicalJson } from '../packages/ui-profile/scripts/lib/profile.mjs';
@@ -37,6 +39,16 @@ const dependencyPolicy = {
   }
 };
 const temporaryRoots: string[] = [];
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 function installedToolchain() {
   return {
@@ -299,10 +311,14 @@ describe('pinned shadcn network intake', () => {
     });
 
     expect(snapshots.get('button')?.toString('utf8')).toBe(raw);
-    expect(getRegistryItemsImpl).toHaveBeenCalledWith(['button'], {
-      config: { style: 'base-nova' },
-      useCache: false
-    });
+    expect(getRegistryItemsImpl).toHaveBeenCalledWith(
+      ['button'],
+      {
+        config: { style: 'base-nova' },
+        useCache: false
+      },
+      { signal: expect.any(AbortSignal) }
+    );
   });
 
   it('accepts the complete committed dependency and fetched-source closure', async () => {
@@ -497,10 +513,15 @@ describe('pinned shadcn network intake', () => {
     }
   });
 
-  it('bounds the pinned CLI-backed registry intake with the same deadline', async () => {
+  it('terminates pinned CLI work before surfacing its deadline', async () => {
     const { packageRoot, resolvedRegistryUrl } = installedToolchain();
     const cliItem = { name: 'button', type: 'registry:ui', files: [] };
-    const getRegistryItemsImpl = vi.fn(async () => new Promise<never>(() => {}));
+    const termination = deferred<number>();
+    class ControlledWorker extends EventEmitter {
+      terminate = vi.fn(() => termination.promise);
+    }
+    const worker = new ControlledWorker();
+    const createRegistryWorker = vi.fn(() => worker);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       const pending = fetchPinnedRegistrySnapshots({
@@ -509,18 +530,61 @@ describe('pinned shadcn network intake', () => {
         registryIds: ['button'],
         dependencyPolicy,
         fetchImpl: async () => new Response(JSON.stringify(cliItem), { status: 200 }),
-        getRegistryItemsImpl,
+        createRegistryWorker,
         resolvedRegistryUrl,
         requestTimeoutMs: 50
       });
-      while (getRegistryItemsImpl.mock.calls.length === 0) await new Promise((resolve) => setImmediate(resolve));
+      while (createRegistryWorker.mock.calls.length === 0) await new Promise((resolve) => setImmediate(resolve));
       const rejection = expect(pending).rejects.toThrow('Pinned shadcn CLI registry intake exceeded the 50ms deadline');
+      let settled = false;
+      void pending.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        }
+      );
 
       await vi.advanceTimersByTimeAsync(50);
 
+      expect(worker.terminate).toHaveBeenCalledOnce();
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      termination.resolve(1);
       await rejection;
+      expect(settled).toBe(true);
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    [
+      'returns worker results',
+      'export async function getRegistryItems(ids) { return ids.map((name) => ({ name, type: "registry:ui", files: [] })) }',
+      null
+    ],
+    [
+      'propagates worker errors',
+      'export async function getRegistryItems() { throw new TypeError("worker failure") }',
+      'worker failure'
+    ]
+  ])('%s from the killable pinned CLI boundary', async (_label, source, expectedError) => {
+    const root = await mkdtemp(path.join(tmpdir(), 'ui-profile-registry-worker-'));
+    temporaryRoots.push(root);
+    const modulePath = path.join(root, 'registry.mjs');
+    await writeFile(modulePath, source);
+    const operation = runPinnedRegistryCliIntake({
+      resolvedRegistryUrl: pathToFileURL(modulePath).href,
+      registryIds: ['button'],
+      preset: 'base-nova',
+      signal: new AbortController().signal
+    });
+    if (expectedError) {
+      await expect(operation).rejects.toThrow(expectedError);
+    } else {
+      await expect(operation).resolves.toEqual([{ name: 'button', type: 'registry:ui', files: [] }]);
     }
   });
 
