@@ -74,7 +74,7 @@
       "fontHeadingMarker": "font-heading"
     },
     "implementation": "scripts/lib/profile.mjs",
-    "implementationSha256": "73402e3c11f86509e467ca7d30ee6e75d921b4d9f209f23dd8612d0f27be786b"
+    "implementationSha256": "2bf17557cad55c8f41145365f3f582ad4b9615bec93e46d2d5f2104ac88f7dc9"
   },
   "registryIds": [
     "button",
