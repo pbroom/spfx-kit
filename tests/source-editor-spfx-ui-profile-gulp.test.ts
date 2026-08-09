@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // @ts-expect-error portable .mjs module without declarations
-import { prepareSpfxUiProfileBaseUi } from '../packages/source-editor-react/spfx-ui-profile-prepare.mjs';
+import {
+  prepareSpfxUiProfileBaseUi,
+  spfxUiProfilePreparationActorIsActive
+} from '../packages/source-editor-react/spfx-ui-profile-prepare.mjs';
 // @ts-expect-error plain .mjs module without declarations
 import { resolveSourceEditorUiProfile } from '../packages/spfx-tools/src/lib/source-editor-vendor.mjs';
 
@@ -20,6 +23,30 @@ afterEach(async () => {
 });
 
 describe('portable Better Text SPFx UI profile build adapter', () => {
+  it('binds preparation ownership to a process instance and fails closed when identity is unknown', async () => {
+    const actor = { pid: 42, processIdentity: 'process-instance-a' };
+    await expect(
+      spfxUiProfilePreparationActorIsActive(actor, {
+        observeProcess: async () => ({ status: 'alive', identity: 'process-instance-a' })
+      })
+    ).resolves.toBe(true);
+    await expect(
+      spfxUiProfilePreparationActorIsActive(actor, {
+        observeProcess: async () => ({ status: 'alive', identity: 'process-instance-b' })
+      })
+    ).resolves.toBe(false);
+    await expect(
+      spfxUiProfilePreparationActorIsActive(actor, {
+        observeProcess: async () => ({ status: 'unknown' })
+      })
+    ).resolves.toBe(true);
+    await expect(
+      spfxUiProfilePreparationActorIsActive(actor, {
+        observeProcess: async () => ({ status: 'missing' })
+      })
+    ).resolves.toBe(false);
+  });
+
   it('prepares an app-local Base UI copy and composes its alias and exact CSS rule with Monaco', async () => {
     const appRoot = await mkdtemp(path.join(tmpdir(), 'better-text-ui-profile-'));
     temporaryDirectories.push(appRoot);
@@ -108,6 +135,98 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
       await writeFile(fixturePath, original);
     }
     await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
+
+    const lockRoot = path.join(appRoot, 'temp', 'spfx-ui-profile', '.base-ui-prepare-lock');
+    const lockOwnerPath = path.join(lockRoot, 'owner.json');
+    await mkdir(lockRoot);
+    await writeFile(
+      lockOwnerPath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        pid: 2_147_483_647,
+        token: 'abandoned-preparation',
+        startedAt: '2026-08-09T00:00:00.000Z',
+        processIdentity: null
+      })}\n`
+    );
+    const activeRecoveryToken = '00000000-0000-0000-0000-000000000000';
+    const recoveryClaimPrefix = `${path.basename(lockRoot)}.recovery-claim-`;
+    const recoveryClaimRoot = path.join(path.dirname(lockRoot), `${recoveryClaimPrefix}${activeRecoveryToken}`);
+    const recoveryClaimPath = path.join(recoveryClaimRoot, 'claim.json');
+    const retiredLockRoot = `${lockRoot}.stale-test`;
+    let publicationBoundaryCalls = 0;
+    await expect(
+      prepareSpfxUiProfileBaseUi({
+        appRoot,
+        profileRoot,
+        onPreparationLockBoundary: async (boundary: string) => {
+          if (boundary !== 'initial-recovery-claims-scanned' || publicationBoundaryCalls > 0) return;
+          publicationBoundaryCalls += 1;
+          await mkdir(recoveryClaimRoot);
+          await writeFile(
+            recoveryClaimPath,
+            `${JSON.stringify({
+              schemaVersion: 1,
+              pid: process.pid,
+              token: activeRecoveryToken,
+              ownerToken: 'abandoned-preparation',
+              startedAt: '2026-08-09T00:00:00.000Z',
+              processIdentity: null
+            })}\n`
+          );
+          await rename(lockRoot, retiredLockRoot);
+        }
+      })
+    ).rejects.toThrow(`Another Base UI preparation recovery is already in progress (pid ${process.pid}`);
+    expect(publicationBoundaryCalls).toBe(1);
+    await expect(lstat(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(JSON.parse(await readFile(path.join(retiredLockRoot, 'owner.json'), 'utf8')).token).toBe('abandoned-preparation');
+    expect(JSON.parse(await readFile(recoveryClaimPath, 'utf8')).token).toBe(activeRecoveryToken);
+    expect((await readdir(path.dirname(lockRoot))).filter((name) => name.startsWith(recoveryClaimPrefix))).toEqual([
+      path.basename(recoveryClaimRoot)
+    ]);
+    await rename(retiredLockRoot, lockRoot);
+    await rm(recoveryClaimRoot, { recursive: true });
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
+    await expect(readFile(lockOwnerPath)).rejects.toMatchObject({ code: 'ENOENT' });
+
+    const retiredClaimResidue = path.join(path.dirname(lockRoot), `${path.basename(lockRoot)}.recovery-retired-interrupted`);
+    await mkdir(retiredClaimResidue);
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
+    expect((await lstat(retiredClaimResidue)).isDirectory()).toBe(true);
+    await rm(retiredClaimResidue, { recursive: true });
+
+    const incompleteCanonicalClaim = path.join(path.dirname(lockRoot), `${recoveryClaimPrefix}incomplete-canonical-claim`);
+    await mkdir(incompleteCanonicalClaim);
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).rejects.toMatchObject({ code: 'ENOENT' });
+    expect((await lstat(incompleteCanonicalClaim)).isDirectory()).toBe(true);
+    await rm(incompleteCanonicalClaim, { recursive: true });
+
+    await mkdir(lockRoot);
+    await writeFile(
+      lockOwnerPath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        pid: process.pid,
+        token: 'active-preparation',
+        startedAt: '2026-08-09T00:00:00.000Z',
+        processIdentity: null
+      })}\n`
+    );
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).rejects.toThrow(
+      `Another Base UI preparation is already in progress (pid ${process.pid}`
+    );
+    expect(JSON.parse(await readFile(lockOwnerPath, 'utf8')).token).toBe('active-preparation');
+    await rm(lockRoot, { recursive: true });
+
+    const danglingLockTarget = path.join(appRoot, 'missing-preparation-lock-target');
+    await symlink(danglingLockTarget, lockRoot, 'dir');
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).rejects.toThrow(
+      'Base UI preparation lock metadata is unreadable'
+    );
+    expect((await lstat(lockRoot)).isSymbolicLink()).toBe(true);
+    await expect(lstat(danglingLockTarget)).rejects.toMatchObject({ code: 'ENOENT' });
+    await rm(lockRoot);
 
     const inheritedInclude = /[\\/]src[\\/]/u;
     const inheritedExclude = /legacy-global/u;
@@ -231,6 +350,18 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
     expect(() => registerSpfxUiProfileGulp(createBuildStub(), { appRoot, profileRoot })).toThrow(
       'Resolved app-local @babel/runtime path differs from the app lockfile.'
     );
+
+    const outsideTempRoot = await mkdtemp(path.join(tmpdir(), 'spfx-ui-profile-outside-'));
+    temporaryDirectories.push(outsideTempRoot);
+    const outsideSentinel = path.join(outsideTempRoot, 'sentinel.txt');
+    await writeFile(outsideSentinel, 'must remain outside the app\n');
+    await rm(path.join(appRoot, 'temp'), { recursive: true, force: true });
+    await symlink(outsideTempRoot, path.join(appRoot, 'temp'), 'dir');
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).rejects.toThrow(
+      'Prepared Base UI path must be an app-local directory'
+    );
+    expect(await readFile(outsideSentinel, 'utf8')).toBe('must remain outside the app\n');
+    await expect(lstat(path.join(outsideTempRoot, 'spfx-ui-profile'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 
