@@ -131,18 +131,24 @@ describe('React 17 UI profile normalization', () => {
   });
 
   it('pins the Combobox module subpath without rewriting comments or runtime strings', () => {
+    const source =
+      'import { Combobox as ComboboxPrimitive } from "@base-ui/react"\n' +
+      'const packageLabel = "@base-ui/react"\n' +
+      '// Example: from "@base-ui/react"\n' +
+      'const Combobox = ComboboxPrimitive.Root\n' +
+      'export const Portal = ({ ...props }: ComboboxPrimitive.Portal.Props) => <ComboboxPrimitive.Portal {...props} />\n' +
+      'export function ComboboxContent({ ...props }: ComboboxPrimitive.Popup.Props) { return <Portal><ComboboxPrimitive.Popup {...props} /></Portal> }\n' +
+      'export { Combobox, packageLabel }\n';
     const result = normalizeRegistrySource({
-      source:
-        'import { Combobox as ComboboxPrimitive } from "@base-ui/react"\n' +
-        'const packageLabel = "@base-ui/react"\n' +
-        '// Example: from "@base-ui/react"\n' +
-        'const Combobox = ComboboxPrimitive.Root\n' +
-        'export const Portal = ({ ...props }: ComboboxPrimitive.Portal.Props) => <ComboboxPrimitive.Portal {...props} />\n' +
-        'export function ComboboxContent({ ...props }: ComboboxPrimitive.Popup.Props) { return <Portal><ComboboxPrimitive.Popup {...props} /></Portal> }\n' +
-        'export { Combobox, packageLabel }\n',
+      source,
       registrySourcePath: 'registry/base-nova/ui/combobox.tsx'
     });
+    const windowsResult = normalizeRegistrySource({
+      source,
+      registrySourcePath: 'registry\\base-nova\\ui\\combobox.tsx'
+    });
 
+    expect(windowsResult).toEqual(result);
     expect(result.source).toContain('from "@base-ui/react/combobox"');
     expect(result.source).toContain('const packageLabel = "@base-ui/react"');
     expect(result.source).toContain('// Example: from "@base-ui/react"');

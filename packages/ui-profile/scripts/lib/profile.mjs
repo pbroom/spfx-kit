@@ -4416,7 +4416,8 @@ export function prefixTailwindClassCandidates(
   return { source: normalized, transformed: replacements.some((replacement) => replacement.changed) };
 }
 
-export function normalizeRegistrySource({ source, registrySourcePath, sourceContext }) {
+export function normalizeRegistrySource({ source, registrySourcePath: rawRegistrySourcePath, sourceContext }) {
+  const registrySourcePath = rawRegistrySourcePath.replaceAll('\\', '/');
   const outputPath = outputPathForRegistrySource(registrySourcePath);
   const transformations = ['normalize-line-endings'];
   let normalized = source.replace(/\r\n?/g, '\n');
