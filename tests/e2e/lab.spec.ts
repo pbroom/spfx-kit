@@ -131,6 +131,18 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(page.getByRole('tab', { name: 'CDN', exact: true })).toHaveAttribute('aria-selected', 'false');
   await expect(page.getByRole('region', { name: 'Package resources' })).toHaveCount(0);
 
+  const themeTrigger = page.getByRole('button', { name: 'Theme: Light' });
+  const webPartTrigger = page.getByRole('combobox', { name: 'Select web part' });
+  await expect(themeTrigger).toHaveAttribute('data-slot', 'dropdown-menu-trigger');
+  await expect(themeTrigger).toHaveAttribute('aria-haspopup', 'menu');
+  await expect(webPartTrigger).toHaveAttribute('data-slot', 'select-trigger');
+  await expect(webPartTrigger).toHaveAttribute('data-size', 'sm');
+  await expect(webPartTrigger).toHaveAttribute('aria-haspopup', 'listbox');
+  const themeTriggerBox = await themeTrigger.boundingBox();
+  expect(themeTriggerBox).not.toBeNull();
+  expect(themeTriggerBox!.width).toBe(themeTriggerBox!.height);
+  expect(themeTriggerBox!.width).toBe(28);
+
   await expect(page.getByRole('button', { name: 'Manage apps' })).toHaveCount(0);
   const appMenuButton = page.locator('button[aria-controls="app-management-sidebar"]');
   await appMenuButton.click();
@@ -140,9 +152,24 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(appMenuButton).toHaveAttribute('aria-expanded', 'true');
   await sidebar.getByRole('button', { name: 'Close app settings sidebar' }).click();
 
-  await page.getByRole('button', { name: 'Theme: Light' }).click();
+  await themeTrigger.click();
+  const themeContent = page.locator('[data-slot="dropdown-menu-content"]');
+  await expect(themeContent).toHaveAttribute('id', /spfx-ui-/);
+  await expect(themeContent).toHaveAttribute('data-slot', 'dropdown-menu-content');
+  await expect(themeContent.locator('xpath=ancestor::*[@data-spfx-ui-portal-host]')).toHaveCount(1);
   await page.getByRole('menuitemradio', { name: 'Dark' }).click();
   await expect(page.locator('main.lab-shell')).toHaveClass(/lab-shell--dark/);
+  await expect(themeContent).toBeHidden();
+  await page.getByRole('button', { name: 'Theme: Dark' }).click();
+  await expect(themeContent).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(themeContent).toBeHidden();
+
+  await webPartTrigger.click();
+  const webPartContent = page.locator('[data-slot="select-content"]');
+  await expect(webPartContent).toHaveAttribute('id', /spfx-ui-/);
+  await expect(webPartContent).toHaveAttribute('data-slot', 'select-content');
+  await expect(webPartContent.locator('xpath=ancestor::*[@data-spfx-ui-portal-host]')).toHaveCount(1);
 });
 
 test('orders the segmented package mode and bucket controls after export while keeping display mode independent', async ({

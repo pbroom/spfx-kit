@@ -374,7 +374,6 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
                   render={
                     <Button
                       aria-label={`Theme: ${themeOptions.find((option) => option.value === themeMode)?.label || themeMode}`}
-                      className="theme-menu-trigger"
                       size="icon-sm"
                       variant="ghost"
                     />
@@ -450,7 +449,7 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
           <div className="lab-toolbar lab-toolbar--panel">
             <Select
               id={webPartSelectId}
-              items={webParts.map((webPart) => ({ label: webPart.title, value: webPart.id }))}
+              items={Object.fromEntries(webParts.map((webPart) => [webPart.id, webPart.title]))}
               open={webPartPickerOpen}
               value={selected?.id || null}
               onValueChange={(nextValue) => {
