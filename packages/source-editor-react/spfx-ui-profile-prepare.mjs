@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { access, cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +16,7 @@ const LOCK_OWNER_FILE = 'owner.json';
 const LOCK_RECOVERY_CLAIM_SUFFIX = '.recovery-claim-';
 const LOCK_RECOVERY_CLAIM_CANDIDATE_SUFFIX = '.recovery-candidate-';
 const LOCK_RECOVERY_CLAIM_FILE = 'claim.json';
+const PREPARATION_TRANSACTION_KIND = 'spfx-ui-profile-preparation-v1';
 const execFileAsync = promisify(execFile);
 const EXPORT_PATH = './spfx-id-ownership';
 const EXPORT_CONTRACT = {
@@ -26,16 +27,6 @@ const EXPORT_CONTRACT = {
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
-}
-
-async function exists(target) {
-  try {
-    await access(target);
-    return true;
-  } catch (error) {
-    if (error && typeof error === 'object' && error.code === 'ENOENT') return false;
-    throw error;
-  }
 }
 
 function isPathInside(root, target) {
@@ -157,7 +148,57 @@ function preparationLockActor(value, label) {
 }
 
 function preparationLockOwner(value) {
-  return preparationLockActor(value, 'owner');
+  const owner = preparationLockActor(value, 'owner');
+  if (Object.hasOwn(owner, 'transaction')) preparationTransaction(owner.transaction, owner.token);
+  return owner;
+}
+
+function preparationTransaction(value, ownerToken) {
+  const contractNames = ['id-ownership', 'popup-lifecycle', 'select-value'];
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    value.kind !== PREPARATION_TRANSACTION_KIND ||
+    value.token !== ownerToken ||
+    typeof value.preparedRoot !== 'string' ||
+    !path.isAbsolute(value.preparedRoot) ||
+    typeof value.backupRoot !== 'string' ||
+    !path.isAbsolute(value.backupRoot) ||
+    typeof value.stagingRoot !== 'string' ||
+    !path.isAbsolute(value.stagingRoot) ||
+    typeof value.hadPrepared !== 'boolean' ||
+    !value.contracts ||
+    typeof value.contracts !== 'object' ||
+    Array.isArray(value.contracts) ||
+    JSON.stringify(Object.keys(value.contracts)) !== JSON.stringify(contractNames) ||
+    contractNames.some((name) => typeof value.contracts[name] !== 'string' || !/^[a-f0-9]{64}$/u.test(value.contracts[name])) ||
+    !Object.hasOwn(value, 'priorTree') ||
+    (value.hadPrepared ? !value.priorTree : value.priorTree !== null) ||
+    (value.priorTree !== null && !preparationTreeRecord(value.priorTree)) ||
+    !preparationTreeRecord(value.stagedTree)
+  ) {
+    throw new Error('Base UI preparation transaction journal is invalid');
+  }
+  return value;
+}
+
+function preparationTreeRecord(value) {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof value.dev === 'string' &&
+    /^\d+$/u.test(value.dev) &&
+    typeof value.ino === 'string' &&
+    /^\d+$/u.test(value.ino) &&
+    typeof value.treeSha256 === 'string' &&
+    /^[a-f0-9]{64}$/u.test(value.treeSha256)
+  );
+}
+
+function samePreparationTreeRecord(left, right) {
+  return left.dev === right.dev && left.ino === right.ino && left.treeSha256 === right.treeSha256;
 }
 
 function preparationRecoveryClaim(value) {
@@ -278,6 +319,256 @@ async function assertPreparationLockBinding(lockRoot, expectedIdentity, ownerTok
     throw new Error('Base UI preparation lock owner changed during recovery');
   }
   return owner;
+}
+
+function assertPreparationTransactionPaths(transaction, { preparedRoot, backupRoot }) {
+  const stagingName = path.basename(transaction.stagingRoot);
+  if (
+    transaction.preparedRoot !== preparedRoot ||
+    transaction.backupRoot !== backupRoot ||
+    path.dirname(transaction.stagingRoot) !== path.dirname(preparedRoot) ||
+    !stagingName.startsWith('.base-ui-staging-') ||
+    stagingName === '.base-ui-staging-' ||
+    transaction.stagingRoot === preparedRoot ||
+    transaction.stagingRoot === backupRoot
+  ) {
+    throw new Error('Base UI preparation transaction paths do not match this preparation root');
+  }
+}
+
+async function preparationDirectoryExists(target, label) {
+  let identity;
+  try {
+    identity = await lstat(target, { bigint: true });
+  } catch (error) {
+    if (isMissing(error)) return false;
+    throw error;
+  }
+  if (!identity.isDirectory() || identity.isSymbolicLink()) {
+    throw new Error(`${label} must be an app-local directory: ${target}`);
+  }
+  return true;
+}
+
+async function recordPreparationTree(root, label) {
+  const before = await lstat(root, { bigint: true });
+  if (!before.isDirectory() || before.isSymbolicLink()) {
+    throw new Error(`${label} must be an app-local directory: ${root}`);
+  }
+  const digest = await treeSha256(root);
+  const after = await lstat(root, { bigint: true });
+  if (!sameFilesystemIdentity(before, after)) throw new Error(`${label} changed while its identity was recorded`);
+  return { dev: String(before.dev), ino: String(before.ino), treeSha256: digest };
+}
+
+async function assertRecordedPreparationTree(root, expected, label) {
+  const before = await lstat(root, { bigint: true });
+  if (!before.isDirectory() || before.isSymbolicLink()) {
+    throw new Error(`${label} must be an app-local directory: ${root}`);
+  }
+  if (String(before.dev) !== expected.dev || String(before.ino) !== expected.ino) {
+    throw new Error(`${label} directory identity differs from the transaction journal: ${root}`);
+  }
+  const digest = await treeSha256(root);
+  const after = await lstat(root, { bigint: true });
+  if (!sameFilesystemIdentity(before, after) || digest !== expected.treeSha256) {
+    throw new Error(`${label} tree identity differs from the transaction journal: ${root}`);
+  }
+}
+
+async function writePreparationLockOwnerAtomically(lockRoot, expectedIdentity, nextOwner) {
+  preparationLockOwner(nextOwner);
+  const currentOwner = await assertPreparationLockBinding(lockRoot, expectedIdentity, nextOwner.token);
+  if (currentOwner.token !== nextOwner.token) throw new Error('Base UI preparation lock ownership changed before journaling');
+  const candidatePath = path.join(lockRoot, `.owner-${randomUUID()}.json`);
+  let candidateOwned = true;
+  try {
+    await writeFile(candidatePath, `${JSON.stringify(nextOwner, null, 2)}\n`, { flag: 'wx' });
+    const candidateIdentity = await lstat(candidatePath, { bigint: true });
+    if (!candidateIdentity.isFile() || candidateIdentity.isSymbolicLink()) {
+      throw new Error('Base UI preparation transaction journal candidate must be a regular file');
+    }
+    await assertPreparationLockBinding(lockRoot, expectedIdentity, nextOwner.token);
+    await rename(candidatePath, path.join(lockRoot, LOCK_OWNER_FILE));
+    candidateOwned = false;
+    const writtenOwner = await assertPreparationLockBinding(lockRoot, expectedIdentity, nextOwner.token);
+    if (JSON.stringify(writtenOwner.transaction) !== JSON.stringify(nextOwner.transaction)) {
+      throw new Error('Base UI preparation transaction journal changed during publication');
+    }
+  } finally {
+    if (candidateOwned) {
+      await assertPreparationLockBinding(lockRoot, expectedIdentity, nextOwner.token);
+      await rm(candidatePath, { force: true });
+    }
+  }
+}
+
+async function beginPreparationTransaction(lockRoot, token, details) {
+  const lockIdentity = await lockDirectoryIdentity(lockRoot);
+  const owner = await assertPreparationLockBinding(lockRoot, lockIdentity, token);
+  if (owner.transaction) throw new Error('Base UI preparation lock already contains a transaction journal');
+  const priorTree = details.hadPrepared ? await recordPreparationTree(details.preparedRoot, 'Prior prepared Base UI tree') : null;
+  await assertPreparedTreeForRecovery(details.stagingRoot, details.contracts, 'Staged prepared tree');
+  const stagedTree = await recordPreparationTree(details.stagingRoot, 'Staged prepared Base UI tree');
+  const transaction = preparationTransaction(
+    {
+      kind: PREPARATION_TRANSACTION_KIND,
+      token,
+      preparedRoot: details.preparedRoot,
+      backupRoot: details.backupRoot,
+      stagingRoot: details.stagingRoot,
+      hadPrepared: details.hadPrepared,
+      contracts: { ...details.contracts },
+      priorTree,
+      stagedTree
+    },
+    token
+  );
+  assertPreparationTransactionPaths(transaction, details);
+  await writePreparationLockOwnerAtomically(lockRoot, lockIdentity, { ...owner, transaction });
+  return { transaction, lockIdentity };
+}
+
+async function assertPreparedTreeForRecovery(root, contracts, label) {
+  if (!(await preparedTreeIsCurrent(root, contracts))) {
+    throw new Error(`${label} is not a verified prepared Base UI tree: ${root}`);
+  }
+}
+
+async function assertStagedTreeForRecovery(root, transaction, label) {
+  await assertRecordedPreparationTree(root, transaction.stagedTree, label);
+  await assertPreparedTreeForRecovery(root, transaction.contracts, label);
+}
+
+async function mutatePreparationState(assertMutationOwnership, operation) {
+  await assertMutationOwnership();
+  await operation();
+  await assertMutationOwnership();
+}
+
+async function retirePreparationTree({ root, record, label, retiredPrefix, boundary, context, assertMutationOwnership }) {
+  await assertRecordedPreparationTree(root, record, label);
+  const retiredRoot = path.join(path.dirname(root), `${retiredPrefix}${randomUUID()}`);
+  await mutatePreparationState(assertMutationOwnership, () => rename(root, retiredRoot));
+  await assertRecordedPreparationTree(retiredRoot, record, `Retired ${label.toLowerCase()}`);
+  await context.onLockBoundary(boundary, { root, retiredRoot });
+  await mutatePreparationState(assertMutationOwnership, () => rm(retiredRoot, { recursive: true, force: true }));
+}
+
+async function recoverPreparationTransactionState(transaction, context, assertMutationOwnership) {
+  assertPreparationTransactionPaths(transaction, context);
+  const preparedExists = await preparationDirectoryExists(transaction.preparedRoot, 'Prepared Base UI recovery tree');
+  const backupExists = await preparationDirectoryExists(transaction.backupRoot, 'Prepared Base UI recovery backup');
+  const stagingExists = await preparationDirectoryExists(transaction.stagingRoot, 'Prepared Base UI recovery staging tree');
+
+  if (transaction.hadPrepared) {
+    if (preparedExists && !backupExists && stagingExists) {
+      await assertRecordedPreparationTree(transaction.preparedRoot, transaction.priorTree, 'Preserved prior prepared tree');
+      await assertStagedTreeForRecovery(transaction.stagingRoot, transaction, 'Preserved staged prepared tree');
+      await retirePreparationTree({
+        root: transaction.stagingRoot,
+        record: transaction.stagedTree,
+        label: 'Preserved staged prepared tree',
+        retiredPrefix: '.base-ui-staging-retired-',
+        boundary: 'recovery-staging-retired',
+        context,
+        assertMutationOwnership
+      });
+      return 'pre-swap';
+    }
+    if (!preparedExists && backupExists && stagingExists) {
+      await assertRecordedPreparationTree(transaction.backupRoot, transaction.priorTree, 'Preserved prior prepared backup');
+      await assertStagedTreeForRecovery(transaction.stagingRoot, transaction, 'Preserved staged prepared tree');
+      await mutatePreparationState(assertMutationOwnership, () => rename(transaction.backupRoot, transaction.preparedRoot));
+      await assertRecordedPreparationTree(transaction.preparedRoot, transaction.priorTree, 'Restored prior prepared tree');
+      await retirePreparationTree({
+        root: transaction.stagingRoot,
+        record: transaction.stagedTree,
+        label: 'Preserved staged prepared tree',
+        retiredPrefix: '.base-ui-staging-retired-',
+        boundary: 'recovery-staging-retired',
+        context,
+        assertMutationOwnership
+      });
+      return 'backup-restored';
+    }
+    if (!preparedExists && backupExists && !stagingExists) {
+      await assertRecordedPreparationTree(transaction.backupRoot, transaction.priorTree, 'Preserved prior prepared backup');
+      await mutatePreparationState(assertMutationOwnership, () => rename(transaction.backupRoot, transaction.preparedRoot));
+      await assertRecordedPreparationTree(transaction.preparedRoot, transaction.priorTree, 'Restored prior prepared tree');
+      return 'backup-restored';
+    }
+    if (preparedExists && backupExists && !stagingExists) {
+      await assertStagedTreeForRecovery(transaction.preparedRoot, transaction, 'Promoted prepared tree');
+      await assertRecordedPreparationTree(transaction.backupRoot, transaction.priorTree, 'Preserved prior prepared backup');
+      await retirePreparationTree({
+        root: transaction.backupRoot,
+        record: transaction.priorTree,
+        label: 'Preserved prior prepared backup',
+        retiredPrefix: '.base-ui-backup-retired-',
+        boundary: 'recovery-backup-retired',
+        context,
+        assertMutationOwnership
+      });
+      return 'promotion-finished';
+    }
+    if (preparedExists && !backupExists && !stagingExists) {
+      const preparedRecord = await recordPreparationTree(transaction.preparedRoot, 'Prepared tree');
+      if (samePreparationTreeRecord(preparedRecord, transaction.priorTree)) return 'rollback-complete';
+      if (samePreparationTreeRecord(preparedRecord, transaction.stagedTree)) {
+        await assertPreparedTreeForRecovery(transaction.preparedRoot, transaction.contracts, 'Prepared tree');
+        return 'complete';
+      }
+      throw new Error('Prepared Base UI tree does not match either journaled generation');
+    }
+  } else {
+    if (!preparedExists && !backupExists && stagingExists) {
+      await assertStagedTreeForRecovery(transaction.stagingRoot, transaction, 'Preserved staged prepared tree');
+      await retirePreparationTree({
+        root: transaction.stagingRoot,
+        record: transaction.stagedTree,
+        label: 'Preserved staged prepared tree',
+        retiredPrefix: '.base-ui-staging-retired-',
+        boundary: 'recovery-staging-retired',
+        context,
+        assertMutationOwnership
+      });
+      return 'pre-swap';
+    }
+    if (preparedExists && !backupExists && !stagingExists) {
+      await assertStagedTreeForRecovery(transaction.preparedRoot, transaction, 'Prepared tree');
+      return 'complete';
+    }
+    if (!preparedExists && !backupExists && !stagingExists) return 'rollback-complete';
+  }
+
+  throw new Error(
+    `Base UI preparation transaction is ambiguous (prepared=${preparedExists}, backup=${backupExists}, staging=${stagingExists}); all paths were preserved`
+  );
+}
+
+async function assertPreparationRecoveryOwnership(lockRoot, expectedIdentity, ownerToken, published) {
+  await assertPreparationLockBinding(lockRoot, expectedIdentity, ownerToken);
+  const before = await lockDirectoryIdentity(published.claimRoot);
+  const claim = await readPreparationRecoveryClaim(published.claimRoot);
+  const after = await lockDirectoryIdentity(published.claimRoot);
+  if (
+    !sameFilesystemIdentity(before, after) ||
+    !sameFilesystemIdentity(before, published.claimIdentity) ||
+    claim.token !== published.claim.token ||
+    claim.ownerToken !== ownerToken
+  ) {
+    throw new Error('Base UI preparation recovery claim changed before transaction recovery');
+  }
+}
+
+async function recoverOwnedPreparationTransaction(lockRoot, token, recoveryContext) {
+  const lockIdentity = await lockDirectoryIdentity(lockRoot);
+  const owner = await assertPreparationLockBinding(lockRoot, lockIdentity, token);
+  if (!owner.transaction) throw new Error('Base UI preparation transaction journal is missing');
+  return recoverPreparationTransactionState(owner.transaction, recoveryContext, () =>
+    assertPreparationLockBinding(lockRoot, lockIdentity, token)
+  );
 }
 
 async function pathExistsNoFollow(target) {
@@ -416,7 +707,7 @@ async function acquirePreparationRecoveryClaim(lockRoot, existingOwner, expected
   return publishPreparationRecoveryClaim(lockRoot, existingOwner, expectedIdentity, ownClaim);
 }
 
-async function reclaimStalePreparationLock(lockRoot, existingOwner, expectedIdentity) {
+async function reclaimStalePreparationLock(lockRoot, existingOwner, expectedIdentity, recoveryContext) {
   const published = await acquirePreparationRecoveryClaim(lockRoot, existingOwner, expectedIdentity);
   let result = false;
   let operationError;
@@ -435,6 +726,11 @@ async function reclaimStalePreparationLock(lockRoot, existingOwner, expectedIden
       finalClaim.ownerToken !== existingOwner.token
     ) {
       throw new Error('Base UI preparation recovery claim changed before lock retirement');
+    }
+    if (currentOwner.transaction) {
+      await recoverPreparationTransactionState(currentOwner.transaction, recoveryContext, () =>
+        assertPreparationRecoveryOwnership(lockRoot, expectedIdentity, existingOwner.token, published)
+      );
     }
     const staleRoot = `${lockRoot}.stale-${randomUUID()}`;
     let retired = false;
@@ -470,7 +766,7 @@ async function reclaimStalePreparationLock(lockRoot, existingOwner, expectedIden
   return result;
 }
 
-async function acquirePreparationLock(lockRoot, onLockBoundary) {
+async function acquirePreparationLock(lockRoot, onLockBoundary, recoveryContext) {
   const owner = preparationLockOwner(await newPreparationLockActor());
   for (let attempt = 0; attempt < 16; attempt += 1) {
     if (await publishPreparationLock(lockRoot, owner, onLockBoundary)) return owner;
@@ -491,7 +787,7 @@ async function acquirePreparationLock(lockRoot, onLockBoundary) {
         `Another Base UI preparation is already in progress (pid ${existingOwner.pid}, started ${existingOwner.startedAt})`
       );
     }
-    await reclaimStalePreparationLock(lockRoot, existingOwner, before);
+    await reclaimStalePreparationLock(lockRoot, existingOwner, before, recoveryContext);
   }
   throw new Error(`Base UI preparation lock contention did not settle at ${lockRoot}`);
 }
@@ -674,9 +970,14 @@ async function applyIdOwnership(profileRoot, stagingRoot, contract) {
 }
 
 async function preparedTreeIsCurrent(preparedRoot, contractDigests) {
-  if (!(await exists(path.join(preparedRoot, STAMP_FILE)))) return false;
+  if (!(await preparationDirectoryExists(preparedRoot, 'Prepared Base UI tree'))) return false;
+  const stampPath = path.join(preparedRoot, STAMP_FILE);
   try {
-    const stamp = JSON.parse(await readFile(path.join(preparedRoot, STAMP_FILE), 'utf8'));
+    const before = await lstat(stampPath, { bigint: true });
+    if (!before.isFile() || before.isSymbolicLink()) return false;
+    const stamp = JSON.parse(await readFile(stampPath, 'utf8'));
+    const after = await lstat(stampPath, { bigint: true });
+    if (!sameFilesystemIdentity(before, after)) return false;
     return (
       stamp.schemaVersion === 1 &&
       stamp.package === `${BASE_UI_PACKAGE}@${BASE_UI_VERSION}` &&
@@ -709,16 +1010,17 @@ export async function prepareSpfxUiProfileBaseUi({ appRoot, profileRoot, onPrepa
   const preparedRoot = path.join(preparedParent, 'base-ui');
   const backupRoot = path.join(preparedParent, '.base-ui-backup');
   const lockRoot = path.join(preparedParent, '.base-ui-prepare-lock');
-  const lockOwner = await acquirePreparationLock(lockRoot, onPreparationLockBoundary);
+  const recoveryContext = { preparedRoot, backupRoot, onLockBoundary: onPreparationLockBoundary };
+  const lockOwner = await acquirePreparationLock(lockRoot, onPreparationLockBoundary, recoveryContext);
 
   let stagingRoot;
-  let movedPreparedToBackup = false;
+  let transactionStarted = false;
   let result;
   let operationError;
   try {
     const installedRoot = await resolveInstalledBaseUi(resolvedAppRoot);
     if (!(await preparedTreeIsCurrent(preparedRoot, contractDigests))) {
-      if (await exists(backupRoot)) throw new Error('A retained Base UI backup requires manual inspection');
+      if (await pathExistsNoFollow(backupRoot)) throw new Error('A retained Base UI backup requires manual inspection');
       stagingRoot = await mkdtemp(path.join(preparedParent, '.base-ui-staging-'));
       await cp(installedRoot, stagingRoot, { recursive: true });
       if ((await treeSha256(stagingRoot)) !== BASE_UI_TREE_SHA256) throw new Error('Staged Base UI tree differs');
@@ -736,42 +1038,74 @@ export async function prepareSpfxUiProfileBaseUi({ appRoot, profileRoot, onPrepa
           contracts: contractDigests
         })}\n`
       );
-      if (await exists(preparedRoot)) {
-        await rename(preparedRoot, backupRoot);
-        movedPreparedToBackup = true;
+      const hadPrepared = await preparationDirectoryExists(preparedRoot, 'Prepared Base UI tree');
+      const journal = await beginPreparationTransaction(lockRoot, lockOwner.token, {
+        preparedRoot,
+        backupRoot,
+        stagingRoot,
+        hadPrepared,
+        contracts: contractDigests
+      });
+      transactionStarted = true;
+      const assertOwnedLock = () => assertPreparationLockBinding(lockRoot, journal.lockIdentity, lockOwner.token);
+      await onPreparationLockBoundary('preparation-transaction-journaled', { lockRoot, transaction: journal.transaction });
+      if (hadPrepared) {
+        await mutatePreparationState(assertOwnedLock, () => rename(preparedRoot, backupRoot));
+        await onPreparationLockBoundary('prepared-tree-backed-up', { lockRoot, transaction: journal.transaction });
       }
-      await rename(stagingRoot, preparedRoot);
+      await mutatePreparationState(assertOwnedLock, () => rename(stagingRoot, preparedRoot));
       stagingRoot = undefined;
-      await rm(backupRoot, { recursive: true, force: true });
-      movedPreparedToBackup = false;
+      await onPreparationLockBoundary('prepared-tree-promoted', { lockRoot, transaction: journal.transaction });
+      if (hadPrepared) {
+        await retirePreparationTree({
+          root: backupRoot,
+          record: journal.transaction.priorTree,
+          label: 'Preserved prior prepared backup',
+          retiredPrefix: '.base-ui-backup-retired-',
+          boundary: 'prepared-backup-retired',
+          context: recoveryContext,
+          assertMutationOwnership: assertOwnedLock
+        });
+      }
     }
     result = preparedRoot;
   } catch (error) {
     operationError = error;
-    try {
-      if (movedPreparedToBackup && !(await exists(preparedRoot)) && (await exists(backupRoot))) {
-        await rename(backupRoot, preparedRoot);
-      }
-    } catch (rollbackError) {
-      operationError = new AggregateError([error, rollbackError], 'Base UI preparation and rollback both failed');
-    }
   }
 
   const cleanupErrors = [];
-  try {
-    if (stagingRoot) await rm(stagingRoot, { recursive: true, force: true });
-  } catch (error) {
-    cleanupErrors.push(error);
-  }
-  try {
-    if (!(await releasePreparationLock(lockRoot, lockOwner.token))) {
-      throw new Error(`Base UI preparation lock ownership was lost before release at ${lockRoot}`);
+  let recoveryUnsafe = false;
+  if (operationError && transactionStarted) {
+    try {
+      await recoverOwnedPreparationTransaction(lockRoot, lockOwner.token, recoveryContext);
+    } catch (error) {
+      cleanupErrors.push(error);
+      recoveryUnsafe = true;
     }
-  } catch (error) {
-    cleanupErrors.push(error);
+  } else if (stagingRoot) {
+    try {
+      await rm(stagingRoot, { recursive: true, force: true });
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
   }
-  const cleanupError =
-    cleanupErrors.length > 1 ? new AggregateError(cleanupErrors, 'Base UI preparation cleanup failed') : cleanupErrors[0];
+  if (!recoveryUnsafe) {
+    try {
+      if (!(await releasePreparationLock(lockRoot, lockOwner.token))) {
+        throw new Error(`Base UI preparation lock ownership was lost before release at ${lockRoot}`);
+      }
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+  }
+  const cleanupError = recoveryUnsafe
+    ? new AggregateError(
+        cleanupErrors,
+        'Base UI preparation recovery failed; the transaction journal and owned lock were retained'
+      )
+    : cleanupErrors.length > 1
+      ? new AggregateError(cleanupErrors, 'Base UI preparation cleanup failed')
+      : cleanupErrors[0];
   if (operationError && cleanupError) {
     throw new AggregateError([operationError, cleanupError], 'Base UI preparation and cleanup both failed');
   }

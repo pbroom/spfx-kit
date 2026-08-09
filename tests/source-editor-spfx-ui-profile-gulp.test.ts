@@ -109,6 +109,93 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
     expect(await readFile(path.join(preparedRoot, 'spfx-id-ownership.mjs'), 'utf8')).toContain('BaseUiIdOwnershipProvider');
     await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
 
+    const preparedParent = path.dirname(preparedRoot);
+    const backupRoot = path.join(preparedParent, '.base-ui-backup');
+    const lockRoot = path.join(preparedParent, '.base-ui-prepare-lock');
+    const lockOwnerPath = path.join(lockRoot, 'owner.json');
+    const stampPath = path.join(preparedRoot, '.spfx-ui-profile-prepared.json');
+    const currentStamp = JSON.parse(await readFile(stampPath, 'utf8'));
+    await writeFile(stampPath, `${JSON.stringify({ ...currentStamp, preparedTreeSha256: '0'.repeat(64) })}\n`);
+    let journalBoundaryCalls = 0;
+    let backupBoundaryCalls = 0;
+    let interruptedOwner: any;
+    const heldBackupRoot = path.join(preparedParent, '.base-ui-backup-held-test');
+    await expect(
+      prepareSpfxUiProfileBaseUi({
+        appRoot,
+        profileRoot,
+        onPreparationLockBoundary: async (boundary: string) => {
+          if (boundary === 'preparation-transaction-journaled') {
+            journalBoundaryCalls += 1;
+            interruptedOwner = JSON.parse(await readFile(lockOwnerPath, 'utf8'));
+            expect(interruptedOwner.transaction).toMatchObject({
+              kind: 'spfx-ui-profile-preparation-v1',
+              token: interruptedOwner.token,
+              preparedRoot,
+              backupRoot,
+              hadPrepared: true,
+              contracts: currentStamp.contracts
+            });
+            expect(interruptedOwner.transaction.priorTree).not.toEqual(interruptedOwner.transaction.stagedTree);
+            expect((await lstat(preparedRoot)).isDirectory()).toBe(true);
+            await expect(lstat(backupRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+            expect((await lstat(interruptedOwner.transaction.stagingRoot)).isDirectory()).toBe(true);
+          }
+          if (boundary === 'prepared-tree-backed-up') {
+            backupBoundaryCalls += 1;
+            await rename(backupRoot, heldBackupRoot);
+            throw new Error('simulated process termination after the prepared tree was backed up');
+          }
+        }
+      })
+    ).rejects.toThrow('Base UI preparation and cleanup both failed');
+    expect(journalBoundaryCalls).toBe(1);
+    expect(backupBoundaryCalls).toBe(1);
+    await expect(lstat(preparedRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(lstat(backupRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect((await lstat(heldBackupRoot)).isDirectory()).toBe(true);
+    expect((await lstat(interruptedOwner.transaction.stagingRoot)).isDirectory()).toBe(true);
+    expect((await lstat(lockRoot)).isDirectory()).toBe(true);
+    await rename(heldBackupRoot, backupRoot);
+    await writeFile(lockOwnerPath, `${JSON.stringify({ ...interruptedOwner, pid: 2_147_483_647, processIdentity: null })}\n`);
+    let retiredStagingRoot: string | undefined;
+    await expect(
+      prepareSpfxUiProfileBaseUi({
+        appRoot,
+        profileRoot,
+        onPreparationLockBoundary: async (boundary: string, details: any) => {
+          if (boundary !== 'recovery-staging-retired') return;
+          retiredStagingRoot = details.retiredRoot;
+          throw new Error('simulated process termination after staging retirement');
+        }
+      })
+    ).rejects.toThrow('simulated process termination after staging retirement');
+    expect((await lstat(preparedRoot)).isDirectory()).toBe(true);
+    await expect(lstat(backupRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(lstat(interruptedOwner.transaction.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect((await lstat(retiredStagingRoot!)).isDirectory()).toBe(true);
+    expect((await lstat(lockRoot)).isDirectory()).toBe(true);
+
+    let retiredBackupRoot: string | undefined;
+    await expect(
+      prepareSpfxUiProfileBaseUi({
+        appRoot,
+        profileRoot,
+        onPreparationLockBoundary: async (boundary: string, details: any) => {
+          if (boundary !== 'prepared-backup-retired') return;
+          retiredBackupRoot = details.retiredRoot;
+          throw new Error('simulated process termination after backup retirement');
+        }
+      })
+    ).rejects.toThrow('simulated process termination after backup retirement');
+    expect((await lstat(preparedRoot)).isDirectory()).toBe(true);
+    await expect(lstat(backupRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect((await lstat(retiredBackupRoot!)).isDirectory()).toBe(true);
+    await expect(lstat(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
+    expect((await lstat(retiredStagingRoot!)).isDirectory()).toBe(true);
+    expect((await lstat(retiredBackupRoot!)).isDirectory()).toBe(true);
+
     const contractPaths = [
       'compat/base-ui-1.6.0/id-ownership/contract.json',
       'compat/base-ui-1.6.0/popup-lifecycle/contract.json',
@@ -136,8 +223,6 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
     }
     await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
 
-    const lockRoot = path.join(appRoot, 'temp', 'spfx-ui-profile', '.base-ui-prepare-lock');
-    const lockOwnerPath = path.join(lockRoot, 'owner.json');
     await mkdir(lockRoot);
     await writeFile(
       lockOwnerPath,
