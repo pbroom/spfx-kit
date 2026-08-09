@@ -380,6 +380,42 @@ describe('Base UI preparation lock transaction', () => {
     expect((await readdir(fixture.root)).some((name) => name.includes('recovery-claim-stale'))).toBe(false);
   });
 
+  it('revalidates a quarantined claim and preserves a live replacement', async () => {
+    const fixture = await journaledRecoveryFixture();
+    await acquireBaseUiRecoveryClaim(fixture.lockRoot, fixture.owner.token, {
+      pid: 101,
+      token: 'stale-claim-before-race',
+      startedAt: '2026-08-06T00:00:00.000Z'
+    });
+
+    await expect(
+      acquireBaseUiRecoveryClaim(fixture.lockRoot, fixture.owner.token, {
+        pid: 202,
+        token: 'stale-recoverer',
+        isProcessAlive: () => false,
+        afterStaleClaimRead: async () => {
+          await acquireBaseUiRecoveryClaim(fixture.lockRoot, fixture.owner.token, {
+            pid: 303,
+            token: 'live-replacement-claim',
+            startedAt: '2026-08-06T00:00:02.000Z',
+            isProcessAlive: () => false
+          });
+        }
+      })
+    ).rejects.toThrow('Unexpected recovery claim was preserved at');
+
+    const retained = (await readdir(fixture.lockRoot)).filter((name) => name.startsWith('.recovery-claim-stale-'));
+    expect(retained).toHaveLength(1);
+    expect(JSON.parse(await readFile(path.join(fixture.lockRoot, retained[0], 'claim.json'), 'utf8'))).toMatchObject({
+      token: 'live-replacement-claim',
+      ownerToken: fixture.owner.token
+    });
+    await expect(readFile(path.join(fixture.lockRoot, 'recovery-claim/claim.json'), 'utf8')).rejects.toThrow();
+    expect(JSON.parse(await readFile(path.join(fixture.lockRoot, 'owner.json'), 'utf8')).token).toBe(fixture.owner.token);
+    expect(await readFile(path.join(fixture.preparedRoot, 'sentinel.txt'), 'utf8')).toBe('old');
+    expect(await readFile(path.join(fixture.stagingRoot, 'sentinel.txt'), 'utf8')).toBe('new');
+  });
+
   it.each([
     ['pid', { pid: 0, token: 'owner', startedAt: '2026-08-06T00:00:00.000Z' }, 'positive safe integer'],
     ['token', { pid: 101, token: '', startedAt: '2026-08-06T00:00:00.000Z' }, 'nonempty string'],
