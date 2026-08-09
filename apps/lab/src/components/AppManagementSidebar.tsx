@@ -721,7 +721,7 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                   name="version"
                   ownerId={contentId}
                 >
-                  {(controlId) => (
+                  {(controlId, fieldDescriptionId) => (
                     <Select
                       id={controlId}
                       disabled={selectedAppBusy || !selectedManagedApp?.version.canSelect}
@@ -743,7 +743,11 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
                         }
                       }}
                     >
-                      <SelectTrigger aria-label={`Source version for ${selectedApp.title}`} size="sm">
+                      <SelectTrigger
+                        aria-describedby={selectedManagedApp?.version.detail ? fieldDescriptionId : undefined}
+                        aria-label={`Source version for ${selectedApp.title}`}
+                        size="sm"
+                      >
                         <SelectValue>
                           {selectedManagedApp ? versionDropdownLabel(selectedManagedApp) : 'Local / unmanaged'}
                         </SelectValue>

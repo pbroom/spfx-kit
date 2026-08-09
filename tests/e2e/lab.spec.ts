@@ -952,6 +952,7 @@ test('has no automatically detectable WCAG A or AA violations', async ({ page })
 });
 
 test('shows selected app state, saves export config, and can select a source release', async ({ page }) => {
+  const versionDetail = 'Choose which source release is active for this managed app.';
   let selectedVersion = 'latest';
   let latestVersion = '1.2.0';
   let updateAvailable = true;
@@ -1026,6 +1027,9 @@ test('shows selected app state, saves export config, and can select a source rel
   await expect(sidebar.getByRole('switch', { name: /pinned/i })).toHaveCount(0);
 
   const versionDropdown = sidebar.getByRole('combobox', { name: 'Source version for Hello Card' });
+  await expect(versionDropdown).toHaveAttribute('aria-describedby', /spfx-ui-/u);
+  const versionDescriptionId = await versionDropdown.getAttribute('aria-describedby');
+  await expect(sidebar.locator(`[id="${versionDescriptionId}"]`)).toHaveText(versionDetail);
   await expect(versionDropdown).toBeDisabled();
   await expect(sidebar.getByRole('switch', { name: 'Active', exact: true })).toBeDisabled();
   releaseLatestUpdate();
@@ -1401,7 +1405,8 @@ function managedAppFixtures(
         canSelect: true,
         updateAvailable,
         source: 'clone',
-        repositoryUrl: 'https://github.com/acme/hello-card-spfx'
+        repositoryUrl: 'https://github.com/acme/hello-card-spfx',
+        detail: 'Choose which source release is active for this managed app.'
       }
     },
     {
