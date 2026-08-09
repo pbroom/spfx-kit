@@ -83,6 +83,20 @@ async function readContracts(profileRoot, profileManifest) {
   return contracts;
 }
 
+async function verifyContractFixtures(profileRoot, contracts) {
+  for (const file of contracts['id-ownership'].contract.providerFiles) {
+    await readVerified(profileRoot, file.sourcePath, file.sha256, file.sourcePath);
+  }
+  for (const file of contracts['popup-lifecycle'].contract.files) {
+    await readVerified(profileRoot, file.originalPath, file.originalSha256, file.originalPath);
+    await readVerified(profileRoot, file.transformedPath, file.transformedSha256, file.transformedPath);
+  }
+  for (const file of contracts['select-value'].contract.files) {
+    await readVerified(profileRoot, file.upstreamPath, file.upstreamSha256, file.upstreamPath);
+    await readVerified(profileRoot, file.transformedPath, file.transformedSha256, file.transformedPath);
+  }
+}
+
 async function resolveInstalledBaseUi(appRoot) {
   const packageManifest = JSON.parse(await readFile(path.join(appRoot, 'package.json'), 'utf8'));
   const declared = packageManifest.dependencies?.[BASE_UI_PACKAGE] ?? packageManifest.devDependencies?.[BASE_UI_PACKAGE];
@@ -194,6 +208,7 @@ export async function prepareSpfxUiProfileBaseUi({ appRoot, profileRoot }) {
     throw new Error('Vendored UI profile prepared Base UI identity differs');
   }
   const contracts = await readContracts(resolvedProfileRoot, profileManifest);
+  await verifyContractFixtures(resolvedProfileRoot, contracts);
   const contractDigests = Object.fromEntries(
     Object.entries(contracts)
       .sort(([left], [right]) => left.localeCompare(right, 'en'))

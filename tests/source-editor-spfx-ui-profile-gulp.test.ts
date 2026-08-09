@@ -82,6 +82,33 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
     expect(await readFile(path.join(preparedRoot, 'spfx-id-ownership.mjs'), 'utf8')).toContain('BaseUiIdOwnershipProvider');
     await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
 
+    const contractPaths = [
+      'compat/base-ui-1.6.0/id-ownership/contract.json',
+      'compat/base-ui-1.6.0/popup-lifecycle/contract.json',
+      'compat/base-ui-1.6.0/select-value/contract.json'
+    ];
+    const fixtureBindings = [];
+    for (const contractPath of contractPaths) {
+      const contract = JSON.parse(await readFile(path.join(profileRoot, contractPath), 'utf8'));
+      for (const file of contract.providerFiles || []) {
+        fixtureBindings.push({ path: file.sourcePath, sha256: file.sha256 });
+      }
+      for (const file of contract.files || []) {
+        if (file.upstreamPath) fixtureBindings.push({ path: file.upstreamPath, sha256: file.upstreamSha256 });
+        if (file.originalPath) fixtureBindings.push({ path: file.originalPath, sha256: file.originalSha256 });
+        fixtureBindings.push({ path: file.transformedPath, sha256: file.transformedSha256 });
+      }
+    }
+    expect(fixtureBindings).toHaveLength(12);
+    for (const fixture of fixtureBindings) {
+      const fixturePath = path.join(profileRoot, fixture.path);
+      const original = await readFile(fixturePath);
+      await writeFile(fixturePath, Buffer.concat([original, Buffer.from('\ncorrupted fixture\n')]));
+      await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).rejects.toThrow(`${fixture.path} digest differs`);
+      await writeFile(fixturePath, original);
+    }
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
+
     const inheritedInclude = /[\\/]src[\\/]/u;
     const inheritedExclude = /legacy-global/u;
     const moduleRule = { ...createCssRule(true), include: inheritedInclude };
