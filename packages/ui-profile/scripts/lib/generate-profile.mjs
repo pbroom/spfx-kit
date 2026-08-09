@@ -30,6 +30,7 @@ const compilerInputPaths = [
   'scripts/typecheck.mjs',
   'scripts/lib/generate-profile.mjs',
   'scripts/lib/profile-update-intake.mjs',
+  'scripts/lib/shadcn-registry-worker.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
   'scripts/lib/generation-transaction.mjs',

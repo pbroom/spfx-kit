@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Worker } from 'node:worker_threads';
 import Ajv2020 from 'ajv/dist/2020.js';
 
 import {
@@ -135,19 +136,115 @@ function assertPositiveSafeInteger(value, label) {
 
 async function withDeadline(label, timeoutMs, operation) {
   const controller = new AbortController();
+  const deadlineResult = Symbol('deadline');
+  const deadlineError = new Error(`${label} exceeded the ${timeoutMs}ms deadline`);
   let timeout;
-  const deadline = new Promise((_, reject) => {
-    timeout = setTimeout(() => {
-      controller.abort();
-      reject(new Error(`${label} exceeded the ${timeoutMs}ms deadline`));
-    }, timeoutMs);
+  const deadline = new Promise((resolve) => {
+    timeout = setTimeout(() => resolve(deadlineResult), timeoutMs);
     timeout.unref?.();
   });
+  const operationPromise = Promise.resolve().then(() => operation(controller.signal));
   try {
-    return await Promise.race([Promise.resolve().then(() => operation(controller.signal)), deadline]);
+    const result = await Promise.race([operationPromise, deadline]);
+    if (result !== deadlineResult) return result;
+    controller.abort(deadlineError);
+    try {
+      await operationPromise;
+    } catch {
+      // The deadline error below is the stable public failure after abort-aware cleanup completes.
+    }
+    throw deadlineError;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function workerFailure(error) {
+  const failure = new Error(
+    error && typeof error === 'object' && typeof error.message === 'string'
+      ? error.message
+      : 'Pinned shadcn registry worker failed'
+  );
+  if (error && typeof error === 'object') {
+    if (typeof error.name === 'string') failure.name = error.name;
+    if (typeof error.stack === 'string') failure.stack = error.stack;
+  }
+  return failure;
+}
+
+export function runPinnedRegistryCliIntake({
+  resolvedRegistryUrl,
+  registryIds,
+  preset,
+  signal,
+  createWorker = (url, options) => new Worker(url, options)
+}) {
+  assert(signal && typeof signal.addEventListener === 'function', 'Pinned shadcn registry worker requires an abort signal');
+  const worker = createWorker(new URL('./shadcn-registry-worker.mjs', import.meta.url), {
+    workerData: { resolvedRegistryUrl, registryIds, preset }
+  });
+  return new Promise((resolve, reject) => {
+    let finishing = false;
+
+    const removeListeners = () => {
+      signal.removeEventListener('abort', onAbort);
+      worker.removeListener('message', onMessage);
+      worker.removeListener('error', onError);
+      worker.removeListener('exit', onExit);
+    };
+    const finish = async (error, value) => {
+      if (finishing) return;
+      finishing = true;
+      removeListeners();
+      let terminationError;
+      try {
+        await worker.terminate();
+      } catch (caught) {
+        terminationError = caught;
+      }
+      if (terminationError) {
+        reject(
+          error
+            ? new AggregateError([error, terminationError], 'Pinned shadcn registry worker and termination both failed')
+            : terminationError
+        );
+      } else if (error) {
+        reject(error);
+      } else {
+        resolve(value);
+      }
+    };
+    const onMessage = (message) => {
+      if (message?.ok === true && Array.isArray(message.items)) {
+        void finish(null, message.items);
+      } else if (message?.ok === false) {
+        void finish(workerFailure(message.error));
+      } else {
+        void finish(new Error('Pinned shadcn registry worker returned an invalid result'));
+      }
+    };
+    const onError = (error) => {
+      void finish(error);
+    };
+    const onExit = (code) => {
+      void finish(
+        new Error(
+          code === 0
+            ? 'Pinned shadcn registry worker exited without a result'
+            : `Pinned shadcn registry worker exited with code ${code}`
+        )
+      );
+    };
+    const onAbort = () => {
+      void finish(signal.reason instanceof Error ? signal.reason : new Error('Pinned shadcn registry worker aborted'));
+    };
+
+    worker.once('message', onMessage);
+    worker.once('error', onError);
+    worker.once('exit', onExit);
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
 }
 
 async function readBoundedResponse(response, id, itemLimit, aggregateRemaining) {
@@ -446,6 +543,7 @@ export async function fetchPinnedRegistrySnapshots({
   expectedSourcePathsById,
   fetchImpl = fetch,
   getRegistryItemsImpl,
+  createRegistryWorker,
   resolvedRegistryUrl,
   maxRegistryItemBytes = DEFAULT_REGISTRY_ITEM_MAX_BYTES,
   maxRegistryAggregateBytes = DEFAULT_REGISTRY_AGGREGATE_MAX_BYTES,
@@ -462,7 +560,6 @@ export async function fetchPinnedRegistrySnapshots({
     'Profile update dependency policy is missing'
   );
   resolvedRegistryUrl = await assertPinnedShadcnToolchain({ packageRoot, registry, resolvedRegistryUrl });
-  if (!getRegistryItemsImpl) ({ getRegistryItems: getRegistryItemsImpl } = await import(resolvedRegistryUrl));
 
   const snapshots = new Map();
   let aggregateBytes = 0;
@@ -481,12 +578,25 @@ export async function fetchPinnedRegistrySnapshots({
     snapshots.set(id, snapshot);
   }
 
-  const cliItems = await withDeadline('Pinned shadcn CLI registry intake', requestTimeoutMs, () =>
-    getRegistryItemsImpl(registryIds, {
-      config: { style: registry.preset },
-      useCache: false
-    })
-  );
+  const cliItems = await withDeadline('Pinned shadcn CLI registry intake', requestTimeoutMs, (signal) => {
+    if (getRegistryItemsImpl) {
+      return getRegistryItemsImpl(
+        registryIds,
+        {
+          config: { style: registry.preset },
+          useCache: false
+        },
+        { signal }
+      );
+    }
+    return runPinnedRegistryCliIntake({
+      resolvedRegistryUrl,
+      registryIds,
+      preset: registry.preset,
+      signal,
+      createWorker: createRegistryWorker
+    });
+  });
   assert(cliItems.length === registryIds.length, 'Pinned shadcn CLI returned an incomplete registry collection');
   const cliById = new Map(cliItems.map((item) => [item.name, item]));
   assert(cliById.size === registryIds.length, 'Pinned shadcn CLI returned duplicate registry identities');

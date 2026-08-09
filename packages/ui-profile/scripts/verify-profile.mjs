@@ -49,6 +49,7 @@ const expectedCompilerInputPaths = [
   'scripts/typecheck.mjs',
   'scripts/lib/generate-profile.mjs',
   'scripts/lib/profile-update-intake.mjs',
+  'scripts/lib/shadcn-registry-worker.mjs',
   'scripts/lib/typecheck-generated-profile.mjs',
   'scripts/lib/generate-validated-profile.mjs',
   'scripts/lib/generation-transaction.mjs',
@@ -153,7 +154,7 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === '3a05e925d45ba023b2d9d627711e0d9adca717f5a3f72d539eaddce2e1501794',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === '8de3c71dd1936fe4131a4034ac5ad54f894d663728755b28429e5be57ab4a2a9',
   'profile.schema.json identity differs'
 );
 assert(

@@ -29,8 +29,8 @@
     "normalizationImplementationSha256": { "$ref": "#/$defs/sha256" },
     "compilerInputs": {
       "type": "array",
-      "minItems": 26,
-      "maxItems": 26,
+      "minItems": 27,
+      "maxItems": 27,
       "prefixItems": [
         { "$ref": "#/$defs/compilerBridge" },
         { "$ref": "#/$defs/selectValueCompatibilityProbe" },
@@ -44,6 +44,7 @@
         { "$ref": "#/$defs/typecheckImplementation" },
         { "$ref": "#/$defs/profileGenerationImplementation" },
         { "$ref": "#/$defs/profileUpdateIntakeImplementation" },
+        { "$ref": "#/$defs/shadcnRegistryWorkerImplementation" },
         { "$ref": "#/$defs/generatedProfileTypecheckImplementation" },
         { "$ref": "#/$defs/validatedProfileGenerationImplementation" },
         { "$ref": "#/$defs/generationTransactionImplementation" },
@@ -207,6 +208,15 @@
         {
           "type": "object",
           "properties": { "path": { "const": "scripts/lib/profile-update-intake.mjs" } }
+        }
+      ]
+    },
+    "shadcnRegistryWorkerImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        {
+          "type": "object",
+          "properties": { "path": { "const": "scripts/lib/shadcn-registry-worker.mjs" } }
         }
       ]
     },
