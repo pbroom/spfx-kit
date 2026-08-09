@@ -159,6 +159,9 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(themeContent.locator('xpath=ancestor::*[@data-spfx-ui-portal-host]')).toHaveCount(1);
   await page.getByRole('menuitemradio', { name: 'Dark' }).click();
   await expect(page.locator('main.lab-shell')).toHaveClass(/lab-shell--dark/);
+  await expect(themeContent).toBeHidden();
+  await page.getByRole('button', { name: 'Theme: Dark' }).click();
+  await expect(themeContent).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(themeContent).toBeHidden();
 
