@@ -43,7 +43,7 @@
     },
     {
       "path": "scripts/lib/scope-tailwind-css.mjs",
-      "sha256": "0fa68a7fb45f214b17bd149c05aab73028fe158e15339052fb01261e6360a308"
+      "sha256": "631d31a81f3e793c2a4a556f638bf1dd7c1b612dcf17833ef58fd664336e908b"
     },
     {
       "path": "scripts/lib/block-network.mjs",
@@ -127,7 +127,7 @@
     },
     "artifact": {
       "path": "generated/tailwind-profile.css",
-      "sha256": "e3fadb073a4feb7ff6c72a140baa2832d5a977875f284979cb0e9769670021be"
+      "sha256": "7695f776e34dd59e51673d7235ce6ffaa9de4e99eb802c1b8bf1bd0029dcb2be"
     },
     "candidateCount": 609,
     "compiler": {
@@ -154,11 +154,11 @@
     },
     "scoper": {
       "path": "scripts/lib/scope-tailwind-css.mjs",
-      "sha256": "0fa68a7fb45f214b17bd149c05aab73028fe158e15339052fb01261e6360a308"
+      "sha256": "631d31a81f3e793c2a4a556f638bf1dd7c1b612dcf17833ef58fd664336e908b"
     },
-    "scopeSeedSha256": "9eea46b8e51bf75d65258eeac59d916b2c864b73c63c68ddafe91c61f62b08cc",
-    "scopeSelector": "[data-spfx-ui-scope=\"skui-9eea46b8e51bf75d\"]",
-    "scopeValue": "skui-9eea46b8e51bf75d",
+    "scopeSeedSha256": "7dbbe5a12045377369bafd698c3d1fed2c1fd2302d6c9a33ba6d023df1fecc26",
+    "scopeSelector": "[data-spfx-ui-scope=\"skui-7dbbe5a120453773\"]",
+    "scopeValue": "skui-7dbbe5a120453773",
     "structuralMarkers": [
       "skui:group/accordion-trigger",
       "skui:group/alert",

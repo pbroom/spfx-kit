@@ -42,6 +42,25 @@ async function expectSurfaceParity(page: Page, instanceId: 'contract-a' | 'contr
   expect(rootContract.ownerDocument).toBe(true);
 }
 
+async function expectProfileUtilitiesActive(page: Page, instanceId: 'contract-a' | 'contract-b'): Promise<void> {
+  const appRoot = root(page, instanceId);
+  const [spacing, badgeStyle] = await Promise.all([
+    appRoot.evaluate((element) => getComputedStyle(element).getPropertyValue('--skui-spacing').trim()),
+    appRoot.locator(`[data-contract-badge="${instanceId}"]`).evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        borderRadius: style.borderRadius,
+        display: style.display,
+        height: style.height
+      };
+    })
+  ]);
+
+  expect(spacing).toBe('.25rem');
+  // The badge is a flex item, so Chromium blockifies its inline-flex outer display to flex.
+  expect(badgeStyle).toEqual({ borderRadius: '32px', display: 'flex', height: '20px' });
+}
+
 async function ownedSurfaceIds(page: Page, instanceId?: 'contract-a' | 'contract-b'): Promise<string[]> {
   return page.evaluate((selectedInstance) => {
     const selector = selectedInstance
@@ -106,6 +125,8 @@ test('replaces the Lab route and keeps two root contracts isolated, themed, and 
 
   await expectSurfaceParity(page, 'contract-a');
   await expectSurfaceParity(page, 'contract-b');
+  await expectProfileUtilitiesActive(page, 'contract-a');
+  await expectProfileUtilitiesActive(page, 'contract-b');
   await expect(root(page, 'contract-a')).toHaveAttribute(themeAttribute, 'light');
   await expect(root(page, 'contract-b')).toHaveAttribute(themeAttribute, 'dark');
   await expect(root(page, 'contract-a')).toHaveAttribute(

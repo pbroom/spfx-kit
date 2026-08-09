@@ -90,8 +90,8 @@ describe('source editor UI profile', () => {
       surfaces: [{ consumer: 'SourceEditorField', components: ['button', 'dropdown-menu'] }],
       css: {
         mode: 'canonical-safe-superset',
-        scopeValue: 'skui-9eea46b8e51bf75d',
-        scopeSelector: '[data-spfx-ui-scope="skui-9eea46b8e51bf75d"]'
+        scopeValue: 'skui-7dbbe5a120453773',
+        scopeSelector: '[data-spfx-ui-scope="skui-7dbbe5a120453773"]'
       }
     });
     expect(scssOnly.files.map((file: { vendorPath: string }) => file.vendorPath)).not.toContain(

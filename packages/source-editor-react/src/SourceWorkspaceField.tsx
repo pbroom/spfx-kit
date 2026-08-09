@@ -59,7 +59,7 @@ const resizeZones: Array<{ direction: ResizeDirection; label: string }> = [
 ];
 
 const sourceWorkspaceProfileId = 'source-editor-react17-base-nova-v1';
-const sourceWorkspaceScopeValue = 'skui-9eea46b8e51bf75d';
+const sourceWorkspaceScopeValue = 'skui-7dbbe5a120453773';
 const defaultSourceWorkspaceTheme: SpfxUiThemeTokens = {
   mode: 'light',
   colorBackground: '#ffffff',
