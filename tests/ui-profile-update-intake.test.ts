@@ -317,6 +317,16 @@ describe('pinned shadcn network intake', () => {
       'registry/base-nova/ui/button.tsx uses undeclared production dependency left-pad'
     ],
     [
+      'prototype-inherited metadata dependency',
+      { dependencies: ['constructor'], files: [] },
+      'Pinned registry item button uses undeclared production dependency constructor'
+    ],
+    [
+      'prototype-inherited source import',
+      { files: [{ path: 'registry/base-nova/ui/button.tsx', type: 'registry:ui', content: 'import "toString"\n' }] },
+      'registry/base-nova/ui/button.tsx uses undeclared production dependency toString'
+    ],
+    [
       'unfetched registry dependency',
       { registryDependencies: ['input'], files: [] },
       'requires source outside the fetched registry closure: input'

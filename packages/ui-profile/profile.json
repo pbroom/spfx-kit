@@ -59,7 +59,7 @@
     },
     {
       "path": "scripts/lib/profile-update-intake.mjs",
-      "sha256": "c97a9b95e59519abe23318f38baaea5e05d3b25f696a1a7c1c62ea76ab2f9b6d"
+      "sha256": "caf59294bca15651b12ec62db8dae4b473a47d61b395ea0ef7e851a612c3a471"
     },
     {
       "path": "scripts/lib/typecheck-generated-profile.mjs",
