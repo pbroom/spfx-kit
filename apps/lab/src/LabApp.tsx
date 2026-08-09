@@ -147,6 +147,8 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
   const theme = createLabTheme(themeMode, customBackground);
   const themeMenuTriggerId = useSpfxUiId('lab-theme-menu-trigger');
   const themeMenuContentId = useSpfxUiDerivedId(themeMenuTriggerId, 'content');
+  const appManagementTriggerId = useSpfxUiId('lab-app-management-trigger');
+  const appManagementContentId = useSpfxUiDerivedId(appManagementTriggerId, 'content');
   const webPartSelectId = useSpfxUiId('lab-webpart-select');
   const webPartSelectContentId = useSpfxUiDerivedId(webPartSelectId, 'content');
   const activeProps = selected ? propsByWebPart[selected.id] || selected.defaultProps : {};
@@ -272,19 +274,19 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
       data-display-mode={displayMode}
       style={{ '--lab-section-background': theme.background } as React.CSSProperties}
     >
-      <LegacyFluentShellIslands themeMode={themeMode}>
-        <AppManagementSidebar
-          open={appSidebarOpen}
-          pinnedAppId={pinnedAppId}
-          selectedAppId={selected?.appId || ''}
-          webPartsByAppId={webPartsByAppId}
-          onOpenChange={setAppSidebarOpen}
-          onOpenExport={openExportDrawer}
-          onOpenImport={() => openAddAppDrawer('import')}
-          onSelectApp={selectApp}
-          onTogglePinned={togglePinnedAppById}
-        />
-      </LegacyFluentShellIslands>
+      <AppManagementSidebar
+        contentId={appManagementContentId}
+        open={appSidebarOpen}
+        pinnedAppId={pinnedAppId}
+        selectedAppId={selected?.appId || ''}
+        triggerId={appManagementTriggerId}
+        webPartsByAppId={webPartsByAppId}
+        onOpenChange={setAppSidebarOpen}
+        onOpenExport={openExportDrawer}
+        onOpenImport={() => openAddAppDrawer('import')}
+        onSelectApp={selectApp}
+        onTogglePinned={togglePinnedAppById}
+      />
 
       <section className="preview-area" aria-label="Web part preview area">
         <div className={`lab-toolbar lab-toolbar--preview lab-toolbar--${displayMode}`}>
@@ -292,8 +294,9 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
             {displayMode === 'edit' ? (
               <div className="app-menu-control" aria-label="App menu">
                 <IconButton
-                  controls="app-management-sidebar"
+                  controls={appManagementContentId}
                   expanded={appSidebarOpen}
+                  id={appManagementTriggerId}
                   label="Open app menu"
                   onClick={appSidebarOpen ? () => setAppSidebarOpen(false) : openAppSidebar}
                 >
@@ -580,6 +583,7 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
 interface IconButtonProps {
   controls?: string;
   expanded?: boolean;
+  id?: string;
   label: string;
   pressed?: boolean;
   onClick: () => void;
@@ -594,6 +598,7 @@ function IconButton(props: IconButtonProps): JSX.Element {
       aria-label={props.label}
       aria-pressed={props.pressed}
       className="icon-button"
+      id={props.id}
       size="icon"
       title={props.label}
       variant={props.pressed ? 'secondary' : 'ghost'}

@@ -12,6 +12,7 @@ import { createLabUiThemeTokens } from '../apps/lab/src/ui-profile/lab-theme';
 
 const migratedLabFiles = [
   'apps/lab/src/LabApp.tsx',
+  'apps/lab/src/components/AppManagementSidebar.tsx',
   'apps/lab/src/components/ColorField.tsx',
   'apps/lab/src/components/PropertyPane.tsx',
   'apps/lab/src/components/PackageRuntimeSurface.tsx',
@@ -71,6 +72,27 @@ describe('Lab UI profile slice', () => {
     expect(shellSource).toContain('items={Object.fromEntries(webParts.map((webPart) => [webPart.id, webPart.title]))}');
     expect(shellSource).not.toContain('className="theme-menu-trigger"');
     expect(shellStyles).not.toContain('.theme-menu-trigger');
+  });
+
+  it('keeps App settings entirely within the normalized shadcn profile', () => {
+    const shellSource = readFileSync('apps/lab/src/LabApp.tsx', 'utf8');
+    const sidebarSource = readFileSync('apps/lab/src/components/AppManagementSidebar.tsx', 'utf8');
+
+    expect(shellSource).not.toMatch(/<LegacyFluentShellIslands[^>]*>\s*<AppManagementSidebar/u);
+    expect(sidebarSource).toContain('<SheetContent');
+    expect(sidebarSource).toContain('data-sidebar="sidebar"');
+    expect(sidebarSource).toContain('<SelectTrigger');
+    expect(sidebarSource).toContain('<Switch');
+    expect(sidebarSource).toContain('<InputGroup');
+    expect(sidebarSource).toContain('<Accordion');
+    expect(sidebarSource).toContain('<Alert');
+    expect(sidebarSource).toContain('<Spinner aria-hidden="true" />');
+    expect(sidebarSource).toContain("useSpfxUiDerivedId(contentId, 'selected-app-heading')");
+    expect(sidebarSource).toContain("useSpfxUiDerivedId(contentId, 'export-config-heading')");
+    expect(sidebarSource).toContain("useSpfxUiDerivedId(contentId, 'app-actions-heading')");
+    expect(sidebarSource).not.toMatch(/(?:id|aria-labelledby)="(?:selected-app|export-config|app-actions)-heading"/u);
+    expect(sidebarSource).not.toMatch(/@fluentui\/react-(?:components|icons)/u);
+    expect(sidebarSource).not.toMatch(/<(?:Drawer|Dropdown|Option)\b/u);
   });
 
   it('prepares the ignored Base UI compatibility tree before direct Lab dev and build entrypoints', () => {
