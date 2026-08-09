@@ -86,6 +86,7 @@ describe('Lab UI profile slice', () => {
     expect(sidebarSource).toContain('<InputGroup');
     expect(sidebarSource).toContain('<Accordion');
     expect(sidebarSource).toContain('<Alert');
+    expect(sidebarSource).toContain('<Spinner aria-hidden="true" />');
     expect(sidebarSource).toContain("useSpfxUiDerivedId(contentId, 'selected-app-heading')");
     expect(sidebarSource).toContain("useSpfxUiDerivedId(contentId, 'export-config-heading')");
     expect(sidebarSource).toContain("useSpfxUiDerivedId(contentId, 'app-actions-heading')");

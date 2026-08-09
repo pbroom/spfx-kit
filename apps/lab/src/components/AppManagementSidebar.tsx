@@ -1157,7 +1157,7 @@ export function AppManagementSidebar(props: AppManagementSidebarProps): JSX.Elem
               role={status.phase === 'error' ? 'alert' : 'status'}
               variant={status.phase === 'error' ? 'destructive' : 'default'}
             >
-              {status.phase === 'complete' ? <Check /> : status.phase === 'error' ? <X /> : <Spinner />}
+              {status.phase === 'complete' ? <Check /> : status.phase === 'error' ? <X /> : <Spinner aria-hidden="true" />}
               <AlertTitle>{status.message}</AlertTitle>
               {status.detail ? <AlertDescription>{status.detail}</AlertDescription> : null}
             </Alert>
