@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 
-import { assertGeneratedTreeClosure, pinnedTypeDirectiveNames } from './lib/generated-tree-closure.mjs';
+import { assertGeneratedTreeClosure } from './lib/generated-tree-closure.mjs';
 import { verifyTailwindCss } from './lib/compile-tailwind-css.mjs';
 import { assertFetchedRegistryClosure } from './lib/profile-update-intake.mjs';
 import {
@@ -17,6 +17,7 @@ import {
   createRegistrySourceContext,
   externalImports,
   normalizeRegistrySource,
+  pinnedTypeDirectiveNames,
   sha256
 } from './lib/profile.mjs';
 
@@ -379,7 +380,8 @@ for (const item of profile.items) {
 
 assertFetchedRegistryClosure(rawSnapshots, provenance.registryIds, {
   excludedDependencies: provenance.excludedDependencies,
-  directProductionDependencies: provenance.directProductionDependencies
+  directProductionDependencies: provenance.directProductionDependencies,
+  allowedTypeDirectives: pinnedTypeDirectiveNames(manifest.devDependencies)
 });
 
 assertExact(await filesUnder('snapshots/raw'), [...expectedRawPaths].sort(), 'Raw snapshot inventory');

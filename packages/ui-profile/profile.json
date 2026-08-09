@@ -55,11 +55,11 @@
     },
     {
       "path": "scripts/lib/generate-profile.mjs",
-      "sha256": "31ecb00f568ed14bce1939f7e1315846fbaaf081b13d3321ba4b8ec176427076"
+      "sha256": "1d53c504fce184dbb3ad9c24555a82f0db43bf1a27d5d31d535a8bc1e25e89d2"
     },
     {
       "path": "scripts/lib/profile-update-intake.mjs",
-      "sha256": "caf59294bca15651b12ec62db8dae4b473a47d61b395ea0ef7e851a612c3a471"
+      "sha256": "b7132ba7e830c19e70bb6dba388164d644c836c2bf4c71563d6d3b6e0448e11c"
     },
     {
       "path": "scripts/lib/typecheck-generated-profile.mjs",
@@ -67,7 +67,7 @@
     },
     {
       "path": "scripts/lib/generate-validated-profile.mjs",
-      "sha256": "73f8cdd03d57d99c2b1dfec14ddfa1a77d266daaf5d1bf4dca408be94c1ea6a6"
+      "sha256": "b6149cbda859ffbcd9977e4a65947660224eff2f5b253f563d598fb5499e959a"
     },
     {
       "path": "scripts/lib/generation-transaction.mjs",
@@ -79,7 +79,7 @@
     },
     {
       "path": "scripts/lib/generated-tree-closure.mjs",
-      "sha256": "20c9af8d933c9b73277f0150761fafc824626e98c6b36ed5b7c1de463a096ba7"
+      "sha256": "14afa417dc7cd255e0fee232958156e1189df9aed787e9ba95ed7858f3158c95"
     },
     {
       "path": "scripts/verify-dependency-closure.mjs",
@@ -814,7 +814,7 @@
       }
     }
   ],
-  "normalizationImplementationSha256": "4515bab4b7cb296f182f77dcaa25775b83fa348415bdbd40bc77d97f22fb84a1",
+  "normalizationImplementationSha256": "73402e3c11f86509e467ca7d30ee6e75d921b4d9f209f23dd8612d0f27be786b",
   "ownedSources": [
     {
       "output": {
@@ -844,6 +844,6 @@
     }
   ],
   "profileId": "spfx-react17-base-nova-v1",
-  "provenanceSha256": "15ee3700f630c4620b4a84b9a67287280c90070bade7881f415cba062d733643",
+  "provenanceSha256": "dac4040522704cbfe8501131ca30601df815607476e681185a973b15318eb0a1",
   "schemaVersion": 1
 }

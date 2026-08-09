@@ -3,8 +3,8 @@ import path from 'node:path';
 import Ajv2020 from 'ajv/dist/2020.js';
 
 import { generateProfile } from './generate-profile.mjs';
-import { assertGeneratedTreeClosure, pinnedTypeDirectiveNames } from './generated-tree-closure.mjs';
-import { canonicalJson, sha256 } from './profile.mjs';
+import { assertGeneratedTreeClosure } from './generated-tree-closure.mjs';
+import { canonicalJson, pinnedTypeDirectiveNames, sha256 } from './profile.mjs';
 import { replaceGeneratedPaths } from './replace-generated.mjs';
 import { assertGeneratedProfileCompiles } from './typecheck-generated-profile.mjs';
 
