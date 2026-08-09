@@ -367,12 +367,6 @@ textarea {
   align-items: center;
 }
 
-.theme-menu-trigger {
-  gap: 1px;
-  width: 40px;
-  flex-basis: 40px;
-}
-
 .theme-menu-popover {
   min-width: 168px;
   padding: 4px;

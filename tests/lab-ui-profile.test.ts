@@ -60,6 +60,19 @@ describe('Lab UI profile slice', () => {
     );
   });
 
+  it('keeps the Lab toolbar on the normalized shadcn control contracts', () => {
+    const shellSource = readFileSync('apps/lab/src/LabApp.tsx', 'utf8');
+    const shellStyles = readFileSync('apps/lab/src/styles/lab.css', 'utf8');
+
+    expect(shellSource).toContain('<DropdownMenuTrigger');
+    expect(shellSource).toContain('size="icon-sm"');
+    expect(shellSource).toContain('<SelectTrigger');
+    expect(shellSource).toContain('aria-label="Select web part"');
+    expect(shellSource).toContain('items={Object.fromEntries(webParts.map((webPart) => [webPart.id, webPart.title]))}');
+    expect(shellSource).not.toContain('className="theme-menu-trigger"');
+    expect(shellStyles).not.toContain('.theme-menu-trigger');
+  });
+
   it('prepares the ignored Base UI compatibility tree before direct Lab dev and build entrypoints', () => {
     const labPackage = JSON.parse(readFileSync('apps/lab/package.json', 'utf8')) as {
       scripts: Record<string, string>;
