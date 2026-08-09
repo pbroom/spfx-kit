@@ -1149,6 +1149,57 @@ test('shows selected app state, saves export config, and can select a source rel
   await expect(sidebar.getByRole('button', { name: 'Reload lab' })).toBeVisible();
 });
 
+test('reselects Latest to resume automatic updates', async ({ page }) => {
+  let autoUpdate = false;
+  const versionRequests: Array<{ appId: string; versionId: string }> = [];
+  const fixtures = (): ManagedAppFixture[] => {
+    const apps = managedAppFixtures('latest');
+    apps[0].version.autoUpdate = autoUpdate;
+    apps[0].version.updateAvailable = false;
+    apps[0].version.detail = autoUpdate
+      ? 'Choose which source release is active for this managed app.'
+      : 'Select Latest to enable automatic updates.';
+    return apps;
+  };
+
+  await page.route('**/api/spfx-apps/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === 'POST' && url.pathname.endsWith('/version')) {
+      const body = route.request().postDataJSON() as { appId: string; versionId: string };
+      versionRequests.push(body);
+      autoUpdate = body.versionId === 'latest';
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          appId: body.appId,
+          message: 'Updated fixture app.',
+          syncedAdapters: 1,
+          apps: fixtures()
+        })
+      });
+      return;
+    }
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ apps: fixtures() }) });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open app menu' }).click();
+  const sidebar = page.locator('[data-sidebar="sidebar"]');
+  const versionDropdown = sidebar.getByRole('combobox', { name: 'Source version for Hello Card' });
+  await expect(sidebar.getByText('Select Latest to enable automatic updates.')).toBeVisible();
+
+  await versionDropdown.click();
+  await page.getByRole('option', { name: 'Latest', exact: true }).click();
+
+  await expect.poll(() => versionRequests).toEqual([{ appId: 'hello-card-spfx', versionId: 'latest' }]);
+  await expect(sidebar.getByText('Updated fixture app.')).toBeVisible();
+  await expect(sidebar.getByText('Select Latest to enable automatic updates.')).toHaveCount(0);
+});
+
 test('opens export downloads with the requested package target selected', async ({ page }) => {
   await page.route('**/api/spfx-apps/**', async (route) => {
     if (route.request().method() === 'GET') {
