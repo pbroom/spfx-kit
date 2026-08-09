@@ -107,7 +107,7 @@
     },
     {
       "path": "scripts/lib/preparation-lock.mjs",
-      "sha256": "008126d9561869a80b6cc04e066d51fbccaf158bcb81717884bff77453c0b88b"
+      "sha256": "fd6d7f6143581d8f57b512b2413a4ca4438e13366a353293080eaa437f6083cd"
     },
     {
       "path": "tsconfig.base.json",
