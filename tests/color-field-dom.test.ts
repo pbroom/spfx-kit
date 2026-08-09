@@ -197,7 +197,7 @@ function renderFixture(
     targetDocument: ownerDocument,
     instanceId,
     profileId: 'spfx-react17-base-nova-v1',
-    scopeValue: 'skui-9eea46b8e51bf75d',
+    scopeValue: 'skui-7dbbe5a120453773',
     theme: {
       mode: 'light',
       colorBackground: '#ffffff',

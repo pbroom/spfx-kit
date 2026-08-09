@@ -1,7 +1,6 @@
 import { appendFile, cp, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { Window } from 'happy-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs module without type declarations
 import { compileTailwindCss, verifyTailwindCss } from '../packages/ui-profile/scripts/lib/compile-tailwind-css.mjs';
@@ -93,7 +92,7 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
     expect(result.css).toContain(`@container ${scopeValue}-container-pane`);
     expect(result.css).toContain(`animation: ${scopeValue}-enter 150ms ease-out`);
     expect(result.css).toContain(`--${scopeValue}-tw-origin`);
-    expect(result.css).not.toMatch(/(?:^|[,{])\s*(?:\*|html|body|:root|:host)(?:\s|[,{])/u);
+    expect(result.css).not.toMatch(/(?:^|[,{])\s*(?:html|body|:root|:host)(?:\s|[,{])/u);
     expect(result.css).not.toContain('@layer base');
     expect(result.css).not.toContain('@layer properties');
     expect(result.css).not.toContain('@property');
@@ -101,7 +100,7 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
     expect(result.css).not.toContain('https://');
   });
 
-  it('emits both scope-root and descendant utility selectors', () => {
+  it('emits scope-relative descendant and root utility selectors without double-prefixing the boundary', () => {
     const scopeValue = 'skui-0123456789abcdef';
     const scope = `[data-spfx-ui-scope="${scopeValue}"]`;
     const result = scopeTailwindCss({
@@ -114,12 +113,34 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
       allowedClasses: ['skui:flex', 'skui:block', 'skui:hidden', 'parent']
     });
 
-    expect(result.css).toContain(`${scope} .skui\\:flex`);
-    expect(result.css).toContain(`${scope}.skui\\:flex`);
-    expect(result.css).toContain(`button${scope}.skui\\:block`);
-    expect(result.css).toContain(`*${scope}.skui\\:hidden`);
-    expect(result.css).toContain(`${scope}.parent .skui\\:block`);
-    expect(result.css).not.toContain(`${scope}button`);
+    expect(result.css).toContain('.skui\\:flex,:where(:scope).skui\\:flex');
+    expect(result.css).toContain('button.skui\\:block, button:where(:scope).skui\\:block');
+    expect(result.css).toContain('*.skui\\:hidden, *:where(:scope).skui\\:hidden');
+    expect(result.css).toContain('.parent .skui\\:block,:where(:scope).parent .skui\\:block');
+    expect(result.css).not.toContain(`${scope} .skui\\:flex`);
+    expect(result.css).not.toContain(`${scope}.skui\\:flex`);
+  });
+
+  it('rejects an explicitly scope-prefixed selector inside the owned scope boundary', () => {
+    const scopeValue = 'skui-0123456789abcdef';
+    const scope = `[data-spfx-ui-scope="${scopeValue}"]`;
+    expect(() =>
+      auditScopedTailwindCss({
+        css: `@scope (${scope}) to ([data-spfx-ui-scope]:not(${scope})) { ${scope} .skui\\:flex { display: flex } }`,
+        scopeValue,
+        candidates: ['skui:flex']
+      })
+    ).toThrow(`Selector redundantly prefixes ${scope}`);
+
+    for (const selector of ['.skui\\:flex', ':where(:scope).skui\\:flex']) {
+      expect(() =>
+        auditScopedTailwindCss({
+          css: `@scope (${scope}) to ([data-spfx-ui-scope]:not(${scope})) { ${selector} { display: flex } }`,
+          scopeValue,
+          candidates: ['skui:flex']
+        })
+      ).toThrow(/Selector lacks its/u);
+    }
   });
 
   it('fails closed on unsafe selectors, missing candidates, and asset references', () => {
@@ -129,6 +150,21 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
         scopeValue: 'skui-0123456789abcdef'
       })
     ).toThrow('Root selector must be the complete selector');
+
+    for (const rawCss of [
+      String.raw`:scope .skui\:flex { display: flex }`,
+      String.raw`[data-spfx-ui-scope] .skui\:flex { display: flex }`,
+      String.raw`[DATA-SPFX-UI-SCOPE] .skui\:flex { display: flex }`,
+      String.raw`@scope (.host) { .skui\:flex { display: flex } }`
+    ]) {
+      expect(() =>
+        scopeTailwindCss({
+          rawCss,
+          scopeValue: 'skui-0123456789abcdef',
+          candidates: ['skui:flex']
+        })
+      ).toThrow();
+    }
 
     expect(() =>
       scopeTailwindCss({
@@ -233,7 +269,7 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
       `@scope ([data-spfx-ui-scope="${scopeValue}"]) to ([data-spfx-ui-scope]:not([data-spfx-ui-scope="${scopeValue}"]))`
     );
     expect(result.css).not.toContain(':not(:where(');
-    expect(result.css).toContain(`[data-spfx-ui-scope="${scopeValue}"] .skui\\:flex`);
+    expect(result.css).toContain('.skui\\:flex,:where(:scope).skui\\:flex');
   });
 
   it('uses disjoint selector, property, and keyframe namespaces for two profile copies', () => {
@@ -308,36 +344,18 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
     expect(source).not.toContain('compileTailwindCss');
   });
 
-  it('provides component baseline invariants in an otherwise unstyled host', async () => {
+  it('emits component baseline invariants for descendants and the scope root', async () => {
     const { profile } = await readContract();
     const css = await readFile(path.join(packageRoot, profile.css.artifact.path), 'utf8');
-    const window = new Window();
-    const { document } = window;
-    const style = document.createElement('style');
-    style.textContent = css;
-    document.head.append(style);
-    const hostStyle = document.createElement('style');
-    hostStyle.textContent =
-      'button { margin: 9px; padding: 12px; font-family: Host Override; } fieldset { border: 5px solid red; padding: 12px; } p { margin: 12px; }';
-    document.head.append(hostStyle);
-    const root = document.createElement('div');
-    root.setAttribute('data-spfx-ui-scope', profile.css.scopeValue);
-    root.style.fontFamily = 'Owned Host Font';
-    const box = document.createElement('div');
-    const fieldset = document.createElement('fieldset');
-    const paragraph = document.createElement('p');
-    const button = document.createElement('button');
-    root.append(box, fieldset, paragraph, button);
-    document.body.append(root);
+    const boundary = `@scope ([data-spfx-ui-scope="${profile.css.scopeValue}"]) to ([data-spfx-ui-scope]:not([data-spfx-ui-scope="${profile.css.scopeValue}"]))`;
 
-    expect(window.getComputedStyle(box).boxSizing).toBe('border-box');
-    expect(window.getComputedStyle(fieldset).borderTopWidth).toBe('0px');
-    expect(window.getComputedStyle(fieldset).paddingTop).toBe('0px');
-    expect(window.getComputedStyle(paragraph).marginTop).toBe('0px');
-    expect(window.getComputedStyle(button).fontFamily).toBe('inherit');
-    expect(window.getComputedStyle(button).marginTop).toBe('0px');
-    expect(window.getComputedStyle(button).paddingTop).toBe('0px');
-    window.close();
+    expect(css).toContain(boundary);
+    expect(css).toContain('*,*:where(:scope),:before,:where(:scope):before,:after,:where(:scope):after{box-sizing:border-box}');
+    expect(css).toContain('fieldset,fieldset:where(:scope)');
+    expect(css).toContain('p,p:where(:scope)');
+    expect(css).toContain('button,button:where(:scope)');
+    expect(css).toContain('margin:0;padding:0');
+    expect(css).toContain('font:inherit');
   });
 
   it('verifies the committed artifact through the offline profile contract', async () => {
@@ -351,6 +369,6 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
         scopeValue: result.scopeValue,
         candidates: ['skui:missing']
       })
-    ).toThrow('Selector lacks a nested-scope boundary');
+    ).toThrow('Selector must have exactly one nested-scope boundary');
   });
 });

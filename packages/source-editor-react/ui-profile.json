@@ -5,9 +5,9 @@
   "upstream": {
     "profileId": "spfx-react17-base-nova-v1",
     "profilePath": "packages/ui-profile/profile.json",
-    "profileSha256": "2e408c7c8c04e420fdc1de91cfac3fc5dbb14db9b9ac1decdb99a3198a8b22e5",
+    "profileSha256": "f451076dc28d609b892c5039d7abd5851aa67cc87368a1119730d373f1fc6464",
     "provenancePath": "packages/ui-profile/provenance.json",
-    "provenanceSha256": "2b6b0ee6edc8ad7f8c6f88027fccb9fafa17c1f8fb377d27b6fc00b94c37f9a6"
+    "provenanceSha256": "15ee3700f630c4620b4a84b9a67287280c90070bade7881f415cba062d733643"
   },
   "surfaces": [
     {
@@ -27,7 +27,7 @@
     "contracts": [
       {
         "path": "packages/ui-profile/compat/base-ui-1.6.0/id-ownership/contract.json",
-        "sha256": "660f74a5e1f350fbdddd792d00c2d48265f435e6a1b79075bd3327b2c8581870"
+        "sha256": "cdbbc140272e237e3f5450baae8afdaab2f56f14b48835b7bc42f76211b4a2aa"
       },
       {
         "path": "packages/ui-profile/compat/base-ui-1.6.0/popup-lifecycle/contract.json",
@@ -78,7 +78,7 @@
     {
       "sourcePath": "packages/ui-profile/generated/tailwind-profile.css",
       "vendorPath": "src/vendor/source-editor/ui-profile/tailwind-profile.css",
-      "sha256": "e3fadb073a4feb7ff6c72a140baa2832d5a977875f284979cb0e9769670021be"
+      "sha256": "7695f776e34dd59e51673d7235ce6ffaa9de4e99eb802c1b8bf1bd0029dcb2be"
     }
   ]
 }

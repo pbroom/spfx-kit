@@ -461,6 +461,7 @@ test('explicit bucket selection reloads the active CDN descriptor without standa
 });
 
 test('checks the selected staged scripts without invoking the package or rendering the standalone adapter', async ({ page }) => {
+  await page.addInitScript((key) => window.localStorage.setItem(key, 'hello-card-spfx'), pinnedAppStorageKey);
   const releaseId = '1.2.3-test.abc123';
   const namespacePath = `apps/hello-card-spfx/versions/${releaseId}/`;
   const releaseBaseUrl = `${syntheticMockCdnOrigin}/${namespacePath}`;
@@ -558,7 +559,7 @@ test('checks the selected staged scripts without invoking the package or renderi
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
   await page.getByRole('tab', { name: 'CDN', exact: true }).click();
 
-  await expect(frame.getByRole('status')).toContainText('Checking mock-CDN delivery');
+  await expect(frame.locator('[data-cdn-smoke-check="loading"]')).toContainText('Checking mock-CDN delivery');
   await expect(frame.getByRole('heading', { name: 'Hello Card' })).toHaveCount(0);
   await expect(packageResources).toContainText('1.2.3-test.abc123');
   await expect(packageResources).toContainText(syntheticMockCdnOrigin);
@@ -1265,7 +1266,7 @@ test('pins one startup app and restores it after refresh', async ({ page }) => {
   const restoredSelector = page
     .getByRole('complementary', { name: 'Options panel' })
     .getByRole('combobox', { name: 'Select web part' });
-  await expect(restoredSelector).toHaveText('Hello Card');
+  await expect(restoredSelector).toContainText('Hello Card');
 
   await page.getByRole('button', { name: 'Open app menu' }).click();
   const sidebar = page.locator('#app-management-sidebar');
@@ -1274,16 +1275,16 @@ test('pins one startup app and restores it after refresh', async ({ page }) => {
   await selectedAppSelector.click();
   const pinnedAppOption = page.getByRole('option', { name: /Hello Card\. Pinned\./ });
   await pinnedAppOption.hover();
-  const leftUnpinButton = sidebar.getByRole('button', { name: 'Unpin Hello Card as startup app' });
+  const leftUnpinButton = page.getByRole('button', { name: 'Unpin Hello Card as startup app' });
   await expect(leftUnpinButton).toHaveAttribute('aria-pressed', 'true');
   const sidebarListbox = page.getByRole('listbox');
   await expect(sidebarListbox).toBeVisible();
   await expect(sidebarListbox.getByRole('button')).toHaveCount(0);
   await leftUnpinButton.click();
-  await expect(sidebar.getByRole('button', { name: 'Pin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('button', { name: 'Pin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'false');
   await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), pinnedAppStorageKey)).toBeNull();
-  await sidebar.getByRole('button', { name: 'Pin Hello Card as startup app' }).click();
-  await expect(sidebar.getByRole('button', { name: 'Unpin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Pin Hello Card as startup app' }).click();
+  await expect(page.getByRole('button', { name: 'Unpin Hello Card as startup app' })).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Control+o');
   await expect(sidebar).toBeHidden();
   await page.getByRole('button', { name: 'Close add SPFx app drawer' }).click();

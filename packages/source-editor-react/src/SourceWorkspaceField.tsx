@@ -59,7 +59,7 @@ const resizeZones: Array<{ direction: ResizeDirection; label: string }> = [
 ];
 
 const sourceWorkspaceProfileId = 'source-editor-react17-base-nova-v1';
-const sourceWorkspaceScopeValue = 'skui-9eea46b8e51bf75d';
+const sourceWorkspaceScopeValue = 'skui-7dbbe5a120453773';
 const defaultSourceWorkspaceTheme: SpfxUiThemeTokens = {
   mode: 'light',
   colorBackground: '#ffffff',
@@ -271,8 +271,6 @@ export const SourceWorkspaceField: React.FunctionComponent<SourceWorkspaceFieldP
     const surfaceId = floating ? 'floating' : 'inline';
     const surfaceRootId = uiHost!.deriveElementId(uiHost!.idFor('workspace'), surfaceId);
     const panelId = uiHost!.deriveElementId(surfaceRootId, 'panel');
-    const selectedView = floating || view !== 'split' ? view : lastDocumentView;
-
     return (
       <TabsList
         aria-label={`${props.label} views`}
@@ -509,7 +507,11 @@ function createInitialWorkspaceRect(targetWindow?: Window): FloatingRect {
 }
 
 function requireWorkspaceInstanceId(instanceId: string): string {
-  if (!instanceId || instanceId.trim() !== instanceId || /[\u0000-\u001f\u007f]/u.test(instanceId)) {
+  const hasControlCharacter = Array.from(instanceId).some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
+  if (!instanceId || instanceId.trim() !== instanceId || hasControlCharacter) {
     throw new Error('Source workspace instanceId must be a non-empty, trimmed string without control characters');
   }
   return instanceId;

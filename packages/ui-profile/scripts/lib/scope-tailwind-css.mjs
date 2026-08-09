@@ -52,27 +52,27 @@ function insideKeyframes(rule) {
   return false;
 }
 
-function cloneSelectorNodes(selector) {
-  const ast = selectorParser().astSync(selector);
-  return ast.nodes[0].nodes.map((node) => node.clone());
-}
-
 function scopeBoundaryParams(scopeValue) {
   const scope = scopeSelector(scopeValue);
   const anyScope = `[${SCOPE_ATTRIBUTE}]`;
   return `(${scope}) to (${anyScope}:not(${scope}))`;
 }
 
-function scopeOneSelector(selector, scopeValue) {
-  const scope = scopeSelector(scopeValue);
+function scopeSelfPseudo() {
+  return selectorParser().astSync(':where(:scope)').nodes[0].nodes[0].clone();
+}
+
+function scopeOneSelector(selector) {
   let nestingFound = false;
   selector.walkNesting(() => {
     nestingFound = true;
   });
   assert(!nestingFound, `Nested selectors are not accepted: ${selector}`);
+  assert(!selectorHasExplicitScopeAttribute(selector), `Source selector owns ${SCOPE_ATTRIBUTE}: ${selector}`);
 
   const rootPseudos = [];
   selector.walkPseudos((pseudo) => {
+    assert(pseudo.value.toLowerCase() !== ':scope', `Source selector owns :scope: ${selector}`);
     if ([':root', ':host'].includes(pseudo.value.toLowerCase())) rootPseudos.push(pseudo);
   });
   if (rootPseudos.length > 0) {
@@ -83,19 +83,20 @@ function scopeOneSelector(selector, scopeValue) {
       `Nested or functional root selector is not accepted: ${selector}`
     );
     assert(selector.nodes.length === 1, `Root selector must be the complete selector: ${selector}`);
-    rootPseudo.replaceWith(...cloneSelectorNodes(scope));
+    rootPseudo.replaceWith(selectorParser.pseudo({ value: ':scope' }));
     return null;
   }
 
   assert(selector.first?.type !== 'combinator', `Leading combinators are not accepted: ${selector}`);
   const selfSelector = selector.clone();
-  const selfScope = cloneSelectorNodes(scope);
+  const selfScope = scopeSelfPseudo();
   if (['tag', 'universal'].includes(selfSelector.first?.type)) {
-    selfSelector.insertAfter(selfSelector.first, ...selfScope);
+    selfSelector.insertAfter(selfSelector.first, selfScope);
   }
-  else selfSelector.prepend(...selfScope);
-  selector.prepend(selectorParser.combinator({ value: ' ' }));
-  selector.prepend(...cloneSelectorNodes(scope));
+  else {
+    selfSelector.first.spaces.before = '';
+    selfSelector.prepend(selfScope);
+  }
   return selfSelector;
 }
 
@@ -279,18 +280,42 @@ function namespaceKeyframes(root, scopeValue) {
   return replacements;
 }
 
-function selectorHasOwnedScopeInLeadingCompound(selector, scopeValue) {
-  let leadingScopeCount = 0;
-  let totalScopeCount = 0;
-  let inLeadingCompound = true;
-  for (const node of selector.nodes) {
-    if (node.type === 'combinator') inLeadingCompound = false;
-    if (node.type !== 'attribute' || node.attribute !== SCOPE_ATTRIBUTE) continue;
-    totalScopeCount += 1;
-    if (node.operator !== '=' || node.value !== scopeValue) return false;
-    if (inLeadingCompound) leadingScopeCount += 1;
+function selectorHasExplicitScopeAttribute(selector) {
+  let found = false;
+  selector.walkAttributes((attribute) => {
+    if (attribute.attribute.toLowerCase() === SCOPE_ATTRIBUTE) found = true;
+  });
+  return found;
+}
+
+function assertGeneratedScopePseudo(selector) {
+  const scopePseudos = [];
+  selector.walkPseudos((pseudo) => {
+    if (pseudo.value.toLowerCase() === ':scope') scopePseudos.push(pseudo);
+  });
+  assert(scopePseudos.length <= 1, `Selector contains multiple :scope pseudos: ${selector}`);
+  if (scopePseudos.length === 0) return { kind: 'descendant', base: selector.toString().trim() };
+
+  const scopePseudo = scopePseudos[0];
+  let carrier = scopePseudo;
+  if (scopePseudo.parent?.type === 'selector' && scopePseudo.parent.parent?.type === 'pseudo') {
+    carrier = scopePseudo.parent.parent;
+    assert(carrier.value.toLowerCase() === ':where' && carrier.toString() === ':where(:scope)', `Selector contains unsupported :scope shape: ${selector}`);
   }
-  return leadingScopeCount === 1 && totalScopeCount === 1;
+  assert(carrier.parent === selector, `Selector nests :scope outside its leading compound: ${selector}`);
+  for (const node of selector.nodes) {
+    if (node === carrier) break;
+    assert(node.type !== 'combinator', `Selector nests :scope outside its leading compound: ${selector}`);
+  }
+  if (carrier === scopePseudo) {
+    assert(selector.nodes.length === 1, `Bare :scope must be the complete selector: ${selector}`);
+    return { kind: 'root' };
+  }
+  const unguarded = selector.clone();
+  unguarded.walkPseudos((pseudo) => {
+    if (pseudo.value.toLowerCase() === ':where' && pseudo.toString() === ':where(:scope)') pseudo.remove();
+  });
+  return { kind: 'self', base: unguarded.toString().trim() };
 }
 
 function insideNegation(node) {
@@ -402,17 +427,22 @@ export function auditScopedTailwindCss({ css, scopeValue, candidates = [], allow
 
   root.walkRules((rule) => {
     if (insideKeyframes(rule)) return;
-    let scopeBoundary;
+    const scopeBoundaries = [];
     for (let parent = rule.parent; parent; parent = parent.parent) {
       if (parent.type === 'atrule' && parent.name.toLowerCase() === 'scope') {
-        scopeBoundary = parent;
-        break;
+        scopeBoundaries.push(parent);
       }
     }
-    assert(scopeBoundary?.params === boundary, `Selector lacks a nested-scope boundary: ${rule.selector}`);
+    assert(scopeBoundaries.length === 1, `Selector must have exactly one nested-scope boundary: ${rule.selector}`);
+    assert(scopeBoundaries[0].params === boundary, `CSS scope boundary differs: ${scopeBoundaries[0].params}`);
     const parsed = selectorParser().astSync(rule.selector);
+    const descendantSelectors = new Set();
+    const selfSelectors = new Set();
     for (const selector of parsed.nodes) {
-      assert(selectorHasOwnedScopeInLeadingCompound(selector, scopeValue), `Selector escapes ${scope}: ${selector}`);
+      assert(!selectorHasExplicitScopeAttribute(selector), `Selector redundantly prefixes ${scope}: ${selector}`);
+      const scopeShape = assertGeneratedScopePseudo(selector);
+      if (scopeShape.kind === 'descendant') descendantSelectors.add(scopeShape.base);
+      if (scopeShape.kind === 'self') selfSelectors.add(scopeShape.base);
       selector.walkPseudos((pseudo) => {
         assert(![':root', ':host'].includes(pseudo.value.toLowerCase()), `Page root selector remains: ${selector}`);
       });
@@ -423,6 +453,12 @@ export function auditScopedTailwindCss({ css, scopeValue, candidates = [], allow
         assert(allowedClassSet.has(className.value), `Unexpected emitted CSS class: ${className.value}`);
         if (!insideNegation(className)) emittedCandidates.add(className.value);
       });
+    }
+    for (const selector of descendantSelectors) {
+      assert(selfSelectors.has(selector), `Selector lacks its :where(:scope) self variant: ${selector}`);
+    }
+    for (const selector of selfSelectors) {
+      assert(descendantSelectors.has(selector), `Selector lacks its descendant variant: ${selector}`);
     }
   });
 
@@ -479,6 +515,9 @@ export function auditScopedTailwindCss({ css, scopeValue, candidates = [], allow
 export function scopeTailwindCss({ rawCss, scopeValue, candidates = [], allowedClasses = candidates }) {
   const root = postcss.parse(rawCss.replace(/\r\n?/gu, '\n'), { from: undefined });
   root.walkComments((comment) => comment.remove());
+  root.walkAtRules((atRule) => {
+    assert(atRule.name.toLowerCase() !== 'scope', 'Source CSS must not own an @scope boundary');
+  });
   const fallbackPropertyCount = removeAndFlattenGlobalAtRules(root);
 
   const scope = scopeSelector(scopeValue);
@@ -487,7 +526,7 @@ export function scopeTailwindCss({ rawCss, scopeValue, candidates = [], allowedC
     if (insideKeyframes(rule)) return;
     rule.selector = selectorParser((selectors) => {
       for (const selector of [...selectors.nodes]) {
-        const selfSelector = scopeOneSelector(selector, scopeValue);
+        const selfSelector = scopeOneSelector(selector);
         if (selfSelector) selectors.insertAfter(selector, selfSelector);
       }
       const seen = new Set();

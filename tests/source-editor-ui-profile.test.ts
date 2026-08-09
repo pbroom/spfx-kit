@@ -76,6 +76,7 @@ describe('source editor UI profile', () => {
     expect(sourceEditor).not.toContain('.fui-');
     expect(packageManifest.peerDependencies).not.toHaveProperty('@fluentui/react-components');
     expect(packageManifest.devDependencies).not.toHaveProperty('@fluentui/react-components');
+    expect(packageManifest.scripts.prebuild).toBe('npm --workspace @spfx-kit/ui-profile run profile:prepare:base-ui');
   });
 
   it('derives the SCSS-only profile without workspace or Tabs source while retaining exact scoped CSS', async () => {
@@ -89,8 +90,8 @@ describe('source editor UI profile', () => {
       surfaces: [{ consumer: 'SourceEditorField', components: ['button', 'dropdown-menu'] }],
       css: {
         mode: 'canonical-safe-superset',
-        scopeValue: 'skui-9eea46b8e51bf75d',
-        scopeSelector: '[data-spfx-ui-scope="skui-9eea46b8e51bf75d"]'
+        scopeValue: 'skui-7dbbe5a120453773',
+        scopeSelector: '[data-spfx-ui-scope="skui-7dbbe5a120453773"]'
       }
     });
     expect(scssOnly.files.map((file: { vendorPath: string }) => file.vendorPath)).not.toContain(

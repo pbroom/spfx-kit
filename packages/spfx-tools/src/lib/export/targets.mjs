@@ -29,6 +29,7 @@ import { childStdio, reportTargetProgress } from './output.mjs';
 import { describeTarget, exportDirNameForTarget } from './archive.mjs';
 import {
   clearUiProfileBuildOutputs,
+  materializeUiProfileTargetAssets,
   materializeStandaloneUiProfileClosure,
   verifyEmbeddedUiProfileClosure,
   verifyExternalUiProfileClosure,
@@ -206,6 +207,7 @@ export async function buildExternalAssetsPackage(appDir, cdnBasePath, options = 
     deployAssetsDir: path.join(appDir, 'temp', 'deploy')
   };
   if (options.uiProfileClosure) {
+    await materializeUiProfileTargetAssets(build.releaseAssetsDir, options.uiProfileClosure);
     build.uiProfileDelivery = await verifyExternalUiProfileClosure(build, options.uiProfileClosure);
   }
   return build;

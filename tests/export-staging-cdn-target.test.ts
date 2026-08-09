@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -42,6 +43,44 @@ describe('external-assets export target', () => {
       releaseAssetsDir: path.join(appDir, 'release', 'assets'),
       releaseManifestDir: path.join(appDir, 'release', 'manifests'),
       deployAssetsDir: path.join(appDir, 'temp', 'deploy')
+    });
+  });
+
+  it('materializes the exact UI profile artifact before external closure verification', async () => {
+    const appDir = await temporaryDirectory();
+    const profileRoot = path.join(appDir, 'ui-profile');
+    const profilePath = path.join(profileRoot, 'profile.json');
+    const cssPath = path.join(profileRoot, 'profile.css');
+    const cssBytes = Buffer.from('[data-spfx-ui-scope="fixture"]{display:block}');
+    const cssSha256 = createHash('sha256').update(cssBytes).digest('hex');
+    const deliveryPath = `spfx-ui-profile/${cssSha256}.css`;
+    await Promise.all([
+      writeJson(path.join(appDir, 'config', 'package-solution.json'), {
+        paths: { zippedPackage: 'solution/team.sppkg' },
+        solution: { includeClientSideAssets: true }
+      }),
+      writeJson(path.join(appDir, 'config', 'write-manifests.json'), { cdnBasePath: 'https://old.test/' }),
+      writeJson(profilePath, {}),
+      writeFileWithParents(cssPath, cssBytes)
+    ]);
+    const closure = {
+      descriptorSha256: 'a'.repeat(64),
+      profilePath,
+      descriptor: {
+        css: { path: 'profile.css', deliveryPath, sha256: cssSha256, assets: [] }
+      }
+    };
+
+    const build = await buildExternalAssetsPackage(appDir, 'https://staging.contoso.test/ui/', {
+      ship: async () => writePackage(path.join(appDir, 'sharepoint', 'solution', 'team.sppkg')),
+      uiProfileClosure: closure
+    });
+
+    await expect(readFile(path.join(build.releaseAssetsDir, deliveryPath))).resolves.toEqual(cssBytes);
+    expect(build.uiProfileDelivery).toMatchObject({
+      descriptorSha256: closure.descriptorSha256,
+      mode: 'external',
+      status: 'passed'
     });
   });
 
