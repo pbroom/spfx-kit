@@ -5,9 +5,9 @@
   "upstream": {
     "profileId": "spfx-react17-base-nova-v1",
     "profilePath": "packages/ui-profile/profile.json",
-    "profileSha256": "f451076dc28d609b892c5039d7abd5851aa67cc87368a1119730d373f1fc6464",
+    "profileSha256": "9616e346734143172da5359e4d8f06ac32902293ef76f5daba15ec7f4b847c40",
     "provenancePath": "packages/ui-profile/provenance.json",
-    "provenanceSha256": "15ee3700f630c4620b4a84b9a67287280c90070bade7881f415cba062d733643"
+    "provenanceSha256": "881ecf2e26861799956a0958fc7fc9f2ed1041b0d29eeab72b0c58def6cfb3b8"
   },
   "surfaces": [
     {
