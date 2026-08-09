@@ -11,6 +11,7 @@ import {
   canonicalJson,
   createRegistrySourceContext,
   normalizeRegistrySource,
+  pinnedTypeDirectiveNames,
   sha256
 } from './profile.mjs';
 import { assertFetchedRegistryClosure, assertProductionDependencyRoots } from './profile-update-intake.mjs';
@@ -58,6 +59,7 @@ const ownedSourceDefinitions = [
 
 export async function generateProfile({ packageRoot, rawRoot, outputRoot, provenance, provenanceBytes }) {
   assertRegistryIds(provenance.registryIds);
+  const manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
   const dependencyClosureBytes = await readFile(path.join(packageRoot, 'dependency-closure.json'));
   const dependencyClosure = JSON.parse(dependencyClosureBytes.toString('utf8'));
   assertProductionDependencyRoots(dependencyClosure.productionRoots, provenance.directProductionDependencies);
@@ -105,7 +107,8 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
     provenance.registryIds,
     {
       excludedDependencies: provenance.excludedDependencies,
-      directProductionDependencies: provenance.directProductionDependencies
+      directProductionDependencies: provenance.directProductionDependencies,
+      allowedTypeDirectives: pinnedTypeDirectiveNames(manifest.devDependencies)
     }
   );
   const sourceContext = createRegistrySourceContext(

@@ -10,7 +10,8 @@ import {
   PROFILE_SCHEMA_VERSION,
   assertRegistryIds,
   canonicalJson,
-  moduleSpecifiers,
+  pinnedTypeDirectiveNames,
+  sourceDependencies,
   sha256
 } from './profile.mjs';
 
@@ -236,8 +237,31 @@ function resolveRelativeSourcePath(sourcePath, specifier, sourcePaths) {
   assert(candidates.length === 1, `${sourcePath} has an unresolved or ambiguous relative source import: ${specifier}`);
 }
 
+function assertReferencePathResolves(sourcePath, specifier, sourcePaths) {
+  assert(
+    !path.posix.isAbsolute(specifier) && !path.win32.isAbsolute(specifier),
+    `${sourcePath} uses an absolute reference path: ${specifier}`
+  );
+  assert(
+    !specifier.includes('\\') && (specifier.startsWith('./') || specifier.startsWith('../')),
+    `${sourcePath} uses a non-relative reference path: ${specifier}`
+  );
+  resolveRelativeSourcePath(sourcePath, specifier, sourcePaths);
+}
+
 export function assertFetchedRegistryClosure(items, registryIds, policy, expectedSourcePathsById = new Map()) {
   const registryIdSet = new Set(registryIds);
+  const allowedTypeDirectives = policy.allowedTypeDirectives ?? [];
+  assert(Array.isArray(allowedTypeDirectives), 'Pinned type directive policy must be an array');
+  assert(
+    allowedTypeDirectives.every((directive) => typeof directive === 'string' && directive.length > 0),
+    'Pinned type directive policy contains an invalid name'
+  );
+  assert(
+    new Set(allowedTypeDirectives).size === allowedTypeDirectives.length,
+    'Pinned type directive policy contains duplicates'
+  );
+  const allowedTypeDirectiveSet = new Set(allowedTypeDirectives);
   const sourcePaths = new Set();
   for (const item of items) {
     assert(Array.isArray(item.files), `Pinned registry item ${item.name} has no source files`);
@@ -271,7 +295,8 @@ export function assertFetchedRegistryClosure(items, registryIds, policy, expecte
     }
 
     for (const file of item.files) {
-      for (const specifier of moduleSpecifiers(file.content, file.path)) {
+      const dependencies = sourceDependencies(file.content, file.path);
+      for (const specifier of dependencies.moduleSpecifiers) {
         if (specifier === ICON_PLACEHOLDER_SPECIFIER) {
           assertAllowedProductionDependency('lucide-react', file.path, policy);
           continue;
@@ -292,6 +317,15 @@ export function assertFetchedRegistryClosure(items, registryIds, policy, expecte
         }
         assert(!specifier.startsWith('/'), `${file.path} uses an absolute source import: ${specifier}`);
         assertAllowedProductionDependency(importedPackageName(specifier), file.path, policy);
+      }
+      for (const referencedPath of dependencies.referencedPaths) {
+        assertReferencePathResolves(file.path, referencedPath, sourcePaths);
+      }
+      for (const typeDirective of dependencies.typeDirectives) {
+        assert(
+          allowedTypeDirectiveSet.has(typeDirective),
+          `${file.path}: type reference directive ${JSON.stringify(typeDirective)} is not pinned by the profile`
+        );
       }
     }
   }
@@ -484,13 +518,15 @@ export async function fetchValidatedProfileUpdateSnapshots({
   resolvedRegistryUrl
 }) {
   const expectedSourcePathsById = await assertProfileUpdateProvenance({ packageRoot, provenance });
+  const manifest = await readJson(path.join(packageRoot, 'package.json'));
   return fetchPinnedRegistrySnapshots({
     packageRoot,
     registry: provenance.registry,
     registryIds: provenance.registryIds,
     dependencyPolicy: {
       excludedDependencies: provenance.excludedDependencies,
-      directProductionDependencies: provenance.directProductionDependencies
+      directProductionDependencies: provenance.directProductionDependencies,
+      allowedTypeDirectives: pinnedTypeDirectiveNames(manifest.devDependencies)
     },
     expectedSourcePathsById,
     fetchImpl,

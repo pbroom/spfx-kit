@@ -227,7 +227,7 @@ function moduleSpecifierNodes(sourceFile) {
   return specifiers;
 }
 
-export function moduleSpecifiers(source, label) {
+export function sourceDependencies(source, label) {
   const sourceFile = parsedSource(source, label);
   function rejectComputedDependency(node) {
     const dependency = dependencyCall(node);
@@ -237,7 +237,22 @@ export function moduleSpecifiers(source, label) {
     ts.forEachChild(node, rejectComputedDependency);
   }
   rejectComputedDependency(sourceFile);
-  return moduleSpecifierNodes(sourceFile).map((specifier) => specifier.text);
+  const preprocessed = ts.preProcessFile(source, true, true);
+  return {
+    moduleSpecifiers: moduleSpecifierNodes(sourceFile).map((specifier) => specifier.text),
+    referencedPaths: preprocessed.referencedFiles.map((reference) => reference.fileName),
+    typeDirectives: preprocessed.typeReferenceDirectives.map((reference) => reference.fileName)
+  };
+}
+
+export function moduleSpecifiers(source, label) {
+  return sourceDependencies(source, label).moduleSpecifiers;
+}
+
+export function pinnedTypeDirectiveNames(dependencies) {
+  return Object.keys(dependencies ?? {})
+    .filter((name) => name.startsWith('@types/'))
+    .map((name) => name.slice('@types/'.length));
 }
 
 function rewriteModuleSpecifiers(source, label, rewrite) {

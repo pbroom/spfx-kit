@@ -2,7 +2,14 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import ts from 'typescript';
 
-import { assertSupportedJsxPragmas, assertSupportedRequireBindings, dependencyCall } from './profile.mjs';
+import {
+  assertSupportedJsxPragmas,
+  assertSupportedRequireBindings,
+  dependencyCall,
+  pinnedTypeDirectiveNames
+} from './profile.mjs';
+
+export { pinnedTypeDirectiveNames };
 
 export const PROFILE_EXTERNAL_MODULE_SUBPATHS = Object.freeze([
   '@base-ui/react/accordion',
@@ -184,12 +191,6 @@ function assertDependenciesResolve(
       `${outputPath}: lib reference directive ${JSON.stringify(directive)} is not supplied by pinned TypeScript`
     );
   }
-}
-
-export function pinnedTypeDirectiveNames(dependencies) {
-  return Object.keys(dependencies ?? {})
-    .filter((name) => name.startsWith('@types/'))
-    .map((name) => name.slice('@types/'.length));
 }
 
 function assertNoDuplicateDependencies(values, label) {

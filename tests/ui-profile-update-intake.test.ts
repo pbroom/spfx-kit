@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   assertProfileGenerationProvenance,
   assertProfileUpdateProvenance,
+  assertFetchedRegistryClosure,
   bindVerifiedSnapshotsToProvenance,
   assertPinnedShadcnToolchain,
   shadcnRuntimeClosureSha256,
@@ -173,6 +174,42 @@ describe('committed UI profile provenance', () => {
 });
 
 describe('pinned shadcn network intake', () => {
+  it('accepts pinned type directives and reference paths inside the fetched source closure', () => {
+    expect(() =>
+      assertFetchedRegistryClosure(
+        [
+          {
+            name: 'button',
+            files: [
+              {
+                path: 'registry/base-nova/ui/button.tsx',
+                content: '/// <reference types="react" />\n/// <reference path="./button-types.ts" />\nexport {}\n'
+              },
+              { path: 'registry/base-nova/ui/button-types.ts', content: 'export {}\n' }
+            ]
+          }
+        ],
+        ['button'],
+        { ...dependencyPolicy, allowedTypeDirectives: ['react'] }
+      )
+    ).not.toThrow();
+  });
+
+  it.each([
+    ['unlisted type directive', '/// <reference types="left-pad" />', 'is not pinned by the profile'],
+    ['missing reference path', '/// <reference path="./missing.ts" />', 'unresolved or ambiguous relative source import'],
+    ['absolute reference path', '/// <reference path="/outside.ts" />', 'uses an absolute reference path'],
+    ['backslash reference path', '/// <reference path=".\\\\outside.ts" />', 'uses a non-relative reference path']
+  ])('rejects a %s during raw source intake', (_label, content, expectedMessage) => {
+    expect(() =>
+      assertFetchedRegistryClosure(
+        [{ name: 'button', files: [{ path: 'registry/base-nova/ui/button.tsx', content }] }],
+        ['button'],
+        { ...dependencyPolicy, allowedTypeDirectives: ['react'] }
+      )
+    ).toThrow(expectedMessage);
+  });
+
   it('binds the complete installed runtime dependency closure used by the pinned shadcn registry entry', async () => {
     const packageRoot = path.resolve('packages/ui-profile');
     const provenance = JSON.parse(await readFile(path.join(packageRoot, 'provenance.json'), 'utf8'));

@@ -399,7 +399,7 @@ describe('generated profile module closure', () => {
     [
       'leading reference path before React binding injection',
       '/// <reference path="./missing.ts" />',
-      'relative import "./missing.ts" does not resolve'
+      'unresolved or ambiguous relative source import: ./missing.ts'
     ],
     [
       'type-only React namespace import',
