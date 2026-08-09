@@ -2,7 +2,7 @@
 
 const { createHash } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
-const { existsSync, readFileSync, realpathSync } = require('node:fs');
+const { existsSync, lstatSync, readFileSync, realpathSync } = require('node:fs');
 const path = require('node:path');
 
 const configureSpfxMonacoCss = require('./spfx-monaco-webpack.cjs');
@@ -12,6 +12,254 @@ const MONACO_CSS_RULE = /[\\/]node_modules[\\/]monaco-editor[\\/].*\.css$/i;
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function assertExact(actual, expected, message) {
+  if (canonicalJson(actual) !== canonicalJson(expected)) throw new Error(message);
+}
+
+function lockPackageName(lockPath) {
+  const marker = 'node_modules/';
+  const index = lockPath.lastIndexOf(marker);
+  return index === -1 ? null : lockPath.slice(index + marker.length);
+}
+
+function resolveLockDependency(lock, fromPath, dependency) {
+  let current = fromPath;
+  while (current && current !== '.') {
+    const candidate = path.posix.join(current, 'node_modules', dependency);
+    if (lock.packages[candidate]) return candidate;
+    const parent = path.posix.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  const rootCandidate = `node_modules/${dependency}`;
+  return lock.packages[rootCandidate] ? rootCandidate : null;
+}
+
+function optionalPeers(value) {
+  return Object.entries(value || {})
+    .filter(([, metadata]) => metadata && metadata.optional === true)
+    .map(([name]) => name)
+    .sort();
+}
+
+function resolveInstalledDependency(appRoot, fromRoot, dependency) {
+  let current = fromRoot;
+  while (true) {
+    const candidate = path.join(current, 'node_modules', ...dependency.split('/'));
+    if (existsSync(candidate)) return candidate;
+    if (path.normalize(current) === path.normalize(appRoot)) return null;
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+function verifyInstalledPackageRoot(nodeModulesRoot, candidate, name) {
+  if (!candidate) throw new Error(`App install cannot resolve dependency-closure package ${name}.`);
+  if (lstatSync(candidate).isSymbolicLink()) {
+    throw new Error(`Installed ${name} package root must not be a symbolic link.`);
+  }
+  const resolvedRoot = realpathSync(candidate);
+  const relative = path.relative(nodeModulesRoot, resolvedRoot);
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Installed ${name} package root resolves outside the app-local node_modules tree.`);
+  }
+  if (path.normalize(resolvedRoot) !== path.normalize(candidate)) {
+    throw new Error(`Installed ${name} package root differs from its app-local path.`);
+  }
+  return resolvedRoot;
+}
+
+function validateDependencyClosure(appRoot, closure, lock) {
+  if (
+    closure.schemaVersion !== 1 ||
+    closure.profileId !== 'spfx-react17-base-nova-v1' ||
+    closure.policy?.allowForcedPeerResolution !== false ||
+    closure.policy?.allowLegacyPeerDeps !== false ||
+    !Array.isArray(closure.productionRoots) ||
+    !Array.isArray(closure.packages) ||
+    closure.packages.length === 0
+  ) {
+    throw new Error('Prepared Base UI dependency closure identity differs.');
+  }
+  const accepted = new Map();
+  for (const entry of closure.packages) {
+    if (
+      !entry ||
+      typeof entry.name !== 'string' ||
+      !entry.name ||
+      typeof entry.version !== 'string' ||
+      !entry.version ||
+      typeof entry.integrity !== 'string' ||
+      !entry.integrity.startsWith('sha512-') ||
+      !entry.dependencies ||
+      Array.isArray(entry.dependencies) ||
+      !entry.peerDependencies ||
+      Array.isArray(entry.peerDependencies) ||
+      (entry.optionalPeers !== undefined && !Array.isArray(entry.optionalPeers))
+    ) {
+      throw new Error('Prepared Base UI dependency closure package metadata differs.');
+    }
+    if (accepted.has(entry.name)) throw new Error(`Prepared Base UI dependency closure duplicates ${entry.name}.`);
+    accepted.set(entry.name, entry);
+  }
+  for (const root of closure.productionRoots) {
+    if (!accepted.has(root)) throw new Error(`Prepared Base UI dependency closure omits production root ${root}.`);
+  }
+  for (const entry of accepted.values()) {
+    for (const dependency of Object.keys(entry.dependencies)) {
+      if (!accepted.has(dependency)) {
+        throw new Error(`Prepared Base UI dependency closure omits ${entry.name} dependency ${dependency}.`);
+      }
+    }
+    for (const peer of Object.keys(entry.peerDependencies)) {
+      if (!(entry.optionalPeers || []).includes(peer) && !accepted.has(peer)) {
+        throw new Error(`Prepared Base UI dependency closure omits ${entry.name} peer ${peer}.`);
+      }
+    }
+  }
+  if (accepted.get('react')?.version !== '17.0.1' || accepted.get('react-dom')?.version !== '17.0.1') {
+    throw new Error('Prepared Base UI dependency closure does not pin React and React DOM 17.0.1.');
+  }
+  if (lock.lockfileVersion !== 3 || !lock.packages || Array.isArray(lock.packages)) {
+    throw new Error('SPFx UI profile dependency verification requires npm lockfileVersion 3.');
+  }
+
+  const reached = new Map();
+  const reachedByName = new Map();
+  const queue = closure.productionRoots.map((dependency) => ({ from: '', dependency }));
+  while (queue.length > 0) {
+    const next = queue.shift();
+    const resolvedPath = resolveLockDependency(lock, next.from, next.dependency);
+    if (!resolvedPath) throw new Error(`App lockfile cannot resolve dependency-closure package ${next.dependency}.`);
+    if (reached.has(resolvedPath)) continue;
+    const name = lockPackageName(resolvedPath);
+    const expected = accepted.get(name);
+    if (!expected) throw new Error(`App lockfile resolves unexpected dependency-closure package ${name}.`);
+    if (reachedByName.has(name)) {
+      throw new Error(`App lockfile resolves dependency-closure package ${name} more than once.`);
+    }
+    const locked = lock.packages[resolvedPath];
+    if (locked.version !== expected.version || locked.integrity !== expected.integrity) {
+      throw new Error(`Installed ${name} lock identity differs from the dependency closure.`);
+    }
+    assertExact(locked.dependencies || {}, expected.dependencies, `Installed ${name} dependency metadata differs.`);
+    assertExact(locked.peerDependencies || {}, expected.peerDependencies, `Installed ${name} peer metadata differs.`);
+    assertExact(locked.optionalDependencies || {}, {}, `Installed ${name} optional dependency metadata differs.`);
+    assertExact(locked.bundleDependencies || [], [], `Installed ${name} bundled dependency metadata differs.`);
+    assertExact(locked.bundledDependencies || [], [], `Installed ${name} bundled dependency metadata differs.`);
+    assertExact(
+      optionalPeers(locked.peerDependenciesMeta),
+      [...(expected.optionalPeers || [])].sort(),
+      `Installed ${name} optional-peer metadata differs.`
+    );
+    reached.set(resolvedPath, name);
+    reachedByName.set(name, resolvedPath);
+    for (const dependency of Object.keys(expected.dependencies)) queue.push({ from: resolvedPath, dependency });
+  }
+  if (reached.size !== accepted.size) {
+    throw new Error(`App lockfile dependency closure size ${reached.size} differs from accepted ${accepted.size}.`);
+  }
+  for (const entry of accepted.values()) {
+    const resolvedPath = reachedByName.get(entry.name);
+    if (!resolvedPath) throw new Error(`App lockfile dependency closure omits ${entry.name}.`);
+    for (const peer of Object.keys(entry.peerDependencies).filter((name) => !(entry.optionalPeers || []).includes(name))) {
+      const peerPath = resolveLockDependency(lock, resolvedPath, peer);
+      if (!peerPath || reached.get(peerPath) !== peer) {
+        throw new Error(`Installed ${entry.name} peer ${peer} differs from the dependency closure.`);
+      }
+    }
+  }
+
+  const nodeModulesRoot = realpathSync(path.join(appRoot, 'node_modules'));
+  const resolvedRoots = new Map();
+  const resolvedPaths = new Map();
+  const physicalQueue = closure.productionRoots.map((dependency) => ({
+    fromRoot: appRoot,
+    fromLockPath: '',
+    dependency
+  }));
+  while (physicalQueue.length > 0) {
+    const next = physicalQueue.shift();
+    const lockPath = resolveLockDependency(lock, next.fromLockPath, next.dependency);
+    if (!lockPath || reached.get(lockPath) !== next.dependency) {
+      throw new Error(`App lockfile cannot bind physical dependency-closure package ${next.dependency}.`);
+    }
+    const installedPath = resolveInstalledDependency(appRoot, next.fromRoot, next.dependency);
+    const resolvedRoot = verifyInstalledPackageRoot(nodeModulesRoot, installedPath, next.dependency);
+    const expectedRoot = path.join(appRoot, ...lockPath.split('/'));
+    if (path.normalize(resolvedRoot) !== path.normalize(expectedRoot)) {
+      throw new Error(`Resolved app-local ${next.dependency} path differs from the app lockfile.`);
+    }
+    if (resolvedPaths.has(resolvedRoot)) continue;
+    if (resolvedRoots.has(next.dependency)) {
+      throw new Error(`App install resolves dependency-closure package ${next.dependency} more than once.`);
+    }
+    const expected = accepted.get(next.dependency);
+    const manifestPath = path.join(resolvedRoot, 'package.json');
+    if (lstatSync(manifestPath).isSymbolicLink() || !lstatSync(manifestPath).isFile()) {
+      throw new Error(`Installed ${next.dependency} package manifest is not a regular file.`);
+    }
+    const packageManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    if (packageManifest.name !== next.dependency || packageManifest.version !== expected.version) {
+      throw new Error(`Resolved app-local ${next.dependency} package identity differs from the dependency closure.`);
+    }
+    assertExact(
+      packageManifest.dependencies || {},
+      expected.dependencies,
+      `Resolved app-local ${next.dependency} dependencies differ.`
+    );
+    assertExact(
+      packageManifest.peerDependencies || {},
+      expected.peerDependencies,
+      `Resolved app-local ${next.dependency} peers differ.`
+    );
+    assertExact(
+      packageManifest.optionalDependencies || {},
+      {},
+      `Resolved app-local ${next.dependency} optional dependencies differ.`
+    );
+    assertExact(
+      packageManifest.bundleDependencies || [],
+      [],
+      `Resolved app-local ${next.dependency} bundled dependencies differ.`
+    );
+    assertExact(
+      packageManifest.bundledDependencies || [],
+      [],
+      `Resolved app-local ${next.dependency} bundled dependencies differ.`
+    );
+    assertExact(
+      optionalPeers(packageManifest.peerDependenciesMeta),
+      [...(expected.optionalPeers || [])].sort(),
+      `Resolved app-local ${next.dependency} optional peers differ.`
+    );
+    resolvedPaths.set(resolvedRoot, next.dependency);
+    resolvedRoots.set(next.dependency, resolvedRoot);
+    for (const dependency of Object.keys(expected.dependencies)) {
+      physicalQueue.push({ fromRoot: resolvedRoot, fromLockPath: lockPath, dependency });
+    }
+    for (const peer of Object.keys(expected.peerDependencies).filter((name) => !(expected.optionalPeers || []).includes(name))) {
+      physicalQueue.push({ fromRoot: resolvedRoot, fromLockPath: lockPath, dependency: peer });
+    }
+  }
+  if (resolvedRoots.size !== accepted.size) {
+    throw new Error(`App install dependency closure size ${resolvedRoots.size} differs from accepted ${accepted.size}.`);
+  }
+  return resolvedRoots;
 }
 
 function loadDelivery(options) {
@@ -50,23 +298,10 @@ function loadDelivery(options) {
     throw new Error('Vendored prepared Base UI dependency closure digest differs.');
   }
   const closure = JSON.parse(closureBytes.toString('utf8'));
-  const baseUiUtilsEvidence = closure.packages.find((candidate) => candidate.name === '@base-ui/utils');
-  if (!baseUiUtilsEvidence || baseUiUtilsEvidence.version !== '0.3.1') {
-    throw new Error('Prepared Base UI dependency closure does not pin @base-ui/utils@0.3.1.');
-  }
   const lock = JSON.parse(readFileSync(path.join(appRoot, 'package-lock.json'), 'utf8'));
-  const lockedBaseUiUtils = lock.packages?.['node_modules/@base-ui/utils'];
-  if (
-    lockedBaseUiUtils?.version !== baseUiUtilsEvidence.version ||
-    lockedBaseUiUtils.integrity !== baseUiUtilsEvidence.integrity
-  ) {
-    throw new Error('Installed @base-ui/utils lock identity differs from the dependency closure.');
-  }
-  const baseUiUtilsRoot = realpathSync(path.join(appRoot, 'node_modules', '@base-ui', 'utils'));
-  const baseUiUtilsManifest = JSON.parse(readFileSync(path.join(baseUiUtilsRoot, 'package.json'), 'utf8'));
-  if (baseUiUtilsManifest.name !== '@base-ui/utils' || baseUiUtilsManifest.version !== baseUiUtilsEvidence.version) {
-    throw new Error('Resolved app-local @base-ui/utils package identity differs from the dependency closure.');
-  }
+  const resolvedRoots = validateDependencyClosure(appRoot, closure, lock);
+  const baseUiUtilsRoot = resolvedRoots.get('@base-ui/utils');
+  if (!baseUiUtilsRoot) throw new Error('Prepared Base UI dependency closure omits @base-ui/utils.');
   return {
     appRoot,
     profileRoot,

@@ -209,7 +209,7 @@ export async function prepareSpfxUiProfileBaseUi({ appRoot, profileRoot }) {
     await mkdir(lockRoot);
   } catch (error) {
     if (error && typeof error === 'object' && error.code === 'EEXIST') {
-      throw new Error('Another Base UI preparation is already in progress');
+      throw new Error('Another Base UI preparation is already in progress', { cause: error });
     }
     throw error;
   }

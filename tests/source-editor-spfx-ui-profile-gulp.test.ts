@@ -23,37 +23,46 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
   it('prepares an app-local Base UI copy and composes its alias and exact CSS rule with Monaco', async () => {
     const appRoot = await mkdtemp(path.join(tmpdir(), 'better-text-ui-profile-'));
     temporaryDirectories.push(appRoot);
+    const closure = JSON.parse(
+      await readFile(path.join(repositoryRoot, 'packages', 'ui-profile', 'dependency-closure.json'), 'utf8')
+    );
+    const lockPackages = Object.fromEntries(
+      closure.packages.map((entry: any) => [
+        lockPath(entry.name),
+        {
+          version: entry.version,
+          integrity: entry.integrity,
+          dependencies: entry.dependencies,
+          peerDependencies: entry.peerDependencies,
+          ...(entry.optionalPeers?.length
+            ? {
+                peerDependenciesMeta: Object.fromEntries(entry.optionalPeers.map((peer: string) => [peer, { optional: true }]))
+              }
+            : {}),
+          ...(entry.name === '@base-ui/react' ? { resolved: 'https://registry.npmjs.org/@base-ui/react/-/react-1.6.0.tgz' } : {})
+        }
+      ])
+    );
+    const lock = {
+      lockfileVersion: 3,
+      packages: {
+        '': { dependencies: { '@base-ui/react': '1.6.0' } },
+        ...lockPackages
+      }
+    };
     await writeFile(
       path.join(appRoot, 'package.json'),
       `${JSON.stringify({ name: 'better-text-spfx', dependencies: { '@base-ui/react': '1.6.0' } })}\n`
     );
-    await writeFile(
-      path.join(appRoot, 'package-lock.json'),
-      `${JSON.stringify({
-        lockfileVersion: 3,
-        packages: {
-          '': { dependencies: { '@base-ui/react': '1.6.0' } },
-          'node_modules/@base-ui/react': {
-            version: '1.6.0',
-            resolved: 'https://registry.npmjs.org/@base-ui/react/-/react-1.6.0.tgz',
-            integrity: 'sha512-/jzjTWJYXhRFO45Bev9lc3cHbmjzCMpUqbMZ2AgKy/z25mY9B6shGSNcXcjQar9n5doM0KYW1W8fcFv2jZBuMw=='
-          },
-          'node_modules/@base-ui/utils': {
-            version: '0.3.1',
-            resolved: 'https://registry.npmjs.org/@base-ui/utils/-/utils-0.3.1.tgz',
-            integrity: 'sha512-gFFiltORVmW/N6IILTGxizP3PBpVpysqML1ALY5Vk0mH+7faVkCknOU31goYHN5Aoek2dkjxva1XOD2Ce9WuIg=='
-          }
-        }
-      })}\n`
-    );
+    const appLockPath = path.join(appRoot, 'package-lock.json');
+    await writeFile(appLockPath, `${JSON.stringify(lock)}\n`);
     const installedBaseUi = path.join(repositoryRoot, 'node_modules', '@base-ui', 'react');
-    await mkdir(path.join(appRoot, 'node_modules', '@base-ui'), { recursive: true });
-    await cp(installedBaseUi, path.join(appRoot, 'node_modules', '@base-ui', 'react'), { recursive: true });
-    await cp(
-      path.join(repositoryRoot, 'node_modules', '@base-ui', 'utils'),
-      path.join(appRoot, 'node_modules', '@base-ui', 'utils'),
-      { recursive: true }
-    );
+    for (const entry of closure.packages) {
+      const source = path.join(repositoryRoot, 'node_modules', ...entry.name.split('/'));
+      const target = path.join(appRoot, ...lockPath(entry.name).split('/'));
+      await mkdir(path.dirname(target), { recursive: true });
+      await cp(source, target, { recursive: true });
+    }
 
     const resolved = await resolveSourceEditorUiProfile(repositoryRoot, 'better-text-spfx');
     for (const file of resolved.files) {
@@ -131,8 +140,80 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
 
     expect(customization.additionalConfiguration(webpackConfiguration)).toBe(webpackConfiguration);
     expect(webpackConfiguration.module.rules).toHaveLength(5);
+
+    for (const entry of closure.packages) {
+      const driftedLock = structuredClone(lock);
+      driftedLock.packages[lockPath(entry.name)].version = '0.0.0-drift';
+      await writeFile(appLockPath, `${JSON.stringify(driftedLock)}\n`);
+      expect(() => registerSpfxUiProfileGulp(createBuildStub(), { appRoot, profileRoot })).toThrow(
+        `Installed ${entry.name} lock identity differs from the dependency closure.`
+      );
+    }
+    await writeFile(appLockPath, `${JSON.stringify(lock)}\n`);
+
+    const optionalLock = structuredClone(lock);
+    optionalLock.packages['node_modules/@base-ui/utils'].optionalDependencies = { 'left-pad': '1.3.0' };
+    await writeFile(appLockPath, `${JSON.stringify(optionalLock)}\n`);
+    expect(() => registerSpfxUiProfileGulp(createBuildStub(), { appRoot, profileRoot })).toThrow(
+      'Installed @base-ui/utils optional dependency metadata differs.'
+    );
+
+    const bundledLock = structuredClone(lock);
+    bundledLock.packages['node_modules/@base-ui/utils'].bundleDependencies = [];
+    bundledLock.packages['node_modules/@base-ui/utils'].bundledDependencies = ['left-pad'];
+    await writeFile(appLockPath, `${JSON.stringify(bundledLock)}\n`);
+    expect(() => registerSpfxUiProfileGulp(createBuildStub(), { appRoot, profileRoot })).toThrow(
+      'Installed @base-ui/utils bundled dependency metadata differs.'
+    );
+    await writeFile(appLockPath, `${JSON.stringify(lock)}\n`);
+
+    const floatingManifestPath = path.join(appRoot, 'node_modules', '@floating-ui', 'react-dom', 'package.json');
+    const floatingManifest = JSON.parse(await readFile(floatingManifestPath, 'utf8'));
+    await writeFile(floatingManifestPath, `${JSON.stringify({ ...floatingManifest, version: '0.0.0-drift' })}\n`);
+    expect(() => registerSpfxUiProfileGulp(createBuildStub(), { appRoot, profileRoot })).toThrow(
+      'Resolved app-local @floating-ui/react-dom package identity differs from the dependency closure.'
+    );
+    await writeFile(floatingManifestPath, `${JSON.stringify(floatingManifest)}\n`);
+
+    const utilsManifestPath = path.join(appRoot, 'node_modules', '@base-ui', 'utils', 'package.json');
+    const utilsManifest = JSON.parse(await readFile(utilsManifestPath, 'utf8'));
+    await writeFile(
+      utilsManifestPath,
+      `${JSON.stringify({
+        ...utilsManifest,
+        optionalDependencies: { 'left-pad': '1.3.0' },
+        bundleDependencies: [],
+        bundledDependencies: ['left-pad']
+      })}\n`
+    );
+    expect(() => registerSpfxUiProfileGulp(createBuildStub(), { appRoot, profileRoot })).toThrow(
+      'Resolved app-local @base-ui/utils optional dependencies differ.'
+    );
+    await writeFile(
+      utilsManifestPath,
+      `${JSON.stringify({ ...utilsManifest, bundleDependencies: [], bundledDependencies: ['left-pad'] })}\n`
+    );
+    expect(() => registerSpfxUiProfileGulp(createBuildStub(), { appRoot, profileRoot })).toThrow(
+      'Resolved app-local @base-ui/utils bundled dependencies differ.'
+    );
+    await writeFile(utilsManifestPath, `${JSON.stringify(utilsManifest)}\n`);
+
+    const nestedRuntimeRoot = path.join(appRoot, 'node_modules', '@base-ui', 'utils', 'node_modules', '@babel', 'runtime');
+    await mkdir(path.dirname(nestedRuntimeRoot), { recursive: true });
+    await cp(path.join(repositoryRoot, 'node_modules', '@babel', 'runtime'), nestedRuntimeRoot, { recursive: true });
+    expect(() => registerSpfxUiProfileGulp(createBuildStub(), { appRoot, profileRoot })).toThrow(
+      'Resolved app-local @babel/runtime path differs from the app lockfile.'
+    );
   });
 });
+
+function lockPath(name: string): string {
+  return name === 'reselect' ? 'node_modules/@base-ui/utils/node_modules/reselect' : `node_modules/${name}`;
+}
+
+function createBuildStub(): any {
+  return { configureWebpack: { mergeConfig() {} } };
+}
 
 function createCssRule(modulesEnabled: boolean): any {
   return {
