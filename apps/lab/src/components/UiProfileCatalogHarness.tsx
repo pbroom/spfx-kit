@@ -139,19 +139,35 @@ import {
 import { Toggle } from '@spfx-kit/ui-profile/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@spfx-kit/ui-profile/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@spfx-kit/ui-profile/tooltip';
+import { uiProfileCatalogSectionId, type UiProfileCatalogComponentId } from './uiProfileCatalogEntries';
 import { createSpfxUiHost, SpfxUiHostProvider, useSpfxUiId } from '@spfx-kit/ui-profile';
 import { createLabTheme } from '@spfx-kit/spfx-lab-runtime';
 import { createLabUiThemeTokens } from '../ui-profile/lab-theme';
 
 interface CatalogSampleProps {
   children: React.ReactNode;
-  component: string;
+  component: UiProfileCatalogComponentId;
   title: string;
 }
 
+const ActiveCatalogComponentContext = React.createContext<UiProfileCatalogComponentId | undefined>(undefined);
+
 function CatalogSample({ children, component, title }: CatalogSampleProps): React.ReactElement {
+  const activeComponent = React.useContext(ActiveCatalogComponentContext);
+  const active = activeComponent === component;
+  const sampleRef = React.useRef<HTMLElement>(null);
+
+  React.useEffect(() => {
+    if (active) sampleRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [active]);
+
   return (
-    <section data-catalog-component={component}>
+    <section
+      data-catalog-active={active ? 'true' : undefined}
+      data-catalog-component={component}
+      id={uiProfileCatalogSectionId(component)}
+      ref={sampleRef}
+    >
       <h3>{title}</h3>
       {children}
     </section>
@@ -178,7 +194,9 @@ function CatalogToastList(): React.ReactElement {
 }
 
 /** A browser-smoke gallery for every React 17-compatible public catalog subpath. */
-export function UiProfileCatalogHarness(): React.ReactElement {
+export function UiProfileCatalogHarness({
+  activeComponent
+}: { activeComponent?: UiProfileCatalogComponentId } = {}): React.ReactElement {
   const [calendarDate, setCalendarDate] = React.useState<Date | undefined>(new Date(2026, 7, 9));
   const toastManager = React.useMemo(() => createToastManager(), []);
 
@@ -232,7 +250,7 @@ export function UiProfileCatalogHarness(): React.ReactElement {
   const tooltipTriggerId = useSpfxUiId('catalog:tooltip-trigger');
   const tooltipContentId = useSpfxUiId('catalog:tooltip-content');
 
-  return (
+  const catalog = (
     <section aria-label="Shared UI component catalog" data-ui-profile-catalog="base-nova">
       <h2>Shared UI component catalog</h2>
 
@@ -797,6 +815,8 @@ export function UiProfileCatalogHarness(): React.ReactElement {
       </CatalogSample>
     </section>
   );
+
+  return <ActiveCatalogComponentContext.Provider value={activeComponent}>{catalog}</ActiveCatalogComponentContext.Provider>;
 }
 
 export function mountUiProfileCatalogHarness(mountPoint: HTMLElement): () => void {

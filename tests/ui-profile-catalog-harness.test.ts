@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const harnessPath = 'apps/lab/src/components/UiProfileCatalogHarness.tsx';
+const entriesPath = 'apps/lab/src/components/uiProfileCatalogEntries.ts';
 const catalogSubpaths = [
   'accordion',
   'alert',
@@ -79,11 +80,16 @@ describe('Lab UI profile catalog harness', () => {
 
   it('renders one stable smoke target for every included catalog component', () => {
     const source = readFileSync(harnessPath, 'utf8');
+    const entriesSource = readFileSync(entriesPath, 'utf8');
     const samples = [...source.matchAll(/<CatalogSample component="([a-z0-9-]+)"/gu)].map((match) => match[1]);
+    const navigationEntries = [...entriesSource.matchAll(/\{ id: '([a-z0-9-]+)', title: '[^']+' \}/gu)].map((match) => match[1]);
 
     expect(samples).toHaveLength(57);
     expect(new Set(samples).size).toBe(samples.length);
     expect([...samples].sort()).toEqual([...catalogSubpaths].sort());
+    expect(navigationEntries).toHaveLength(57);
+    expect(new Set(navigationEntries).size).toBe(navigationEntries.length);
+    expect(navigationEntries).toEqual(samples);
     expect(source).toContain('data-ui-profile-catalog="base-nova"');
   });
 
@@ -116,8 +122,11 @@ describe('Lab UI profile catalog harness', () => {
     expect(workspaceSource).toContain("import('./UiProfileCatalogHarness')");
     expect(workspaceSource).toContain('module.UiProfileCatalogHarness');
     expect(workspaceSource).toContain('<React.Suspense');
-    expect(workspaceSource).toContain('<UiProfileCatalogHarness />');
-    expect(workspaceSource).toContain('const includedComponentCount = 57');
+    expect(workspaceSource).toContain('<UiProfileCatalogHarness activeComponent={activeComponent} />');
+    expect(workspaceSource).toContain('const includedComponentCount = uiProfileCatalogEntries.length');
+    expect(workspaceSource).toContain('aria-label="UI Library components"');
+    expect(workspaceSource).toContain("aria-current={entry.id === activeComponent ? 'location' : undefined}");
+    expect(workspaceSource).toContain("onNavigate({ workspace: 'ui-library', component: entry.id })");
     expect(workspaceSource).not.toContain('foundationPreviews');
     expect(harnessSource).toContain('<section aria-label="Shared UI component catalog"');
     expect(harnessSource).not.toContain('<main aria-label="Shared UI component catalog"');

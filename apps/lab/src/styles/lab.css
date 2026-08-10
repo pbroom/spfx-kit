@@ -2041,6 +2041,12 @@ textarea {
   background: var(--spfx-ui-color-card);
 }
 
+.ui-library-catalog-shell [data-catalog-component][data-catalog-active='true'] {
+  border-color: var(--spfx-ui-color-ring);
+  outline: 2px solid var(--spfx-ui-color-ring);
+  outline-offset: 2px;
+}
+
 .ui-library-catalog-shell [data-catalog-component] > h3 {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--spfx-ui-color-border);
@@ -2049,26 +2055,75 @@ textarea {
 
 .ui-library-workspace__body {
   display: grid;
+  width: 100%;
   min-width: 0;
   min-height: 0;
-  grid-template-columns: 168px minmax(0, 1fr);
+  align-items: start;
+  grid-template-columns: 184px minmax(0, 1fr);
   gap: 20px;
 }
 
 .ui-library-navigation {
   display: flex;
+  position: sticky;
+  top: 0;
+  width: 100%;
+  min-width: 0;
+  max-height: calc(100vh - 160px);
   align-self: start;
-  align-items: flex-start;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  background: transparent;
   box-shadow: none;
 }
 
-.ui-library-navigation > button {
-  justify-content: flex-start;
+.ui-library-navigation__title {
+  color: var(--spfx-ui-color-muted-foreground);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.ui-library-navigation > button[aria-current='page'] {
+.ui-library-navigation__list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.ui-library-navigation__list a {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  border-radius: var(--spfx-ui-radius-md);
+  padding: 6px 8px;
+  color: var(--spfx-ui-color-muted-foreground);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+  text-decoration: none;
+}
+
+.ui-library-navigation__list a:hover {
+  color: var(--spfx-ui-color-foreground);
+  background: var(--spfx-ui-color-muted);
+}
+
+.ui-library-navigation__list a:focus-visible {
+  outline: 2px solid var(--spfx-ui-color-ring);
+  outline-offset: -2px;
+}
+
+.ui-library-navigation__list a[aria-current='location'] {
   color: var(--spfx-ui-color-accent-foreground);
   background: var(--spfx-ui-color-accent);
   font-weight: 600;
@@ -2218,12 +2273,23 @@ textarea {
   }
 
   .ui-library-navigation {
-    flex-direction: row;
-    overflow-x: auto;
+    position: static;
+    max-height: none;
+    overflow: visible;
   }
 
-  .ui-library-navigation > button {
+  .ui-library-navigation__list {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .ui-library-navigation__list li,
+  .ui-library-navigation__list a {
+    width: max-content;
     flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .ui-library-foundation-grid {
