@@ -9,6 +9,12 @@ type React17JsxIntrinsicAttributes = JSX.IntrinsicAttributes;
 type React17JsxIntrinsicClassAttributes<Instance> = JSX.IntrinsicClassAttributes<Instance>;
 type React17JsxIntrinsicElements = JSX.IntrinsicElements;
 
+declare global {
+  interface TrustedHTML {
+    readonly __spfxUiTrustedHtmlBrand?: never;
+  }
+}
+
 declare module 'react' {
   namespace JSX {
     type Element = React17JsxElement;

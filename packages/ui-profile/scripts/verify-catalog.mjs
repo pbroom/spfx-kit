@@ -58,7 +58,7 @@ function assertPublicEntries(manifest, coverage) {
     assertExact(
       manifest.exports[`./${id}`],
       {
-        types: `./normalized/src/components/ui/${id}.tsx`,
+        types: `./dist/normalized/src/components/ui/${id}.d.ts`,
         import: `./dist/normalized/src/components/ui/${id}.js`
       },
       `${id}: public package export differs from the catalog contract`
@@ -72,7 +72,7 @@ function assertPublicEntries(manifest, coverage) {
   for (const id of coverage.publicComponentIds) {
     assertExact(
       versions[id],
-      [`normalized/src/components/ui/${id}.tsx`],
+      [`dist/normalized/src/components/ui/${id}.d.ts`],
       `${id}: public package typeVersions target differs from the catalog contract`
     );
   }

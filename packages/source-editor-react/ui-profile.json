@@ -5,9 +5,9 @@
   "upstream": {
     "profileId": "spfx-react17-base-nova-v1",
     "profilePath": "packages/ui-profile/profile.json",
-    "profileSha256": "534a8e8b251e3ea8d3d16346a0d0ad5fe7dcfc0f30c09629acbb5ff828000af8",
+    "profileSha256": "7bfa720de5d14a5aa010fc2b5f1fccaf8ee0edabb951119f73f35eaed559aa14",
     "provenancePath": "packages/ui-profile/provenance.json",
-    "provenanceSha256": "6da2ac37892dca6bd0c601d392faacde35317077abd1df3b8b278f1dc002274c"
+    "provenanceSha256": "6612bfece05b264cdace8cb734167936ca7917e886dbaf221b02f94244481061"
   },
   "surfaces": [
     {
@@ -78,7 +78,7 @@
     {
       "sourcePath": "packages/ui-profile/generated/tailwind-profile.css",
       "vendorPath": "src/vendor/source-editor/ui-profile/tailwind-profile.css",
-      "sha256": "c426e75e02eb43fa07a10ea0f59ff9bacc94941dc766d3b453144c6220132172"
+      "sha256": "b7b442855d03ba5c7855b5fa428abd25862abff370049a3f730ebc32fde22e57"
     }
   ]
 }

@@ -59,6 +59,15 @@ describe('@spfx-kit/ui-profile public package', () => {
       expect(emitted, component).not.toContain('"class-variance-authority/dist/types"');
     }
     expect(statSync(path.join(profileRoot, 'dist/compat-consumers/react17-base-ui-jsx.d.ts')).isFile()).toBe(true);
+    expect(packageManifest.typesVersions['<5.4']).toEqual({
+      chart: ['dist/compat-consumers/typescript53/chart.d.ts'],
+      delivery: ['delivery.d.ts'],
+      vite: ['vite.d.ts'],
+      '*': ['dist/normalized/src/components/ui/*.d.ts']
+    });
+    expect(readFileSync(path.join(profileRoot, 'dist/compat-consumers/typescript53/chart.d.ts'), 'utf8')).toContain(
+      'reference path="../typescript53-globals.d.ts"'
+    );
     for (const subpath of nonPublicSubpaths) {
       expect(packageManifest.exports, subpath).not.toHaveProperty(`./${subpath}`);
       expect(packageManifest.typesVersions['*'], subpath).not.toHaveProperty(subpath);

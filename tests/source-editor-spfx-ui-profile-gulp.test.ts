@@ -731,10 +731,6 @@ async function writeLegacyPreparationLock(
   );
 }
 
-function lockPath(name: string): string {
-  return name === 'reselect' ? 'node_modules/@base-ui/utils/node_modules/reselect' : `node_modules/${name}`;
-}
-
 function createPortableClosureLayout(closure: any): Map<string, string> {
   const accepted = new Map<string, any>(closure.packages.map((entry: any) => [entry.path, entry]));
   const installed = new Map<string, any>();

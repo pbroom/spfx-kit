@@ -132,6 +132,7 @@ const NavigationMenuPositioner = React.forwardRef<
   React.ElementRef<typeof NavigationMenuPrimitive.Positioner>,
   React.PropsWithoutRef<NavigationMenuPrimitive.Positioner.Props>
 >(function NavigationMenuPositioner({
+  id,
   className,
   side = "bottom",
   sideOffset = 8,
@@ -140,7 +141,7 @@ const NavigationMenuPositioner = React.forwardRef<
   ...props
 }, ref) {
   return (
-    <NavigationMenuPrimitive.Portal id={useSpfxUiPortalId(props.id)} container={useSpfxUiPortalHost()}>
+    <NavigationMenuPrimitive.Portal id={useSpfxUiPortalId(id)} container={useSpfxUiPortalHost()}>
       <NavigationMenuPrimitive.Positioner
         ref={ref}
         side={side}
@@ -153,7 +154,7 @@ const NavigationMenuPositioner = React.forwardRef<
         )}
         {...props}
       >
-        <NavigationMenuPrimitive.Popup className="skui:data-[ending-style]:easing-[ease] skui:xs:w-(--popup-width) skui:relative skui:h-(--popup-height) skui:w-(--popup-width) skui:origin-(--transform-origin) skui:rounded-lg skui:bg-popover skui:text-popover-foreground skui:shadow skui:ring-1 skui:ring-foreground/10 skui:transition-[opacity,transform,width,height,scale,translate] skui:duration-[0.35s] skui:ease-[cubic-bezier(0.22,1,0.36,1)] skui:outline-none skui:data-ending-style:scale-90 skui:data-ending-style:opacity-0 skui:data-ending-style:duration-150 skui:data-starting-style:scale-90 skui:data-starting-style:opacity-0" id={props.id} render={useSpfxUiOwnedRender(undefined, props.id, "NavigationMenuPositioner")}>
+        <NavigationMenuPrimitive.Popup className="skui:data-[ending-style]:easing-[ease] skui:xs:w-(--popup-width) skui:relative skui:h-(--popup-height) skui:w-(--popup-width) skui:origin-(--transform-origin) skui:rounded-lg skui:bg-popover skui:text-popover-foreground skui:shadow skui:ring-1 skui:ring-foreground/10 skui:transition-[opacity,transform,width,height,scale,translate] skui:duration-[0.35s] skui:ease-[cubic-bezier(0.22,1,0.36,1)] skui:outline-none skui:data-ending-style:scale-90 skui:data-ending-style:opacity-0 skui:data-ending-style:duration-150 skui:data-starting-style:scale-90 skui:data-starting-style:opacity-0" id={id} render={useSpfxUiOwnedRender(undefined, id, "NavigationMenuPositioner")}>
           <NavigationMenuPrimitive.Viewport className="skui:relative skui:size-full skui:overflow-hidden" />
         </NavigationMenuPrimitive.Popup>
       </NavigationMenuPrimitive.Positioner>

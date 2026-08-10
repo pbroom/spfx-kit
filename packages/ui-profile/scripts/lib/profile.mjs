@@ -540,6 +540,11 @@ function routeBaseUiPortalsThroughOwnedHost(source, registrySourcePath, outputPa
       const tag = node.tagName;
       if (ts.isPropertyAccessExpression(tag) && tag.name.text === 'Portal') {
         const functionName = enclosingFunctionName(node);
+        const idExpression =
+          registrySourcePath === 'registry/base-nova/ui/navigation-menu.tsx' &&
+          functionName === 'NavigationMenuPositioner'
+            ? 'id'
+            : 'props.id';
         if (
           portalPopupOwnershipCounts.get(registrySourcePath)?.[functionName] &&
           node.attributes.properties.some((attribute) => ts.isJsxSpreadAttribute(attribute))
@@ -570,12 +575,12 @@ function routeBaseUiPortalsThroughOwnedHost(source, registrySourcePath, outputPa
           portalRouteCounts.set(functionName, (portalRouteCounts.get(functionName) ?? 0) + 1);
         }
         const ownedPortalRender = portalWrapperFunctions.has(functionName)
-          ? ` render={useSpfxUiOwnedPortalRender(props.render, props.id, "${functionName}")}`
+          ? ` render={useSpfxUiOwnedPortalRender(props.render, ${idExpression}, "${functionName}")}`
           : '';
         insertions.push({
           position: node.attributes.end,
           text:
-            ' id={useSpfxUiPortalId(props.id)}' +
+            ` id={useSpfxUiPortalId(${idExpression})}` +
             ' container={useSpfxUiPortalHost()}' +
             ownedPortalRender
         });
@@ -596,6 +601,11 @@ function routeBaseUiPortalsThroughOwnedHost(source, registrySourcePath, outputPa
       }
       if (ts.isPropertyAccessExpression(tag) && tag.name.text === 'Popup') {
         const functionName = enclosingFunctionName(node);
+        const idExpression =
+          registrySourcePath === 'registry/base-nova/ui/navigation-menu.tsx' &&
+          functionName === 'NavigationMenuPositioner'
+            ? 'id'
+            : 'props.id';
         const expectedPopupCount = portalPopupOwnershipCounts.get(registrySourcePath)?.[functionName];
         if (expectedPopupCount) {
           assertPropsRestBinding(node);
@@ -615,8 +625,8 @@ function routeBaseUiPortalsThroughOwnedHost(source, registrySourcePath, outputPa
           insertions.push({
             position: node.attributes.end,
             text:
-              ' id={props.id}' +
-              ` render={useSpfxUiOwnedRender(${popupRender}, props.id, "${functionName}")}`
+              ` id={${idExpression}}` +
+              ` render={useSpfxUiOwnedRender(${popupRender}, ${idExpression}, "${functionName}")}`
           });
         }
       }
@@ -2804,11 +2814,39 @@ function normalizeReviewedRawClassLiterals(source, registrySourcePath, outputPat
   normalized = replaceReviewedSourceOnce(
     normalized,
     '  const ref = React.useRef<HTMLButtonElement>(null)\n  React.useEffect(() => {\n    if (modifiers.focused) ref.current?.focus()',
-    '  const focusRef = React.useRef<HTMLButtonElement>(null)\n  React.useEffect(() => {\n    if (modifiers.focused) focusRef.current?.focus()',
+    [
+      '  const focusRef = React.useRef<HTMLButtonElement | null>(null)',
+      '  const setDayButtonRef = React.useCallback(',
+      '    (node: HTMLButtonElement | null) => {',
+      '      focusRef.current = node',
+      '      if (typeof ref === "function") ref(node)',
+      '      else if (ref) (ref as React.MutableRefObject<HTMLButtonElement | null>).current = node',
+      '    },',
+      '    [ref]',
+      '  )',
+      '  React.useEffect(() => {',
+      '    if (modifiers.focused) focusRef.current?.focus()'
+    ].join('\n'),
     outputPath,
     'Calendar internal focus ref binding'
   );
   return { source: normalized, transformed: true };
+}
+
+function mergeCalendarFocusRef(source, registrySourcePath, outputPath) {
+  if (registrySourcePath !== 'registry/base-nova/ui/calendar.tsx') {
+    return { source, transformed: false };
+  }
+  return {
+    source: replaceReviewedSourceOnce(
+      source,
+      '    <Button\n      ref={ref}',
+      '    <Button\n      ref={setDayButtonRef}',
+      outputPath,
+      'Calendar merged focus ref binding'
+    ),
+    transformed: true
+  };
 }
 
 function replaceReviewedSourceOnce(source, search, replacement, outputPath, label) {
@@ -2824,6 +2862,13 @@ function normalizeChartHostContract(source, registrySourcePath, outputPath) {
     return { source, transformed: false };
   }
   let normalized = source;
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    'const THEMES = { light: "", dark: ".dark" } as const',
+    'const THEMES = { light: "", dark: \'[data-spfx-ui-theme="dark"]\' } as const',
+    outputPath,
+    'Chart host theme selector'
+  );
   normalized = replaceReviewedSourceOnce(
     normalized,
     '  const uniqueId = React.useId()\n  const chartId = `chart-${id ?? uniqueId.replace(/:/g, "")}`',
@@ -2933,6 +2978,13 @@ function normalizeNavigationMenuHostContract(source, registrySourcePath, outputP
     '<NavigationMenuPositioner id={positionerId} align={align} />',
     outputPath,
     'NavigationMenu Positioner ID'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    'function NavigationMenuPositioner({\n  className,',
+    'function NavigationMenuPositioner({\n  id,\n  className,',
+    outputPath,
+    'NavigationMenu Positioner ID parameter'
   );
   normalized = insertImport(
     normalized,
@@ -3084,8 +3136,8 @@ function normalizeToastHostContract(source, registrySourcePath, outputPath) {
       '  return (',
       '    <ToastPrimitive.Portal',
       '      data-slot="toast-portal"',
-      '      container={portalHost}',
       '      {...props}',
+      '      container={portalHost}',
       '    />',
       '  )',
       '}'
@@ -4964,6 +5016,10 @@ export function normalizeRegistrySource({ source, registrySourcePath: rawRegistr
     normalized = forwardRefResult.source;
     if (requiresReactBinding) normalized = insertImport(normalized, 'import * as React from "react"');
   }
+
+  const calendarFocusResult = mergeCalendarFocusRef(normalized, registrySourcePath, outputPath);
+  if (calendarFocusResult.transformed) transformations.push('merge-calendar-focus-ref');
+  normalized = calendarFocusResult.source;
 
   normalized = `${normalized.replace(/\s+$/u, '')}\n`;
   assertReact17Source(normalized, outputPath, { sourceContext, currentPath: outputPath });

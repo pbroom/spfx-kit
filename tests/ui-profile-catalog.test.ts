@@ -141,4 +141,27 @@ describe('official shadcn component catalog coverage', () => {
       expect(transformationsFor(id), id).toContain('route-portals-through-owned-host');
     }
   });
+
+  it('locks reviewed host-sensitive component behavior into generated outputs', async () => {
+    const [calendar, chart, navigationMenu, toast] = await Promise.all(
+      ['calendar', 'chart', 'navigation-menu', 'toast'].map((id) =>
+        readFile(path.join(packageRoot, 'normalized/src/components/ui', `${id}.tsx`), 'utf8')
+      )
+    );
+
+    expect(calendar).toContain('ref={setDayButtonRef}');
+    expect(calendar).toContain('focusRef.current = node');
+    expect(calendar).toContain('if (typeof ref === "function") ref(node)');
+
+    expect(chart).toContain('dark: \'[data-spfx-ui-theme="dark"]\'');
+    expect(chart).toContain('[data-spfx-ui-scope="${scopeValue}"]${prefix} [data-chart="${id}"]');
+
+    expect(navigationMenu).toContain('function NavigationMenuPositioner({\n  id,');
+    expect(navigationMenu).toContain('id={useSpfxUiPortalId(id)}');
+    expect(navigationMenu).toContain('id={id} render={useSpfxUiOwnedRender(undefined, id, "NavigationMenuPositioner")}');
+    expect(navigationMenu).not.toContain('id={props.id}');
+
+    const toastPortal = toast.slice(toast.indexOf('function ToastPortal'), toast.indexOf('const ToastViewport'));
+    expect(toastPortal.indexOf('{...props}')).toBeLessThan(toastPortal.indexOf('container={portalHost}'));
+  });
 });

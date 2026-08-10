@@ -201,14 +201,22 @@ const CalendarDayButton = React.forwardRef<
 }, ref) {
   const defaultClassNames = getDefaultClassNames()
 
-  const focusRef = React.useRef<HTMLButtonElement>(null)
+  const focusRef = React.useRef<HTMLButtonElement | null>(null)
+  const setDayButtonRef = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      focusRef.current = node
+      if (typeof ref === "function") ref(node)
+      else if (ref) (ref as React.MutableRefObject<HTMLButtonElement | null>).current = node
+    },
+    [ref]
+  )
   React.useEffect(() => {
     if (modifiers.focused) focusRef.current?.focus()
   }, [modifiers.focused])
 
   return (
     <Button
-      ref={ref}
+      ref={setDayButtonRef}
       variant="ghost"
       size="icon"
       data-day={day.date.toLocaleDateString(locale?.code)}

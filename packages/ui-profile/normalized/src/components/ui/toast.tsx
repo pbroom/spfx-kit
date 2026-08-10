@@ -17,8 +17,8 @@ function ToastPortal({ ...props }: ToastPrimitive.Portal.Props) {
   return (
     <ToastPrimitive.Portal
       data-slot="toast-portal"
-      container={portalHost}
       {...props}
+      container={portalHost}
     />
   )
 }

@@ -27,6 +27,17 @@ const compatibilityTarget = path.join(distRoot, 'compat-consumers', 'react17-bas
 await mkdir(path.dirname(compatibilityTarget), { recursive: true });
 await copyFile(compatibilitySource, compatibilityTarget);
 
+const typescript53GlobalsTarget = path.join(distRoot, 'compat-consumers', 'typescript53-globals.d.ts');
+await copyFile(path.join(packageRoot, 'compat-consumers', 'typescript53-globals.d.ts'), typescript53GlobalsTarget);
+const typescript53ChartTarget = path.join(distRoot, 'compat-consumers', 'typescript53', 'chart.d.ts');
+await mkdir(path.dirname(typescript53ChartTarget), { recursive: true });
+await writeFile(
+  typescript53ChartTarget,
+  ['/// <reference path="../typescript53-globals.d.ts" />', 'export * from "../../normalized/src/components/ui/chart"', ''].join(
+    '\n'
+  )
+);
+
 const componentDeclarationsRoot = path.join(distRoot, 'normalized', 'src', 'components', 'ui');
 for (const file of await filesWithExtension(componentDeclarationsRoot, '.d.ts')) {
   const compatibilityReference = toModuleSpecifier(path.relative(path.dirname(file), compatibilityTarget));
