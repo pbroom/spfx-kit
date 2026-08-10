@@ -60,9 +60,33 @@ export const uiProfileCatalogEntries = [
 
 export type UiProfileCatalogComponentId = (typeof uiProfileCatalogEntries)[number]['id'];
 
-interface UiProfileCatalogDocumentation {
+export interface UiProfileCatalogExampleDocumentation {
+  id: string;
+  title: string;
+  summary: string;
+  code: string;
+}
+
+export interface UiProfileCatalogApiPropDocumentation {
+  name: string;
+  type: string;
+  description: string;
+  defaultValue?: string;
+}
+
+export interface UiProfileCatalogApiPartDocumentation {
+  name: string;
+  element: string;
+  props: readonly UiProfileCatalogApiPropDocumentation[];
+}
+
+export interface UiProfileCatalogDocumentation {
   primaryExport: string;
   summary: string;
+  composition?: readonly string[];
+  examples?: readonly UiProfileCatalogExampleDocumentation[];
+  api?: readonly UiProfileCatalogApiPartDocumentation[];
+  compatibilityNotes?: readonly string[];
 }
 
 export const uiProfileCatalogDocumentation: Record<UiProfileCatalogComponentId, UiProfileCatalogDocumentation> = {
@@ -96,7 +120,229 @@ export const uiProfileCatalogDocumentation: Record<UiProfileCatalogComponentId, 
   },
   breadcrumb: {
     primaryExport: 'Breadcrumb',
-    summary: 'Shows the current location within a navigable content hierarchy.'
+    summary: 'Shows the current location within a navigable content hierarchy.',
+    composition: [
+      'Breadcrumb provides the labelled navigation landmark.',
+      'BreadcrumbList contains ordered BreadcrumbItem elements.',
+      'BreadcrumbLink represents an ancestor, while BreadcrumbPage marks the current location.',
+      'BreadcrumbSeparator and BreadcrumbEllipsis express hierarchy and collapsed levels without changing navigation semantics.'
+    ],
+    examples: [
+      {
+        id: 'basic',
+        title: 'Basic',
+        summary: 'A short hierarchy with one ancestor link and the current page.',
+        code: `import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator
+} from '@spfx-kit/ui-profile/breadcrumb';
+
+<Breadcrumb>
+  <BreadcrumbList>
+    <BreadcrumbItem><BreadcrumbLink href="#home">Home</BreadcrumbLink></BreadcrumbItem>
+    <BreadcrumbSeparator />
+    <BreadcrumbItem><BreadcrumbPage>Components</BreadcrumbPage></BreadcrumbItem>
+  </BreadcrumbList>
+</Breadcrumb>`
+      },
+      {
+        id: 'custom-separator',
+        title: 'Custom separator',
+        summary: 'Separator content can be replaced while the ordered-list structure remains intact.',
+        code: `import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator
+} from '@spfx-kit/ui-profile/breadcrumb';
+
+<Breadcrumb>
+  <BreadcrumbList>
+    <BreadcrumbItem><BreadcrumbLink href="#home">Home</BreadcrumbLink></BreadcrumbItem>
+    <BreadcrumbSeparator>/</BreadcrumbSeparator>
+    <BreadcrumbItem><BreadcrumbPage>Components</BreadcrumbPage></BreadcrumbItem>
+  </BreadcrumbList>
+</Breadcrumb>`
+      },
+      {
+        id: 'dropdown',
+        title: 'Dropdown',
+        summary: 'A host-owned dropdown can expose intermediate locations without widening the breadcrumb.',
+        code: `import { useSpfxUiId } from '@spfx-kit/ui-profile';
+import {
+  Breadcrumb,
+  BreadcrumbEllipsis,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator
+} from '@spfx-kit/ui-profile/breadcrumb';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@spfx-kit/ui-profile/dropdown-menu';
+
+const triggerId = useSpfxUiId('docs:breadcrumb:dropdown-trigger');
+const contentId = useSpfxUiId('docs:breadcrumb:dropdown-content');
+
+<Breadcrumb>
+  <BreadcrumbList>
+    <BreadcrumbItem><BreadcrumbLink href="#home">Home</BreadcrumbLink></BreadcrumbItem>
+    <BreadcrumbSeparator />
+    <BreadcrumbItem>
+      <DropdownMenu>
+        <DropdownMenuTrigger aria-label="Open intermediate pages" id={triggerId}>
+          <BreadcrumbEllipsis />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent id={contentId}>
+          <DropdownMenuItem>Documentation</DropdownMenuItem>
+          <DropdownMenuItem>Components</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </BreadcrumbItem>
+    <BreadcrumbSeparator />
+    <BreadcrumbItem><BreadcrumbPage>Breadcrumb</BreadcrumbPage></BreadcrumbItem>
+  </BreadcrumbList>
+</Breadcrumb>`
+      },
+      {
+        id: 'collapsed',
+        title: 'Collapsed',
+        summary: 'BreadcrumbEllipsis signals omitted levels when those destinations are intentionally not interactive.',
+        code: `import {
+  Breadcrumb,
+  BreadcrumbEllipsis,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator
+} from '@spfx-kit/ui-profile/breadcrumb';
+
+<Breadcrumb>
+  <BreadcrumbList>
+    <BreadcrumbItem><BreadcrumbLink href="#home">Home</BreadcrumbLink></BreadcrumbItem>
+    <BreadcrumbSeparator />
+    <BreadcrumbItem><BreadcrumbEllipsis /></BreadcrumbItem>
+    <BreadcrumbSeparator />
+    <BreadcrumbItem><BreadcrumbPage>Breadcrumb</BreadcrumbPage></BreadcrumbItem>
+  </BreadcrumbList>
+</Breadcrumb>`
+      },
+      {
+        id: 'custom-link',
+        title: 'Custom link',
+        summary: 'The Base UI render prop composes a project link without nesting interactive elements.',
+        code: `import { BreadcrumbLink } from '@spfx-kit/ui-profile/breadcrumb';
+
+<BreadcrumbLink render={<a href="#components" data-route="components" />}>
+  Components
+</BreadcrumbLink>`
+      },
+      {
+        id: 'responsive',
+        title: 'Responsive hierarchy',
+        summary: 'The middle levels collapse into an owned menu while the first and current locations remain visible.',
+        code: `import { useSpfxUiId } from '@spfx-kit/ui-profile';
+import {
+  Breadcrumb,
+  BreadcrumbEllipsis,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator
+} from '@spfx-kit/ui-profile/breadcrumb';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@spfx-kit/ui-profile/dropdown-menu';
+
+// Use host-owned IDs for the menu trigger and portal content.
+const triggerId = useSpfxUiId('docs:breadcrumb:responsive-trigger');
+const contentId = useSpfxUiId('docs:breadcrumb:responsive-content');
+
+<Breadcrumb>
+  <BreadcrumbList>
+    <BreadcrumbItem><BreadcrumbLink href="#home">Home</BreadcrumbLink></BreadcrumbItem>
+    <BreadcrumbSeparator />
+    <BreadcrumbItem>
+      <DropdownMenu>
+        <DropdownMenuTrigger aria-controls={contentId} aria-label="Open hidden breadcrumb levels" id={triggerId}>
+          <BreadcrumbEllipsis />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent id={contentId}>
+          <DropdownMenuItem>Docs</DropdownMenuItem>
+          <DropdownMenuItem>Shared UI</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </BreadcrumbItem>
+    <BreadcrumbSeparator />
+    <BreadcrumbItem><BreadcrumbPage>Breadcrumb</BreadcrumbPage></BreadcrumbItem>
+  </BreadcrumbList>
+</Breadcrumb>`
+      },
+      {
+        id: 'rtl',
+        title: 'Right-to-left',
+        summary: 'The same composition follows the nearest reading direction without a separate component variant.',
+        code: `import { DirectionProvider } from '@spfx-kit/ui-profile/direction';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator
+} from '@spfx-kit/ui-profile/breadcrumb';
+
+<div dir="rtl">
+  <DirectionProvider direction="rtl">
+    <Breadcrumb>
+      <BreadcrumbList>
+        <BreadcrumbItem><BreadcrumbLink href="#home">الرئيسية</BreadcrumbLink></BreadcrumbItem>
+        <BreadcrumbSeparator />
+        <BreadcrumbItem><BreadcrumbPage>المكونات</BreadcrumbPage></BreadcrumbItem>
+      </BreadcrumbList>
+    </Breadcrumb>
+  </DirectionProvider>
+</div>`
+      }
+    ],
+    api: [
+      { name: 'Breadcrumb', element: 'nav', props: [{ name: 'className', type: 'string', description: 'Adds classes to the navigation landmark.' }] },
+      { name: 'BreadcrumbList', element: 'ol', props: [{ name: 'className', type: 'string', description: 'Adds classes to the ordered list.' }] },
+      { name: 'BreadcrumbItem', element: 'li', props: [{ name: 'className', type: 'string', description: 'Adds classes to an individual hierarchy item.' }] },
+      {
+        name: 'BreadcrumbLink',
+        element: 'a',
+        props: [
+          { name: 'render', type: 'ReactElement | function', description: 'Composes a custom link element through Base UI without nested anchors.' },
+          { name: 'className', type: 'string', description: 'Adds classes to the link.' }
+        ]
+      },
+      { name: 'BreadcrumbPage', element: 'span', props: [{ name: 'className', type: 'string', description: 'Adds classes to the current-page label.' }] },
+      {
+        name: 'BreadcrumbSeparator',
+        element: 'li',
+        props: [
+          { name: 'children', type: 'ReactNode', description: 'Replaces the default chevron separator.' },
+          { name: 'className', type: 'string', description: 'Adds classes to the separator.' }
+        ]
+      },
+      { name: 'BreadcrumbEllipsis', element: 'span', props: [{ name: 'className', type: 'string', description: 'Adds classes to the collapsed-level indicator.' }] }
+    ]
   },
   bubble: {
     primaryExport: 'Bubble',

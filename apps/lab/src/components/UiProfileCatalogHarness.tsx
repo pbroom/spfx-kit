@@ -27,6 +27,7 @@ import { Avatar, AvatarFallback } from '@spfx-kit/ui-profile/avatar';
 import { Badge } from '@spfx-kit/ui-profile/badge';
 import {
   Breadcrumb,
+  BreadcrumbEllipsis,
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
@@ -188,6 +189,175 @@ function CatalogToastList(): React.ReactElement {
   );
 }
 
+interface BreadcrumbDocumentationExamplesProps {
+  dropdownContentId: string;
+  dropdownTriggerId: string;
+  responsiveContentId: string;
+  responsiveTriggerId: string;
+}
+
+function BreadcrumbBasic(): React.ReactElement {
+  return (
+    <Breadcrumb>
+      <BreadcrumbList>
+        <BreadcrumbItem>
+          <BreadcrumbLink href="#catalog-home">Home</BreadcrumbLink>
+        </BreadcrumbItem>
+        <BreadcrumbSeparator />
+        <BreadcrumbItem>
+          <BreadcrumbPage>Components</BreadcrumbPage>
+        </BreadcrumbItem>
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
+}
+
+function BreadcrumbDocumentationExamples({
+  dropdownContentId,
+  dropdownTriggerId,
+  responsiveContentId,
+  responsiveTriggerId
+}: BreadcrumbDocumentationExamplesProps): React.ReactElement {
+  return (
+    <div data-catalog-documentation-examples="breadcrumb">
+      <div data-catalog-example="basic">
+        <h4>Basic</h4>
+        <BreadcrumbBasic />
+      </div>
+
+      <div data-catalog-example="custom-separator">
+        <h4>Custom separator</h4>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="#catalog-home">Home</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator>/</BreadcrumbSeparator>
+            <BreadcrumbItem>
+              <BreadcrumbPage>Components</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </div>
+
+      <div data-catalog-example="dropdown">
+        <h4>Dropdown</h4>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="#catalog-home">Home</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-controls={dropdownContentId}
+                  aria-label="Open intermediate pages"
+                  id={dropdownTriggerId}
+                >
+                  <BreadcrumbEllipsis />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent id={dropdownContentId}>
+                  <DropdownMenuItem>Documentation</DropdownMenuItem>
+                  <DropdownMenuItem>Components</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Breadcrumb</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </div>
+
+      <div data-catalog-example="collapsed">
+        <h4>Collapsed</h4>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="#catalog-home">Home</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbEllipsis />
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Breadcrumb</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </div>
+
+      <div data-catalog-example="custom-link">
+        <h4>Custom link</h4>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink data-route="components" render={<a href="#catalog-components" />}>
+                Components
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Breadcrumb</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </div>
+
+      <div data-catalog-example="responsive">
+        <h4>Responsive hierarchy</h4>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="#catalog-home">Home</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-controls={responsiveContentId}
+                  aria-label="Open hidden breadcrumb levels"
+                  id={responsiveTriggerId}
+                >
+                  <BreadcrumbEllipsis />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent id={responsiveContentId}>
+                  <DropdownMenuItem>Docs</DropdownMenuItem>
+                  <DropdownMenuItem>Shared UI</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Breadcrumb</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </div>
+
+      <div data-catalog-example="rtl" dir="rtl">
+        <h4>Right-to-left</h4>
+        <DirectionProvider direction="rtl">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="#catalog-home">الرئيسية</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>المكونات</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </DirectionProvider>
+      </div>
+    </div>
+  );
+}
+
 /** A browser-smoke gallery for every React 17-compatible public catalog subpath. */
 export function UiProfileCatalogHarness({
   activeComponent
@@ -202,6 +372,10 @@ export function UiProfileCatalogHarness({
   const accordionItemId = useSpfxUiId('catalog:accordion-item');
   const chartId = useSpfxUiId('catalog:chart');
   const checkboxId = useSpfxUiId('catalog:checkbox');
+  const breadcrumbDropdownTriggerId = useSpfxUiId('catalog:breadcrumb-dropdown-trigger');
+  const breadcrumbDropdownContentId = useSpfxUiId('catalog:breadcrumb-dropdown-content');
+  const breadcrumbResponsiveTriggerId = useSpfxUiId('catalog:breadcrumb-responsive-trigger');
+  const breadcrumbResponsiveContentId = useSpfxUiId('catalog:breadcrumb-responsive-content');
   const collapsibleTriggerId = useSpfxUiId('catalog:collapsible-trigger');
   const collapsibleContentId = useSpfxUiId('catalog:collapsible-content');
   const comboboxId = useSpfxUiId('catalog:combobox-root');
@@ -320,17 +494,16 @@ export function UiProfileCatalogHarness({
       </CatalogSample>
 
       <CatalogSample component="breadcrumb" title="Breadcrumb">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink href="#catalog-home">Home</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage>Components</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+        {activeComponent === 'breadcrumb' ? (
+          <BreadcrumbDocumentationExamples
+            dropdownContentId={breadcrumbDropdownContentId}
+            dropdownTriggerId={breadcrumbDropdownTriggerId}
+            responsiveContentId={breadcrumbResponsiveContentId}
+            responsiveTriggerId={breadcrumbResponsiveTriggerId}
+          />
+        ) : (
+          <BreadcrumbBasic />
+        )}
       </CatalogSample>
 
       <CatalogSample component="bubble" title="Bubble">

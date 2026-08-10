@@ -2142,6 +2142,108 @@ textarea {
   width: 100%;
 }
 
+.ui-library-docs__preview-frame [data-catalog-documentation-examples] {
+  display: grid;
+  width: 100%;
+  gap: 18px;
+}
+
+.ui-library-docs__preview-frame [data-catalog-example] {
+  display: grid;
+  min-width: 0;
+  min-height: 128px;
+  align-content: center;
+  justify-items: start;
+  gap: 20px;
+  border: 1px solid var(--spfx-ui-color-border);
+  border-radius: var(--spfx-ui-radius-lg);
+  padding: clamp(20px, 4vw, 36px);
+  background: var(--spfx-ui-color-background);
+  box-shadow: none;
+}
+
+.ui-library-docs__preview-frame [data-catalog-example] > h4 {
+  color: var(--spfx-ui-color-muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ui-library-docs__example-code-list,
+.ui-library-docs__api-list,
+.ui-library-docs__example-code,
+.ui-library-docs__api {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.ui-library-docs__example-code-list,
+.ui-library-docs__api-list {
+  gap: 28px;
+}
+
+.ui-library-docs__example-code,
+.ui-library-docs__api {
+  padding-top: 24px;
+  border-top: 1px solid var(--spfx-ui-color-border);
+}
+
+.ui-library-docs__guidance-list {
+  display: grid;
+  max-width: 760px;
+  gap: 10px;
+  padding-left: 22px;
+  color: var(--spfx-ui-color-muted-foreground);
+  line-height: 1.6;
+}
+
+.ui-library-docs__api > h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 16px;
+}
+
+.ui-library-docs__api > h4 span {
+  color: var(--spfx-ui-color-muted-foreground);
+  font-family: var(--spfx-ui-font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ui-library-docs__table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--spfx-ui-color-border);
+  border-radius: var(--spfx-ui-radius-lg);
+}
+
+.ui-library-docs__table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--spfx-ui-color-card);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ui-library-docs__table-scroll th,
+.ui-library-docs__table-scroll td {
+  min-width: 120px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--spfx-ui-color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ui-library-docs__table-scroll tr:last-child > * {
+  border-bottom: 0;
+}
+
+.ui-library-docs__table-scroll thead th {
+  background: var(--spfx-ui-color-muted);
+  color: var(--spfx-ui-color-muted-foreground);
+  font-weight: 600;
+}
+
 .ui-library-docs__code {
   overflow-x: auto;
   margin: 0;

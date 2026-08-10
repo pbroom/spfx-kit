@@ -265,6 +265,35 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   await expect(accordionNavigationLink).toHaveAttribute('aria-current', 'location');
   await expect(galleryItems).toHaveAttribute('data-catalog-component', 'accordion');
 
+  const breadcrumbNavigationLink = componentNavigation.getByRole('link', { name: 'Breadcrumb', exact: true });
+  await breadcrumbNavigationLink.click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('breadcrumb');
+  const breadcrumbDocs = page.getByRole('article', { name: 'Breadcrumb' });
+  await expect(breadcrumbDocs.getByRole('heading', { name: 'Examples' })).toBeVisible();
+  const breadcrumbLiveExamples = breadcrumbDocs.getByRole('region', { name: 'Examples' });
+  await expect(gallery.locator('[data-catalog-documentation-examples="breadcrumb"] [data-catalog-example]')).toHaveCount(7);
+  await expect(breadcrumbLiveExamples.getByRole('heading', { name: 'Custom separator' })).toBeVisible();
+  await expect(breadcrumbLiveExamples.getByRole('heading', { name: 'Dropdown' })).toBeVisible();
+  await expect(breadcrumbLiveExamples.getByRole('heading', { name: 'Collapsed' })).toBeVisible();
+  await expect(breadcrumbLiveExamples.getByRole('heading', { name: 'Custom link' })).toBeVisible();
+  await expect(breadcrumbLiveExamples.getByRole('heading', { name: 'Responsive hierarchy' })).toBeVisible();
+  await expect(breadcrumbLiveExamples.getByRole('heading', { name: 'Right-to-left' })).toBeVisible();
+  await expect(breadcrumbDocs.getByRole('heading', { name: 'Composition' })).toBeVisible();
+  await expect(breadcrumbDocs.getByRole('heading', { name: 'API reference' })).toBeVisible();
+  await expect(breadcrumbDocs.getByLabel('Dropdown code for Breadcrumb')).toContainText(
+    "from '@spfx-kit/ui-profile/dropdown-menu'"
+  );
+  await expect(breadcrumbDocs.getByRole('heading', { name: /Installation/iu })).toHaveCount(0);
+  await gallery.getByRole('button', { name: 'Open intermediate pages' }).click();
+  const breadcrumbDropdown = page.getByRole('menu');
+  await expect(breadcrumbDropdown).toBeVisible();
+  await expect(breadcrumbDropdown.locator('xpath=ancestor::*[@data-spfx-ui-portal-host]')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(breadcrumbDropdown).toBeHidden();
+  await page.goBack();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBeNull();
+  await expect(accordionNavigationLink).toHaveAttribute('aria-current', 'location');
+
   const previewFrame = page.locator('.ui-library-docs__preview-frame');
   await expect(previewFrame).toHaveCSS('box-shadow', 'none');
   await expect(page.getByRole('button', { name: 'Return to Lab workspace' })).toBeVisible();

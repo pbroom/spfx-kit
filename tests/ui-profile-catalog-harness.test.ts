@@ -112,6 +112,40 @@ describe('Lab UI profile catalog harness', () => {
     }
   });
 
+  it('uses Breadcrumb as the complete typed documentation contract', () => {
+    const breadcrumb = uiProfileCatalogDocumentation.breadcrumb;
+
+    expect(breadcrumb.examples?.map((example) => example.id)).toEqual([
+      'basic',
+      'custom-separator',
+      'dropdown',
+      'collapsed',
+      'custom-link',
+      'responsive',
+      'rtl'
+    ]);
+    expect(breadcrumb.api?.map((part) => part.name)).toEqual([
+      'Breadcrumb',
+      'BreadcrumbList',
+      'BreadcrumbItem',
+      'BreadcrumbLink',
+      'BreadcrumbPage',
+      'BreadcrumbSeparator',
+      'BreadcrumbEllipsis'
+    ]);
+    expect(breadcrumb.composition).toHaveLength(4);
+    for (const example of breadcrumb.examples ?? []) {
+      expect(example.code).toContain("@spfx-kit/ui-profile/");
+      expect(example.code).not.toMatch(/installation|React Aria|Radix/iu);
+    }
+
+    const harnessSource = readFileSync(harnessPath, 'utf8');
+    const liveExampleIds = [...harnessSource.matchAll(/data-catalog-example="([a-z0-9-]+)"/gu)].map((match) => match[1]);
+    expect(liveExampleIds).toEqual(breadcrumb.examples?.map((example) => example.id));
+    expect(harnessSource).toContain("useSpfxUiId('catalog:breadcrumb-dropdown-content')");
+    expect(harnessSource).toContain("useSpfxUiId('catalog:breadcrumb-responsive-content')");
+  });
+
   it('keeps official component visuals and scoped host ownership intact', () => {
     const source = readFileSync(harnessPath, 'utf8');
 

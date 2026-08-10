@@ -92,8 +92,12 @@ export function UiLibraryWorkspace({ breakpoint, route, themeMode, onNavigate }:
 
             <section aria-labelledby="ui-library-preview-title" className="ui-library-docs__section">
               <div className="ui-library-docs__section-heading">
-                <h3 id="ui-library-preview-title">Preview</h3>
-                <p>Default shared-profile presentation inside the active Lab host and theme.</p>
+                <h3 id="ui-library-preview-title">{activeDocumentation.examples ? 'Examples' : 'Preview'}</h3>
+                <p>
+                  {activeDocumentation.examples
+                    ? 'Supported Base UI compositions running inside the active Lab host and theme.'
+                    : 'Default shared-profile presentation inside the active Lab host and theme.'}
+                </p>
               </div>
               <div className="ui-library-docs__preview-frame">
                 <React.Suspense fallback={<div role="status">Loading {activeEntry.title}…</div>}>
@@ -101,6 +105,97 @@ export function UiLibraryWorkspace({ breakpoint, route, themeMode, onNavigate }:
                 </React.Suspense>
               </div>
             </section>
+
+            {activeDocumentation.examples ? (
+              <section aria-labelledby="ui-library-example-code-title" className="ui-library-docs__section">
+                <div className="ui-library-docs__section-heading">
+                  <h3 id="ui-library-example-code-title">Example code</h3>
+                  <p>Every snippet imports only the shared package’s public React 17 entry points.</p>
+                </div>
+                <div className="ui-library-docs__example-code-list">
+                  {activeDocumentation.examples.map((example) => (
+                    <section
+                      aria-labelledby={`ui-library-example-${example.id}-title`}
+                      className="ui-library-docs__example-code"
+                      key={example.id}
+                    >
+                      <div className="ui-library-docs__section-heading">
+                        <h4 id={`ui-library-example-${example.id}-title`}>{example.title}</h4>
+                        <p>{example.summary}</p>
+                      </div>
+                      <pre aria-label={`${example.title} code for ${activeEntry.title}`} className="ui-library-docs__code">
+                        <code>{example.code}</code>
+                      </pre>
+                    </section>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeDocumentation.composition ? (
+              <section aria-labelledby="ui-library-composition-title" className="ui-library-docs__section">
+                <div className="ui-library-docs__section-heading">
+                  <h3 id="ui-library-composition-title">Composition</h3>
+                  <p>Use the exported parts together to preserve the component’s semantic structure.</p>
+                </div>
+                <ul className="ui-library-docs__guidance-list">
+                  {activeDocumentation.composition.map((guidance) => (
+                    <li key={guidance}>{guidance}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            {activeDocumentation.api ? (
+              <section aria-labelledby="ui-library-api-title" className="ui-library-docs__section">
+                <div className="ui-library-docs__section-heading">
+                  <h3 id="ui-library-api-title">API reference</h3>
+                  <p>Public parts and component-specific props for the shared Base UI implementation.</p>
+                </div>
+                <div className="ui-library-docs__api-list">
+                  {activeDocumentation.api.map((part) => (
+                    <section aria-labelledby={`ui-library-api-${part.name}-title`} className="ui-library-docs__api" key={part.name}>
+                      <h4 id={`ui-library-api-${part.name}-title`}>
+                        <code>{part.name}</code> <span>{part.element}</span>
+                      </h4>
+                      <div className="ui-library-docs__table-scroll">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th scope="col">Prop</th>
+                              <th scope="col">Type</th>
+                              <th scope="col">Default</th>
+                              <th scope="col">Purpose</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {part.props.map((prop) => (
+                              <tr key={prop.name}>
+                                <th scope="row"><code>{prop.name}</code></th>
+                                <td><code>{prop.type}</code></td>
+                                <td>{prop.defaultValue ? <code>{prop.defaultValue}</code> : '—'}</td>
+                                <td>{prop.description}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeDocumentation.compatibilityNotes?.length ? (
+              <section aria-labelledby="ui-library-compatibility-title" className="ui-library-docs__section">
+                <div className="ui-library-docs__section-heading">
+                  <h3 id="ui-library-compatibility-title">Compatibility notes</h3>
+                </div>
+                <ul className="ui-library-docs__guidance-list">
+                  {activeDocumentation.compatibilityNotes.map((note) => <li key={note}>{note}</li>)}
+                </ul>
+              </section>
+            ) : null}
 
             <section aria-labelledby="ui-library-usage-title" className="ui-library-docs__section">
               <div className="ui-library-docs__section-heading">
