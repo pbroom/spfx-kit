@@ -1,8 +1,9 @@
+import { spawn } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // @ts-expect-error portable .mjs module without declarations
@@ -115,7 +116,75 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
     const lockOwnerPath = path.join(lockRoot, 'owner.json');
     const stampPath = path.join(preparedRoot, '.spfx-ui-profile-prepared.json');
     const currentStamp = JSON.parse(await readFile(stampPath, 'utf8'));
+    const outsideStagingDecoy = path.join(preparedParent, '.base-ui-staging-outside-lock');
+    await mkdir(outsideStagingDecoy);
+    await writeFile(path.join(outsideStagingDecoy, 'sentinel'), 'must remain outside the lock\n');
+
     await writeFile(stampPath, `${JSON.stringify({ ...currentStamp, preparedTreeSha256: '0'.repeat(64) })}\n`);
+    const interruptedPreJournalStaging = await terminatePreparationAtBoundary({
+      appRoot,
+      profileRoot,
+      boundary: 'preparation-staging-created'
+    });
+    expect(path.dirname(interruptedPreJournalStaging.stagingRoot)).toBe(path.join(lockRoot, 'payloads'));
+    expect(JSON.parse(await readFile(lockOwnerPath, 'utf8'))).not.toHaveProperty('transaction');
+    expect((await lstat(interruptedPreJournalStaging.stagingRoot)).isDirectory()).toBe(true);
+    const interruptedStaleRetirement = await terminatePreparationAtBoundary({
+      appRoot,
+      profileRoot,
+      boundary: 'stale-lock-retired'
+    });
+    expect((await lstat(interruptedStaleRetirement.staleRoot)).isDirectory()).toBe(true);
+    await expect(lstat(path.join(interruptedStaleRetirement.staleRoot, 'payloads'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
+    await expect(lstat(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
+    await expect(lstat(interruptedPreJournalStaging.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(lstat(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    await rm(interruptedStaleRetirement.staleRoot, { recursive: true });
+    await removePreparationRecoveryClaimResidues(lockRoot);
+    expect(await readFile(path.join(outsideStagingDecoy, 'sentinel'), 'utf8')).toBe('must remain outside the lock\n');
+
+    const interruptedRelease = await terminatePreparationAtBoundary({
+      appRoot,
+      profileRoot,
+      boundary: 'release-lock-retired'
+    });
+    expect((await lstat(interruptedRelease.releaseRoot)).isDirectory()).toBe(true);
+    await expect(lstat(path.join(interruptedRelease.releaseRoot, 'payloads'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(lstat(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
+    await rm(interruptedRelease.releaseRoot, { recursive: true });
+
+    await writeFile(stampPath, `${JSON.stringify({ ...currentStamp, preparedTreeSha256: '0'.repeat(64) })}\n`);
+    const interruptedRetirement = await terminatePreparationAtBoundary({
+      appRoot,
+      profileRoot,
+      boundary: 'prepared-backup-retired'
+    });
+    expect(path.dirname(interruptedRetirement.retiredRoot)).toBe(path.join(lockRoot, 'payloads'));
+    expect((await lstat(interruptedRetirement.retiredRoot)).isDirectory()).toBe(true);
+    const interruptedPayloadCleanup = await terminatePreparationAtBoundary({
+      appRoot,
+      profileRoot,
+      boundary: 'preparation-payload-cleanup-started',
+      beforeKill: async () => {
+        await rm(path.join(interruptedRetirement.retiredRoot, 'package.json'));
+      }
+    });
+    expect(interruptedPayloadCleanup.payloadRoot).toBe(path.join(lockRoot, 'payloads'));
+    expect((await lstat(interruptedPayloadCleanup.payloadRoot)).isDirectory()).toBe(true);
+    expect((await lstat(lockRoot)).isDirectory()).toBe(true);
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
+    await expect(lstat(interruptedRetirement.retiredRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(lstat(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    await removePreparationRecoveryClaimResidues(lockRoot);
+    expect(await readFile(path.join(outsideStagingDecoy, 'sentinel'), 'utf8')).toBe('must remain outside the lock\n');
+    await rm(outsideStagingDecoy, { recursive: true });
+
+    await writeFile(stampPath, `${JSON.stringify({ ...currentStamp, preparedTreeSha256: '0'.repeat(64) })}\n`);
+    let stagingBoundaryCalls = 0;
     let journalBoundaryCalls = 0;
     let backupBoundaryCalls = 0;
     let interruptedOwner: any;
@@ -124,7 +193,13 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
       prepareSpfxUiProfileBaseUi({
         appRoot,
         profileRoot,
-        onPreparationLockBoundary: async (boundary: string) => {
+        onPreparationLockBoundary: async (boundary: string, details: any) => {
+          if (boundary === 'preparation-staging-created') {
+            stagingBoundaryCalls += 1;
+            expect(path.dirname(details.stagingRoot)).toBe(path.join(lockRoot, 'payloads'));
+            expect(path.basename(details.stagingRoot)).toMatch(/^staging-/u);
+            expect(JSON.parse(await readFile(lockOwnerPath, 'utf8'))).not.toHaveProperty('transaction');
+          }
           if (boundary === 'preparation-transaction-journaled') {
             journalBoundaryCalls += 1;
             interruptedOwner = JSON.parse(await readFile(lockOwnerPath, 'utf8'));
@@ -149,6 +224,7 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
         }
       })
     ).rejects.toThrow('Base UI preparation and cleanup both failed');
+    expect(stagingBoundaryCalls).toBe(1);
     expect(journalBoundaryCalls).toBe(1);
     expect(backupBoundaryCalls).toBe(1);
     await expect(lstat(preparedRoot)).rejects.toMatchObject({ code: 'ENOENT' });
@@ -174,27 +250,100 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
     await expect(lstat(backupRoot)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(lstat(interruptedOwner.transaction.stagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
     expect((await lstat(retiredStagingRoot!)).isDirectory()).toBe(true);
+    expect(path.dirname(retiredStagingRoot!)).toBe(path.join(lockRoot, 'payloads'));
     expect((await lstat(lockRoot)).isDirectory()).toBe(true);
 
     let retiredBackupRoot: string | undefined;
+    let promotedBoundaryCalls = 0;
+    let recoveryBackupBoundaryCalls = 0;
     await expect(
       prepareSpfxUiProfileBaseUi({
         appRoot,
         profileRoot,
         onPreparationLockBoundary: async (boundary: string, details: any) => {
-          if (boundary !== 'prepared-backup-retired') return;
-          retiredBackupRoot = details.retiredRoot;
-          throw new Error('simulated process termination after backup retirement');
+          if (boundary === 'prepared-tree-promoted') {
+            promotedBoundaryCalls += 1;
+            throw new Error('simulated process termination after promotion');
+          }
+          if (boundary === 'recovery-backup-retired') {
+            recoveryBackupBoundaryCalls += 1;
+            retiredBackupRoot = details.retiredRoot;
+            throw new Error('simulated process termination during backup retirement');
+          }
         }
       })
-    ).rejects.toThrow('simulated process termination after backup retirement');
+    ).rejects.toThrow('Base UI preparation and cleanup both failed');
+    expect(promotedBoundaryCalls).toBe(1);
+    expect(recoveryBackupBoundaryCalls).toBe(1);
     expect((await lstat(preparedRoot)).isDirectory()).toBe(true);
     await expect(lstat(backupRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(lstat(retiredStagingRoot!)).rejects.toMatchObject({ code: 'ENOENT' });
     expect((await lstat(retiredBackupRoot!)).isDirectory()).toBe(true);
-    await expect(lstat(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(path.dirname(retiredBackupRoot!)).toBe(path.join(lockRoot, 'payloads'));
+    expect((await lstat(lockRoot)).isDirectory()).toBe(true);
+    const promotedOwner = JSON.parse(await readFile(lockOwnerPath, 'utf8'));
+    await writeFile(lockOwnerPath, `${JSON.stringify({ ...promotedOwner, pid: 2_147_483_647, processIdentity: null })}\n`);
     await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
-    expect((await lstat(retiredStagingRoot!)).isDirectory()).toBe(true);
-    expect((await lstat(retiredBackupRoot!)).isDirectory()).toBe(true);
+    await expect(lstat(retiredBackupRoot!)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(lstat(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+
+    const currentPreparedRecord = promotedOwner.transaction.stagedTree;
+    const legacyStagingRoot = path.join(preparedParent, '.base-ui-staging-legacy-test');
+    const legacyRetiredStagingRoot = path.join(preparedParent, '.base-ui-staging-retired-legacy-test');
+    const unboundLegacyRetirement = path.join(preparedParent, '.base-ui-staging-retired-unbound-test');
+    await mkdir(legacyRetiredStagingRoot);
+    await writeFile(path.join(legacyRetiredStagingRoot, 'partial-copy'), 'partial legacy staging retirement\n');
+    const legacyStagingIdentity = await lstat(legacyRetiredStagingRoot, { bigint: true });
+    await mkdir(unboundLegacyRetirement);
+    await writeFile(path.join(unboundLegacyRetirement, 'sentinel'), 'must remain unbound\n');
+    await writeLegacyPreparationLock(lockRoot, {
+      token: 'legacy-staging-retirement',
+      transaction: {
+        kind: 'spfx-ui-profile-preparation-v1',
+        token: 'legacy-staging-retirement',
+        preparedRoot,
+        backupRoot,
+        stagingRoot: legacyStagingRoot,
+        hadPrepared: true,
+        contracts: currentStamp.contracts,
+        priorTree: currentPreparedRecord,
+        stagedTree: {
+          dev: String(legacyStagingIdentity.dev),
+          ino: String(legacyStagingIdentity.ino),
+          treeSha256: '0'.repeat(64)
+        }
+      }
+    });
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
+    await expect(lstat(legacyRetiredStagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readFile(path.join(unboundLegacyRetirement, 'sentinel'), 'utf8')).toBe('must remain unbound\n');
+    await rm(unboundLegacyRetirement, { recursive: true });
+
+    const legacyBackupRoot = path.join(preparedParent, '.base-ui-backup-retired-legacy-test');
+    await mkdir(legacyBackupRoot);
+    await writeFile(path.join(legacyBackupRoot, 'partial-copy'), 'partial legacy backup retirement\n');
+    const legacyBackupIdentity = await lstat(legacyBackupRoot, { bigint: true });
+    await writeLegacyPreparationLock(lockRoot, {
+      token: 'legacy-backup-retirement',
+      transaction: {
+        kind: 'spfx-ui-profile-preparation-v1',
+        token: 'legacy-backup-retirement',
+        preparedRoot,
+        backupRoot,
+        stagingRoot: legacyStagingRoot,
+        hadPrepared: true,
+        contracts: currentStamp.contracts,
+        priorTree: {
+          dev: String(legacyBackupIdentity.dev),
+          ino: String(legacyBackupIdentity.ino),
+          treeSha256: '0'.repeat(64)
+        },
+        stagedTree: currentPreparedRecord
+      }
+    });
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
+    await expect(lstat(legacyBackupRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(lstat(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
 
     const contractPaths = [
       'compat/base-ui-1.6.0/id-ownership/contract.json',
@@ -234,6 +383,11 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
         processIdentity: null
       })}\n`
     );
+    const abandonedPayloadRoot = path.join(lockRoot, 'payloads');
+    await mkdir(abandonedPayloadRoot);
+    const abandonedStagingRoot = path.join(abandonedPayloadRoot, 'staging-interrupted');
+    await mkdir(abandonedStagingRoot);
+    await writeFile(path.join(abandonedStagingRoot, 'partial-copy'), 'interrupted before journaling\n');
     const activeRecoveryToken = '00000000-0000-0000-0000-000000000000';
     const recoveryClaimPrefix = `${path.basename(lockRoot)}.recovery-claim-`;
     const recoveryClaimRoot = path.join(path.dirname(lockRoot), `${recoveryClaimPrefix}${activeRecoveryToken}`);
@@ -266,6 +420,7 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
     expect(publicationBoundaryCalls).toBe(1);
     await expect(lstat(lockRoot)).rejects.toMatchObject({ code: 'ENOENT' });
     expect(JSON.parse(await readFile(path.join(retiredLockRoot, 'owner.json'), 'utf8')).token).toBe('abandoned-preparation');
+    expect((await lstat(path.join(retiredLockRoot, 'payloads', 'staging-interrupted'))).isDirectory()).toBe(true);
     expect(JSON.parse(await readFile(recoveryClaimPath, 'utf8')).token).toBe(activeRecoveryToken);
     expect((await readdir(path.dirname(lockRoot))).filter((name) => name.startsWith(recoveryClaimPrefix))).toEqual([
       path.basename(recoveryClaimRoot)
@@ -273,6 +428,7 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
     await rename(retiredLockRoot, lockRoot);
     await rm(recoveryClaimRoot, { recursive: true });
     await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).resolves.toBe(preparedRoot);
+    await expect(lstat(abandonedStagingRoot)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(readFile(lockOwnerPath)).rejects.toMatchObject({ code: 'ENOENT' });
 
     const retiredClaimResidue = path.join(path.dirname(lockRoot), `${path.basename(lockRoot)}.recovery-retired-interrupted`);
@@ -286,6 +442,30 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
     await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).rejects.toMatchObject({ code: 'ENOENT' });
     expect((await lstat(incompleteCanonicalClaim)).isDirectory()).toBe(true);
     await rm(incompleteCanonicalClaim, { recursive: true });
+
+    const outsidePayloadRoot = path.join(appRoot, 'outside-preparation-payloads');
+    await mkdir(outsidePayloadRoot);
+    await writeFile(path.join(outsidePayloadRoot, 'sentinel'), 'must remain outside the preparation lock\n');
+    await mkdir(lockRoot);
+    await writeFile(
+      lockOwnerPath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        pid: 2_147_483_647,
+        token: 'symlinked-payload-root',
+        startedAt: '2026-08-09T00:00:00.000Z',
+        processIdentity: null
+      })}\n`
+    );
+    await symlink(outsidePayloadRoot, path.join(lockRoot, 'payloads'), 'dir');
+    await expect(prepareSpfxUiProfileBaseUi({ appRoot, profileRoot })).rejects.toThrow(
+      'Base UI preparation payload root must be an owned directory'
+    );
+    expect((await lstat(lockRoot)).isDirectory()).toBe(true);
+    expect((await lstat(path.join(lockRoot, 'payloads'))).isSymbolicLink()).toBe(true);
+    expect(await readFile(path.join(outsidePayloadRoot, 'sentinel'), 'utf8')).toBe('must remain outside the preparation lock\n');
+    await rm(lockRoot, { recursive: true });
+    await rm(outsidePayloadRoot, { recursive: true });
 
     await mkdir(lockRoot);
     await writeFile(
@@ -447,8 +627,100 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
     );
     expect(await readFile(outsideSentinel, 'utf8')).toBe('must remain outside the app\n');
     await expect(lstat(path.join(outsideTempRoot, 'spfx-ui-profile'))).rejects.toMatchObject({ code: 'ENOENT' });
-  });
+  }, 120_000);
 });
+
+async function terminatePreparationAtBoundary({
+  appRoot,
+  profileRoot,
+  boundary,
+  beforeKill
+}: {
+  appRoot: string;
+  profileRoot: string;
+  boundary: string;
+  beforeKill?: (details: any) => Promise<void>;
+}): Promise<any> {
+  const moduleUrl = pathToFileURL(
+    path.join(repositoryRoot, 'packages', 'source-editor-react', 'spfx-ui-profile-prepare.mjs')
+  ).href;
+  const script = `
+    const { prepareSpfxUiProfileBaseUi } = await import(${JSON.stringify(moduleUrl)});
+    await prepareSpfxUiProfileBaseUi({
+      appRoot: ${JSON.stringify(appRoot)},
+      profileRoot: ${JSON.stringify(profileRoot)},
+      onPreparationLockBoundary: async (name, details) => {
+        if (name !== ${JSON.stringify(boundary)}) return;
+        await new Promise((resolve, reject) => {
+          process.send({ name, details }, (error) => (error ? reject(error) : resolve()));
+        });
+        setInterval(() => {}, 1_000);
+        await new Promise(() => {});
+      }
+    });
+  `;
+  const child = spawn(process.execPath, ['--input-type=module', '--eval', script], {
+    stdio: ['ignore', 'ignore', 'pipe', 'ipc']
+  });
+  let stderr = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  const closed = new Promise<void>((resolve) => {
+    child.once('close', () => resolve());
+  });
+  const boundaryReached = new Promise<any>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${boundary}: ${stderr}`)), 20_000);
+    child.once('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once('close', (code, signal) => {
+      clearTimeout(timeout);
+      reject(new Error(`Preparation child exited before ${boundary} (code ${code}, signal ${signal}): ${stderr}`));
+    });
+    child.on('message', (message: any) => {
+      if (message?.name !== boundary) return;
+      clearTimeout(timeout);
+      resolve(message.details);
+    });
+  });
+  try {
+    const details = await boundaryReached;
+    await beforeKill?.(details);
+    return details;
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    await closed;
+  }
+}
+
+async function removePreparationRecoveryClaimResidues(lockRoot: string): Promise<void> {
+  const preparedParent = path.dirname(lockRoot);
+  const claimPrefix = `${path.basename(lockRoot)}.recovery-claim-`;
+  for (const name of await readdir(preparedParent)) {
+    if (name.startsWith(claimPrefix)) await rm(path.join(preparedParent, name), { recursive: true });
+  }
+}
+
+async function writeLegacyPreparationLock(
+  lockRoot: string,
+  value: { token: string; transaction: Record<string, unknown> }
+): Promise<void> {
+  await mkdir(lockRoot);
+  await writeFile(
+    path.join(lockRoot, 'owner.json'),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      pid: 2_147_483_647,
+      token: value.token,
+      startedAt: '2026-08-09T00:00:00.000Z',
+      processIdentity: null,
+      transaction: value.transaction
+    })}\n`
+  );
+}
 
 function lockPath(name: string): string {
   return name === 'reselect' ? 'node_modules/@base-ui/utils/node_modules/reselect' : `node_modules/${name}`;
