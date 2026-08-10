@@ -24,6 +24,7 @@
     "test:safe-copy": "node scripts/test-safe-copy-symlinks.mjs"
   },
   "dependencies": {
+    "@spfx-kit/ui-profile": "file:../ui-profile",
     "fflate": "0.8.3"
   }
 }

@@ -1,24 +1,17 @@
 import * as React from 'react';
 import LayoutRightIcon from '@hugeicons/core-free-icons/LayoutRightIcon';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Button } from '../../../packages/ui-profile/normalized/src/components/ui/button';
+import { Button } from '@spfx-kit/ui-profile/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger
-} from '../../../packages/ui-profile/normalized/src/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '../../../packages/ui-profile/normalized/src/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '../../../packages/ui-profile/normalized/src/components/ui/tabs';
-import { type SpfxUiHost, useSpfxUiDerivedId, useSpfxUiId } from '../../../packages/ui-profile/normalized/src/lib/ui-root';
+} from '@spfx-kit/ui-profile/dropdown-menu';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@spfx-kit/ui-profile/select';
+import { Tabs, TabsList, TabsTrigger } from '@spfx-kit/ui-profile/tabs';
+import { type SpfxUiHost, useSpfxUiDerivedId, useSpfxUiId } from '@spfx-kit/ui-profile';
 import {
   Moon,
   PanelRight,

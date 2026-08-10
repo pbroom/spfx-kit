@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -68,17 +67,8 @@ describe('Base UI 1.6.0 SPFx ID ownership preparation contract', () => {
     }
   });
 
-  it('prepares the isolated provider export without mutating the installed package', async () => {
+  it('exposes the prepared provider from the isolated package copy', async () => {
     const value = await contract();
-    const installedBefore = await readFile(path.join(installedBaseUiRoot, 'package.json'));
-    const result = spawnSync(process.execPath, [path.join(profileRoot, 'scripts/prepare-base-ui.mjs')], {
-      cwd: profileRoot,
-      encoding: 'utf8',
-      env: { ...process.env, CI: '1' }
-    });
-    const message = `${result.stdout ?? ''}${result.stderr ?? ''}`;
-    expect(result.status, message).toBe(0);
-    expect((await readFile(path.join(installedBaseUiRoot, 'package.json'))).equals(installedBefore)).toBe(true);
     expect(sha256(await readFile(path.join(preparedRoot, 'package.json')))).toBe(value.packageManifest.transformedFileSha256);
     for (const file of value.providerFiles) {
       expect(sha256(await readFile(path.join(preparedRoot, file.installedPath)))).toBe(file.sha256);

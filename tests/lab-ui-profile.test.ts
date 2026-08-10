@@ -6,7 +6,7 @@ import * as ReactDom from 'react-dom';
 import { act, Simulate } from 'react-dom/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLabTheme, type LabWebPart } from '../packages/spfx-lab-runtime/src/index';
-import { createSpfxUiHost, SpfxUiHostProvider, type SpfxUiHost } from '../packages/ui-profile/normalized/src/lib/ui-root';
+import { createSpfxUiHost, SpfxUiHostProvider, type SpfxUiHost } from '@spfx-kit/ui-profile';
 import { PropertyPane } from '../apps/lab/src/components/PropertyPane';
 import { createLabUiThemeTokens } from '../apps/lab/src/ui-profile/lab-theme';
 
@@ -33,8 +33,6 @@ describe('Lab UI profile slice', () => {
       portalParent,
       targetDocument: document,
       instanceId: 'lab-generic-controls-test',
-      profileId: 'spfx-react17-base-nova-v1',
-      scopeValue: 'skui-7dbbe5a120453773',
       theme: createLabUiThemeTokens('light', createLabTheme('light'))
     });
   });
@@ -55,7 +53,7 @@ describe('Lab UI profile slice', () => {
 
     const colorSource = readFileSync('apps/lab/src/components/ColorField.tsx', 'utf8');
     expect(colorSource).toContain('export interface ColorFieldProps');
-    expect(colorSource).toContain("from '../../../../packages/ui-profile/normalized/src/components/ui/popover'");
+    expect(colorSource).toContain("from '@spfx-kit/ui-profile/popover'");
     expect(readFileSync('apps/lab/src/components/PropertyPane.tsx', 'utf8')).not.toMatch(
       /LegacyFluentShellIslands[^]*?<ColorField/u
     );
@@ -99,7 +97,7 @@ describe('Lab UI profile slice', () => {
     const labPackage = JSON.parse(readFileSync('apps/lab/package.json', 'utf8')) as {
       scripts: Record<string, string>;
     };
-    expect(labPackage.scripts['prepare:ui-profile']).toBe('npm --workspace @spfx-kit/ui-profile run profile:prepare:base-ui');
+    expect(labPackage.scripts['prepare:ui-profile']).toBe('npm --workspace @spfx-kit/ui-profile run build:runtime');
     expect(labPackage.scripts.predev).toBe('npm run prepare:ui-profile');
     expect(labPackage.scripts.prebuild).toBe('npm run prepare:ui-profile');
 

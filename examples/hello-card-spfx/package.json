@@ -7,16 +7,17 @@
   },
   "main": "lib/index.js",
   "scripts": {
-    "build": "node ../../packages/ui-profile/scripts/verify-delivery-artifact.mjs && heft test --clean --production && heft package-solution --production",
+    "prepare:ui-profile": "npm --prefix ../.. --workspace @spfx-kit/ui-profile run build:runtime && spfx-ui-profile-prepare && spfx-ui-profile-verify",
+    "build": "npm run prepare:ui-profile && heft test --clean --production && heft package-solution --production",
     "clean": "heft clean",
     "test": "heft test",
     "serve": "heft start --clean",
     "start": "heft start --clean",
-    "ship": "node ../../packages/ui-profile/scripts/verify-delivery-artifact.mjs && heft test --clean --production && heft package-solution --production",
+    "ship": "npm run prepare:ui-profile && heft test --clean --production && heft package-solution --production",
     "eject-webpack": "heft eject-webpack"
   },
   "dependencies": {
-    "@fluentui/react-components": "9.74.1",
+    "@spfx-kit/ui-profile": "file:../../packages/ui-profile",
     "@microsoft/sp-component-base": "1.23.2",
     "@microsoft/sp-core-library": "1.23.2",
     "@microsoft/sp-lodash-subset": "1.23.2",

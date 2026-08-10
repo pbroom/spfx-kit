@@ -1,36 +1,14 @@
 import * as React from 'react';
 import { Check, Download, FolderInput, Pin, PinOff, RefreshCw, Save, X } from 'lucide-react';
 import type { LabWebPart } from '@spfx-kit/spfx-lab-runtime';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger
-} from '../../../../packages/ui-profile/normalized/src/components/ui/accordion';
-import { Alert, AlertDescription, AlertTitle } from '../../../../packages/ui-profile/normalized/src/components/ui/alert';
-import { Button } from '../../../../packages/ui-profile/normalized/src/components/ui/button';
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-  FieldTitle
-} from '../../../../packages/ui-profile/normalized/src/components/ui/field';
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-  InputGroupText
-} from '../../../../packages/ui-profile/normalized/src/components/ui/input-group';
-import { Input } from '../../../../packages/ui-profile/normalized/src/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '../../../../packages/ui-profile/normalized/src/components/ui/select';
-import { Separator } from '../../../../packages/ui-profile/normalized/src/components/ui/separator';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@spfx-kit/ui-profile/accordion';
+import { Alert, AlertDescription, AlertTitle } from '@spfx-kit/ui-profile/alert';
+import { Button } from '@spfx-kit/ui-profile/button';
+import { Field, FieldDescription, FieldLabel, FieldTitle } from '@spfx-kit/ui-profile/field';
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@spfx-kit/ui-profile/input-group';
+import { Input } from '@spfx-kit/ui-profile/input';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@spfx-kit/ui-profile/select';
+import { Separator } from '@spfx-kit/ui-profile/separator';
 import {
   Sheet,
   SheetClose,
@@ -39,11 +17,11 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle
-} from '../../../../packages/ui-profile/normalized/src/components/ui/sheet';
-import { Spinner } from '../../../../packages/ui-profile/normalized/src/components/ui/spinner';
-import { Switch } from '../../../../packages/ui-profile/normalized/src/components/ui/switch';
-import { Textarea } from '../../../../packages/ui-profile/normalized/src/components/ui/textarea';
-import { useSpfxUiDerivedId } from '../../../../packages/ui-profile/normalized/src/lib/ui-root';
+} from '@spfx-kit/ui-profile/sheet';
+import { Spinner } from '@spfx-kit/ui-profile/spinner';
+import { Switch } from '@spfx-kit/ui-profile/switch';
+import { Textarea } from '@spfx-kit/ui-profile/textarea';
+import { useSpfxUiDerivedId } from '@spfx-kit/ui-profile';
 import {
   ExportPackageFormat,
   labApiWriteHeaders,

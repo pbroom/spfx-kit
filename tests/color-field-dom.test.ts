@@ -5,7 +5,7 @@ import * as ReactDom from 'react-dom';
 import { act, Simulate } from 'react-dom/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ColorField } from '../apps/lab/src/components/ColorField';
-import { createSpfxUiHost, SpfxUiHostProvider, type SpfxUiHost } from '../packages/ui-profile/normalized/src/lib/ui-root';
+import { createSpfxUiHost, SpfxUiHostProvider, type SpfxUiHost } from '@spfx-kit/ui-profile';
 
 interface Fixture {
   controlIds: string[];
@@ -196,8 +196,6 @@ function renderFixture(
     portalParent,
     targetDocument: ownerDocument,
     instanceId,
-    profileId: 'spfx-react17-base-nova-v1',
-    scopeValue: 'skui-7dbbe5a120453773',
     theme: {
       mode: 'light',
       colorBackground: '#ffffff',

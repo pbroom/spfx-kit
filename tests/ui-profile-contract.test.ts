@@ -86,6 +86,15 @@ const expectedToolingDependencies = {
   'tailwind-merge': '3.6.0'
 };
 
+const expectedRuntimeDependencies = Object.fromEntries(
+  Object.entries(expectedToolingDependencies).filter(([name]) => name !== 'react' && name !== 'react-dom')
+);
+
+const expectedPeerDependencies = {
+  react: '17.0.1',
+  'react-dom': '17.0.1'
+};
+
 const expectedFloatingUiPins = {
   '@floating-ui/core': '1.7.5',
   '@floating-ui/dom': '1.7.6',
@@ -94,7 +103,6 @@ const expectedFloatingUiPins = {
 };
 
 const expectedDevelopmentDependencies = {
-  ...expectedToolingDependencies,
   ...expectedFloatingUiPins,
   '@tailwindcss/cli': '4.3.3',
   '@types/react': '17.0.45',
@@ -104,6 +112,8 @@ const expectedDevelopmentDependencies = {
   postcss: '8.5.19',
   'postcss-selector-parser': '7.1.4',
   'postcss-value-parser': '4.2.0',
+  react: '17.0.1',
+  'react-dom': '17.0.1',
   shadcn: '4.16.1',
   tailwindcss: '4.3.3',
   'tw-animate-css': '1.4.0',
@@ -345,7 +355,7 @@ async function rewriteSnapshot(
   await writeCanonicalJson(root, 'profile.json', profile);
 }
 
-describe('private offline React 17 UI profile artifacts', () => {
+describe('shared offline React 17 UI profile artifacts', () => {
   it('pins byte-hashed profile artifacts to LF working-tree bytes', async () => {
     expect(await readFile(path.join(repositoryRoot, '.gitattributes'), 'utf8')).toContain('packages/ui-profile/** text eol=lf\n');
 
@@ -363,14 +373,25 @@ describe('private offline React 17 UI profile artifacts', () => {
     expect(attributes.stdout.trim().split('\n')).toEqual(paths.map((file) => `${file}: eol: lf`));
   });
 
-  it('is a non-runtime package with the exact owner-corrected dependency pins', async () => {
+  it('publishes a stable runtime boundary with the exact owner-corrected dependency pins', async () => {
     const manifest = await readJson<Record<string, unknown>>(profileRoot, 'package.json');
 
     expect(manifest.private).toBe(true);
-    expect(manifest.main).toBeUndefined();
-    expect(manifest.exports).toBeUndefined();
-    expect(manifest.types).toBeUndefined();
-    expect(manifest.dependencies).toBeUndefined();
+    expect(manifest.main).toBe('./dist/src/index.js');
+    expect(manifest.types).toBe('./dist/src/index.d.ts');
+    expect(manifest.exports).toMatchObject({
+      '.': { types: './dist/src/index.d.ts', import: './dist/src/index.js' },
+      './button': {
+        types: './dist/normalized/src/components/ui/button.d.ts',
+        import: './dist/normalized/src/components/ui/button.js'
+      },
+      './styles.css': './generated/tailwind-profile.css',
+      './vite': { types: './vite.d.ts', import: './vite.mjs' },
+      './spfx-webpack': './spfx-ui-webpack.cjs',
+      './spfx-gulp': './spfx-ui-gulp.cjs'
+    });
+    expect(manifest.dependencies).toEqual(expectedRuntimeDependencies);
+    expect(manifest.peerDependencies).toEqual(expectedPeerDependencies);
     expect(manifest.devDependencies).toEqual(expectedDevelopmentDependencies);
     expect(manifest.overrides).toBeUndefined();
     expect(manifest.resolutions).toBeUndefined();

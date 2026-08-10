@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Spinner } from '../../../../packages/ui-profile/normalized/src/components/ui/spinner';
+import { Spinner } from '@spfx-kit/ui-profile/spinner';
 import type { CdnPackageDescriptor } from '../api/packageRuntime';
 import { parseCdnSmokeMessage, type CdnSmokeAssetEvidence, type CdnSmokeRegistration } from '../lib/cdnSmokeProtocol';
 

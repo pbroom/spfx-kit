@@ -1,11 +1,7 @@
 'use strict';
 
-const path = require('node:path');
-
-const configureSpfxUiProfileCss = require('../../../../packages/ui-profile/spfx-ui-webpack.cjs');
+const configureSpfxUiProfileCss = require('@spfx-kit/ui-profile/spfx-webpack');
 
 module.exports = function patchUiProfileCss(webpackConfiguration) {
-  return configureSpfxUiProfileCss(webpackConfiguration, {
-    packageRoot: path.resolve(__dirname, '../../../../packages/ui-profile')
-  });
+  return configureSpfxUiProfileCss(webpackConfiguration);
 };

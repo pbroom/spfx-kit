@@ -3,8 +3,232 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Offline, non-runtime source profile for the React 17 Base Nova compatibility spike.",
+  "description": "Shared React 17 UI foundation for the SPFx Kit Lab and SPFx applications.",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "accordion": [
+        "dist/normalized/src/components/ui/accordion.d.ts"
+      ],
+      "alert": [
+        "dist/normalized/src/components/ui/alert.d.ts"
+      ],
+      "badge": [
+        "dist/normalized/src/components/ui/badge.d.ts"
+      ],
+      "button": [
+        "dist/normalized/src/components/ui/button.d.ts"
+      ],
+      "checkbox": [
+        "dist/normalized/src/components/ui/checkbox.d.ts"
+      ],
+      "combobox": [
+        "dist/normalized/src/components/ui/combobox.d.ts"
+      ],
+      "dialog": [
+        "dist/normalized/src/components/ui/dialog.d.ts"
+      ],
+      "dropdown-menu": [
+        "dist/normalized/src/components/ui/dropdown-menu.d.ts"
+      ],
+      "field": [
+        "dist/normalized/src/components/ui/field.d.ts"
+      ],
+      "input": [
+        "dist/normalized/src/components/ui/input.d.ts"
+      ],
+      "input-group": [
+        "dist/normalized/src/components/ui/input-group.d.ts"
+      ],
+      "label": [
+        "dist/normalized/src/components/ui/label.d.ts"
+      ],
+      "popover": [
+        "dist/normalized/src/components/ui/popover.d.ts"
+      ],
+      "select": [
+        "dist/normalized/src/components/ui/select.d.ts"
+      ],
+      "separator": [
+        "dist/normalized/src/components/ui/separator.d.ts"
+      ],
+      "sheet": [
+        "dist/normalized/src/components/ui/sheet.d.ts"
+      ],
+      "spinner": [
+        "dist/normalized/src/components/ui/spinner.d.ts"
+      ],
+      "switch": [
+        "dist/normalized/src/components/ui/switch.d.ts"
+      ],
+      "tabs": [
+        "dist/normalized/src/components/ui/tabs.d.ts"
+      ],
+      "textarea": [
+        "dist/normalized/src/components/ui/textarea.d.ts"
+      ],
+      "toggle": [
+        "dist/normalized/src/components/ui/toggle.d.ts"
+      ],
+      "toggle-group": [
+        "dist/normalized/src/components/ui/toggle-group.d.ts"
+      ],
+      "tooltip": [
+        "dist/normalized/src/components/ui/tooltip.d.ts"
+      ],
+      "delivery": [
+        "delivery.d.ts"
+      ],
+      "vite": [
+        "vite.d.ts"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./accordion": {
+      "types": "./dist/normalized/src/components/ui/accordion.d.ts",
+      "import": "./dist/normalized/src/components/ui/accordion.js"
+    },
+    "./alert": {
+      "types": "./dist/normalized/src/components/ui/alert.d.ts",
+      "import": "./dist/normalized/src/components/ui/alert.js"
+    },
+    "./badge": {
+      "types": "./dist/normalized/src/components/ui/badge.d.ts",
+      "import": "./dist/normalized/src/components/ui/badge.js"
+    },
+    "./button": {
+      "types": "./dist/normalized/src/components/ui/button.d.ts",
+      "import": "./dist/normalized/src/components/ui/button.js"
+    },
+    "./checkbox": {
+      "types": "./dist/normalized/src/components/ui/checkbox.d.ts",
+      "import": "./dist/normalized/src/components/ui/checkbox.js"
+    },
+    "./combobox": {
+      "types": "./dist/normalized/src/components/ui/combobox.d.ts",
+      "import": "./dist/normalized/src/components/ui/combobox.js"
+    },
+    "./dialog": {
+      "types": "./dist/normalized/src/components/ui/dialog.d.ts",
+      "import": "./dist/normalized/src/components/ui/dialog.js"
+    },
+    "./dropdown-menu": {
+      "types": "./dist/normalized/src/components/ui/dropdown-menu.d.ts",
+      "import": "./dist/normalized/src/components/ui/dropdown-menu.js"
+    },
+    "./field": {
+      "types": "./dist/normalized/src/components/ui/field.d.ts",
+      "import": "./dist/normalized/src/components/ui/field.js"
+    },
+    "./input": {
+      "types": "./dist/normalized/src/components/ui/input.d.ts",
+      "import": "./dist/normalized/src/components/ui/input.js"
+    },
+    "./input-group": {
+      "types": "./dist/normalized/src/components/ui/input-group.d.ts",
+      "import": "./dist/normalized/src/components/ui/input-group.js"
+    },
+    "./label": {
+      "types": "./dist/normalized/src/components/ui/label.d.ts",
+      "import": "./dist/normalized/src/components/ui/label.js"
+    },
+    "./popover": {
+      "types": "./dist/normalized/src/components/ui/popover.d.ts",
+      "import": "./dist/normalized/src/components/ui/popover.js"
+    },
+    "./select": {
+      "types": "./dist/normalized/src/components/ui/select.d.ts",
+      "import": "./dist/normalized/src/components/ui/select.js"
+    },
+    "./separator": {
+      "types": "./dist/normalized/src/components/ui/separator.d.ts",
+      "import": "./dist/normalized/src/components/ui/separator.js"
+    },
+    "./sheet": {
+      "types": "./dist/normalized/src/components/ui/sheet.d.ts",
+      "import": "./dist/normalized/src/components/ui/sheet.js"
+    },
+    "./spinner": {
+      "types": "./dist/normalized/src/components/ui/spinner.d.ts",
+      "import": "./dist/normalized/src/components/ui/spinner.js"
+    },
+    "./switch": {
+      "types": "./dist/normalized/src/components/ui/switch.d.ts",
+      "import": "./dist/normalized/src/components/ui/switch.js"
+    },
+    "./tabs": {
+      "types": "./dist/normalized/src/components/ui/tabs.d.ts",
+      "import": "./dist/normalized/src/components/ui/tabs.js"
+    },
+    "./textarea": {
+      "types": "./dist/normalized/src/components/ui/textarea.d.ts",
+      "import": "./dist/normalized/src/components/ui/textarea.js"
+    },
+    "./toggle": {
+      "types": "./dist/normalized/src/components/ui/toggle.d.ts",
+      "import": "./dist/normalized/src/components/ui/toggle.js"
+    },
+    "./toggle-group": {
+      "types": "./dist/normalized/src/components/ui/toggle-group.d.ts",
+      "import": "./dist/normalized/src/components/ui/toggle-group.js"
+    },
+    "./tooltip": {
+      "types": "./dist/normalized/src/components/ui/tooltip.d.ts",
+      "import": "./dist/normalized/src/components/ui/tooltip.js"
+    },
+    "./styles.css": "./generated/tailwind-profile.css",
+    "./delivery": {
+      "types": "./delivery.d.ts",
+      "import": "./delivery.mjs",
+      "require": "./delivery.cjs"
+    },
+    "./vite": {
+      "types": "./vite.d.ts",
+      "import": "./vite.mjs"
+    },
+    "./spfx-webpack": "./spfx-ui-webpack.cjs",
+    "./spfx-gulp": "./spfx-ui-gulp.cjs"
+  },
+  "files": [
+    ".prepared/base-ui",
+    "dist",
+    "normalized/src",
+    "generated/tailwind-profile.css",
+    "compat/base-ui-1.6.0",
+    "profile.json",
+    "provenance.json",
+    "delivery.cjs",
+    "delivery.d.ts",
+    "delivery.mjs",
+    "vite.d.ts",
+    "vite.mjs",
+    "spfx-ui-webpack.cjs",
+    "spfx-ui-gulp.cjs",
+    "scripts/lib/delivery-artifact.cjs",
+    "scripts/lib/delivery-artifact.mjs",
+    "scripts/lib/preparation-lock.mjs",
+    "scripts/lib/vite-delivery-plugin.mjs",
+    "scripts/prepare-base-ui.mjs",
+    "scripts/transform-base-ui-id-ownership.mjs",
+    "scripts/transform-base-ui-popup-lifecycle.mjs",
+    "scripts/transform-base-ui-select-value.mjs",
+    "scripts/verify-delivery-artifact.mjs"
+  ],
+  "sideEffects": [
+    "./generated/tailwind-profile.css"
+  ],
+  "bin": {
+    "spfx-ui-profile-prepare": "./scripts/prepare-base-ui.mjs",
+    "spfx-ui-profile-verify": "./scripts/verify-delivery-artifact.mjs"
+  },
   "scripts": {
+    "build:runtime": "npm run profile:prepare:base-ui && node ./scripts/clean-runtime.mjs && tsc -p ./tsconfig.build.json && node ./scripts/finalize-runtime-imports.mjs",
     "css:build": "node ./scripts/build-tailwind-css.mjs",
     "css:verify": "node ./scripts/verify-tailwind-css.mjs",
     "delivery:verify": "node ./scripts/verify-delivery-artifact.mjs",
@@ -18,10 +242,21 @@
     "typecheck:ts58": "node ./scripts/typecheck.mjs typescript-5-8 5.8.3 ./tsconfig.ts58.json",
     "typecheck": "npm run profile:prepare:base-ui && npm run typecheck:ts53 && npm run typecheck:ts58",
     "verify": "npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure",
-    "build": "npm run verify && npm run delivery:verify && npm run typecheck"
+    "build": "npm run verify && npm run delivery:verify && npm run typecheck && npm run build:runtime",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.6.0",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.25.0",
+    "tailwind-merge": "3.6.0"
+  },
+  "peerDependencies": {
+    "react": "17.0.1",
+    "react-dom": "17.0.1"
   },
   "devDependencies": {
-    "@base-ui/react": "1.6.0",
     "@floating-ui/core": "1.7.5",
     "@floating-ui/dom": "1.7.6",
     "@floating-ui/react-dom": "2.1.8",
@@ -31,16 +266,12 @@
     "@types/react-dom": "17.0.17",
     "@types/scheduler": "0.16.8",
     "ajv": "8.20.0",
-    "class-variance-authority": "0.7.1",
-    "clsx": "2.1.1",
-    "lucide-react": "1.25.0",
     "postcss": "8.5.19",
     "postcss-selector-parser": "7.1.4",
     "postcss-value-parser": "4.2.0",
     "react": "17.0.1",
     "react-dom": "17.0.1",
     "shadcn": "4.16.1",
-    "tailwind-merge": "3.6.0",
     "tailwindcss": "4.3.3",
     "tw-animate-css": "1.4.0",
     "typescript": "5.3.3",

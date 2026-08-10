@@ -1,8 +1,9 @@
+import { createHash } from 'node:crypto';
 import { readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { sha256 } from './lib/profile.mjs';
+const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 export const SELECT_VALUE_FROM = "Omit<BaseUIComponentProps<'span', SelectValueState>, 'children'>";
 export const SELECT_VALUE_TO = "Omit<BaseUIComponentProps<'span', SelectValueState>, 'children' | 'placeholder'>";

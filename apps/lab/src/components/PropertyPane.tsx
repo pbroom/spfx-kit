@@ -6,21 +6,14 @@ import {
   ComboboxInput,
   ComboboxItem,
   ComboboxList
-} from '../../../../packages/ui-profile/normalized/src/components/ui/combobox';
-import { Checkbox } from '../../../../packages/ui-profile/normalized/src/components/ui/checkbox';
-import { Field, FieldDescription, FieldLabel } from '../../../../packages/ui-profile/normalized/src/components/ui/field';
-import { Input } from '../../../../packages/ui-profile/normalized/src/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '../../../../packages/ui-profile/normalized/src/components/ui/select';
-import { Textarea } from '../../../../packages/ui-profile/normalized/src/components/ui/textarea';
-import { ToggleGroup, ToggleGroupItem } from '../../../../packages/ui-profile/normalized/src/components/ui/toggle-group';
-import { useSpfxUiDerivedId, useSpfxUiId } from '../../../../packages/ui-profile/normalized/src/lib/ui-root';
+} from '@spfx-kit/ui-profile/combobox';
+import { Checkbox } from '@spfx-kit/ui-profile/checkbox';
+import { Field, FieldDescription, FieldLabel } from '@spfx-kit/ui-profile/field';
+import { Input } from '@spfx-kit/ui-profile/input';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@spfx-kit/ui-profile/select';
+import { Textarea } from '@spfx-kit/ui-profile/textarea';
+import { ToggleGroup, ToggleGroupItem } from '@spfx-kit/ui-profile/toggle-group';
+import { useSpfxUiDerivedId, useSpfxUiId } from '@spfx-kit/ui-profile';
 import { AlignCenter, AlignLeft, AlignRight } from 'lucide-react';
 import {
   LabPropertyBag,

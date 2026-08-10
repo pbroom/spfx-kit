@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('node:path');
-const { readFileSync } = require('node:fs');
+const { readFileSync, realpathSync } = require('node:fs');
 
 const { resolveUiProfileDeliveryArtifact } = require('./scripts/lib/delivery-artifact.cjs');
 const UI_PROFILE_RULE_MARKER = Symbol.for('spfx-kit.ui-profile.global-css-rule');
@@ -12,11 +12,29 @@ module.exports = function configureSpfxUiProfileCss(webpackConfiguration, option
   if (!Array.isArray(rules)) {
     throw new Error('SPFx webpack configuration does not expose module.rules.');
   }
-  if (!options.packageRoot) {
-    throw new Error('SPFx UI profile webpack adapter requires packageRoot.');
+  const packageRoot = path.resolve(options.packageRoot || __dirname);
+  const artifact = resolveUiProfileDeliveryArtifact({ packageRoot });
+  const preparedBaseUiRoot = realpathSync(path.join(packageRoot, '.prepared/base-ui'));
+  const expectedPreparedParent = `${realpathSync(path.join(packageRoot, '.prepared'))}${path.sep}`;
+  if (!preparedBaseUiRoot.startsWith(expectedPreparedParent)) {
+    throw new Error('Prepared Base UI compatibility root resolves outside the UI profile package.');
+  }
+  const preparedManifest = JSON.parse(readFileSync(path.join(preparedBaseUiRoot, 'package.json'), 'utf8'));
+  if (preparedManifest.name !== '@base-ui/react' || preparedManifest.version !== '1.6.0') {
+    throw new Error('Prepared Base UI compatibility package identity differs.');
   }
 
-  const artifact = resolveUiProfileDeliveryArtifact({ packageRoot: options.packageRoot });
+  const resolve = webpackConfiguration.resolve || (webpackConfiguration.resolve = {});
+  const alias = resolve.alias || (resolve.alias = {});
+  if (Array.isArray(alias) || typeof alias !== 'object') {
+    throw new Error('SPFx webpack configuration does not expose an object resolve.alias map.');
+  }
+  const currentBaseUiAlias = alias['@base-ui/react'];
+  if (currentBaseUiAlias && path.resolve(currentBaseUiAlias) !== preparedBaseUiRoot) {
+    throw new Error('SPFx webpack configuration already aliases @base-ui/react to a different package.');
+  }
+  alias['@base-ui/react'] = preparedBaseUiRoot;
+
   const exactCssPath = path.normalize(artifact.cssPath);
   const exactCssCondition = (resource) => path.normalize(String(resource || '').split('?', 1)[0]) === exactCssPath;
   exactCssCondition.uiProfileCssPath = exactCssPath;

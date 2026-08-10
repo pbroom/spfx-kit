@@ -221,17 +221,19 @@ export async function exportStandaloneRepo(appDir, outDir, slug, options = {}) {
   await ensureHouseStandardDocs(targetDir, slug);
   await writeAppRepoFiles(targetDir);
   await writeRepoExportReadme(targetDir, slug);
+  const proof = options.uiProfileClosure
+    ? await materializeStandaloneUiProfileClosure(appDir, targetDir, options.uiProfileClosure)
+    : null;
   reportTargetProgress('standalone', 'configuring', 0.52, 'Rewriting standalone package configuration.');
-  await rewriteStandalonePackageJson(targetDir, standalonePackageName(appDir));
+  await rewriteStandalonePackageJson(targetDir, standalonePackageName(appDir), {
+    uiProfileDependency: proof?.packageDependency
+  });
   await rewriteStandaloneTsconfig(targetDir);
   await writeStandaloneMetadata(targetDir, slug);
   reportTargetProgress('standalone', 'building', 0.7, 'Generating standalone package lock.');
   await createStandalonePackageLock(targetDir);
   reportTargetProgress('standalone', 'packaging', 0.94, 'Reading standalone repo contents.');
   const files = await listFilesRecursive(targetDir);
-  const proof = options.uiProfileClosure
-    ? await materializeStandaloneUiProfileClosure(appDir, targetDir, options.uiProfileClosure)
-    : null;
   const target = withUiProfileTargetProof(
     await describeTarget('standalone', `${slug}-repo`, targetDir, files),
     proof
@@ -274,7 +276,7 @@ async function copyContentsIfExists(source, target) {
   }
 }
 
-async function rewriteStandalonePackageJson(targetDir, packageName) {
+export async function rewriteStandalonePackageJson(targetDir, packageName, options = {}) {
   const packagePath = path.join(targetDir, 'package.json');
   const packageJson = await readJson(packagePath);
   packageJson.name = packageName;
@@ -282,13 +284,18 @@ async function rewriteStandalonePackageJson(targetDir, packageName) {
   packageJson.private = true;
   if (packageJson.dependencies) {
     for (const [name, spec] of Object.entries(packageJson.dependencies)) {
+      if (name === '@spfx-kit/ui-profile' && options.uiProfileDependency) {
+        packageJson.dependencies[name] = options.uiProfileDependency;
+        continue;
+      }
       if (name.startsWith('@spfx-kit/') || String(spec).includes('../../packages')) {
         delete packageJson.dependencies[name];
       }
     }
   }
   packageJson.scripts = standaloneScriptsForToolchain(detectSpfxToolchain(packageJson), {
-    monaco: hasDependency(packageJson, 'monaco-editor')
+    monaco: hasDependency(packageJson, 'monaco-editor'),
+    uiProfile: hasDependency(packageJson, '@spfx-kit/ui-profile')
   });
   await writeJson(packagePath, packageJson);
   if (hasDependency(packageJson, 'monaco-editor')) {
@@ -343,11 +350,16 @@ async function writeStandaloneMetadata(targetDir, slug) {
 }
 
 async function createStandalonePackageLock(targetDir) {
-  runNpmCommand(
-    targetDir,
-    ['install', '--package-lock-only', '--ignore-scripts'],
-    `Could not generate standalone package-lock.json in ${targetDir}`
-  );
+  const cacheRoot = path.join(targetDir, '.spfx-kit', 'npm-cache');
+  try {
+    runNpmCommand(
+      targetDir,
+      ['install', '--package-lock-only', '--ignore-scripts', '--cache', cacheRoot],
+      `Could not generate standalone package-lock.json in ${targetDir}`
+    );
+  } finally {
+    await rm(cacheRoot, { recursive: true, force: true });
+  }
 }
 
 function runNpmCommand(cwd, args, failureMessage) {
