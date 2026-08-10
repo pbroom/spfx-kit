@@ -67,7 +67,7 @@
     },
     "contractVersion": "react17-classic-jsx-skui-v4",
     "implementation": "scripts/lib/profile.mjs",
-    "implementationSha256": "e32b9717e1e83cfa21141b32baee8653be70271eaf69946ea35692404557cba1"
+    "implementationSha256": "932c0a473775ddb8d188784be1e628729708792cb007b660f1b3b660c35f2699"
   },
   "profileId": "spfx-react17-base-nova-v1",
   "reactTypeContract": {

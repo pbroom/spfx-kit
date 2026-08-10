@@ -194,6 +194,7 @@ const Sidebar = React.forwardRef(function Sidebar({
       <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
         <SheetContent
           ref={ref}
+          id={props.id}
           dir={dir}
           data-sidebar="sidebar"
           data-slot="sidebar"
@@ -587,6 +588,7 @@ function SidebarMenuButton({
   size = "default",
   tooltip,
   className,
+  id,
   ...props
 }: useRender.ComponentProps<"button"> &
   React.ComponentProps<"button"> & {
@@ -594,10 +596,12 @@ function SidebarMenuButton({
     tooltip?: string | React.ComponentProps<typeof TooltipContent>
   } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const { isMobile, state } = useSidebar()
+  const { deriveElementId } = useSpfxUiHost()
   const comp = useRender({
     defaultTagName: "button",
     props: mergeProps<"button">(
       {
+        id,
         className: cn(sidebarMenuButtonVariants({ variant, size }), className),
       },
       props
@@ -616,8 +620,10 @@ function SidebarMenuButton({
   }
 
   if (typeof tooltip === "string") {
+    const tooltipId = deriveElementId(id ?? "", "tooltip")
     tooltip = {
       children: tooltip,
+      id: tooltipId,
     }
   }
 

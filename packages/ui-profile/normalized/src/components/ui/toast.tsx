@@ -1,6 +1,6 @@
 "use client"
 
-import { useSpfxUiPortalHost } from "../../lib/ui-root"
+import { useSpfxUiOwnedPortalRender, useSpfxUiPortalHost, useSpfxUiPortalId } from "../../lib/ui-root"
 import { CircleCheckIcon, InfoIcon, Loader2Icon, OctagonXIcon, TriangleAlertIcon, XIcon } from "lucide-react"
 import * as React from "react"
 import { Toast as ToastPrimitive } from "@base-ui/react/toast"
@@ -12,13 +12,15 @@ function ToastProvider({ ...props }: ToastPrimitive.Provider.Props) {
   return <ToastPrimitive.Provider {...props} />
 }
 
-function ToastPortal({ ...props }: ToastPrimitive.Portal.Props) {
+function ToastPortal({ ...props }: ToastPrimitive.Portal.Props & { id: string }) {
   const portalHost = useSpfxUiPortalHost()
   return (
     <ToastPrimitive.Portal
       data-slot="toast-portal"
       {...props}
+      id={useSpfxUiPortalId(props.id)}
       container={portalHost}
+      render={useSpfxUiOwnedPortalRender(props.render, props.id, "ToastPortal")}
     />
   )
 }
@@ -258,16 +260,17 @@ function ToastList() {
 
 function Toaster({
   children,
+  portalId,
   toastManager: toastManagerProp,
   ...props
-}: ToastPrimitive.Provider.Props) {
+}: ToastPrimitive.Provider.Props & { portalId: string }) {
   const defaultToastManager = React.useMemo(() => ToastPrimitive.createToastManager(), [])
   const toastManager = toastManagerProp ?? defaultToastManager
 
   return (
     <ToastProvider toastManager={toastManager} {...props}>
       {children}
-      <ToastPortal>
+      <ToastPortal id={portalId}>
         <ToastViewport>
           <ToastList />
         </ToastViewport>

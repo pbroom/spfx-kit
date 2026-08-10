@@ -141,7 +141,7 @@ describe('SourceEditorField shortcut overflow menu', () => {
       mountPoint: container,
       portalParent: container,
       profileId: 'source-editor-react17-base-nova-v1',
-      scopeValue: 'skui-06bc7a2f5ebc2c81',
+      scopeValue: 'skui-c07c5a893c8b5641',
       targetDocument: document,
       theme: testTheme
     });
@@ -266,7 +266,7 @@ describe('SourceEditorField shortcut overflow menu', () => {
       mountPoint: container,
       portalParent: container,
       profileId: 'source-editor-react17-base-nova-v1',
-      scopeValue: 'skui-06bc7a2f5ebc2c81',
+      scopeValue: 'skui-c07c5a893c8b5641',
       targetDocument: document,
       theme: testTheme
     });

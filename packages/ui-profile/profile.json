@@ -163,7 +163,7 @@
     },
     "artifact": {
       "path": "generated/tailwind-profile.css",
-      "sha256": "b7b442855d03ba5c7855b5fa428abd25862abff370049a3f730ebc32fde22e57"
+      "sha256": "0cf422965a0971b9ae19930357ded3dcdc05e29930002b5a1c0251df0f96736c"
     },
     "candidateCount": 1384,
     "compiler": {
@@ -206,9 +206,9 @@
       "path": "scripts/lib/scope-tailwind-css.mjs",
       "sha256": "bc58fc3ff8b7b529b8c9b6dae500a1023c685b583861cd7cf442c70b3ea8b980"
     },
-    "scopeSeedSha256": "06bc7a2f5ebc2c81361d0824e961455166adba67c43741c1d567f51b93f3d426",
-    "scopeSelector": "[data-spfx-ui-scope=\"skui-06bc7a2f5ebc2c81\"]",
-    "scopeValue": "skui-06bc7a2f5ebc2c81",
+    "scopeSeedSha256": "c07c5a893c8b5641f67a342661577d01541b3c449d21f19d4328e3445fc3ce6d",
+    "scopeSelector": "[data-spfx-ui-scope=\"skui-c07c5a893c8b5641\"]",
+    "scopeValue": "skui-c07c5a893c8b5641",
     "structuralMarkers": [
       "skui:group",
       "skui:group/accordion-trigger",
@@ -1443,7 +1443,7 @@
         {
           "path": "normalized/src/components/ui/sidebar.tsx",
           "registrySourcePath": "registry/base-nova/ui/sidebar.tsx",
-          "sha256": "c746d243091246cfc47b5e3396e631ac0e01982a88f99995612b4538b035ef81",
+          "sha256": "169247c2fc8b02b303dad57b58d4b569b7feab78d20f632edbea031e240a3180",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
@@ -1651,7 +1651,7 @@
         {
           "path": "normalized/src/components/ui/toast.tsx",
           "registrySourcePath": "registry/base-nova/ui/toast.tsx",
-          "sha256": "99864dac4c8018d99aed6d1415d0bbec4a88a22dcaefca4293d16fba39281e1b",
+          "sha256": "1e1224967d37ae1c16f05eb1b656321983f50b7279b63d74eec27de5d83c7384",
           "transformations": [
             "normalize-line-endings",
             "rewrite-app-owned-aliases",
@@ -1792,7 +1792,7 @@
       }
     }
   ],
-  "normalizationImplementationSha256": "e32b9717e1e83cfa21141b32baee8653be70271eaf69946ea35692404557cba1",
+  "normalizationImplementationSha256": "932c0a473775ddb8d188784be1e628729708792cb007b660f1b3b660c35f2699",
   "ownedSources": [
     {
       "output": {
@@ -1822,6 +1822,6 @@
     }
   ],
   "profileId": "spfx-react17-base-nova-v1",
-  "provenanceSha256": "6612bfece05b264cdace8cb734167936ca7917e886dbaf221b02f94244481061",
+  "provenanceSha256": "bd8a449e4fc01526faddb605e221d72e7df4385df97df1d480ce067b9329c095",
   "schemaVersion": 1
 }

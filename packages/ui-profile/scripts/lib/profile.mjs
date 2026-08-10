@@ -3094,9 +3094,9 @@ function normalizeSidebarHostContract(source, registrySourcePath, outputPath) {
   normalized = replaceReviewedSourceOnce(
     normalized,
     '        <SheetContent\n          dir={dir}',
-    '        <SheetContent\n          ref={ref}\n          dir={dir}',
+    '        <SheetContent\n          ref={ref}\n          id={props.id}\n          dir={dir}',
     outputPath,
-    'Sidebar mobile branch ref'
+    'Sidebar mobile branch owned ID'
   );
   normalized = replaceReviewedSourceOnce(
     normalized,
@@ -3111,6 +3111,40 @@ function normalizeSidebarHostContract(source, registrySourcePath, outputPath) {
     '\n})\n\nfunction SidebarTrigger({',
     outputPath,
     'Sidebar forwardRef closure'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  tooltip,\n  className,\n  ...props',
+    '  tooltip,\n  className,\n  id,\n  ...props',
+    outputPath,
+    'Sidebar menu button owned ID binding'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '      {\n        className: cn(sidebarMenuButtonVariants({ variant, size }), className),',
+    '      {\n        id,\n        className: cn(sidebarMenuButtonVariants({ variant, size }), className),',
+    outputPath,
+    'Sidebar menu button ID forwarding'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  const { isMobile, state } = useSidebar()\n  const comp = useRender({',
+    '  const { isMobile, state } = useSidebar()\n  const { deriveElementId } = useSpfxUiHost()\n  const comp = useRender({',
+    outputPath,
+    'Sidebar string-tooltip ID derivation'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '    tooltip = {\n      children: tooltip,\n    }',
+    [
+      '    const tooltipId = deriveElementId(id ?? "", "tooltip")',
+      '    tooltip = {',
+      '      children: tooltip,',
+      '      id: tooltipId,',
+      '    }'
+    ].join('\n'),
+    outputPath,
+    'Sidebar string-tooltip owned ID'
   );
   normalized = insertImport(normalized, 'import { useSpfxUiHost } from "../../lib/ui-root"');
   return { source: normalized, transformed: true };
@@ -3131,13 +3165,15 @@ function normalizeToastHostContract(source, registrySourcePath, outputPath) {
     normalized,
     'function ToastPortal({ ...props }: ToastPrimitive.Portal.Props) {\n  return <ToastPrimitive.Portal data-slot="toast-portal" {...props} />\n}',
     [
-      'function ToastPortal({ ...props }: ToastPrimitive.Portal.Props) {',
+      'function ToastPortal({ ...props }: ToastPrimitive.Portal.Props & { id: string }) {',
       '  const portalHost = useSpfxUiPortalHost()',
       '  return (',
       '    <ToastPrimitive.Portal',
       '      data-slot="toast-portal"',
       '      {...props}',
+      '      id={useSpfxUiPortalId(props.id)}',
       '      container={portalHost}',
+      '      render={useSpfxUiOwnedPortalRender(props.render, props.id, "ToastPortal")}',
       '    />',
       '  )',
       '}'
@@ -3148,7 +3184,7 @@ function normalizeToastHostContract(source, registrySourcePath, outputPath) {
   normalized = replaceReviewedSourceOnce(
     normalized,
     '  toastManager = toast,\n  ...props',
-    '  toastManager: toastManagerProp,\n  ...props',
+    '  portalId,\n  toastManager: toastManagerProp,\n  ...props',
     outputPath,
     'Toast manager parameter'
   );
@@ -3156,7 +3192,7 @@ function normalizeToastHostContract(source, registrySourcePath, outputPath) {
     normalized,
     '}: ToastPrimitive.Provider.Props) {\n  return (',
     [
-      '}: ToastPrimitive.Provider.Props) {',
+      '}: ToastPrimitive.Provider.Props & { portalId: string }) {',
       '  const defaultToastManager = React.useMemo(() => ToastPrimitive.createToastManager(), [])',
       '  const toastManager = toastManagerProp ?? defaultToastManager',
       '',
@@ -3164,6 +3200,13 @@ function normalizeToastHostContract(source, registrySourcePath, outputPath) {
     ].join('\n'),
     outputPath,
     'Toast host-local manager'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '      <ToastPortal>',
+    '      <ToastPortal id={portalId}>',
+    outputPath,
+    'Toast convenience portal owned ID'
   );
   normalized = replaceReviewedSourceOnce(
     normalized,
@@ -3186,7 +3229,10 @@ function normalizeToastHostContract(source, registrySourcePath, outputPath) {
     outputPath,
     'React 17 ToastList fragment closing'
   );
-  normalized = insertImport(normalized, 'import { useSpfxUiPortalHost } from "../../lib/ui-root"');
+  normalized = insertImport(
+    normalized,
+    'import { useSpfxUiOwnedPortalRender, useSpfxUiPortalHost, useSpfxUiPortalId } from "../../lib/ui-root"'
+  );
   return { source: normalized, transformed: true };
 }
 
