@@ -158,6 +158,7 @@ interface CatalogSampleProps {
 }
 
 const ActiveCatalogComponentContext = React.createContext<UiProfileCatalogComponentId | undefined>(undefined);
+const ActiveCatalogExampleContext = React.createContext<string | undefined>(undefined);
 
 function CatalogSample({ children, component, title }: CatalogSampleProps): React.ReactElement | null {
   const activeComponent = React.useContext(ActiveCatalogComponentContext);
@@ -203,9 +204,24 @@ interface CatalogDocumentationExampleProps {
 
 function CatalogDocumentationExample({ children, id, title }: CatalogDocumentationExampleProps): React.ReactElement {
   const activeComponent = React.useContext(ActiveCatalogComponentContext);
+  const activeExample = React.useContext(ActiveCatalogExampleContext);
+  const sectionRef = React.useRef<HTMLElement>(null);
   const tabsId = useSpfxUiId(`catalog:${activeComponent ?? 'gallery'}:example:${id}:tabs`);
   const documentation = activeComponent ? uiProfileCatalogDocumentation[activeComponent] : undefined;
   const example = documentation?.examples?.find((candidate) => candidate.id === id);
+  const selected = activeExample === id;
+
+  React.useEffect(() => {
+    const section = sectionRef.current;
+    if (!selected || !section) return;
+
+    section.focus({ preventScroll: true });
+    section.scrollIntoView({ block: 'start' });
+
+    return () => {
+      if (section.ownerDocument.activeElement === section) section.blur();
+    };
+  }, [selected]);
 
   if (!activeComponent || !example) {
     return (
@@ -217,7 +233,13 @@ function CatalogDocumentationExample({ children, id, title }: CatalogDocumentati
   }
 
   return (
-    <section data-catalog-example={id} id={uiProfileCatalogExampleSectionId(activeComponent, id)}>
+    <section
+      data-catalog-example={id}
+      data-catalog-example-active={selected ? 'true' : undefined}
+      id={uiProfileCatalogExampleSectionId(activeComponent, id)}
+      ref={sectionRef}
+      tabIndex={selected ? -1 : undefined}
+    >
       <div className="ui-library-docs__example-heading">
         <h4>{title}</h4>
         <p>{example.summary}</p>
@@ -1094,8 +1116,9 @@ function ProgressDocumentationExamples({
 
 /** A browser-smoke gallery for every React 17-compatible public catalog subpath. */
 export function UiProfileCatalogHarness({
-  activeComponent
-}: { activeComponent?: UiProfileCatalogComponentId } = {}): React.ReactElement {
+  activeComponent,
+  activeExample
+}: { activeComponent?: UiProfileCatalogComponentId; activeExample?: string } = {}): React.ReactElement {
   const [calendarDate, setCalendarDate] = React.useState<Date | undefined>(new Date(2026, 7, 9));
   const toastManager = React.useMemo(() => createToastManager(), []);
 
@@ -1756,7 +1779,11 @@ export function UiProfileCatalogHarness({
     </section>
   );
 
-  return <ActiveCatalogComponentContext.Provider value={activeComponent}>{catalog}</ActiveCatalogComponentContext.Provider>;
+  return (
+    <ActiveCatalogComponentContext.Provider value={activeComponent}>
+      <ActiveCatalogExampleContext.Provider value={activeExample}>{catalog}</ActiveCatalogExampleContext.Provider>
+    </ActiveCatalogComponentContext.Provider>
+  );
 }
 
 export function mountUiProfileCatalogHarness(mountPoint: HTMLElement): () => void {

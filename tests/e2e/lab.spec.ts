@@ -481,6 +481,47 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   await expect(exportOptions.getByRole('option', { name: /^UI Library$/u })).toHaveCount(0);
 });
 
+test('honors component and example deep links across browser history', async ({ page }) => {
+  await page.goto('/?workspace=ui-library&component=button&example=spinner');
+
+  const workspace = page.locator('[data-ui-library-workspace="ready"]');
+  const buttonSpinner = page.locator('#ui-library-button-example-spinner');
+  await expect(page.getByRole('article', { name: 'Button' })).toBeVisible();
+  await expect(workspace).toHaveAttribute('data-ui-library-active-example', 'spinner');
+  await expect(buttonSpinner).toHaveAttribute('data-catalog-example-active', 'true');
+  await expect(buttonSpinner).toBeFocused();
+
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/?workspace=ui-library&component=breadcrumb&example=dropdown');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+
+  const breadcrumbDropdown = page.locator('#ui-library-breadcrumb-example-dropdown');
+  await expect(page.getByRole('article', { name: 'Breadcrumb' })).toBeVisible();
+  await expect(workspace).toHaveAttribute('data-ui-library-active-example', 'dropdown');
+  await expect(breadcrumbDropdown).toHaveAttribute('data-catalog-example-active', 'true');
+  await expect(breadcrumbDropdown).toBeFocused();
+
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/?workspace=ui-library&component=breadcrumb&example=not-a-real-example');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(workspace).not.toHaveAttribute('data-ui-library-active-example');
+  await expect(page.locator('[data-catalog-example-active="true"]')).toHaveCount(0);
+  await expect(breadcrumbDropdown).not.toBeFocused();
+
+  await page.goBack();
+  await expect.poll(() => new URL(page.url()).searchParams.get('example')).toBe('dropdown');
+  await expect(breadcrumbDropdown).toHaveAttribute('data-catalog-example-active', 'true');
+  await expect(breadcrumbDropdown).toBeFocused();
+
+  await page.goBack();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('button');
+  await expect.poll(() => new URL(page.url()).searchParams.get('example')).toBe('spinner');
+  await expect(buttonSpinner).toHaveAttribute('data-catalog-example-active', 'true');
+  await expect(buttonSpinner).toBeFocused();
+});
+
 test('documents the complete Button, Button Group, and Spinner action family in the owned Lab host', async ({ page }) => {
   const consoleErrors: string[] = [];
   const pageErrors: Error[] = [];

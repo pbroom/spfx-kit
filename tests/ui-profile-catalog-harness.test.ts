@@ -340,7 +340,11 @@ describe('Lab UI profile catalog harness', () => {
     expect(workspaceSource).toContain("import('./UiProfileCatalogHarness')");
     expect(workspaceSource).toContain('module.UiProfileCatalogHarness');
     expect(workspaceSource).toContain('<React.Suspense');
-    expect(workspaceSource).toContain('<UiProfileCatalogHarness activeComponent={activeComponent} />');
+    expect(workspaceSource).toContain(
+      '<UiProfileCatalogHarness activeComponent={activeComponent} activeExample={activeExample} />'
+    );
+    expect(workspaceSource).toContain('example.id === route.example');
+    expect(workspaceSource).toContain('data-ui-library-active-example={activeExample}');
     expect(workspaceSource).toContain('const includedComponentCount = uiProfileCatalogEntries.length');
     expect(workspaceSource).toContain('aria-label="UI Library components"');
     expect(workspaceSource).toContain("aria-current={entry.id === activeComponent ? 'location' : undefined}");
@@ -349,6 +353,8 @@ describe('Lab UI profile catalog harness', () => {
     expect(harnessSource).toContain('aria-label="Shared UI component catalog"');
     expect(harnessSource).toContain("data-catalog-mode={activeComponent === undefined ? 'gallery' : 'single'}");
     expect(harnessSource).toContain('if (activeComponent !== undefined && !active) return null;');
+    expect(harnessSource).toContain('data-catalog-example-active={selected');
+    expect(harnessSource).toContain('<ActiveCatalogExampleContext.Provider value={activeExample}>');
     expect(harnessSource).not.toContain('<main aria-label="Shared UI component catalog"');
     expect(labSource).toContain('<UiLibraryWorkspace');
     expect(labSource).not.toContain('mountUiProfileCatalogHarness');

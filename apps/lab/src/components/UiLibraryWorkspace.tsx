@@ -33,6 +33,7 @@ export function UiLibraryWorkspace({ breakpoint, route, themeMode, onNavigate }:
   const activeComponent = isUiProfileCatalogComponentId(route.component) ? route.component : uiProfileCatalogEntries[0].id;
   const activeEntry = uiProfileCatalogEntries.find((entry) => entry.id === activeComponent) ?? uiProfileCatalogEntries[0];
   const activeDocumentation = uiProfileCatalogDocumentation[activeComponent];
+  const activeExample = activeDocumentation.examples?.some((example) => example.id === route.example) ? route.example : undefined;
   const pageSections = uiProfileCatalogPageSections(activeComponent);
   const examplesSection = pageSections.find((section) => section.kind === 'examples')!;
   const usageSection = pageSections.find((section) => section.kind === 'usage')!;
@@ -56,7 +57,12 @@ export function UiLibraryWorkspace({ breakpoint, route, themeMode, onNavigate }:
   }, [activeComponent]);
 
   return (
-    <div aria-labelledby="ui-library-title" className="ui-library-workspace" data-ui-library-workspace="ready">
+    <div
+      aria-labelledby="ui-library-title"
+      className="ui-library-workspace"
+      data-ui-library-active-example={activeExample}
+      data-ui-library-workspace="ready"
+    >
       <header className="ui-library-workspace__header">
         <div>
           <Badge variant="secondary">First-party Lab workspace</Badge>
@@ -111,7 +117,7 @@ export function UiLibraryWorkspace({ breakpoint, route, themeMode, onNavigate }:
               </div>
               <div className="ui-library-docs__preview-frame">
                 <React.Suspense fallback={<div role="status">Loading {activeEntry.title}…</div>}>
-                  <UiProfileCatalogHarness activeComponent={activeComponent} />
+                  <UiProfileCatalogHarness activeComponent={activeComponent} activeExample={activeExample} />
                 </React.Suspense>
               </div>
             </section>
