@@ -157,8 +157,11 @@ describe('committed build integration', () => {
       'utf8'
     );
 
-    expect(packageJson.scripts.build).toMatch(/^spfx-ui-profile-prepare && spfx-ui-profile-verify && heft /u);
-    expect(packageJson.scripts.ship).toMatch(/^spfx-ui-profile-prepare && spfx-ui-profile-verify && heft /u);
+    expect(packageJson.scripts['prepare:ui-profile']).toBe(
+      'npm --prefix ../.. --workspace @spfx-kit/ui-profile run build:runtime && spfx-ui-profile-prepare && spfx-ui-profile-verify'
+    );
+    expect(packageJson.scripts.build).toMatch(/^npm run prepare:ui-profile && heft /u);
+    expect(packageJson.scripts.ship).toMatch(/^npm run prepare:ui-profile && heft /u);
     expect(webpackPatch.patchFiles).toEqual(['./config/webpack-patch/ui-profile.cjs']);
     expect(source).toContain("import '@spfx-kit/ui-profile/styles.css';");
   });
