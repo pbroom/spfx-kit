@@ -56,6 +56,8 @@ import {
 } from './lib/pinnedApp';
 import type { LabPackageMode } from './lib/packageMode';
 import { LegacyFluentShellIslands } from './components/LegacyFluentShellIslands';
+import { UiLibraryWorkspace, UiLibraryWorkspaceDetails } from './components/UiLibraryWorkspace';
+import { parseLabWorkspaceRoute, serializeLabWorkspaceRoute, type LabWorkspaceRoute } from './lib/uiLibraryRoute';
 import { createLabUiThemeTokens } from './ui-profile/lab-theme';
 
 type PropsByWebPart = Record<string, LabPropertyBag>;
@@ -97,9 +99,13 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
   const [panelCollapsed, setPanelCollapsed] = React.useState(false);
   const [webPartPickerOpen, setWebPartPickerOpen] = React.useState(false);
   const [pinAnnouncement, setPinAnnouncement] = React.useState('');
+  const [workspaceRoute, setWorkspaceRoute] = React.useState<LabWorkspaceRoute>(() =>
+    parseLabWorkspaceRoute(window.location.search)
+  );
   const [propsByWebPart, setPropsByWebPart] = React.useState<PropsByWebPart>(() =>
     Object.fromEntries(webParts.map((webPart) => [webPart.id, { ...webPart.defaultProps }]))
   );
+  const uiLibraryMode = workspaceRoute.workspace === 'ui-library';
 
   React.useEffect(() => {
     if (!selectedId && webParts[0]) {
@@ -108,12 +114,29 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
   }, [selectedId, webParts]);
 
   React.useEffect(() => {
+    const handlePopState = (): void => setWorkspaceRoute(parseLabWorkspaceRoute(window.location.search));
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  React.useEffect(() => {
+    if (!uiLibraryMode) {
+      return;
+    }
+    setAppSidebarOpen(false);
+    setAddDrawerOpen(false);
+    setExportDrawerOpen(false);
+    setLocalCdnBucketOpen(false);
+    setWebPartPickerOpen(false);
+  }, [uiLibraryMode]);
+
+  React.useEffect(() => {
     const handleAppCommandShortcut = (event: KeyboardEvent): void => {
       const key = event.key.toLowerCase();
       const isAppCommandShortcut =
         (key === 'o' || key === 'n' || key === 'e') && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey;
 
-      if (displayMode !== 'edit' || !isAppCommandShortcut || event.defaultPrevented || event.repeat) {
+      if (uiLibraryMode || displayMode !== 'edit' || !isAppCommandShortcut || event.defaultPrevented || event.repeat) {
         return;
       }
 
@@ -134,7 +157,7 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
 
     window.addEventListener('keydown', handleAppCommandShortcut);
     return () => window.removeEventListener('keydown', handleAppCommandShortcut);
-  }, [displayMode]);
+  }, [displayMode, uiLibraryMode]);
 
   const activeBreakpoint = SHAREPOINT_BREAKPOINTS.find((item) => item.id === breakpointId) || SHAREPOINT_BREAKPOINTS[0];
   const theme = createLabTheme(themeMode, customBackground);
@@ -147,14 +170,25 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
   const activeProps = selected ? propsByWebPart[selected.id] || selected.defaultProps : {};
   const webPartsByAppId = React.useMemo(() => groupWebPartsByAppId(webParts), [webParts]);
   const context = React.useMemo(() => createMockSpfxContext(), []);
-  const viewerMode = displayMode === 'viewer';
-  const panelHeaderOnly = viewerMode || panelCollapsed;
-  const effectiveBoundsVisible = displayMode === 'edit' && boundsVisible;
+  const viewerMode = !uiLibraryMode && displayMode === 'viewer';
+  const effectiveDisplayMode: LabDisplayMode = uiLibraryMode ? 'edit' : displayMode;
+  const panelHeaderOnly = !uiLibraryMode && (viewerMode || panelCollapsed);
+  const effectiveBoundsVisible = !uiLibraryMode && displayMode === 'edit' && boundsVisible;
   const ignorePropertyUpdate = React.useCallback((): void => undefined, []);
 
   React.useEffect(() => {
     uiHost.applyTheme(createLabUiThemeTokens(themeMode, theme));
   }, [theme, themeMode, uiHost]);
+
+  const navigateWorkspace = React.useCallback((route: LabWorkspaceRoute): void => {
+    const search = serializeLabWorkspaceRoute(window.location.search, route);
+    const nextUrl = `${window.location.pathname}${search}${window.location.hash}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextUrl !== currentUrl) {
+      window.history.pushState(null, '', nextUrl);
+    }
+    setWorkspaceRoute(route);
+  }, []);
 
   const updateProps = (patch: LabPropertyBag): void => {
     if (!selected) {
@@ -261,30 +295,33 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
 
   return (
     <main
-      className={`lab-shell lab-shell--${themeMode} lab-shell--${displayMode} ${
+      className={`lab-shell lab-shell--${themeMode} lab-shell--${effectiveDisplayMode} ${
         panelHeaderOnly ? 'lab-shell--panel-header-only' : ''
       }`}
-      data-display-mode={displayMode}
+      data-display-mode={effectiveDisplayMode}
+      data-lab-workspace={workspaceRoute.workspace}
       style={{ '--lab-section-background': theme.background } as React.CSSProperties}
     >
-      <AppManagementSidebar
-        contentId={appManagementContentId}
-        open={appSidebarOpen}
-        pinnedAppId={pinnedAppId}
-        selectedAppId={selected?.appId || ''}
-        triggerId={appManagementTriggerId}
-        webPartsByAppId={webPartsByAppId}
-        onOpenChange={setAppSidebarOpen}
-        onOpenExport={openExportDrawer}
-        onOpenImport={() => openAddAppDrawer('import')}
-        onSelectApp={selectApp}
-        onTogglePinned={togglePinnedAppById}
-      />
+      {!uiLibraryMode ? (
+        <AppManagementSidebar
+          contentId={appManagementContentId}
+          open={appSidebarOpen}
+          pinnedAppId={pinnedAppId}
+          selectedAppId={selected?.appId || ''}
+          triggerId={appManagementTriggerId}
+          webPartsByAppId={webPartsByAppId}
+          onOpenChange={setAppSidebarOpen}
+          onOpenExport={openExportDrawer}
+          onOpenImport={() => openAddAppDrawer('import')}
+          onSelectApp={selectApp}
+          onTogglePinned={togglePinnedAppById}
+        />
+      ) : null}
 
-      <section className="preview-area" aria-label="Web part preview area">
-        <div className={`lab-toolbar lab-toolbar--preview lab-toolbar--${displayMode}`}>
+      <section className="preview-area" aria-label={uiLibraryMode ? 'UI Library' : 'Web part preview area'}>
+        <div className={`lab-toolbar lab-toolbar--preview lab-toolbar--${effectiveDisplayMode}`}>
           <div className="preview-toolbar__primary">
-            {displayMode === 'edit' ? (
+            {!uiLibraryMode && displayMode === 'edit' ? (
               <div className="app-menu-control" aria-label="App menu">
                 <IconButton
                   controls={appManagementContentId}
@@ -295,54 +332,60 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
                 >
                   <MenuIcon size={16} />
                 </IconButton>
-                <IconButton label="Export package" onClick={openExportDrawer}>
+                <IconButton label="Export package" onClick={() => openExportDrawer()}>
                   <Upload size={16} />
                 </IconButton>
               </div>
             ) : null}
 
-            <div className="package-mode-control">
-              <Tabs
-                className="lab-tabs-root"
-                value={packageMode}
-                onValueChange={(nextValue) => selectPackageMode(nextValue as LabPackageMode)}
-              >
-                <TabsList aria-label="App package mode" className="lab-mode-tabs package-mode-tabs">
-                  <TabsTrigger value="standalone">Standalone</TabsTrigger>
-                  <TabsTrigger
-                    aria-describedby="cdn-package-mode-description"
-                    title="Local mock-CDN staged-bundle smoke check (not a SharePoint preview)"
-                    value="cdn"
-                  >
-                    CDN
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-              <span className="visually-hidden" id="cdn-package-mode-description">
-                CDN runs a staged bundle smoke check, not a SharePoint or deployment preview.
-              </span>
-            </div>
+            {!uiLibraryMode ? (
+              <div className="package-mode-control">
+                <Tabs
+                  className="lab-tabs-root"
+                  value={packageMode}
+                  onValueChange={(nextValue) => selectPackageMode(nextValue as LabPackageMode)}
+                >
+                  <TabsList aria-label="App package mode" className="lab-mode-tabs package-mode-tabs">
+                    <TabsTrigger value="standalone">Standalone</TabsTrigger>
+                    <TabsTrigger
+                      aria-describedby="cdn-package-mode-description"
+                      title="Local mock-CDN staged-bundle smoke check (not a SharePoint preview)"
+                      value="cdn"
+                    >
+                      CDN
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                <span className="visually-hidden" id="cdn-package-mode-description">
+                  CDN runs a staged bundle smoke check, not a SharePoint or deployment preview.
+                </span>
+              </div>
+            ) : null}
 
-            <Button
-              aria-label="Local CDN bucket"
-              className="preview-toolbar__bucket-button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setLocalCdnBucketOpen(true)}
-            >
-              Local CDN
-            </Button>
+            {!uiLibraryMode ? (
+              <Button
+                aria-label="Local CDN bucket"
+                className="preview-toolbar__bucket-button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setLocalCdnBucketOpen(true)}
+              >
+                Local CDN
+              </Button>
+            ) : null}
           </div>
 
-          {displayMode === 'edit' ? (
+          {effectiveDisplayMode === 'edit' ? (
             <div className="preview-toolbar__center">
-              <IconButton
-                label={boundsVisible ? 'Hide preview bounds' : 'Show preview bounds'}
-                pressed={boundsVisible}
-                onClick={() => setBoundsVisible((value) => !value)}
-              >
-                <SquareDashed size={16} />
-              </IconButton>
+              {!uiLibraryMode ? (
+                <IconButton
+                  label={boundsVisible ? 'Hide preview bounds' : 'Show preview bounds'}
+                  pressed={boundsVisible}
+                  onClick={() => setBoundsVisible((value) => !value)}
+                >
+                  <SquareDashed size={16} />
+                </IconButton>
+              ) : null}
 
               <Tabs
                 className="lab-tabs-root"
@@ -407,168 +450,196 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
           )}
 
           <div className="preview-toolbar__modes">
-            <Tabs
-              className="lab-tabs-root"
-              value={displayMode}
-              onValueChange={(nextValue) => selectDisplayMode(nextValue as LabDisplayMode)}
+            <Button
+              aria-label={uiLibraryMode ? 'Return to Lab workspace' : 'Open UI Library'}
+              className="preview-toolbar__workspace-button"
+              size="sm"
+              variant="ghost"
+              onClick={() => navigateWorkspace(uiLibraryMode ? { workspace: 'lab' } : { workspace: 'ui-library' })}
             >
-              <TabsList aria-label="Lab display mode" className="lab-mode-tabs">
-                <TabsTrigger value="edit">
-                  <Pencil aria-hidden="true" data-icon="inline-start" />
-                  Edit
-                </TabsTrigger>
-                <TabsTrigger value="viewer">
-                  <Eye aria-hidden="true" data-icon="inline-start" />
-                  Viewer
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+              {uiLibraryMode ? 'Lab' : 'UI Library'}
+            </Button>
+            {!uiLibraryMode ? (
+              <Tabs
+                className="lab-tabs-root"
+                value={displayMode}
+                onValueChange={(nextValue) => selectDisplayMode(nextValue as LabDisplayMode)}
+              >
+                <TabsList aria-label="Lab display mode" className="lab-mode-tabs">
+                  <TabsTrigger value="edit">
+                    <Pencil aria-hidden="true" data-icon="inline-start" />
+                    Edit
+                  </TabsTrigger>
+                  <TabsTrigger value="viewer">
+                    <Eye aria-hidden="true" data-icon="inline-start" />
+                    Viewer
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            ) : null}
           </div>
         </div>
 
-        <PackageRuntimeSurface
-          boundsVisible={effectiveBoundsVisible}
-          frameWidth={activeBreakpoint.width}
-          mode={packageMode}
-          selectionRevision={cdnSelectionRevision}
-          selected={selected}
-          standaloneContent={standalonePreview}
-        />
+        {workspaceRoute.workspace === 'ui-library' ? (
+          <UiLibraryWorkspace
+            breakpoint={activeBreakpoint}
+            route={workspaceRoute}
+            themeMode={themeMode}
+            onNavigate={navigateWorkspace}
+          />
+        ) : (
+          <PackageRuntimeSurface
+            boundsVisible={effectiveBoundsVisible}
+            frameWidth={activeBreakpoint.width}
+            mode={packageMode}
+            selectionRevision={cdnSelectionRevision}
+            selected={selected}
+            standaloneContent={standalonePreview}
+          />
+        )}
       </section>
 
       <aside
-        aria-label="Options panel"
-        className={`options-panel ${panelHeaderOnly ? 'options-panel--header-only' : ''}`}
+        aria-label={uiLibraryMode ? 'UI Library details' : 'Options panel'}
+        className={`options-panel ${uiLibraryMode ? 'options-panel--ui-library' : ''} ${
+          panelHeaderOnly ? 'options-panel--header-only' : ''
+        }`}
         data-panel-state={panelHeaderOnly ? 'header-only' : 'expanded'}
       >
-        <>
-          <div className="lab-toolbar lab-toolbar--panel">
-            <Select
-              id={webPartSelectId}
-              items={Object.fromEntries(webParts.map((webPart) => [webPart.id, webPart.title]))}
-              open={webPartPickerOpen}
-              value={selected?.id || null}
-              onValueChange={(nextValue) => {
-                if (nextValue) setSelectedId(String(nextValue));
-              }}
-              onOpenChange={(open) => setWebPartPickerOpen(open)}
-            >
-              <SelectTrigger
-                aria-label="Select web part"
-                className="webpart-select"
-                size="sm"
-                onKeyDown={(event) => {
-                  if (
-                    !webPartPickerOpen ||
-                    event.repeat ||
-                    !event.altKey ||
-                    event.ctrlKey ||
-                    event.metaKey ||
-                    event.getModifierState('AltGraph') ||
-                    event.code !== 'KeyP'
-                  ) {
-                    return;
-                  }
-                  const activeWebPart = selected;
-                  if (!activeWebPart) {
-                    return;
-                  }
-                  event.preventDefault();
-                  event.stopPropagation();
-                  togglePinnedApp(activeWebPart);
+        {workspaceRoute.workspace === 'ui-library' ? (
+          <UiLibraryWorkspaceDetails breakpoint={activeBreakpoint} route={workspaceRoute} themeMode={themeMode} />
+        ) : (
+          <>
+            <div className="lab-toolbar lab-toolbar--panel">
+              <Select
+                id={webPartSelectId}
+                items={Object.fromEntries(webParts.map((webPart) => [webPart.id, webPart.title]))}
+                open={webPartPickerOpen}
+                value={selected?.id || null}
+                onValueChange={(nextValue) => {
+                  if (nextValue) setSelectedId(String(nextValue));
                 }}
+                onOpenChange={(open) => setWebPartPickerOpen(open)}
               >
-                <SelectValue>{selected?.title || ''}</SelectValue>
-              </SelectTrigger>
-              <SelectContent align="start" id={webPartSelectContentId}>
-                <SelectGroup>
-                  {webParts.map((webPart) => {
-                    const appPinned = pinnedAppId === getLabAppId(webPart);
-                    return (
-                      <div
-                        className={`webpart-option-row ${appPinned ? 'webpart-option-row--pinned' : ''}`}
-                        key={webPart.id}
-                        role="presentation"
-                      >
-                        <SelectItem
-                          aria-label={`${webPart.title}. ${appPinned ? 'Pinned' : 'Not pinned'}. Press Alt+P to ${
-                            appPinned ? 'unpin' : 'pin'
-                          }.`}
-                          className="webpart-option"
-                          value={webPart.id}
+                <SelectTrigger
+                  aria-label="Select web part"
+                  className="webpart-select"
+                  size="sm"
+                  onKeyDown={(event) => {
+                    if (
+                      !webPartPickerOpen ||
+                      event.repeat ||
+                      !event.altKey ||
+                      event.ctrlKey ||
+                      event.metaKey ||
+                      event.getModifierState('AltGraph') ||
+                      event.code !== 'KeyP'
+                    ) {
+                      return;
+                    }
+                    const activeWebPart = selected;
+                    if (!activeWebPart) {
+                      return;
+                    }
+                    event.preventDefault();
+                    event.stopPropagation();
+                    togglePinnedApp(activeWebPart);
+                  }}
+                >
+                  <SelectValue>{selected?.title || ''}</SelectValue>
+                </SelectTrigger>
+                <SelectContent align="start" id={webPartSelectContentId}>
+                  <SelectGroup>
+                    {webParts.map((webPart) => {
+                      const appPinned = pinnedAppId === getLabAppId(webPart);
+                      return (
+                        <div
+                          className={`webpart-option-row ${appPinned ? 'webpart-option-row--pinned' : ''}`}
+                          key={webPart.id}
+                          role="presentation"
                         >
-                          <span className="webpart-option__label">{webPart.title}</span>
-                        </SelectItem>
-                        <button
-                          aria-label={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
-                          aria-pressed={appPinned}
-                          className="webpart-option__pin"
-                          title={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
-                          type="button"
-                          onPointerDown={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            togglePinnedApp(webPart);
-                          }}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            if (event.detail === 0) togglePinnedApp(webPart);
-                          }}
-                        >
-                          <Pin aria-hidden="true" fill={appPinned ? 'currentColor' : 'none'} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <span aria-live="polite" className="visually-hidden" role="status">
-              {pinAnnouncement}
-            </span>
-            <IconButton
-              label={
-                panelHeaderOnly
-                  ? viewerMode
-                    ? 'Expand options panel and switch to edit mode'
-                    : 'Expand options panel'
-                  : 'Collapse options panel'
-              }
-              pressed={panelHeaderOnly}
-              onClick={panelHeaderOnly ? expandOptionsPanel : () => setPanelCollapsed(true)}
-            >
-              <HugeiconsIcon aria-hidden="true" className="huge-icon" icon={LayoutRightIcon} size={16} strokeWidth={1.7} />
-            </IconButton>
-          </div>
-          {!panelHeaderOnly ? (
-            <PropertyPane themeMode={themeMode} webPart={selected} values={activeProps} onChange={updateProps} />
-          ) : null}
-        </>
+                          <SelectItem
+                            aria-label={`${webPart.title}. ${appPinned ? 'Pinned' : 'Not pinned'}. Press Alt+P to ${
+                              appPinned ? 'unpin' : 'pin'
+                            }.`}
+                            className="webpart-option"
+                            value={webPart.id}
+                          >
+                            <span className="webpart-option__label">{webPart.title}</span>
+                          </SelectItem>
+                          <button
+                            aria-label={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
+                            aria-pressed={appPinned}
+                            className="webpart-option__pin"
+                            title={`${appPinned ? 'Unpin' : 'Pin'} ${webPart.title} as startup app`}
+                            type="button"
+                            onPointerDown={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              togglePinnedApp(webPart);
+                            }}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              if (event.detail === 0) togglePinnedApp(webPart);
+                            }}
+                          >
+                            <Pin aria-hidden="true" fill={appPinned ? 'currentColor' : 'none'} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <span aria-live="polite" className="visually-hidden" role="status">
+                {pinAnnouncement}
+              </span>
+              <IconButton
+                label={
+                  panelHeaderOnly
+                    ? viewerMode
+                      ? 'Expand options panel and switch to edit mode'
+                      : 'Expand options panel'
+                    : 'Collapse options panel'
+                }
+                pressed={panelHeaderOnly}
+                onClick={panelHeaderOnly ? expandOptionsPanel : () => setPanelCollapsed(true)}
+              >
+                <HugeiconsIcon aria-hidden="true" className="huge-icon" icon={LayoutRightIcon} size={16} strokeWidth={1.7} />
+              </IconButton>
+            </div>
+            {!panelHeaderOnly ? (
+              <PropertyPane themeMode={themeMode} webPart={selected} values={activeProps} onChange={updateProps} />
+            ) : null}
+          </>
+        )}
       </aside>
 
-      <LegacyFluentShellIslands themeMode={themeMode}>
-        <LocalCdnBucketDialog
-          open={localCdnBucketOpen}
-          onOpenChange={setLocalCdnBucketOpen}
-          onSelectionChanged={() => setCdnSelectionRevision((revision) => revision + 1)}
-          selectedAppId={selected?.appId || ''}
-        />
-        {displayMode === 'edit' ? (
-          <>
-            <AddAppDrawer open={addDrawerOpen} mode={addMode} onOpenChange={setAddDrawerOpen} onModeChange={setAddMode} />
+      {!uiLibraryMode ? (
+        <LegacyFluentShellIslands themeMode={themeMode}>
+          <LocalCdnBucketDialog
+            open={localCdnBucketOpen}
+            onOpenChange={setLocalCdnBucketOpen}
+            onSelectionChanged={() => setCdnSelectionRevision((revision) => revision + 1)}
+            selectedAppId={selected?.appId || ''}
+          />
+          {displayMode === 'edit' ? (
+            <>
+              <AddAppDrawer open={addDrawerOpen} mode={addMode} onOpenChange={setAddDrawerOpen} onModeChange={setAddMode} />
 
-            <ExportDrawer
-              open={exportDrawerOpen}
-              onOpenChange={setExportDrawerOpen}
-              webParts={webParts}
-              selected={selected}
-              initialTargets={exportTargets}
-              onSelectApp={setSelectedId}
-            />
-          </>
-        ) : null}
-      </LegacyFluentShellIslands>
+              <ExportDrawer
+                open={exportDrawerOpen}
+                onOpenChange={setExportDrawerOpen}
+                webParts={webParts}
+                selected={selected}
+                initialTargets={exportTargets}
+                onSelectApp={setSelectedId}
+              />
+            </>
+          ) : null}
+        </LegacyFluentShellIslands>
+      ) : null}
     </main>
   );
 }
