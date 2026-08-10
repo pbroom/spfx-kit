@@ -173,6 +173,7 @@ describe('@spfx-kit/ui-profile public package', () => {
       'apps/lab/src/components/ColorField.tsx',
       'apps/lab/src/components/PackageRuntimeSurface.tsx',
       'apps/lab/src/components/PropertyPane.tsx',
+      'apps/lab/src/components/UiLibraryWorkspace.tsx',
       'apps/lab/src/components/UiProfileContractHarness.tsx',
       'apps/lab/vite.config.ts',
       'examples/hello-card-spfx/src/webparts/helloCard/HelloCard.ts',

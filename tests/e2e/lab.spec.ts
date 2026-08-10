@@ -185,6 +185,65 @@ test('loads the committed web part and supports a core toolbar interaction', asy
   await expect(webPartContent.locator('xpath=ancestor::*[@data-spfx-ui-portal-host]')).toHaveCount(1);
 });
 
+test('navigates to the first-party UI Library without exposing app, export, or CDN behavior', async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  await page.addInitScript((key) => window.localStorage.setItem(key, 'hello-card-spfx'), pinnedAppStorageKey);
+  await page.goto('/');
+
+  const webPartSelector = page.getByRole('combobox', { name: 'Select web part' });
+  await webPartSelector.click();
+  await expect(page.getByRole('listbox').getByRole('option', { name: /^UI Library/u })).toHaveCount(0);
+  await page.getByRole('listbox').press('Escape');
+  await expect(page.getByRole('listbox')).toBeHidden();
+
+  await page.getByRole('button', { name: 'Open UI Library' }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('workspace')).toBe('ui-library');
+  const catalog = page.getByRole('region', { name: 'UI Library' });
+  await expect(catalog).toBeVisible();
+  await expect(catalog.getByRole('heading', { name: 'UI Library' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open app menu' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Export package' })).toHaveCount(0);
+  await expect(page.getByRole('tablist', { name: 'App package mode' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Local CDN bucket' })).toHaveCount(0);
+  await expect(page.getByRole('tablist', { name: 'Lab display mode' })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Select web part' })).toHaveCount(0);
+  await expect(page.getByRole('complementary', { name: 'Options panel' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Web part preview area' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Theme: Light' })).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('complementary', { name: 'UI Library details' })).toBeHidden();
+  await expect(catalog.getByRole('heading', { name: 'Button', exact: true })).toBeVisible();
+
+  for (const shortcut of ['Control+e', 'Control+o', 'Control+n']) {
+    await page.keyboard.press(shortcut);
+  }
+  await expect(page.getByRole('combobox', { name: 'Select app to export' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Close add SPFx app drawer' })).toHaveCount(0);
+
+  await page.goBack();
+  const restoredPreview = page.getByRole('region', { name: 'Web part preview area' });
+  await expect(restoredPreview).toBeVisible();
+  await expect(restoredPreview.getByRole('heading', { name: 'Hello Card' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Select web part' })).toContainText('Hello Card');
+
+  await page.goForward();
+  await expect(page.getByRole('region', { name: 'UI Library' })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get('workspace')).toBe('ui-library');
+
+  await page.getByRole('button', { name: 'Return to Lab workspace' }).click();
+  await expect(page.getByRole('region', { name: 'Web part preview area' })).toBeVisible();
+  await expect(page.locator('.preview-toolbar__primary')).toHaveCSS('overflow-x', 'auto');
+  await page.getByRole('button', { name: 'Export package' }).click();
+  expect(pageErrors.map((error) => error.stack)).toEqual([]);
+  const exportSelector = page.getByRole('combobox', { name: 'Select app to export' });
+  await exportSelector.click();
+  const exportOptions = page.getByRole('listbox');
+  await expect(exportOptions.getByRole('option', { name: 'Hello Card' })).toBeVisible();
+  await expect(exportOptions.getByRole('option', { name: /^UI Library$/u })).toHaveCount(0);
+});
+
 test('orders the segmented package mode and bucket controls after export while keeping display mode independent', async ({
   page
 }) => {
