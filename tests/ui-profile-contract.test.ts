@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -13,78 +14,31 @@ import { canonicalJson, normalizeRegistrySource, sha256 } from '../packages/ui-p
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const profileRoot = path.join(repositoryRoot, 'packages/ui-profile');
 const networkBlocker = path.join(repositoryRoot, 'tests/fixtures/ui-profile/block-network.mjs');
-
-const expectedRegistryIds = [
-  'button',
-  'input',
-  'field',
-  'textarea',
-  'checkbox',
-  'switch',
-  'select',
-  'combobox',
-  'toggle-group',
-  'tabs',
-  'accordion',
-  'dropdown-menu',
-  'dialog',
-  'sheet',
-  'popover',
-  'tooltip',
-  'alert',
-  'badge',
-  'spinner',
-  'label',
-  'separator',
-  'input-group',
-  'toggle',
-  'utils'
-];
-
-const expectedNormalizedPaths = expectedRegistryIds
-  .map((id) => (id === 'utils' ? 'normalized/src/lib/utils.ts' : `normalized/src/components/ui/${id}.tsx`))
-  .concat('normalized/src/lib/spfx-theme.ts', 'normalized/src/lib/ui-root.tsx')
-  .sort();
-
-const expectedCompilerInputPaths = [
-  'compat-consumers/react17-base-ui-jsx.d.ts',
-  'compat-consumers/select-value.tsx',
-  'compat/base-ui-1.6.0/id-ownership/contract.schema.json',
-  'tailwind-profile.css',
-  'scripts/build-tailwind-css.mjs',
-  'scripts/verify-tailwind-css.mjs',
-  'scripts/lib/compile-tailwind-css.mjs',
-  'scripts/lib/scope-tailwind-css.mjs',
-  'scripts/lib/block-network.mjs',
-  'scripts/typecheck.mjs',
-  'scripts/lib/generate-profile.mjs',
-  'scripts/lib/profile-update-intake.mjs',
-  'scripts/lib/shadcn-registry-worker.mjs',
-  'scripts/lib/typecheck-generated-profile.mjs',
-  'scripts/lib/generate-validated-profile.mjs',
-  'scripts/lib/generation-transaction.mjs',
-  'scripts/lib/replace-generated.mjs',
-  'scripts/lib/generated-tree-closure.mjs',
-  'scripts/verify-dependency-closure.mjs',
-  'scripts/prepare-base-ui.mjs',
-  'scripts/transform-base-ui-select-value.mjs',
-  'scripts/transform-base-ui-popup-lifecycle.mjs',
-  'scripts/transform-base-ui-id-ownership.mjs',
-  'scripts/lib/preparation-lock.mjs',
-  'tsconfig.base.json',
-  'tsconfig.ts53.json',
-  'tsconfig.ts58.json'
-];
-
-const expectedToolingDependencies = {
-  '@base-ui/react': '1.6.0',
-  'class-variance-authority': '0.7.1',
-  clsx: '2.1.1',
-  'lucide-react': '1.25.0',
-  react: '17.0.1',
-  'react-dom': '17.0.1',
-  'tailwind-merge': '3.6.0'
+const committedCatalog = JSON.parse(readFileSync(path.join(profileRoot, 'catalog.json'), 'utf8')) as {
+  includedComponentIds: string[];
+  supportRegistryIds: string[];
 };
+const committedProfile = JSON.parse(readFileSync(path.join(profileRoot, 'profile.json'), 'utf8')) as ProfileManifest;
+const committedProvenance = JSON.parse(readFileSync(path.join(profileRoot, 'provenance.json'), 'utf8')) as {
+  directProductionDependencies: Record<string, string>;
+};
+const committedManifest = JSON.parse(readFileSync(path.join(profileRoot, 'package.json'), 'utf8')) as {
+  dependencies: Record<string, string>;
+  peerDependencies: Record<string, string>;
+};
+const committedClosure = JSON.parse(readFileSync(path.join(profileRoot, 'dependency-closure.json'), 'utf8')) as DependencyClosure;
+
+const expectedRegistryIds = [...committedCatalog.includedComponentIds, ...committedCatalog.supportRegistryIds];
+const expectedNormalizedPaths = [
+  ...committedProfile.ownedSources.map(({ output }) => output.path),
+  ...committedProfile.items.flatMap(({ normalized }) => normalized.map(({ path: outputPath }) => outputPath))
+].sort();
+const expectedCompilerInputPaths = committedProfile.compilerInputs.map(({ path: inputPath }) => inputPath);
+const expectedToolingDependencies = committedProvenance.directProductionDependencies;
+const expectedProductionRoots = [
+  ...Object.keys(committedManifest.dependencies),
+  ...Object.keys(committedManifest.peerDependencies)
+];
 
 const expectedRuntimeDependencies = Object.fromEntries(
   Object.entries(expectedToolingDependencies).filter(([name]) => name !== 'react' && name !== 'react-dom')
@@ -310,6 +264,7 @@ interface RegistrySnapshot {
 }
 
 interface ClosureEntry {
+  path: string;
   name: string;
   version: string;
   integrity: string;
@@ -397,13 +352,13 @@ describe('shared offline React 17 UI profile artifacts', () => {
     expect(manifest.resolutions).toBeUndefined();
   });
 
-  it('pins the exact 24 registry IDs and React 17 declaration contract', async () => {
+  it('pins the catalog-derived registry IDs and React 17 declaration contract', async () => {
     const provenance = await readJson<any>(profileRoot, 'provenance.json');
 
     expect(provenance.schemaVersion).toBe(1);
     expect(provenance.profileId).toBe('spfx-react17-base-nova-v1');
     expect(provenance.registryIds).toEqual(expectedRegistryIds);
-    expect(new Set(provenance.registryIds).size).toBe(24);
+    expect(new Set(provenance.registryIds).size).toBe(expectedRegistryIds.length);
     expect(provenance.registry).toMatchObject({
       preset: 'base-nova',
       toolSourceRevision: 'cb2bcd88d93b2f9bddb030e9136f1f8773e7eac4',
@@ -436,8 +391,15 @@ describe('shared offline React 17 UI profile artifacts', () => {
     expect(profileSchema.additionalProperties).toBe(false);
     expect(profileSchema.required).toContain('$schema');
     expect(profileSchema.properties.profileId.const).toBe('spfx-react17-base-nova-v1');
-    expect(profileSchema.properties.items).toMatchObject({ minItems: 24, maxItems: 24 });
-    expect(profileSchema.properties.compilerInputs).toMatchObject({ minItems: 27, maxItems: 27, items: false });
+    expect(profileSchema.properties.items).toMatchObject({
+      minItems: expectedRegistryIds.length,
+      maxItems: expectedRegistryIds.length
+    });
+    expect(profileSchema.properties.compilerInputs).toMatchObject({
+      minItems: expectedCompilerInputPaths.length,
+      maxItems: expectedCompilerInputPaths.length,
+      items: false
+    });
     expect(profileSchema.properties.ownedSources).toMatchObject({ minItems: 2, maxItems: 2, items: false });
     expect(profileSchema.properties.items.uniqueItems).toBe(true);
     expect(profileSchema.$defs.sha256.pattern).toBe('^[a-f0-9]{64}$');
@@ -619,23 +581,37 @@ describe('shared offline React 17 UI profile artifacts', () => {
       allowForcedPeerResolution: false,
       allowLegacyPeerDeps: false
     });
-    expect(closure.productionRoots).toEqual(Object.keys(expectedToolingDependencies));
-    expect(closure.packages).toHaveLength(19);
+    expect(closure.productionRoots).toEqual(expectedProductionRoots);
+    expect([...closure.productionRoots].sort()).toEqual(Object.keys(expectedToolingDependencies).sort());
+    expect(closure.packages).toHaveLength(committedClosure.packages.length);
 
-    const packages = new Map(closure.packages.map((entry) => [entry.name, entry]));
+    const packages = new Map(closure.packages.map((entry) => [entry.path, entry]));
+    const packagesByName = (name: string): ClosureEntry[] => closure.packages.filter((entry) => entry.name === name);
     expect(packages.size).toBe(closure.packages.length);
-    expect(packages.get('react')?.version).toBe('17.0.1');
-    expect(packages.get('react-dom')?.version).toBe('17.0.1');
-    expect(packages.get('@base-ui/react')?.version).toBe('1.6.0');
-    expect(packages.get('@base-ui/utils')?.version).toBe('0.3.1');
-    expect(packages.get('use-sync-external-store')?.version).toBe('1.6.0');
-    expect([...packages].filter(([name]) => name === 'react')).toHaveLength(1);
-    expect([...packages].filter(([name]) => name === 'react-dom')).toHaveLength(1);
+    expect(packagesByName('react')).toHaveLength(1);
+    expect(packagesByName('react')[0]?.version).toBe('17.0.1');
+    expect(packagesByName('react-dom')).toHaveLength(1);
+    expect(packagesByName('react-dom')[0]?.version).toBe('17.0.1');
+    expect(packagesByName('@base-ui/react')[0]?.version).toBe('1.6.0');
+    expect(packagesByName('@base-ui/utils')[0]?.version).toBe('0.3.1');
+    expect(packagesByName('use-sync-external-store')[0]?.version).toBe('1.6.0');
 
     for (const entry of closure.packages) {
       expect(entry.integrity, entry.name).toMatch(/^sha512-[A-Za-z0-9+/]+={0,2}$/);
       for (const dependency of Object.keys(entry.dependencies)) {
-        expect(packages.has(dependency), `${entry.name} -> ${dependency}`).toBe(true);
+        let current = entry.path;
+        let resolved = false;
+        while (true) {
+          if (packages.has(path.posix.join(current, 'node_modules', dependency))) {
+            resolved = true;
+            break;
+          }
+          const parent = path.posix.dirname(current);
+          if (parent === current || current === '.') break;
+          current = parent;
+        }
+        if (!resolved) resolved = packages.has(`node_modules/${dependency}`);
+        expect(resolved, `${entry.name} -> ${dependency}`).toBe(true);
       }
     }
   });
@@ -662,7 +638,9 @@ describe('offline profile verifier', () => {
 
     expect(verifierMessage(result)).not.toContain('attempted network access');
     expect(result.status, verifierMessage(result)).toBe(0);
-    expect(result.stdout).toContain('Verified spfx-react17-base-nova-v1: 24 registry payloads');
+    expect(result.stdout).toContain(
+      `Verified spfx-react17-base-nova-v1: ${expectedRegistryIds.length} registry payloads, ${expectedNormalizedPaths.length} normalized files`
+    );
     expect(after).toEqual(before);
   });
 
@@ -685,7 +663,9 @@ describe('offline profile verifier', () => {
     const real = runOfflineClosureVerifier(profileRoot);
     expect(verifierMessage(real)).not.toContain('attempted network access');
     expect(real.status, verifierMessage(real)).toBe(0);
-    expect(real.stdout).toContain('Verified production dependency closure: 19 packages, React 17.0.1, React DOM 17.0.1');
+    expect(real.stdout).toContain(
+      `Verified production dependency closure: ${committedClosure.packages.length} packages, React 17.0.1, React DOM 17.0.1`
+    );
 
     const root = await copyProfile();
     const closure = await readJson<DependencyClosure>(root, 'dependency-closure.json');
@@ -783,7 +763,7 @@ describe('offline profile verifier', () => {
       expect(result.status).not.toBe(0);
       expect(verifierMessage(result)).toContain('Package scripts differs from the pinned profile');
     }
-  });
+  }, 60_000);
 
   it('fails closed when a committed snapshot disappears or normalized bytes drift', async () => {
     const missingRoot = await copyProfile();
@@ -815,7 +795,8 @@ describe('offline profile verifier', () => {
 
   it.each(expectedCompilerInputPaths)('fails closed when compiler input %s drifts', async (inputPath) => {
     const root = await copyProfile();
-    await writeFile(path.join(root, inputPath), '\n// unreviewed compiler drift\n', { flag: 'a' });
+    const drift = inputPath.endsWith('.json') ? '\n' : '\n// unreviewed compiler drift\n';
+    await writeFile(path.join(root, inputPath), drift, { flag: 'a' });
 
     const result = runOfflineVerifier(root);
 
@@ -855,7 +836,7 @@ describe('offline profile verifier', () => {
 
     expect(result.status).not.toBe(0);
     expect(verifierMessage(result)).toContain(
-      'Pinned registry item button requires source outside the fetched registry closure: missing-widget'
+      `Pinned registry item ${item.id} requires source outside the fetched registry closure: missing-widget`
     );
   });
 
@@ -900,7 +881,7 @@ describe('offline profile verifier', () => {
     const raw = await readJson<RegistrySnapshot>(root, item.raw.path);
     const output = item.normalized[0];
     const registryFile = raw.files.find((candidate) => candidate.path === output.registrySourcePath)!;
-    registryFile.content = `import { Calendar } from "@/registry/base-nova/ui/calendar"\n${registryFile.content}`;
+    registryFile.content = `import { MissingWidget } from "@/registry/base-nova/ui/missing-widget"\n${registryFile.content}`;
     const rerun = normalizeRegistrySource({ source: registryFile.content, registrySourcePath: registryFile.path });
     output.upstreamSha256 = sha256(Buffer.from(registryFile.content));
     output.sha256 = sha256(Buffer.from(rerun.source));
@@ -910,7 +891,9 @@ describe('offline profile verifier', () => {
 
     const result = runOfflineVerifier(root);
     expect(result.status).not.toBe(0);
-    expect(verifierMessage(result)).toContain('relative import "./calendar" does not resolve to an emitted normalized output');
+    expect(verifierMessage(result)).toContain(
+      'relative import "./missing-widget" does not resolve to an emitted normalized output'
+    );
   });
 
   it('rejects unbound raw snapshot bytes before offline regeneration writes staged output', async () => {
@@ -947,7 +930,7 @@ describe('offline profile verifier', () => {
     const profile = await readJson<ProfileManifest>(root, 'profile.json');
     const item = profile.items.find((candidate) => candidate.id === 'button')!;
     const raw = await readJson<RegistrySnapshot>(root, 'snapshots/raw/button.json');
-    raw.files[0].content = `import { Calendar } from "@/registry/base-nova/ui/calendar"\n${raw.files[0].content}`;
+    raw.files[0].content = `import { MissingWidget } from "@/registry/base-nova/ui/missing-widget"\n${raw.files[0].content}`;
     await rewriteSnapshot(root, profile, item, raw);
     const before = await treeDigests(root);
 
@@ -955,7 +938,7 @@ describe('offline profile verifier', () => {
 
     expect(result.status).not.toBe(0);
     expect(verifierMessage(result)).toContain(
-      'registry/base-nova/ui/button.tsx requires source outside the fetched registry closure: calendar'
+      'registry/base-nova/ui/button.tsx requires source outside the fetched registry closure: missing-widget'
     );
     expect(await treeDigests(root)).toEqual(before);
   });

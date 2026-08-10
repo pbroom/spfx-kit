@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,6 +28,11 @@ await withGeneratedProfileSession({ packageRoot, operation: 'update' }, async (g
   let operationFailure;
   try {
     await mkdir(path.join(stagingRoot, 'snapshots', 'raw'), { recursive: true });
+    await mkdir(path.join(stagingRoot, 'snapshots', 'catalog'), { recursive: true });
+    await copyFile(
+      path.join(packageRoot, 'snapshots', 'catalog', 'components.json'),
+      path.join(stagingRoot, 'snapshots', 'catalog', 'components.json')
+    );
     const snapshots = await fetchValidatedProfileUpdateSnapshots({
       packageRoot,
       provenance

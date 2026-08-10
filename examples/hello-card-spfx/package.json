@@ -10,8 +10,11 @@
     "prepare:ui-profile": "npm --prefix ../.. --workspace @spfx-kit/ui-profile run build:runtime && spfx-ui-profile-prepare && spfx-ui-profile-verify",
     "build": "npm run prepare:ui-profile && heft test --clean --production && heft package-solution --production",
     "clean": "heft clean",
+    "pretest": "npm run prepare:ui-profile",
     "test": "heft test",
+    "preserve": "npm run prepare:ui-profile",
     "serve": "heft start --clean",
+    "prestart": "npm run prepare:ui-profile",
     "start": "heft start --clean",
     "ship": "npm run prepare:ui-profile && heft test --clean --production && heft package-solution --production",
     "eject-webpack": "heft eject-webpack"

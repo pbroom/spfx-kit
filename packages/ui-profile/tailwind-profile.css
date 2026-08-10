@@ -1,5 +1,6 @@
 @import 'tailwindcss' source(none) prefix(skui);
 @import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 
 @source "./normalized/src";
 
@@ -78,6 +79,14 @@ input:where([type='button'], [type='reset'], [type='submit']),
   --color-border: var(--spfx-ui-color-border);
   --color-input: var(--spfx-ui-color-input);
   --color-ring: var(--spfx-ui-color-ring);
+  --color-sidebar: var(--spfx-ui-color-background);
+  --color-sidebar-foreground: var(--spfx-ui-color-foreground);
+  --color-sidebar-primary: var(--spfx-ui-color-primary);
+  --color-sidebar-primary-foreground: var(--spfx-ui-color-primary-foreground);
+  --color-sidebar-accent: var(--spfx-ui-color-accent);
+  --color-sidebar-accent-foreground: var(--spfx-ui-color-accent-foreground);
+  --color-sidebar-border: var(--spfx-ui-color-border);
+  --color-sidebar-ring: var(--spfx-ui-color-ring);
   --radius-sm: var(--spfx-ui-radius-sm);
   --radius-md: var(--spfx-ui-radius-md);
   --radius-lg: var(--spfx-ui-radius-lg);
@@ -85,10 +94,13 @@ input:where([type='button'], [type='reset'], [type='submit']),
   --font-heading: var(--spfx-ui-font-heading);
 }
 
-@utility no-scrollbar {
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
+:root {
+  --sidebar: var(--spfx-ui-color-background);
+  --sidebar-foreground: var(--spfx-ui-color-foreground);
+  --sidebar-primary: var(--spfx-ui-color-primary);
+  --sidebar-primary-foreground: var(--spfx-ui-color-primary-foreground);
+  --sidebar-accent: var(--spfx-ui-color-accent);
+  --sidebar-accent-foreground: var(--spfx-ui-color-accent-foreground);
+  --sidebar-border: var(--spfx-ui-color-border);
+  --sidebar-ring: var(--spfx-ui-color-ring);
 }

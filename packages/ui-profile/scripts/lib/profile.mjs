@@ -7,6 +7,7 @@ import ts from 'typescript';
 
 const require = createRequire(import.meta.url);
 const profileManifest = require('../../package.json');
+const catalogContract = require('../../catalog.json');
 
 export const PROFILE_ID = 'spfx-react17-base-nova-v1';
 export const PROFILE_SCHEMA_VERSION = 1;
@@ -14,30 +15,8 @@ export const GENERATOR_VERSION = '1.3.0';
 export const NORMALIZATION_CONTRACT_VERSION = 'react17-classic-jsx-skui-v4';
 export const TAILWIND_PREFIX = 'skui';
 export const REGISTRY_IDS = Object.freeze([
-  'button',
-  'input',
-  'field',
-  'textarea',
-  'checkbox',
-  'switch',
-  'select',
-  'combobox',
-  'toggle-group',
-  'tabs',
-  'accordion',
-  'dropdown-menu',
-  'dialog',
-  'sheet',
-  'popover',
-  'tooltip',
-  'alert',
-  'badge',
-  'spinner',
-  'label',
-  'separator',
-  'input-group',
-  'toggle',
-  'utils'
+  ...catalogContract.includedComponentIds,
+  ...catalogContract.supportRegistryIds
 ]);
 
 // These wrappers are intentionally not exported by their registry modules, but they
@@ -45,8 +24,28 @@ export const REGISTRY_IDS = Object.freeze([
 // ref normalization as the exported primitive wrappers when their props are
 // forwarded to Base UI.
 const INTERNAL_REF_WRAPPER_NAMES = new Set(['ComboboxClear', 'SheetOverlay']);
+const NON_REF_PUBLIC_WRAPPER_NAMES = new Set([
+  'AlertDialog',
+  'Calendar',
+  'ContextMenu',
+  'ContextMenuSub',
+  'Drawer',
+  'HoverCard',
+  'MenubarMenu',
+  'MenubarSub',
+  'Toaster',
+  'ToastProvider'
+]);
 
-const REMOVED_SHADCN_CLASS_MARKERS = new Set(['cn-menu-target', 'cn-menu-translucent', 'cn-rtl-flip']);
+const REMOVED_SHADCN_CLASS_MARKERS = new Set([
+  'cn-calendar-caption',
+  'cn-calendar-caption-label',
+  'cn-calendar-dropdown-root',
+  'cn-input-otp',
+  'cn-menu-target',
+  'cn-menu-translucent',
+  'cn-rtl-flip'
+]);
 const REPLACED_SHADCN_CLASS_MARKERS = new Map([['cn-font-heading', 'font-heading']]);
 
 export function assertRegistryIds(registryIds) {
@@ -153,11 +152,12 @@ export function assertTailwindCompilerClosure(lock, provenance) {
 
 export function outputPathForRegistrySource(registrySourcePath) {
   const normalized = registrySourcePath.replaceAll('\\', '/');
-  const match = normalized.match(/^registry\/base-nova\/(ui|lib)\/([^/]+\.(?:ts|tsx))$/);
+  const match = normalized.match(/^registry\/base-nova\/(ui|lib|hooks)\/([^/]+\.(?:ts|tsx))$/);
   if (!match) {
     throw new Error(`Unsupported Base Nova registry source path: ${registrySourcePath}`);
   }
-  return match[1] === 'ui' ? `normalized/src/components/ui/${match[2]}` : `normalized/src/lib/${match[2]}`;
+  if (match[1] === 'ui') return `normalized/src/components/ui/${match[2]}`;
+  return `normalized/src/${match[1]}/${match[2]}`;
 }
 
 function relativeImport(fromOutputPath, targetOutputPath) {
@@ -272,9 +272,14 @@ function rewriteModuleSpecifiers(source, label, rewrite) {
 }
 
 const portalOwnershipCounts = new Map([
+  ['registry/base-nova/ui/alert-dialog.tsx', 1],
   ['registry/base-nova/ui/combobox.tsx', 1],
+  ['registry/base-nova/ui/context-menu.tsx', 2],
   ['registry/base-nova/ui/dialog.tsx', 1],
+  ['registry/base-nova/ui/drawer.tsx', 1],
   ['registry/base-nova/ui/dropdown-menu.tsx', 2],
+  ['registry/base-nova/ui/hover-card.tsx', 1],
+  ['registry/base-nova/ui/navigation-menu.tsx', 1],
   ['registry/base-nova/ui/popover.tsx', 1],
   ['registry/base-nova/ui/select.tsx', 1],
   ['registry/base-nova/ui/sheet.tsx', 1],
@@ -282,9 +287,14 @@ const portalOwnershipCounts = new Map([
 ]);
 
 const portalPopupOwnershipCounts = new Map([
+  ['registry/base-nova/ui/alert-dialog.tsx', { AlertDialogContent: 1 }],
   ['registry/base-nova/ui/combobox.tsx', { ComboboxContent: 1 }],
+  ['registry/base-nova/ui/context-menu.tsx', { ContextMenuContent: 1 }],
   ['registry/base-nova/ui/dialog.tsx', { DialogContent: 1 }],
+  ['registry/base-nova/ui/drawer.tsx', { DrawerContent: 1 }],
   ['registry/base-nova/ui/dropdown-menu.tsx', { DropdownMenuContent: 1 }],
+  ['registry/base-nova/ui/hover-card.tsx', { HoverCardContent: 1 }],
+  ['registry/base-nova/ui/navigation-menu.tsx', { NavigationMenuPositioner: 1 }],
   ['registry/base-nova/ui/popover.tsx', { PopoverContent: 1 }],
   ['registry/base-nova/ui/select.tsx', { SelectContent: 1 }],
   ['registry/base-nova/ui/sheet.tsx', { SheetContent: 1 }],
@@ -293,16 +303,40 @@ const portalPopupOwnershipCounts = new Map([
 
 const portalPrimitiveContracts = new Map([
   [
+    'registry/base-nova/ui/alert-dialog.tsx',
+    { moduleSpecifier: '@base-ui/react/alert-dialog', importedName: 'AlertDialog', localName: 'AlertDialogPrimitive' }
+  ],
+  [
     'registry/base-nova/ui/combobox.tsx',
     { moduleSpecifier: '@base-ui/react/combobox', importedName: 'Combobox', localName: 'ComboboxPrimitive' }
+  ],
+  [
+    'registry/base-nova/ui/context-menu.tsx',
+    { moduleSpecifier: '@base-ui/react/context-menu', importedName: 'ContextMenu', localName: 'ContextMenuPrimitive' }
   ],
   [
     'registry/base-nova/ui/dialog.tsx',
     { moduleSpecifier: '@base-ui/react/dialog', importedName: 'Dialog', localName: 'DialogPrimitive' }
   ],
   [
+    'registry/base-nova/ui/drawer.tsx',
+    { moduleSpecifier: '@base-ui/react/drawer', importedName: 'Drawer', localName: 'DrawerPrimitive' }
+  ],
+  [
     'registry/base-nova/ui/dropdown-menu.tsx',
     { moduleSpecifier: '@base-ui/react/menu', importedName: 'Menu', localName: 'MenuPrimitive' }
+  ],
+  [
+    'registry/base-nova/ui/hover-card.tsx',
+    { moduleSpecifier: '@base-ui/react/preview-card', importedName: 'PreviewCard', localName: 'PreviewCardPrimitive' }
+  ],
+  [
+    'registry/base-nova/ui/navigation-menu.tsx',
+    {
+      moduleSpecifier: '@base-ui/react/navigation-menu',
+      importedName: 'NavigationMenu',
+      localName: 'NavigationMenuPrimitive'
+    }
   ],
   [
     'registry/base-nova/ui/popover.tsx',
@@ -506,6 +540,11 @@ function routeBaseUiPortalsThroughOwnedHost(source, registrySourcePath, outputPa
       const tag = node.tagName;
       if (ts.isPropertyAccessExpression(tag) && tag.name.text === 'Portal') {
         const functionName = enclosingFunctionName(node);
+        const idExpression =
+          registrySourcePath === 'registry/base-nova/ui/navigation-menu.tsx' &&
+          functionName === 'NavigationMenuPositioner'
+            ? 'id'
+            : 'props.id';
         if (
           portalPopupOwnershipCounts.get(registrySourcePath)?.[functionName] &&
           node.attributes.properties.some((attribute) => ts.isJsxSpreadAttribute(attribute))
@@ -536,12 +575,12 @@ function routeBaseUiPortalsThroughOwnedHost(source, registrySourcePath, outputPa
           portalRouteCounts.set(functionName, (portalRouteCounts.get(functionName) ?? 0) + 1);
         }
         const ownedPortalRender = portalWrapperFunctions.has(functionName)
-          ? ` render={useSpfxUiOwnedPortalRender(props.render, props.id, "${functionName}")}`
+          ? ` render={useSpfxUiOwnedPortalRender(props.render, ${idExpression}, "${functionName}")}`
           : '';
         insertions.push({
           position: node.attributes.end,
           text:
-            ' id={useSpfxUiPortalId(props.id)}' +
+            ` id={useSpfxUiPortalId(${idExpression})}` +
             ' container={useSpfxUiPortalHost()}' +
             ownedPortalRender
         });
@@ -562,6 +601,11 @@ function routeBaseUiPortalsThroughOwnedHost(source, registrySourcePath, outputPa
       }
       if (ts.isPropertyAccessExpression(tag) && tag.name.text === 'Popup') {
         const functionName = enclosingFunctionName(node);
+        const idExpression =
+          registrySourcePath === 'registry/base-nova/ui/navigation-menu.tsx' &&
+          functionName === 'NavigationMenuPositioner'
+            ? 'id'
+            : 'props.id';
         const expectedPopupCount = portalPopupOwnershipCounts.get(registrySourcePath)?.[functionName];
         if (expectedPopupCount) {
           assertPropsRestBinding(node);
@@ -573,11 +617,16 @@ function routeBaseUiPortalsThroughOwnedHost(source, registrySourcePath, outputPa
             throw new Error(`${outputPath}: upstream ${functionName} popup ID or render ownership is not accepted`);
           }
           popupCounts.set(functionName, (popupCounts.get(functionName) ?? 0) + 1);
+          const popupRender =
+            registrySourcePath === 'registry/base-nova/ui/navigation-menu.tsx' &&
+            functionName === 'NavigationMenuPositioner'
+              ? 'undefined'
+              : 'props.render';
           insertions.push({
             position: node.attributes.end,
             text:
-              ' id={props.id}' +
-              ` render={useSpfxUiOwnedRender(props.render, props.id, "${functionName}")}`
+              ` id={${idExpression}}` +
+              ` render={useSpfxUiOwnedRender(${popupRender}, ${idExpression}, "${functionName}")}`
           });
         }
       }
@@ -1183,6 +1232,8 @@ function refElementType(target, propsType) {
     /(?:React\.ComponentProps(?:WithRef|WithoutRef)?|useRender\.ComponentProps)<(["'][a-z][a-z0-9-]*["'])>/.exec(propsType);
   if (intrinsicProps) return `React.ElementRef<${intrinsicProps[1]}>`;
   if (/^(?:ButtonPrimitive|TogglePrimitive)$/.test(target)) return 'HTMLButtonElement';
+  if (target === 'ContextMenuPrimitive.Trigger') return 'HTMLDivElement';
+  if (target === 'PreviewCardPrimitive.Trigger') return 'HTMLAnchorElement';
   if (/(?:\.Trigger|\.Close|\.Clear|\.Tab)$/.test(target)) return 'HTMLButtonElement';
   if (/^(?:CheckboxPrimitive|SwitchPrimitive)\.Root$/.test(target)) return 'HTMLElement';
   if (/InputPrimitive$|\.Input$/.test(target)) return 'HTMLInputElement';
@@ -1228,6 +1279,7 @@ function isRegistrySourceTypeSpecifier(specifier) {
   return (
     specifier.startsWith('.') ||
     specifier === '@/registry/base-nova/lib/utils' ||
+    /^@\/registry\/base-nova\/hooks\/[a-z0-9-]+$/u.test(specifier) ||
     /^@\/registry\/base-nova\/ui\/[a-z0-9-]+$/u.test(specifier)
   );
 }
@@ -1475,6 +1527,7 @@ function normalizePublicForwardRefs(source, analysisOptions) {
     if (!ts.isFunctionDeclaration(statement) || !statement.name || !statement.body) continue;
     const name = statement.name.text;
     if (!exports.has(name) && !INTERNAL_REF_WRAPPER_NAMES.has(name)) continue;
+    if (NON_REF_PUBLIC_WRAPPER_NAMES.has(name)) continue;
     const modifiers = statement.modifiers ?? [];
     const parameter = statement.parameters[0];
     const hasOverloads = sourceFile.statements.filter(
@@ -2566,9 +2619,12 @@ function splitTailwindCandidateVariants(candidate) {
 }
 
 function prefixClassSelectors(selector) {
+  const isReviewedExternalClass = (className) => /^(?:rdp-|recharts-)/u.test(className);
   return selectorParser((root) => {
     root.walkClasses((node) => {
-      if (!node.value.startsWith(`${TAILWIND_PREFIX}:`)) node.value = `${TAILWIND_PREFIX}:${node.value}`;
+      if (!node.value.startsWith(`${TAILWIND_PREFIX}:`) && !isReviewedExternalClass(node.value)) {
+        node.value = `${TAILWIND_PREFIX}:${node.value}`;
+      }
     });
     root.walkAttributes((node) => {
       if (node.attribute.toLowerCase() !== 'class' || !['=', '~='].includes(node.operator)) return;
@@ -2576,7 +2632,9 @@ function prefixClassSelectors(selector) {
         .split(/\s+/u)
         .filter(Boolean)
         .map((className) =>
-          className.startsWith(`${TAILWIND_PREFIX}:`) ? className : `${TAILWIND_PREFIX}:${className}`
+          className.startsWith(`${TAILWIND_PREFIX}:`) || isReviewedExternalClass(className)
+            ? className
+            : `${TAILWIND_PREFIX}:${className}`
         )
         .join(' ');
       node.setValue(value, { quoteMark: node.quoteMark ?? '"' });
@@ -2698,7 +2756,484 @@ function collectStaticClassLiteral(node, literals, label, expressionBindings) {
     collectCvaFactoryPropsClassLiterals(unwrapped, literals, label, expressionBindings);
     return;
   }
+  if (
+    label === 'normalized/src/components/ui/calendar.tsx' &&
+    ts.isIdentifier(unwrapped) &&
+    unwrapped.text === 'className'
+  ) {
+    return;
+  }
+  if (
+    label === 'normalized/src/components/ui/chart.tsx' &&
+    ts.isIdentifier(unwrapped) &&
+    (unwrapped.text === 'className' || unwrapped.text === 'labelClassName')
+  ) {
+    return;
+  }
+  if (
+    label === 'normalized/src/components/ui/input-otp.tsx' &&
+    ts.isIdentifier(unwrapped) &&
+    unwrapped.text === 'containerClassName'
+  ) {
+    return;
+  }
+  if (
+    label === 'normalized/src/components/ui/calendar.tsx' &&
+    ts.isPropertyAccessExpression(unwrapped) &&
+    ts.isIdentifier(unwrapped.expression) &&
+    unwrapped.expression.text === 'defaultClassNames' &&
+    ts.isIdentifier(unwrapped.name)
+  ) {
+    return;
+  }
+  if (
+    label === 'normalized/src/components/ui/calendar.tsx' &&
+    ts.isCallExpression(unwrapped) &&
+    ts.isIdentifier(unwrapped.expression) &&
+    unwrapped.expression.text === 'buttonVariants' &&
+    unwrapped.arguments.length === 1 &&
+    ts.isObjectLiteralExpression(unwrapExpression(unwrapped.arguments[0]))
+  ) {
+    return;
+  }
   throw new Error(`${label}: dynamic class expressions are not accepted`);
+}
+
+function normalizeReviewedRawClassLiterals(source, registrySourcePath, outputPath) {
+  if (registrySourcePath !== 'registry/base-nova/ui/calendar.tsx') {
+    return { source, transformed: false };
+  }
+  let count = 0;
+  let normalized = source.replace(/String\.raw`([^`${}]*)`/gu, (_match, raw) => {
+    count += 1;
+    return JSON.stringify(raw);
+  });
+  if (count !== 2) {
+    throw new Error(`${outputPath}: expected two reviewed Calendar String.raw class literals, found ${count}`);
+  }
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  const ref = React.useRef<HTMLButtonElement>(null)\n  React.useEffect(() => {\n    if (modifiers.focused) ref.current?.focus()',
+    [
+      '  const focusRef = React.useRef<HTMLButtonElement | null>(null)',
+      '  const setDayButtonRef = React.useCallback(',
+      '    (node: HTMLButtonElement | null) => {',
+      '      focusRef.current = node',
+      '      if (typeof ref === "function") ref(node)',
+      '      else if (ref) (ref as React.MutableRefObject<HTMLButtonElement | null>).current = node',
+      '    },',
+      '    [ref]',
+      '  )',
+      '  React.useEffect(() => {',
+      '    if (modifiers.focused) focusRef.current?.focus()'
+    ].join('\n'),
+    outputPath,
+    'Calendar internal focus ref binding'
+  );
+  return { source: normalized, transformed: true };
+}
+
+function mergeCalendarFocusRef(source, registrySourcePath, outputPath) {
+  if (registrySourcePath !== 'registry/base-nova/ui/calendar.tsx') {
+    return { source, transformed: false };
+  }
+  return {
+    source: replaceReviewedSourceOnce(
+      source,
+      '    <Button\n      ref={ref}',
+      '    <Button\n      ref={setDayButtonRef}',
+      outputPath,
+      'Calendar merged focus ref binding'
+    ),
+    transformed: true
+  };
+}
+
+function replaceReviewedSourceOnce(source, search, replacement, outputPath, label) {
+  const first = source.indexOf(search);
+  if (first < 0 || source.indexOf(search, first + search.length) >= 0) {
+    throw new Error(`${outputPath}: expected one reviewed ${label} source fragment`);
+  }
+  return `${source.slice(0, first)}${replacement}${source.slice(first + search.length)}`;
+}
+
+function normalizeChartHostContract(source, registrySourcePath, outputPath) {
+  if (registrySourcePath !== 'registry/base-nova/ui/chart.tsx') {
+    return { source, transformed: false };
+  }
+  let normalized = source;
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    'const THEMES = { light: "", dark: ".dark" } as const',
+    'const THEMES = { light: "", dark: \'[data-spfx-ui-theme="dark"]\' } as const',
+    outputPath,
+    'Chart host theme selector'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  const uniqueId = React.useId()\n  const chartId = `chart-${id ?? uniqueId.replace(/:/g, "")}`',
+    [
+      '  const requiredId = useSpfxUiRequiredId(id, "ChartContainer")',
+      '  const chartId = `chart-${encodeURIComponent(requiredId)',
+      '    .replace(/%/g, "_")',
+      '    .replace(/[.!~*\'()]/g, (value) => `_${value.charCodeAt(0).toString(16)}_`)}`',
+      '  const { scopeValue } = useSpfxUiHost()'
+    ].join('\n'),
+    outputPath,
+    'React 17 Chart ID'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '<ChartStyle id={chartId} config={config} />',
+    '<ChartStyle id={chartId} config={config} scopeValue={scopeValue} />',
+    outputPath,
+    'ChartStyle host scope'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    'const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {',
+    [
+      'function safeChartCssName(value: string) {',
+      '  if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(value)) {',
+      '    throw new Error("ChartConfig keys must be CSS identifier-safe")',
+      '  }',
+      '  return value',
+      '}',
+      '',
+      'function safeChartCssColor(value: string) {',
+      '  if (/[;{}\\\\]|url\\s*\\(/i.test(value)) {',
+      '    throw new Error("ChartConfig colors must be single safe CSS color values")',
+      '  }',
+      '  return value',
+      '}',
+      '',
+      'const ChartStyle = ({',
+      '  id,',
+      '  config,',
+      '  scopeValue,',
+      '}: {',
+      '  id: string',
+      '  config: ChartConfig',
+      '  scopeValue: string',
+      '}) => {'
+    ].join('\n'),
+    outputPath,
+    'ChartStyle validation'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '${prefix} [data-chart=${id}] {',
+    '[data-spfx-ui-scope="${scopeValue}"]${prefix} [data-chart="${id}"] {',
+    outputPath,
+    'ChartStyle scoped selector'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '    return color ? `  --color-${key}: ${color};` : null',
+    '    return color ? `  --color-${safeChartCssName(key)}: ${safeChartCssColor(color)};` : null',
+    outputPath,
+    'ChartStyle safe declarations'
+  );
+  normalized = insertImport(
+    normalized,
+    'import { useSpfxUiHost, useSpfxUiRequiredId } from "../../lib/ui-root"'
+  );
+  return { source: normalized, transformed: true };
+}
+
+function normalizeNavigationMenuHostContract(source, registrySourcePath, outputPath) {
+  if (registrySourcePath !== 'registry/base-nova/ui/navigation-menu.tsx') {
+    return { source, transformed: false };
+  }
+  let normalized = replaceReviewedSourceOnce(
+    source,
+    'function NavigationMenu({\n  align = "start",',
+    'function NavigationMenu({\n  id,\n  align = "start",',
+    outputPath,
+    'NavigationMenu root ID parameter'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  Pick<NavigationMenuPrimitive.Positioner.Props, "align">) {\n  return (',
+    [
+      '  Pick<NavigationMenuPrimitive.Positioner.Props, "align">) {',
+      '  const rootId = useSpfxUiRequiredId(id, "NavigationMenu.Root")',
+      '  const positionerId = useSpfxUiDerivedId(rootId, "positioner")',
+      '',
+      '  return ('
+    ].join('\n'),
+    outputPath,
+    'NavigationMenu owned IDs'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '    <NavigationMenuPrimitive.Root\n      data-slot="navigation-menu"',
+    '    <NavigationMenuPrimitive.Root\n      id={rootId}\n      data-slot="navigation-menu"',
+    outputPath,
+    'NavigationMenu Root ID'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '<NavigationMenuPositioner align={align} />',
+    '<NavigationMenuPositioner id={positionerId} align={align} />',
+    outputPath,
+    'NavigationMenu Positioner ID'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    'function NavigationMenuPositioner({\n  className,',
+    'function NavigationMenuPositioner({\n  id,\n  className,',
+    outputPath,
+    'NavigationMenu Positioner ID parameter'
+  );
+  normalized = insertImport(
+    normalized,
+    'import { useSpfxUiDerivedId, useSpfxUiRequiredId } from "../../lib/ui-root"'
+  );
+  return { source: normalized, transformed: true };
+}
+
+function normalizeSidebarHostContract(source, registrySourcePath, outputPath) {
+  if (registrySourcePath === 'registry/base-nova/hooks/use-mobile.ts') {
+    let normalized = replaceReviewedSourceOnce(
+      source,
+      'export function useIsMobile() {\n  const [isMobile, setIsMobile]',
+      'export function useIsMobile() {\n  const { targetWindow } = useSpfxUiHost()\n  const [isMobile, setIsMobile]',
+      outputPath,
+      'use-mobile host window'
+    );
+    const windowMatches = normalized.match(/\bwindow\./gu)?.length ?? 0;
+    if (windowMatches !== 3) {
+      throw new Error(`${outputPath}: expected three reviewed global window references, found ${windowMatches}`);
+    }
+    normalized = normalized.replace(/\bwindow\./gu, 'targetWindow.');
+    normalized = replaceReviewedSourceOnce(
+      normalized,
+      '  }, [])',
+      '  }, [targetWindow])',
+      outputPath,
+      'use-mobile effect dependency'
+    );
+    normalized = insertImport(normalized, 'import { useSpfxUiHost } from "../lib/ui-root"');
+    return { source: normalized, transformed: true };
+  }
+  if (registrySourcePath !== 'registry/base-nova/ui/sidebar.tsx') {
+    return { source, transformed: false };
+  }
+  let normalized = replaceReviewedSourceOnce(
+    source,
+    'function SidebarProvider({',
+    'function SidebarProvider({',
+    outputPath,
+    'SidebarProvider declaration'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '}) {\n  const isMobile = useIsMobile()',
+    [
+      '}) {',
+      '  const { appRoot, instanceId, portalHost, targetDocument, targetWindow } = useSpfxUiHost()',
+      '  const isMobile = useIsMobile()'
+    ].join('\n'),
+    outputPath,
+    'SidebarProvider host binding'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    'document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`',
+    'targetDocument.cookie = `${SIDEBAR_COOKIE_NAME}_${encodeURIComponent(instanceId)}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`',
+    outputPath,
+    'Sidebar host cookie'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '      ) {\n        event.preventDefault()\n        toggleSidebar()',
+    [
+      '      ) {',
+      '        const activeElement = targetDocument.activeElement',
+      '        if (!activeElement || (!appRoot.contains(activeElement) && !portalHost.contains(activeElement))) return',
+      '        event.preventDefault()',
+      '        toggleSidebar()'
+    ].join('\n'),
+    outputPath,
+    'Sidebar focused-host shortcut'
+  );
+  const windowMatches = normalized.match(/\bwindow\./gu)?.length ?? 0;
+  if (windowMatches !== 2) {
+    throw new Error(`${outputPath}: expected two reviewed Sidebar window references, found ${windowMatches}`);
+  }
+  normalized = normalized.replace(/\bwindow\./gu, 'targetWindow.');
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  }, [toggleSidebar])',
+    '  }, [appRoot, portalHost, targetDocument, targetWindow, toggleSidebar])',
+    outputPath,
+    'Sidebar shortcut dependencies'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    'function Sidebar({',
+    'const Sidebar = React.forwardRef(function Sidebar({',
+    outputPath,
+    'Sidebar React 17 forwardRef'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  collapsible?: "offcanvas" | "icon" | "none"\n}) {',
+    '  collapsible?: "offcanvas" | "icon" | "none"\n}, ref: React.ForwardedRef<HTMLDivElement>) {',
+    outputPath,
+    'Sidebar forwarded ref parameter'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '      <div\n        data-slot="sidebar"',
+    '      <div\n        ref={ref}\n        data-slot="sidebar"',
+    outputPath,
+    'Sidebar static branch ref'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '        <SheetContent\n          dir={dir}',
+    '        <SheetContent\n          ref={ref}\n          id={props.id}\n          dir={dir}',
+    outputPath,
+    'Sidebar mobile branch owned ID'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '      <div\n        data-slot="sidebar-container"',
+    '      <div\n        ref={ref}\n        data-slot="sidebar-container"',
+    outputPath,
+    'Sidebar desktop branch ref'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '\n}\n\nfunction SidebarTrigger({',
+    '\n})\n\nfunction SidebarTrigger({',
+    outputPath,
+    'Sidebar forwardRef closure'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  tooltip,\n  className,\n  ...props',
+    '  tooltip,\n  className,\n  id,\n  ...props',
+    outputPath,
+    'Sidebar menu button owned ID binding'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '      {\n        className: cn(sidebarMenuButtonVariants({ variant, size }), className),',
+    '      {\n        id,\n        className: cn(sidebarMenuButtonVariants({ variant, size }), className),',
+    outputPath,
+    'Sidebar menu button ID forwarding'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  const { isMobile, state } = useSidebar()\n  const comp = useRender({',
+    '  const { isMobile, state } = useSidebar()\n  const { deriveElementId } = useSpfxUiHost()\n  const comp = useRender({',
+    outputPath,
+    'Sidebar string-tooltip ID derivation'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '    tooltip = {\n      children: tooltip,\n    }',
+    [
+      '    const tooltipId = deriveElementId(id ?? "", "tooltip")',
+      '    tooltip = {',
+      '      children: tooltip,',
+      '      id: tooltipId,',
+      '    }'
+    ].join('\n'),
+    outputPath,
+    'Sidebar string-tooltip owned ID'
+  );
+  normalized = insertImport(normalized, 'import { useSpfxUiHost } from "../../lib/ui-root"');
+  return { source: normalized, transformed: true };
+}
+
+function normalizeToastHostContract(source, registrySourcePath, outputPath) {
+  if (registrySourcePath !== 'registry/base-nova/ui/toast.tsx') {
+    return { source, transformed: false };
+  }
+  let normalized = replaceReviewedSourceOnce(
+    source,
+    'const toast = ToastPrimitive.createToastManager()\n\n',
+    '',
+    outputPath,
+    'Toast global manager removal'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    'function ToastPortal({ ...props }: ToastPrimitive.Portal.Props) {\n  return <ToastPrimitive.Portal data-slot="toast-portal" {...props} />\n}',
+    [
+      'function ToastPortal({ ...props }: ToastPrimitive.Portal.Props & { id: string }) {',
+      '  const portalHost = useSpfxUiPortalHost()',
+      '  return (',
+      '    <ToastPrimitive.Portal',
+      '      data-slot="toast-portal"',
+      '      {...props}',
+      '      id={useSpfxUiPortalId(props.id)}',
+      '      container={portalHost}',
+      '      render={useSpfxUiOwnedPortalRender(props.render, props.id, "ToastPortal")}',
+      '    />',
+      '  )',
+      '}'
+    ].join('\n'),
+    outputPath,
+    'Toast owned portal'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  toastManager = toast,\n  ...props',
+    '  portalId,\n  toastManager: toastManagerProp,\n  ...props',
+    outputPath,
+    'Toast manager parameter'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '}: ToastPrimitive.Provider.Props) {\n  return (',
+    [
+      '}: ToastPrimitive.Provider.Props & { portalId: string }) {',
+      '  const defaultToastManager = React.useMemo(() => ToastPrimitive.createToastManager(), [])',
+      '  const toastManager = toastManagerProp ?? defaultToastManager',
+      '',
+      '  return ('
+    ].join('\n'),
+    outputPath,
+    'Toast host-local manager'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '      <ToastPortal>',
+    '      <ToastPortal id={portalId}>',
+    outputPath,
+    'Toast convenience portal owned ID'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  toast,\n',
+    '',
+    outputPath,
+    'Toast global export removal'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  return toasts.map((toastItem) => (',
+    '  return (\n    <>\n      {toasts.map((toastItem) => (',
+    outputPath,
+    'React 17 ToastList fragment opening'
+  );
+  normalized = replaceReviewedSourceOnce(
+    normalized,
+    '  ))\n}\n\nfunction Toaster',
+    '      ))}\n    </>\n  )\n}\n\nfunction Toaster',
+    outputPath,
+    'React 17 ToastList fragment closing'
+  );
+  normalized = insertImport(
+    normalized,
+    'import { useSpfxUiOwnedPortalRender, useSpfxUiPortalHost, useSpfxUiPortalId } from "../../lib/ui-root"'
+  );
+  return { source: normalized, transformed: true };
 }
 
 function collectCvaFactoryPropsClassLiterals(call, literals, label, expressionBindings) {
@@ -2738,6 +3273,20 @@ function collectCvaFactoryPropsClassLiterals(call, literals, label, expressionBi
 function collectCnClassLiterals(call, literals, label, expressionBindings) {
   for (const argument of call.arguments) {
     const unwrapped = unwrapExpression(argument);
+    if (ts.isObjectLiteralExpression(unwrapped) && label === 'normalized/src/components/ui/chart.tsx') {
+      for (const property of unwrapped.properties) {
+        if (
+          !ts.isPropertyAssignment(property) ||
+          ts.isComputedPropertyName(property.name) ||
+          isPrototypeSetterProperty(property, expressionBindings.sourceFile) ||
+          !ts.isStringLiteralLike(property.name)
+        ) {
+          throw new Error(`${label}: Chart class map must contain only reviewed string-literal keys`);
+        }
+        literals.add(property.name);
+      }
+      continue;
+    }
     if (ts.isObjectLiteralExpression(unwrapped) || ts.isArrayLiteralExpression(unwrapped)) {
       throw new Error(`${label}: cn object and array class maps are not accepted`);
     }
@@ -4201,13 +4750,31 @@ function collectUseRenderClassBag(call, literals, label, expressionBindings) {
 
 function collectJsxSpreadClassLiterals(attribute, literals, label, expressionBindings, deferAmbiguous) {
   const expression = unwrapExpression(attribute.expression);
+  if (
+    label === 'normalized/src/components/ui/sidebar.tsx' &&
+    ts.isIdentifier(expression) &&
+    expression.text === 'tooltip'
+  ) {
+    return;
+  }
+  if (
+    label === 'normalized/src/components/ui/calendar.tsx' &&
+    ts.isIdentifier(expression) &&
+    expression.text === 'props'
+  ) {
+    return;
+  }
   if (ts.isIdentifier(expression) && expressionBindings.isSourceOwnedProps(expression)) {
     throw new Error(`${label}: source-owned callback props cannot be used as a JSX prop bag`);
   }
   if (ts.isIdentifier(expression) && expressionBindings.isConsumerProps(expression)) return;
   if (!ts.isObjectLiteralExpression(expression)) {
     if (deferAmbiguous) return;
-    throw new Error(`${label}: JSX spread must be a consumer prop bag or static object literal`);
+    throw new Error(
+      `${label}: JSX spread must be a consumer prop bag or static object literal: ${expression.getText(
+        expressionBindings.sourceFile
+      )}`
+    );
   }
   for (const property of expression.properties) {
     if (
@@ -4437,6 +5004,8 @@ export function normalizeRegistrySource({ source, registrySourcePath: rawRegistr
     if (specifier === '@/registry/base-nova/lib/utils') {
       return relativeImport(outputPath, 'normalized/src/lib/utils.ts');
     }
+    const hook = /^@\/registry\/base-nova\/hooks\/([a-z0-9-]+)$/u.exec(specifier)?.[1];
+    if (hook) return relativeImport(outputPath, `normalized/src/hooks/${hook}.ts`);
     const component = /^@\/registry\/base-nova\/ui\/([a-z0-9-]+)$/u.exec(specifier)?.[1];
     return component ? relativeImport(outputPath, `normalized/src/components/ui/${component}.tsx`) : specifier;
   });
@@ -4446,6 +5015,26 @@ export function normalizeRegistrySource({ source, registrySourcePath: rawRegistr
   const iconResult = resolveIconPlaceholders(normalized);
   if (iconResult.transformed) transformations.push('resolve-lucide-icon-placeholders');
   normalized = iconResult.source;
+
+  const rawClassResult = normalizeReviewedRawClassLiterals(normalized, registrySourcePath, outputPath);
+  if (rawClassResult.transformed) transformations.push('normalize-reviewed-raw-class-literals');
+  normalized = rawClassResult.source;
+
+  const chartHostResult = normalizeChartHostContract(normalized, registrySourcePath, outputPath);
+  if (chartHostResult.transformed) transformations.push('bind-chart-to-owned-host');
+  normalized = chartHostResult.source;
+
+  const navigationHostResult = normalizeNavigationMenuHostContract(normalized, registrySourcePath, outputPath);
+  if (navigationHostResult.transformed) transformations.push('bind-navigation-menu-to-owned-host');
+  normalized = navigationHostResult.source;
+
+  const sidebarHostResult = normalizeSidebarHostContract(normalized, registrySourcePath, outputPath);
+  if (sidebarHostResult.transformed) transformations.push('bind-sidebar-to-owned-host');
+  normalized = sidebarHostResult.source;
+
+  const toastHostResult = normalizeToastHostContract(normalized, registrySourcePath, outputPath);
+  if (toastHostResult.transformed) transformations.push('bind-toast-to-owned-host');
+  normalized = toastHostResult.source;
 
   const portalResult = routeBaseUiPortalsThroughOwnedHost(normalized, registrySourcePath, outputPath);
   if (portalResult.transformed) transformations.push('route-portals-through-owned-host');
@@ -4473,6 +5062,10 @@ export function normalizeRegistrySource({ source, registrySourcePath: rawRegistr
     normalized = forwardRefResult.source;
     if (requiresReactBinding) normalized = insertImport(normalized, 'import * as React from "react"');
   }
+
+  const calendarFocusResult = mergeCalendarFocusRef(normalized, registrySourcePath, outputPath);
+  if (calendarFocusResult.transformed) transformations.push('merge-calendar-focus-ref');
+  normalized = calendarFocusResult.source;
 
   normalized = `${normalized.replace(/\s+$/u, '')}\n`;
   assertReact17Source(normalized, outputPath, { sourceContext, currentPath: outputPath });
@@ -5091,6 +5684,7 @@ export function assertReact17Source(source, label, analysisOptions) {
     const useRenderWrapper = ordinary && /return\s+useRender\(\{/.test(ordinary.body);
     if (
       ordinary &&
+      !NON_REF_PUBLIC_WRAPPER_NAMES.has(name) &&
       refProps &&
       (ordinary.spreadTargets.some(targetAcceptsPublicRef) || useRenderWrapper)
     ) {

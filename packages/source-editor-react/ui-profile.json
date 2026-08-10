@@ -5,9 +5,9 @@
   "upstream": {
     "profileId": "spfx-react17-base-nova-v1",
     "profilePath": "packages/ui-profile/profile.json",
-    "profileSha256": "97c8796a33b9685716e0b7f8395735b8a09ef1a262202ef2371e54383182dbf0",
+    "profileSha256": "22c5e0bae82da7d5e6a1d33842e283c1226a443c51792d8778ca6ef427933cc5",
     "provenancePath": "packages/ui-profile/provenance.json",
-    "provenanceSha256": "881ecf2e26861799956a0958fc7fc9f2ed1041b0d29eeab72b0c58def6cfb3b8"
+    "provenanceSha256": "bd8a449e4fc01526faddb605e221d72e7df4385df97df1d480ce067b9329c095"
   },
   "surfaces": [
     {
@@ -23,7 +23,7 @@
     "package": "@base-ui/react",
     "version": "1.6.0",
     "dependencyClosurePath": "packages/ui-profile/dependency-closure.json",
-    "dependencyClosureSha256": "071df6ff0af2debfd0cbbdbdbd372ad6d94230242e6a3cb0f4f9e70c347ef736",
+    "dependencyClosureSha256": "0b91bf6aab47dc07bdefe53256b7bc3dd1e2597cda39e48435c6b8910e5c5b09",
     "contracts": [
       {
         "path": "packages/ui-profile/compat/base-ui-1.6.0/id-ownership/contract.json",
@@ -43,7 +43,7 @@
     {
       "sourcePath": "packages/ui-profile/compat-consumers/react17-base-ui-jsx.d.ts",
       "vendorPath": "src/vendor/source-editor/ui-profile/compat/react17-base-ui-jsx.d.ts",
-      "sha256": "76f6e8a5b9ebc66c2289ba7aa9d16e200cbb116e27b3117d7de18c18cc23398e"
+      "sha256": "217b4f06fa0f61191a2d10a75aed1ccfee0f626e850f84a058c0d7c0729620bc"
     },
     {
       "sourcePath": "packages/ui-profile/normalized/src/components/ui/button.tsx",
@@ -78,7 +78,7 @@
     {
       "sourcePath": "packages/ui-profile/generated/tailwind-profile.css",
       "vendorPath": "src/vendor/source-editor/ui-profile/tailwind-profile.css",
-      "sha256": "7695f776e34dd59e51673d7235ce6ffaa9de4e99eb802c1b8bf1bd0029dcb2be"
+      "sha256": "0cf422965a0971b9ae19930357ded3dcdc05e29930002b5a1c0251df0f96736c"
     }
   ]
 }

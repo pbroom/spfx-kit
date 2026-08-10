@@ -29,10 +29,18 @@
     "normalizationImplementationSha256": { "$ref": "#/$defs/sha256" },
     "compilerInputs": {
       "type": "array",
-      "minItems": 27,
-      "maxItems": 27,
+      "minItems": 35,
+      "maxItems": 35,
       "prefixItems": [
+        { "$ref": "#/$defs/catalogContract" },
+        { "$ref": "#/$defs/catalogSchema" },
+        { "$ref": "#/$defs/catalogSnapshot" },
+        { "$ref": "#/$defs/catalogLibrary" },
+        { "$ref": "#/$defs/catalogVerifier" },
+        { "$ref": "#/$defs/catalogUpdateImplementation" },
+        { "$ref": "#/$defs/dependencyClosureUpdateImplementation" },
         { "$ref": "#/$defs/compilerBridge" },
+        { "$ref": "#/$defs/typescript53CompilerBridge" },
         { "$ref": "#/$defs/selectValueCompatibilityProbe" },
         { "$ref": "#/$defs/idOwnershipContractSchema" },
         { "$ref": "#/$defs/tailwindCssEntry" },
@@ -76,8 +84,8 @@
     },
     "items": {
       "type": "array",
-      "minItems": 24,
-      "maxItems": 24,
+      "minItems": 59,
+      "maxItems": 59,
       "uniqueItems": true,
       "items": { "$ref": "#/$defs/item" }
     }
@@ -92,6 +100,45 @@
         "path": { "type": "string", "pattern": "^[^/].*" },
         "sha256": { "$ref": "#/$defs/sha256" }
       }
+    },
+    "catalogContract": {
+      "allOf": [{ "$ref": "#/$defs/snapshot" }, { "type": "object", "properties": { "path": { "const": "catalog.json" } } }]
+    },
+    "catalogSchema": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "catalog.schema.json" } } }
+      ]
+    },
+    "catalogSnapshot": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "snapshots/catalog/components.json" } } }
+      ]
+    },
+    "catalogLibrary": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/lib/catalog.mjs" } } }
+      ]
+    },
+    "catalogVerifier": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/verify-catalog.mjs" } } }
+      ]
+    },
+    "catalogUpdateImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/update-catalog-profile.mjs" } } }
+      ]
+    },
+    "dependencyClosureUpdateImplementation": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "scripts/update-dependency-closure.mjs" } } }
+      ]
     },
     "ownedThemeSource": {
       "type": "object",
@@ -137,6 +184,12 @@
       "allOf": [
         { "$ref": "#/$defs/snapshot" },
         { "type": "object", "properties": { "path": { "const": "compat-consumers/react17-base-ui-jsx.d.ts" } } }
+      ]
+    },
+    "typescript53CompilerBridge": {
+      "allOf": [
+        { "$ref": "#/$defs/snapshot" },
+        { "type": "object", "properties": { "path": { "const": "compat-consumers/typescript53-globals.d.ts" } } }
       ]
     },
     "selectValueCompatibilityProbe": {

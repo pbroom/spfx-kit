@@ -1,4 +1,5 @@
 {
   "extends": "./tsconfig.base.json",
-  "compilerOptions": {}
+  "compilerOptions": {},
+  "exclude": ["compat-consumers/typescript53-globals.d.ts"]
 }

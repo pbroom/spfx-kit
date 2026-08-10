@@ -237,7 +237,7 @@ describe('SourceWorkspaceField', () => {
     const hostRoot = container.querySelector<HTMLElement>('[data-spfx-ui-root]');
     expect(hostRoot).not.toBeNull();
     expect(hostRoot?.getAttribute('data-spfx-ui-profile')).toBe('source-editor-react17-base-nova-v1');
-    expect(hostRoot?.getAttribute('data-spfx-ui-scope')).toBe('skui-7dbbe5a120453773');
+    expect(hostRoot?.getAttribute('data-spfx-ui-scope')).toBe('skui-c07c5a893c8b5641');
     const inlineTab = hostRoot?.querySelector<HTMLElement>('[role="tab"]');
     const inlinePanel = hostRoot?.querySelector<HTMLElement>('[role="tabpanel"]');
     expect(inlineTab?.id).toContain('spfx-ui-');

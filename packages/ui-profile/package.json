@@ -7,6 +7,20 @@
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "typesVersions": {
+    "<5.4": {
+      "chart": [
+        "dist/compat-consumers/typescript53/chart.d.ts"
+      ],
+      "delivery": [
+        "delivery.d.ts"
+      ],
+      "vite": [
+        "vite.d.ts"
+      ],
+      "*": [
+        "dist/normalized/src/components/ui/*.d.ts"
+      ]
+    },
     "*": {
       "accordion": [
         "dist/normalized/src/components/ui/accordion.d.ts"
@@ -76,6 +90,108 @@
       ],
       "tooltip": [
         "dist/normalized/src/components/ui/tooltip.d.ts"
+      ],
+      "alert-dialog": [
+        "dist/normalized/src/components/ui/alert-dialog.d.ts"
+      ],
+      "aspect-ratio": [
+        "dist/normalized/src/components/ui/aspect-ratio.d.ts"
+      ],
+      "attachment": [
+        "dist/normalized/src/components/ui/attachment.d.ts"
+      ],
+      "avatar": [
+        "dist/normalized/src/components/ui/avatar.d.ts"
+      ],
+      "breadcrumb": [
+        "dist/normalized/src/components/ui/breadcrumb.d.ts"
+      ],
+      "bubble": [
+        "dist/normalized/src/components/ui/bubble.d.ts"
+      ],
+      "button-group": [
+        "dist/normalized/src/components/ui/button-group.d.ts"
+      ],
+      "calendar": [
+        "dist/normalized/src/components/ui/calendar.d.ts"
+      ],
+      "card": [
+        "dist/normalized/src/components/ui/card.d.ts"
+      ],
+      "carousel": [
+        "dist/normalized/src/components/ui/carousel.d.ts"
+      ],
+      "chart": [
+        "dist/normalized/src/components/ui/chart.d.ts"
+      ],
+      "collapsible": [
+        "dist/normalized/src/components/ui/collapsible.d.ts"
+      ],
+      "context-menu": [
+        "dist/normalized/src/components/ui/context-menu.d.ts"
+      ],
+      "direction": [
+        "dist/normalized/src/components/ui/direction.d.ts"
+      ],
+      "drawer": [
+        "dist/normalized/src/components/ui/drawer.d.ts"
+      ],
+      "empty": [
+        "dist/normalized/src/components/ui/empty.d.ts"
+      ],
+      "hover-card": [
+        "dist/normalized/src/components/ui/hover-card.d.ts"
+      ],
+      "input-otp": [
+        "dist/normalized/src/components/ui/input-otp.d.ts"
+      ],
+      "item": [
+        "dist/normalized/src/components/ui/item.d.ts"
+      ],
+      "kbd": [
+        "dist/normalized/src/components/ui/kbd.d.ts"
+      ],
+      "marker": [
+        "dist/normalized/src/components/ui/marker.d.ts"
+      ],
+      "menubar": [
+        "dist/normalized/src/components/ui/menubar.d.ts"
+      ],
+      "message": [
+        "dist/normalized/src/components/ui/message.d.ts"
+      ],
+      "native-select": [
+        "dist/normalized/src/components/ui/native-select.d.ts"
+      ],
+      "navigation-menu": [
+        "dist/normalized/src/components/ui/navigation-menu.d.ts"
+      ],
+      "pagination": [
+        "dist/normalized/src/components/ui/pagination.d.ts"
+      ],
+      "progress": [
+        "dist/normalized/src/components/ui/progress.d.ts"
+      ],
+      "radio-group": [
+        "dist/normalized/src/components/ui/radio-group.d.ts"
+      ],
+      "scroll-area": [
+        "dist/normalized/src/components/ui/scroll-area.d.ts"
+      ],
+      "sidebar": [
+        "dist/normalized/src/components/ui/sidebar.d.ts"
+      ],
+      "skeleton": [
+        "dist/normalized/src/components/ui/skeleton.d.ts"
+      ],
+      "slider": [
+        "dist/normalized/src/components/ui/slider.d.ts"
+      ],
+      "table": [
+        "dist/normalized/src/components/ui/table.d.ts"
+      ],
+      "toast": [
+        "dist/normalized/src/components/ui/toast.d.ts"
       ],
       "delivery": [
         "delivery.d.ts"
@@ -182,6 +298,142 @@
       "types": "./dist/normalized/src/components/ui/tooltip.d.ts",
       "import": "./dist/normalized/src/components/ui/tooltip.js"
     },
+    "./alert-dialog": {
+      "types": "./dist/normalized/src/components/ui/alert-dialog.d.ts",
+      "import": "./dist/normalized/src/components/ui/alert-dialog.js"
+    },
+    "./aspect-ratio": {
+      "types": "./dist/normalized/src/components/ui/aspect-ratio.d.ts",
+      "import": "./dist/normalized/src/components/ui/aspect-ratio.js"
+    },
+    "./attachment": {
+      "types": "./dist/normalized/src/components/ui/attachment.d.ts",
+      "import": "./dist/normalized/src/components/ui/attachment.js"
+    },
+    "./avatar": {
+      "types": "./dist/normalized/src/components/ui/avatar.d.ts",
+      "import": "./dist/normalized/src/components/ui/avatar.js"
+    },
+    "./breadcrumb": {
+      "types": "./dist/normalized/src/components/ui/breadcrumb.d.ts",
+      "import": "./dist/normalized/src/components/ui/breadcrumb.js"
+    },
+    "./bubble": {
+      "types": "./dist/normalized/src/components/ui/bubble.d.ts",
+      "import": "./dist/normalized/src/components/ui/bubble.js"
+    },
+    "./button-group": {
+      "types": "./dist/normalized/src/components/ui/button-group.d.ts",
+      "import": "./dist/normalized/src/components/ui/button-group.js"
+    },
+    "./calendar": {
+      "types": "./dist/normalized/src/components/ui/calendar.d.ts",
+      "import": "./dist/normalized/src/components/ui/calendar.js"
+    },
+    "./card": {
+      "types": "./dist/normalized/src/components/ui/card.d.ts",
+      "import": "./dist/normalized/src/components/ui/card.js"
+    },
+    "./carousel": {
+      "types": "./dist/normalized/src/components/ui/carousel.d.ts",
+      "import": "./dist/normalized/src/components/ui/carousel.js"
+    },
+    "./chart": {
+      "types": "./dist/normalized/src/components/ui/chart.d.ts",
+      "import": "./dist/normalized/src/components/ui/chart.js"
+    },
+    "./collapsible": {
+      "types": "./dist/normalized/src/components/ui/collapsible.d.ts",
+      "import": "./dist/normalized/src/components/ui/collapsible.js"
+    },
+    "./context-menu": {
+      "types": "./dist/normalized/src/components/ui/context-menu.d.ts",
+      "import": "./dist/normalized/src/components/ui/context-menu.js"
+    },
+    "./direction": {
+      "types": "./dist/normalized/src/components/ui/direction.d.ts",
+      "import": "./dist/normalized/src/components/ui/direction.js"
+    },
+    "./drawer": {
+      "types": "./dist/normalized/src/components/ui/drawer.d.ts",
+      "import": "./dist/normalized/src/components/ui/drawer.js"
+    },
+    "./empty": {
+      "types": "./dist/normalized/src/components/ui/empty.d.ts",
+      "import": "./dist/normalized/src/components/ui/empty.js"
+    },
+    "./hover-card": {
+      "types": "./dist/normalized/src/components/ui/hover-card.d.ts",
+      "import": "./dist/normalized/src/components/ui/hover-card.js"
+    },
+    "./input-otp": {
+      "types": "./dist/normalized/src/components/ui/input-otp.d.ts",
+      "import": "./dist/normalized/src/components/ui/input-otp.js"
+    },
+    "./item": {
+      "types": "./dist/normalized/src/components/ui/item.d.ts",
+      "import": "./dist/normalized/src/components/ui/item.js"
+    },
+    "./kbd": {
+      "types": "./dist/normalized/src/components/ui/kbd.d.ts",
+      "import": "./dist/normalized/src/components/ui/kbd.js"
+    },
+    "./marker": {
+      "types": "./dist/normalized/src/components/ui/marker.d.ts",
+      "import": "./dist/normalized/src/components/ui/marker.js"
+    },
+    "./menubar": {
+      "types": "./dist/normalized/src/components/ui/menubar.d.ts",
+      "import": "./dist/normalized/src/components/ui/menubar.js"
+    },
+    "./message": {
+      "types": "./dist/normalized/src/components/ui/message.d.ts",
+      "import": "./dist/normalized/src/components/ui/message.js"
+    },
+    "./native-select": {
+      "types": "./dist/normalized/src/components/ui/native-select.d.ts",
+      "import": "./dist/normalized/src/components/ui/native-select.js"
+    },
+    "./navigation-menu": {
+      "types": "./dist/normalized/src/components/ui/navigation-menu.d.ts",
+      "import": "./dist/normalized/src/components/ui/navigation-menu.js"
+    },
+    "./pagination": {
+      "types": "./dist/normalized/src/components/ui/pagination.d.ts",
+      "import": "./dist/normalized/src/components/ui/pagination.js"
+    },
+    "./progress": {
+      "types": "./dist/normalized/src/components/ui/progress.d.ts",
+      "import": "./dist/normalized/src/components/ui/progress.js"
+    },
+    "./radio-group": {
+      "types": "./dist/normalized/src/components/ui/radio-group.d.ts",
+      "import": "./dist/normalized/src/components/ui/radio-group.js"
+    },
+    "./scroll-area": {
+      "types": "./dist/normalized/src/components/ui/scroll-area.d.ts",
+      "import": "./dist/normalized/src/components/ui/scroll-area.js"
+    },
+    "./sidebar": {
+      "types": "./dist/normalized/src/components/ui/sidebar.d.ts",
+      "import": "./dist/normalized/src/components/ui/sidebar.js"
+    },
+    "./skeleton": {
+      "types": "./dist/normalized/src/components/ui/skeleton.d.ts",
+      "import": "./dist/normalized/src/components/ui/skeleton.js"
+    },
+    "./slider": {
+      "types": "./dist/normalized/src/components/ui/slider.d.ts",
+      "import": "./dist/normalized/src/components/ui/slider.js"
+    },
+    "./table": {
+      "types": "./dist/normalized/src/components/ui/table.d.ts",
+      "import": "./dist/normalized/src/components/ui/table.js"
+    },
+    "./toast": {
+      "types": "./dist/normalized/src/components/ui/toast.d.ts",
+      "import": "./dist/normalized/src/components/ui/toast.js"
+    },
     "./styles.css": "./generated/tailwind-profile.css",
     "./delivery": {
       "types": "./delivery.d.ts",
@@ -196,6 +448,10 @@
     "./spfx-gulp": "./spfx-ui-gulp.cjs"
   },
   "files": [
+    "COMPONENTS.md",
+    "catalog.json",
+    "catalog.schema.json",
+    "snapshots/catalog/components.json",
     ".prepared/base-ui",
     "dist",
     "normalized/src",
@@ -233,6 +489,8 @@
     "css:verify": "node ./scripts/verify-tailwind-css.mjs",
     "delivery:verify": "node ./scripts/verify-delivery-artifact.mjs",
     "profile:update:network": "node ./scripts/update-profile.mjs --allow-network",
+    "profile:update:catalog:network": "node ./scripts/update-catalog-profile.mjs --allow-network",
+    "profile:update:closure": "node ./scripts/update-dependency-closure.mjs --from-lockfile",
     "profile:regenerate": "node ./scripts/regenerate-profile.mjs",
     "profile:verify": "node ./scripts/verify-profile.mjs",
     "profile:verify:closure": "node ./scripts/verify-dependency-closure.mjs",
@@ -241,7 +499,8 @@
     "typecheck:ts53": "node ./scripts/typecheck.mjs typescript 5.3.3 ./tsconfig.ts53.json",
     "typecheck:ts58": "node ./scripts/typecheck.mjs typescript-5-8 5.8.3 ./tsconfig.ts58.json",
     "typecheck": "npm run profile:prepare:base-ui && npm run typecheck:ts53 && npm run typecheck:ts58",
-    "verify": "npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure",
+    "catalog:verify": "node ./scripts/verify-catalog.mjs",
+    "verify": "npm run catalog:verify && npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure",
     "build": "npm run verify && npm run delivery:verify && npm run typecheck && npm run build:runtime",
     "prepack": "npm run build"
   },
@@ -249,7 +508,14 @@
     "@base-ui/react": "1.6.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "date-fns": "4.4.0",
+    "embla-carousel-react": "8.6.0",
+    "input-otp": "1.4.2",
     "lucide-react": "1.25.0",
+    "react-day-picker": "10.0.1",
+    "react-is": "17.0.2",
+    "react-redux": "8.1.3",
+    "recharts": "3.8.0",
     "tailwind-merge": "3.6.0"
   },
   "peerDependencies": {

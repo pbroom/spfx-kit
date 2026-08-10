@@ -6,5 +6,11 @@
     "outDir": "./dist",
     "rootDir": "."
   },
-  "include": ["src/**/*.ts", "normalized/src/**/*.ts", "normalized/src/**/*.tsx", "compat-consumers/react17-base-ui-jsx.d.ts"]
+  "include": [
+    "src/**/*.ts",
+    "normalized/src/**/*.ts",
+    "normalized/src/**/*.tsx",
+    "compat-consumers/react17-base-ui-jsx.d.ts",
+    "compat-consumers/typescript53-globals.d.ts"
+  ]
 }

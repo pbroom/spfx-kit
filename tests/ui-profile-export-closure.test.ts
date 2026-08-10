@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { access, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
 
@@ -124,9 +125,14 @@ describe('UI profile export closure', () => {
     await cp(fixture.appDir, standaloneDir, { recursive: true });
     const standaloneProof = await materializeStandaloneUiProfileClosure(fixture.appDir, standaloneDir, closure);
     expect(standaloneProof.packageDependency).toMatch(/^file:\.\/spfx-ui-profile\/spfx-kit-ui-profile-0\.0\.0\.tgz$/u);
-    await expect(
-      access(path.join(standaloneDir, standaloneProof.packageDependency.slice('file:./'.length)))
-    ).resolves.toBeUndefined();
+    const packageFile = path.join(standaloneDir, standaloneProof.packageDependency.slice('file:./'.length));
+    await expect(readTarGzEntry(packageFile, 'package/dist/normalized/src/components/ui/button.js')).resolves.toBe(
+      'fresh runtime\n'
+    );
+    await expect(readTarGzEntry(packageFile, 'package/dist/normalized/src/components/ui/button.d.ts')).resolves.toBe(
+      'export declare const Button: unknown;\n'
+    );
+    await expect(access(packageFile)).resolves.toBeUndefined();
     const exportedSource = await readFile(path.join(standaloneDir, 'src', 'webpart.ts'), 'utf8');
     const exportedImport = exportedSource.match(/import\s+['"]([^'"]+\.css)['"]/u)?.[1];
     expect(exportedImport).toBeTruthy();
@@ -237,13 +243,25 @@ async function createFixture(options: { bareCssImport?: boolean } = {}) {
     writeFileWithParents(path.join(profileRoot, 'generated', 'font.woff2'), font),
     writeFileWithParents(path.join(profileRoot, 'dist', 'src', 'index.js'), 'export {};\n'),
     writeFileWithParents(path.join(profileRoot, 'dist', 'src', 'index.d.ts'), 'export {};\n'),
+    writeFileWithParents(path.join(profileRoot, 'dist', 'normalized', 'src', 'components', 'ui', 'button.js'), 'stale runtime\n'),
     writeFileWithParents(path.join(profileRoot, '.prepared', 'base-ui', 'package.json'), '{}\n'),
     writeFileWithParents(path.join(profileRoot, 'spfx-ui-webpack.cjs'), 'module.exports = () => {};\n'),
+    writeFileWithParents(
+      path.join(profileRoot, 'build-runtime.cjs'),
+      "const { writeFileSync } = require('node:fs');\nwriteFileSync('dist/normalized/src/components/ui/button.js', 'fresh runtime\\n');\nwriteFileSync('dist/normalized/src/components/ui/button.d.ts', 'export declare const Button: unknown;\\n');\n"
+    ),
     writeJson(path.join(profileRoot, 'package.json'), {
       name: '@spfx-kit/ui-profile',
       version: '0.0.0',
       files: ['dist', '.prepared/base-ui', 'generated', 'profile.json', 'provenance.json', 'spfx-ui-webpack.cjs'],
-      exports: { './styles.css': './generated/profile.css' }
+      scripts: { 'build:runtime': 'node ./build-runtime.cjs' },
+      exports: {
+        './button': {
+          types: './dist/normalized/src/components/ui/button.d.ts',
+          import: './dist/normalized/src/components/ui/button.js'
+        },
+        './styles.css': './generated/profile.css'
+      }
     })
   ]);
   if (options.bareCssImport) {
@@ -293,6 +311,25 @@ async function writeFileWithParents(file: string, contents: string | Uint8Array)
 
 async function readJson(file: string) {
   return JSON.parse(await readFile(file, 'utf8'));
+}
+
+async function readTarGzEntry(file: string, entryPath: string) {
+  const archive = gunzipSync(await readFile(file));
+  let offset = 0;
+  while (offset + 512 <= archive.byteLength) {
+    const header = archive.subarray(offset, offset + 512);
+    const name = header.subarray(0, 100).toString('utf8').replace(/\0.*$/u, '');
+    if (!name) break;
+    const sizeText = header.subarray(124, 136).toString('utf8').replace(/\0.*$/u, '').trim();
+    const size = Number.parseInt(sizeText, 8);
+    if (!Number.isFinite(size)) throw new Error(`Invalid tar entry size for ${name}`);
+    const contentOffset = offset + 512;
+    if (name === entryPath) {
+      return archive.subarray(contentOffset, contentOffset + size).toString('utf8');
+    }
+    offset = contentOffset + Math.ceil(size / 512) * 512;
+  }
+  throw new Error(`Missing tar entry: ${entryPath}`);
 }
 
 async function temporaryDirectory() {

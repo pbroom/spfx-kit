@@ -286,7 +286,6 @@ async function ensureUiProfileRuntime(profileRoot) {
     '.prepared/base-ui/package.json',
     'spfx-ui-webpack.cjs'
   ];
-  if (await hasRequiredUiProfileRuntime(profileRoot, required)) return;
   const result = spawnSync('npm', ['run', 'build:runtime'], {
     cwd: profileRoot,
     encoding: 'utf8'
@@ -300,7 +299,7 @@ async function hasRequiredUiProfileRuntime(profileRoot, required) {
   for (const relativePath of required) {
     try {
       const stats = await lstat(path.join(profileRoot, relativePath));
-      if (stats.isSymbolicLink()) return false;
+      if (!stats.isFile() || stats.isSymbolicLink()) return false;
     } catch (error) {
       if (error?.code === 'ENOENT') return false;
       throw error;

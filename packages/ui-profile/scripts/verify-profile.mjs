@@ -37,7 +37,15 @@ const packageLock = JSON.parse(await readFile(path.resolve(packageRoot, '..', '.
 
 const expectedIds = [...REGISTRY_IDS];
 const expectedCompilerInputPaths = [
+  'catalog.json',
+  'catalog.schema.json',
+  'snapshots/catalog/components.json',
+  'scripts/lib/catalog.mjs',
+  'scripts/verify-catalog.mjs',
+  'scripts/update-catalog-profile.mjs',
+  'scripts/update-dependency-closure.mjs',
   'compat-consumers/react17-base-ui-jsx.d.ts',
+  'compat-consumers/typescript53-globals.d.ts',
   'compat-consumers/select-value.tsx',
   'compat/base-ui-1.6.0/id-ownership/contract.schema.json',
   'tailwind-profile.css',
@@ -70,9 +78,16 @@ const expectedDirectDependencies = {
   '@base-ui/react': '1.6.0',
   'class-variance-authority': '0.7.1',
   clsx: '2.1.1',
+  'date-fns': '4.4.0',
+  'embla-carousel-react': '8.6.0',
+  'input-otp': '1.4.2',
   'lucide-react': '1.25.0',
   react: '17.0.1',
+  'react-day-picker': '10.0.1',
   'react-dom': '17.0.1',
+  'react-is': '17.0.2',
+  'react-redux': '8.1.3',
+  recharts: '3.8.0',
   'tailwind-merge': '3.6.0'
 };
 
@@ -141,6 +156,8 @@ const expectedScripts = {
   'css:verify': 'node ./scripts/verify-tailwind-css.mjs',
   'delivery:verify': 'node ./scripts/verify-delivery-artifact.mjs',
   'profile:update:network': 'node ./scripts/update-profile.mjs --allow-network',
+  'profile:update:catalog:network': 'node ./scripts/update-catalog-profile.mjs --allow-network',
+  'profile:update:closure': 'node ./scripts/update-dependency-closure.mjs --from-lockfile',
   'profile:regenerate': 'node ./scripts/regenerate-profile.mjs',
   'profile:verify': 'node ./scripts/verify-profile.mjs',
   'profile:verify:closure': 'node ./scripts/verify-dependency-closure.mjs',
@@ -150,7 +167,8 @@ const expectedScripts = {
   'typecheck:ts53': 'node ./scripts/typecheck.mjs typescript 5.3.3 ./tsconfig.ts53.json',
   'typecheck:ts58': 'node ./scripts/typecheck.mjs typescript-5-8 5.8.3 ./tsconfig.ts58.json',
   typecheck: 'npm run profile:prepare:base-ui && npm run typecheck:ts53 && npm run typecheck:ts58',
-  verify: 'npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure',
+  'catalog:verify': 'node ./scripts/verify-catalog.mjs',
+  verify: 'npm run catalog:verify && npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure',
   build: 'npm run verify && npm run delivery:verify && npm run typecheck && npm run build:runtime',
   prepack: 'npm run build'
 };
@@ -167,11 +185,11 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateProfile = ajv.compile(profileSchema);
 const validateProvenance = ajv.compile(provenanceSchema);
 assert(
-  sha256(Buffer.from(canonicalJson(profileSchema))) === '8de3c71dd1936fe4131a4034ac5ad54f894d663728755b28429e5be57ab4a2a9',
+  sha256(Buffer.from(canonicalJson(profileSchema))) === '36537b93ad79b1cf20c67fee0c154231ff3405b0e369cf23889e722be2820d2d',
   'profile.schema.json identity differs'
 );
 assert(
-  sha256(Buffer.from(canonicalJson(provenanceSchema))) === '3c7011e554de1eb7e01399f4239ddde69dea1ebb73c64c1b747042c634468e61',
+  sha256(Buffer.from(canonicalJson(provenanceSchema))) === '7b452e40688c76bc6d2305a7a2b033e8d7f130824fa58e2590dc5471456d7575',
   'provenance.schema.json identity differs'
 );
 assert(validateProfile(profile), `profile.json schema errors: ${ajv.errorsText(validateProfile.errors)}`);
@@ -393,6 +411,7 @@ for (const item of profile.items) {
 assertFetchedRegistryClosure(rawSnapshots, provenance.registryIds, {
   excludedDependencies: provenance.excludedDependencies,
   directProductionDependencies: provenance.directProductionDependencies,
+  registryDependencyTagResolutions: provenance.registryDependencyTagResolutions,
   allowedTypeDirectives: pinnedTypeDirectiveNames(manifest.devDependencies)
 });
 

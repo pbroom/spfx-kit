@@ -292,7 +292,7 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
   });
 
   it('compiles only the TypeScript-AST candidate corpus, not Tailwind comment matches', async () => {
-    const { provenance } = await readContract();
+    const { profile, provenance } = await readContract();
     const sourceRoot = await temporaryRoot();
     const outputRoot = await temporaryRoot();
     await cp(path.join(packageRoot, 'normalized'), path.join(sourceRoot, 'normalized'), { recursive: true });
@@ -303,7 +303,7 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
 
     const result = await compileTailwindCss({ packageRoot, sourceRoot, outputRoot, provenance });
     const css = await readFile(path.join(outputRoot, result.artifact.path), 'utf8');
-    expect(result.candidateCount).toBe(609);
+    expect(result.candidateCount).toBe(profile.css.candidateCount);
     expect(css).not.toContain(String.raw`.skui\:antialiased`);
   });
 
@@ -325,7 +325,7 @@ describe('UI profile deterministic Tailwind CSS compiler', () => {
     expect(firstBytes.equals(await readFile(path.join(packageRoot, profile.css.artifact.path)))).toBe(true);
     expect(first.candidateCount).toBeGreaterThan(500);
     expect(first.structuralMarkers.length).toBeGreaterThan(0);
-    expect(first.conditionalClasses).toEqual(['skui:border-b', 'skui:border-t', 'skui:group', 'skui:peer', 'skui:sr-only']);
+    expect(first.conditionalClasses).toEqual(profile.css.conditionalClasses);
     expect(first.keyframeCount).toBeGreaterThan(0);
     expect(first.fallbackPropertyCount).toBeGreaterThan(0);
     const css = firstBytes.toString('utf8');

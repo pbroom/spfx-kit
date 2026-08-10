@@ -16,31 +16,17 @@ const packageManifest = JSON.parse(readFileSync('packages/ui-profile/package.jso
   typesVersions: Record<string, Record<string, string[]>>;
   bin: Record<string, string>;
 };
-
-const componentSubpaths = [
-  'accordion',
-  'alert',
-  'badge',
-  'button',
-  'checkbox',
-  'combobox',
-  'dialog',
-  'dropdown-menu',
-  'field',
-  'input',
-  'input-group',
-  'label',
-  'popover',
-  'select',
-  'separator',
-  'sheet',
-  'spinner',
-  'switch',
-  'tabs',
-  'textarea',
-  'toggle',
-  'toggle-group',
-  'tooltip'
+const catalog = JSON.parse(readFileSync('packages/ui-profile/catalog.json', 'utf8')) as {
+  includedComponentIds: string[];
+  excludedComponents: Array<{ id: string }>;
+  documentedCompositions: Array<{ id: string }>;
+  supportRegistryIds: string[];
+};
+const componentSubpaths = catalog.includedComponentIds;
+const nonPublicSubpaths = [
+  ...catalog.excludedComponents.map(({ id }) => id),
+  ...catalog.documentedCompositions.map(({ id }) => id),
+  ...catalog.supportRegistryIds
 ];
 
 describe('@spfx-kit/ui-profile public package', () => {
@@ -58,7 +44,7 @@ describe('@spfx-kit/ui-profile public package', () => {
     );
     expect(Object.keys(packageManifest.exports)).not.toContain('./normalized/*');
     expect(Object.keys(packageManifest.exports)).not.toContain('./scripts/*');
-    expect(Object.keys(packageManifest.typesVersions['*'])).toEqual([...componentSubpaths, 'delivery', 'vite']);
+    expect(Object.keys(packageManifest.typesVersions['*']).sort()).toEqual([...componentSubpaths, 'delivery', 'vite'].sort());
     for (const component of componentSubpaths) {
       const declaration = `dist/normalized/src/components/ui/${component}.d.ts`;
       expect(packageManifest.typesVersions['*'][component]).toEqual([declaration]);
@@ -73,6 +59,19 @@ describe('@spfx-kit/ui-profile public package', () => {
       expect(emitted, component).not.toContain('"class-variance-authority/dist/types"');
     }
     expect(statSync(path.join(profileRoot, 'dist/compat-consumers/react17-base-ui-jsx.d.ts')).isFile()).toBe(true);
+    expect(packageManifest.typesVersions['<5.4']).toEqual({
+      chart: ['dist/compat-consumers/typescript53/chart.d.ts'],
+      delivery: ['delivery.d.ts'],
+      vite: ['vite.d.ts'],
+      '*': ['dist/normalized/src/components/ui/*.d.ts']
+    });
+    expect(readFileSync(path.join(profileRoot, 'dist/compat-consumers/typescript53/chart.d.ts'), 'utf8')).toContain(
+      'reference path="../typescript53-globals.d.ts"'
+    );
+    for (const subpath of nonPublicSubpaths) {
+      expect(packageManifest.exports, subpath).not.toHaveProperty(`./${subpath}`);
+      expect(packageManifest.typesVersions['*'], subpath).not.toHaveProperty(subpath);
+    }
     expect(packageManifest.bin).toEqual({
       'spfx-ui-profile-prepare': './scripts/prepare-base-ui.mjs',
       'spfx-ui-profile-verify': './scripts/verify-delivery-artifact.mjs'

@@ -154,10 +154,24 @@ describe('UI profile dependency closure', () => {
     const temporaryProfile = path.join(temporaryRepository, 'packages', 'ui-profile');
     const fakeNpm = path.join(temporaryRepository, 'fake-npm.mjs');
     const closure = JSON.parse(readFileSync(path.join(repositoryRoot, 'packages/ui-profile/dependency-closure.json'), 'utf8'));
-    const accepted = new Map(closure.packages.map((entry: any) => [entry.name, entry]));
+    const lock = JSON.parse(readFileSync(path.join(repositoryRoot, 'package-lock.json'), 'utf8'));
+    const accepted = new Map(closure.packages.map((entry: any) => [entry.path, entry]));
+    const resolveDependency = (fromPath: string, dependency: string): string | null => {
+      let current = fromPath;
+      while (true) {
+        const candidate = path.posix.join(current, 'node_modules', dependency);
+        if (lock.packages[candidate]) return candidate;
+        const parent = path.posix.dirname(current);
+        if (parent === current || current === '.') break;
+        current = parent;
+      }
+      const rootCandidate = `node_modules/${dependency}`;
+      return lock.packages[rootCandidate] ? rootCandidate : null;
+    };
     const installedRoots = Object.fromEntries(
       closure.productionRoots.map((name: string) => {
-        const entry: any = accepted.get(name);
+        const rootPath = resolveDependency('packages/ui-profile', name);
+        const entry: any = accepted.get(rootPath);
         return [
           name,
           {
@@ -165,7 +179,7 @@ describe('UI profile dependency closure', () => {
             dependencies: Object.fromEntries(
               Object.keys(entry.dependencies).map((dependency) => [
                 dependency,
-                { version: (accepted.get(dependency) as any).version }
+                { version: (accepted.get(resolveDependency(entry.path, dependency)) as any).version }
               ])
             )
           }

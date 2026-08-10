@@ -8,6 +8,11 @@ import {
   generateValidatedProfile
 } from '../packages/ui-profile/scripts/lib/generate-validated-profile.mjs';
 // @ts-expect-error plain .mjs module without type declarations
+import {
+  createGeneratedProfileStaging,
+  withGeneratedProfileSession
+} from '../packages/ui-profile/scripts/lib/generation-transaction.mjs';
+// @ts-expect-error plain .mjs module without type declarations
 import { assertGeneratedTreeClosure } from '../packages/ui-profile/scripts/lib/generated-tree-closure.mjs';
 // @ts-expect-error plain .mjs module without type declarations
 import { canonicalJson, normalizeRegistrySource } from '../packages/ui-profile/scripts/lib/profile.mjs';
@@ -46,7 +51,6 @@ async function expectInvalidUpdateStagingBeforeReplacement(
   const root = await mkdtemp(path.join(tmpdir(), 'ui-profile-update-staging-'));
   temporaryRoots.push(root);
   const rawRoot = path.join(root, 'raw');
-  const outputRoot = path.join(root, 'output');
   await cp(path.join(packageRoot, 'snapshots', 'raw'), rawRoot, { recursive: true });
   const snapshotPath = path.join(rawRoot, `${registryId}.json`);
   const snapshot = JSON.parse(await readFile(snapshotPath, 'utf8'));
@@ -63,17 +67,21 @@ async function expectInvalidUpdateStagingBeforeReplacement(
   const provenanceBytes = Buffer.from(canonicalJson(provenance));
   const replaceGenerated = vi.fn();
 
-  await expect(
-    generateValidatedProfile({
-      packageRoot,
-      rawRoot,
-      outputRoot,
-      provenance,
-      provenanceBytes,
-      generatedPaths: ['snapshots', 'normalized', 'profile.json'],
-      replaceGenerated
-    })
-  ).rejects.toThrow(expectedMessage);
+  await withGeneratedProfileSession({ packageRoot, operation: 'update' }, async (generationSession: unknown) => {
+    const outputRoot = await createGeneratedProfileStaging(generationSession);
+    await expect(
+      generateValidatedProfile({
+        packageRoot,
+        rawRoot,
+        outputRoot,
+        provenance,
+        provenanceBytes,
+        generatedPaths: ['snapshots', 'normalized', 'profile.json'],
+        generationSession,
+        replaceGenerated
+      })
+    ).rejects.toThrow(expectedMessage);
+  });
   expect(replaceGenerated).not.toHaveBeenCalled();
 }
 
@@ -348,8 +356,8 @@ describe('generated profile module closure', () => {
   it.each([
     [
       'missing normalized alias',
-      'import { Calendar } from "@/registry/base-nova/ui/calendar"',
-      'registry/base-nova/ui/button.tsx requires source outside the fetched registry closure: calendar'
+      'import { MissingWidget } from "@/registry/base-nova/ui/missing-widget"',
+      'registry/base-nova/ui/button.tsx requires source outside the fetched registry closure: missing-widget'
     ],
     [
       'comma-sequence require',

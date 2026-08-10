@@ -1,0 +1,236 @@
+{
+  "$schema": "./catalog.schema.json",
+  "schemaVersion": 1,
+  "profileId": "spfx-react17-base-nova-v1",
+  "catalogSnapshot": "snapshots/catalog/components.json",
+  "officialDefaults": {
+    "style": "base-nova",
+    "registryEndpointTemplate": "https://ui.shadcn.com/r/styles/base-nova/{id}.json",
+    "registrySourcePathTemplate": "registry/base-nova/ui/{id}.tsx",
+    "docsUrlTemplate": "https://ui.shadcn.com/docs/components/base/{id}",
+    "policy": "Preserve the official shadcn Base UI Nova default classes, semantic tokens, variants, composition, and behavior. Apply only the compatibility adjustments identified below; do not redesign, retheme, or substitute project-specific visuals.",
+    "allowedCompatibilityAdjustments": [
+      "react17-classic-jsx",
+      "react17-ref-safe-public-types",
+      "scoped-tailwind-utilities",
+      "scoped-semantic-tokens",
+      "host-owned-portals",
+      "host-owned-ids",
+      "base-ui-versioned-compatibility",
+      "registry-metadata-tag-pinning",
+      "upstream-non-emitting-tailwind-utility",
+      "host-local-toast-manager"
+    ]
+  },
+  "includedComponentIds": [
+    "accordion",
+    "alert",
+    "alert-dialog",
+    "aspect-ratio",
+    "attachment",
+    "avatar",
+    "badge",
+    "breadcrumb",
+    "bubble",
+    "button",
+    "button-group",
+    "calendar",
+    "card",
+    "carousel",
+    "chart",
+    "checkbox",
+    "collapsible",
+    "combobox",
+    "context-menu",
+    "dialog",
+    "direction",
+    "drawer",
+    "dropdown-menu",
+    "empty",
+    "field",
+    "hover-card",
+    "input",
+    "input-group",
+    "input-otp",
+    "item",
+    "kbd",
+    "label",
+    "marker",
+    "menubar",
+    "message",
+    "native-select",
+    "navigation-menu",
+    "pagination",
+    "popover",
+    "progress",
+    "radio-group",
+    "scroll-area",
+    "select",
+    "separator",
+    "sheet",
+    "sidebar",
+    "skeleton",
+    "slider",
+    "spinner",
+    "switch",
+    "table",
+    "tabs",
+    "textarea",
+    "toast",
+    "toggle",
+    "toggle-group",
+    "tooltip"
+  ],
+  "excludedComponents": [
+    {
+      "id": "command",
+      "divergenceId": "react17-peer-cmdk",
+      "reason": "The official component depends on cmdk 1.1.1, whose current peer contract requires React and ReactDOM 18 or 19. Replacing cmdk or copying its behavior would not be a narrow compatibility adjustment.",
+      "evidence": {
+        "registryDependency": "cmdk",
+        "resolvedVersion": "1.1.1",
+        "peerRequirements": "react: ^18 || ^19 || ^19.0.0-rc; react-dom: ^18 || ^19 || ^19.0.0-rc",
+        "sourceUrl": "https://ui.shadcn.com/r/styles/base-nova/command.json",
+        "docsUrl": "https://ui.shadcn.com/docs/components/base/command"
+      }
+    },
+    {
+      "id": "message-scroller",
+      "divergenceId": "react17-peer-shadcn-react",
+      "reason": "The official component depends on @shadcn/react 0.3.0, whose current peer contract requires React 19 or newer and @types/react 19 or newer. Reimplementing the headless behavior would be a substitution.",
+      "evidence": {
+        "registryDependency": "@shadcn/react",
+        "resolvedVersion": "0.3.0",
+        "peerRequirements": "react: >=19; @types/react: >=19",
+        "sourceUrl": "https://ui.shadcn.com/r/styles/base-nova/message-scroller.json",
+        "docsUrl": "https://ui.shadcn.com/docs/components/base/message-scroller"
+      }
+    },
+    {
+      "id": "questionnaire",
+      "divergenceId": "react17-peer-shadcn-react",
+      "reason": "The official component depends on @shadcn/react 0.3.0, whose current peer contract requires React 19 or newer and @types/react 19 or newer. Reimplementing the headless behavior would be a substitution.",
+      "evidence": {
+        "registryDependency": "@shadcn/react",
+        "resolvedVersion": "0.3.0",
+        "peerRequirements": "react: >=19; @types/react: >=19",
+        "sourceUrl": "https://ui.shadcn.com/r/styles/base-nova/questionnaire.json",
+        "docsUrl": "https://ui.shadcn.com/docs/components/base/questionnaire"
+      }
+    },
+    {
+      "id": "resizable",
+      "divergenceId": "react17-peer-react-resizable-panels",
+      "reason": "The official component currently resolves react-resizable-panels 4.12.2, whose peer contract requires React and ReactDOM 18 or 19. Pinning an older release would change the current official dependency and API.",
+      "evidence": {
+        "registryDependency": "react-resizable-panels",
+        "resolvedVersion": "4.12.2",
+        "peerRequirements": "react: ^18.0.0 || ^19.0.0; react-dom: ^18.0.0 || ^19.0.0",
+        "sourceUrl": "https://ui.shadcn.com/r/styles/base-nova/resizable.json",
+        "docsUrl": "https://ui.shadcn.com/docs/components/base/resizable"
+      }
+    }
+  ],
+  "documentedCompositions": [
+    {
+      "id": "data-table",
+      "divergenceId": "official-documentation-composition-only",
+      "docsUrl": "https://ui.shadcn.com/docs/components/base/data-table",
+      "missingRegistryUrl": "https://ui.shadcn.com/r/styles/base-nova/data-table.json",
+      "reason": "The official catalog documents a composition recipe, but the official Base UI Nova registry has no data-table item. The package documents the composition and does not invent a public component export."
+    },
+    {
+      "id": "date-picker",
+      "divergenceId": "official-documentation-composition-only",
+      "docsUrl": "https://ui.shadcn.com/docs/components/base/date-picker",
+      "missingRegistryUrl": "https://ui.shadcn.com/r/styles/base-nova/date-picker.json",
+      "reason": "The official catalog documents a Calendar and Popover composition recipe, but the official Base UI Nova registry has no date-picker item. The package documents the composition and does not invent a public component export."
+    },
+    {
+      "id": "typography",
+      "divergenceId": "official-documentation-composition-only",
+      "docsUrl": "https://ui.shadcn.com/docs/components/base/typography",
+      "missingRegistryUrl": "https://ui.shadcn.com/r/styles/base-nova/typography.json",
+      "reason": "The official catalog documents styled HTML examples rather than a registry component. The package documents those defaults and does not invent a public component export."
+    }
+  ],
+  "supportRegistryIds": ["utils", "use-mobile"],
+  "explicitDivergences": [
+    {
+      "id": "react17-classic-jsx",
+      "componentIds": [],
+      "summary": "Bind generated JSX to the shared React 17 namespace without changing rendered markup or official classes."
+    },
+    {
+      "id": "react17-ref-safe-public-types",
+      "componentIds": [],
+      "summary": "Use React 17-compatible ref-bearing public wrapper types without changing runtime behavior."
+    },
+    {
+      "id": "scoped-tailwind-utilities",
+      "componentIds": [],
+      "summary": "Prefix official utility classes and compile them into the profile stylesheet so they cannot affect the SharePoint host."
+    },
+    {
+      "id": "scoped-semantic-tokens",
+      "componentIds": [],
+      "summary": "Scope the official semantic token names to the owned UI root while retaining their Base Nova values and meanings."
+    },
+    {
+      "id": "host-owned-portals",
+      "componentIds": [],
+      "summary": "Route overlay portals to the owning SPFx UI host without changing official overlay styling or interaction behavior."
+    },
+    {
+      "id": "host-owned-ids",
+      "componentIds": [],
+      "summary": "Derive generated IDs from the owning SPFx UI host to keep concurrent React 17 roots isolated."
+    },
+    {
+      "id": "base-ui-versioned-compatibility",
+      "componentIds": [],
+      "summary": "Apply reviewed, version-bound Base UI declaration, popup lifecycle, and ID ownership compatibility transforms."
+    },
+    {
+      "id": "registry-metadata-tag-pinning",
+      "componentIds": ["calendar"],
+      "summary": "Resolve the official react-day-picker@latest metadata declaration only to the reviewed react-day-picker 10.0.1 package and its integrity-bound production closure."
+    },
+    {
+      "id": "upstream-non-emitting-tailwind-utility",
+      "componentIds": ["navigation-menu"],
+      "summary": "Retain the official Navigation Menu easing-[ease], data-activation-direction=*, and xs:* class literals verbatim even though Tailwind 4.3.3 emits none of them with the official default theme, preserving the official runtime result while making every non-emitting candidate explicit."
+    },
+    {
+      "id": "host-local-toast-manager",
+      "componentIds": ["toast"],
+      "summary": "Replace the official module-global toast manager with a host-local default manager and explicit createToastManager adapter so independent SPFx roots cannot share toast state."
+    },
+    {
+      "id": "react17-peer-cmdk",
+      "componentIds": ["command"],
+      "summary": "Excluded because the official runtime dependency does not support React 17."
+    },
+    {
+      "id": "react17-peer-shadcn-react",
+      "componentIds": ["message-scroller", "questionnaire"],
+      "summary": "Excluded because the official headless runtime requires React 19."
+    },
+    {
+      "id": "react17-peer-react-resizable-panels",
+      "componentIds": ["resizable"],
+      "summary": "Excluded because the current official runtime dependency does not support React 17."
+    },
+    {
+      "id": "official-documentation-composition-only",
+      "componentIds": ["data-table", "date-picker", "typography"],
+      "summary": "Documented as official composition guidance because no Base UI Nova registry component exists."
+    }
+  ],
+  "counts": {
+    "catalog": 64,
+    "included": 57,
+    "excluded": 4,
+    "documentedCompositions": 3
+  }
+}

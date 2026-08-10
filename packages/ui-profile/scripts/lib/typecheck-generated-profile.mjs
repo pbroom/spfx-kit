@@ -50,11 +50,18 @@ export async function assertGeneratedProfileCompiles({ packageRoot, outputRoot }
 
   for (const compiler of PINNED_PROFILE_COMPILERS) {
     const project = path.join(projectRoot, compiler.config);
+    const compilerInclude =
+      compiler.package === 'typescript'
+        ? [
+            ...include,
+            configPath(projectRoot, path.join(realPackageRoot, 'compat-consumers', 'typescript53-globals.d.ts'))
+          ]
+        : include;
     await writeFile(
       project,
       canonicalJson({
         extends: configPath(projectRoot, path.join(realPackageRoot, compiler.config)),
-        include
+        include: compilerInclude
       })
     );
     try {
