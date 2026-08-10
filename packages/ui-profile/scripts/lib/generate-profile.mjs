@@ -18,7 +18,15 @@ import { assertFetchedRegistryClosure, assertProductionDependencyRoots } from '.
 import { compileTailwindCss } from './compile-tailwind-css.mjs';
 
 const compilerInputPaths = [
+  'catalog.json',
+  'catalog.schema.json',
+  'snapshots/catalog/components.json',
+  'scripts/lib/catalog.mjs',
+  'scripts/verify-catalog.mjs',
+  'scripts/update-catalog-profile.mjs',
+  'scripts/update-dependency-closure.mjs',
   'compat-consumers/react17-base-ui-jsx.d.ts',
+  'compat-consumers/typescript53-globals.d.ts',
   'compat-consumers/select-value.tsx',
   'compat/base-ui-1.6.0/id-ownership/contract.schema.json',
   'tailwind-profile.css',
@@ -109,6 +117,7 @@ export async function generateProfile({ packageRoot, rawRoot, outputRoot, proven
     {
       excludedDependencies: provenance.excludedDependencies,
       directProductionDependencies: provenance.directProductionDependencies,
+      registryDependencyTagResolutions: provenance.registryDependencyTagResolutions,
       allowedTypeDirectives: pinnedTypeDirectiveNames(manifest.devDependencies)
     }
   );

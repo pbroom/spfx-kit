@@ -27,7 +27,7 @@ export type {
 } from '../normalized/src/lib/ui-root';
 
 export const SPFX_UI_PROFILE_ID = 'spfx-react17-base-nova-v1';
-export const SPFX_UI_SCOPE_VALUE = 'skui-7dbbe5a120453773';
+export const SPFX_UI_SCOPE_VALUE = 'skui-d0cb51634265e868';
 
 export type CreateSpfxUiHostOptions = Omit<InternalCreateSpfxUiHostOptions, 'profileId' | 'scopeValue'>;
 

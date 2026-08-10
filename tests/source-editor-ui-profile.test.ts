@@ -97,8 +97,8 @@ describe('source editor UI profile', () => {
       ],
       css: {
         mode: 'canonical-safe-superset',
-        scopeValue: 'skui-7dbbe5a120453773',
-        scopeSelector: '[data-spfx-ui-scope="skui-7dbbe5a120453773"]'
+        scopeValue: 'skui-d0cb51634265e868',
+        scopeSelector: '[data-spfx-ui-scope="skui-d0cb51634265e868"]'
       }
     });
     expect(scssOnly.files.map((file: { vendorPath: string }) => file.vendorPath)).not.toContain(
@@ -121,7 +121,7 @@ describe('source editor UI profile', () => {
     expect(runtimeContract?.source).toContain(
       'export const SPFX_UI_PROFILE_ID = "source-editor-scss-react17-base-nova-v1" as const;'
     );
-    expect(runtimeContract?.source).toContain('export const SPFX_UI_SCOPE_VALUE = "skui-7dbbe5a120453773" as const;');
+    expect(runtimeContract?.source).toContain('export const SPFX_UI_SCOPE_VALUE = "skui-d0cb51634265e868" as const;');
     expect(scssOnly.manifest.runtimeContract).toEqual({
       vendorPath: runtimeContract?.vendorPath,
       sha256: sourceEditorDigest(runtimeContract?.source ?? '')

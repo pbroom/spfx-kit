@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "dependencies": [
+    "@base-ui/react"
+  ],
+  "files": [
+    {
+      "content": "\"use client\"\n\nexport {\n  DirectionProvider,\n  useDirection,\n} from \"@base-ui/react/direction-provider\"\n",
+      "path": "registry/base-nova/ui/direction.tsx",
+      "type": "registry:ui"
+    }
+  ],
+  "meta": {
+    "links": {
+      "api": "https://base-ui.com/react/utils/direction-provider.md",
+      "docs": "https://ui.shadcn.com/docs/components/base/direction"
+    }
+  },
+  "name": "direction",
+  "type": "registry:ui"
+}

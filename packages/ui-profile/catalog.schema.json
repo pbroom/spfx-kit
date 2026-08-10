@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spfx-kit.dev/schemas/ui-profile-catalog.schema.json",
+  "title": "SPFx Kit UI profile catalog authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "profileId",
+    "catalogSnapshot",
+    "officialDefaults",
+    "includedComponentIds",
+    "excludedComponents",
+    "documentedCompositions",
+    "supportRegistryIds",
+    "explicitDivergences",
+    "counts"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "./catalog.schema.json"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "profileId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "catalogSnapshot": {
+      "const": "snapshots/catalog/components.json"
+    },
+    "officialDefaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "style",
+        "registryEndpointTemplate",
+        "registrySourcePathTemplate",
+        "docsUrlTemplate",
+        "policy",
+        "allowedCompatibilityAdjustments"
+      ],
+      "properties": {
+        "style": {
+          "const": "base-nova"
+        },
+        "registryEndpointTemplate": {
+          "const": "https://ui.shadcn.com/r/styles/base-nova/{id}.json"
+        },
+        "registrySourcePathTemplate": {
+          "const": "registry/base-nova/ui/{id}.tsx"
+        },
+        "docsUrlTemplate": {
+          "const": "https://ui.shadcn.com/docs/components/base/{id}"
+        },
+        "policy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "allowedCompatibilityAdjustments": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      }
+    },
+    "includedComponentIds": {
+      "type": "array",
+      "minItems": 57,
+      "maxItems": 57,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/id"
+      }
+    },
+    "excludedComponents": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "$ref": "#/$defs/excludedComponent"
+      }
+    },
+    "documentedCompositions": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/documentedComposition"
+      }
+    },
+    "supportRegistryIds": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/id"
+      }
+    },
+    "explicitDivergences": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/divergence"
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog", "included", "excluded", "documentedCompositions"],
+      "properties": {
+        "catalog": {
+          "const": 64
+        },
+        "included": {
+          "const": 57
+        },
+        "excluded": {
+          "const": 4
+        },
+        "documentedCompositions": {
+          "const": 3
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "excludedComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "divergenceId", "reason", "evidence"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "divergenceId": {
+          "$ref": "#/$defs/id"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["registryDependency", "resolvedVersion", "peerRequirements", "sourceUrl", "docsUrl"],
+          "properties": {
+            "registryDependency": {
+              "type": "string",
+              "minLength": 1
+            },
+            "resolvedVersion": {
+              "type": "string",
+              "minLength": 1
+            },
+            "peerRequirements": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sourceUrl": {
+              "type": "string",
+              "format": "uri"
+            },
+            "docsUrl": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        }
+      }
+    },
+    "documentedComposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "divergenceId", "docsUrl", "missingRegistryUrl", "reason"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "divergenceId": {
+          "$ref": "#/$defs/id"
+        },
+        "docsUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "missingRegistryUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "divergence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "componentIds", "summary"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "componentIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -16,6 +16,15 @@ import { Button } from '@spfx-kit/ui-profile/button';
 import '@spfx-kit/ui-profile/styles.css';
 ```
 
+The reviewed [component catalog](./COMPONENTS.md) records all 64 entries on the
+official shadcn main catalog snapshot: 57 public components, four exclusions
+with current React peer evidence, and three official composition guides that
+do not ship a registry component. `catalog.json` is the machine-readable
+authority for that inventory and for every unavoidable compatibility
+divergence. Raw and canonical registry bytes, normalized output bytes, public
+exports, and generated CSS are digest-bound so an upstream class, token,
+variant, or behavior change cannot silently enter the package.
+
 The root host factory binds the immutable profile ID and CSS scope shipped by
 the package. Consumers supply only their mount point, portal parent, owning
 document, stable instance ID, and theme tokens. Vite uses
@@ -27,11 +36,12 @@ canonical, and normalized snapshots and fail when a snapshot is missing or its
 digest changes. The only network-capable command is explicit:
 
 ```sh
-npm --workspace @spfx-kit/ui-profile run profile:update:network
+npm --workspace @spfx-kit/ui-profile run profile:update:catalog:network
 ```
 
-That command is for reviewed profile-update PRs. It refreshes all 24 registry
-items as one staged batch; it is not a fallback for a missing local file. The
+That command is for reviewed profile-update PRs. It refreshes all 59 registry
+payloads (57 public components plus two support inputs) as one staged batch; it
+is not a fallback for a missing local file. The
 hosted responses are explicitly mutable and are not represented as outputs of
 the recorded shadcn tool-source revision. Before intake, the command verifies
 the exact installed `shadcn@4.16.1` version and lockfile integrity, then requires

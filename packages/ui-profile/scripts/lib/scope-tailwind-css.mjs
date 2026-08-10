@@ -12,8 +12,25 @@ export const SCOPE_ATTRIBUTE = 'data-spfx-ui-scope';
 
 const ASSET_FUNCTIONS = new Set(['url', 'image', 'image-set', '-webkit-image-set', 'cross-fade', 'element', 'paint']);
 const SEMANTIC_PROPERTY_REPLACEMENTS = new Map([
+  ['--accent', '--spfx-ui-color-accent'],
+  ['--accent-foreground', '--spfx-ui-color-accent-foreground'],
+  ['--background', '--spfx-ui-color-background'],
+  ['--border', '--spfx-ui-color-border'],
+  ['--card', '--spfx-ui-color-card'],
+  ['--card-foreground', '--spfx-ui-color-card-foreground'],
+  ['--color-popover', '--spfx-ui-color-popover'],
+  ['--destructive', '--spfx-ui-color-destructive'],
   ['--foreground', '--spfx-ui-color-foreground'],
+  ['--input', '--spfx-ui-color-input'],
+  ['--muted', '--spfx-ui-color-muted'],
+  ['--muted-foreground', '--spfx-ui-color-muted-foreground'],
+  ['--popover', '--spfx-ui-color-popover'],
+  ['--popover-foreground', '--spfx-ui-color-popover-foreground'],
+  ['--primary', '--spfx-ui-color-primary'],
+  ['--primary-foreground', '--spfx-ui-color-primary-foreground'],
+  ['--ring', '--spfx-ui-color-ring'],
   ['--secondary', '--spfx-ui-color-secondary'],
+  ['--secondary-foreground', '--spfx-ui-color-secondary-foreground'],
   ['--radius', '--spfx-ui-radius-lg'],
   ['--radius-md', '--spfx-ui-radius-md'],
   ['--spacing', '--skui-spacing']
@@ -23,13 +40,61 @@ const RUNTIME_PROPERTIES = new Set([
   '--anchor-width',
   '--available-height',
   '--available-width',
+  '--color-bg',
+  '--color-border',
+  '--drawer-bleed-background',
+  '--drawer-frontmost-height',
+  '--drawer-height',
+  '--drawer-inset',
+  '--nested-drawers',
+  '--drawer-overlay-min-opacity',
+  '--drawer-snap-point-offset',
+  '--drawer-swipe-movement-x',
+  '--drawer-swipe-movement-y',
+  '--drawer-swipe-progress',
+  '--drawer-swipe-strength',
   '--transform-origin',
+  '--popup-height',
+  '--popup-width',
+  '--positioner-height',
+  '--positioner-width',
+  '--ratio',
+  '--sidebar-width',
+  '--sidebar-width-icon',
+  '--skeleton-width',
+  '--scroll-fade-b-size',
+  '--scroll-fade-e-size',
+  '--scroll-fade-reveal',
+  '--scroll-fade-s-size',
+  '--scroll-fade-size',
+  '--scroll-fade-t-size',
+  '--shimmer-color',
+  '--shimmer-duration',
+  '--shimmer-spread',
+  '--toast-frontmost-height',
+  '--toast-height',
+  '--toast-index',
+  '--toast-offset-y',
+  '--toast-swipe-movement-x',
+  '--toast-swipe-movement-y',
   '--gap',
   '--radix-accordion-content-height',
   '--bits-accordion-content-height',
   '--reka-accordion-content-height',
   '--kb-accordion-content-height',
   '--ngp-accordion-content-height'
+]);
+// The official Navigation Menu source currently ships this literal class, but
+// Tailwind 4.3.3 has no `easing-*` utility family (the emitted family is
+// `ease-*`). Retaining the non-emitting class preserves upstream runtime
+// behavior; the catalog divergence ledger binds this exception to that source.
+const REVIEWED_NON_EMITTING_CANDIDATES = new Set([
+  'skui:data-[ending-style]:easing-[ease]',
+  'skui:data-ending-style:data-activation-direction=left:translate-x-[50%]',
+  'skui:data-ending-style:data-activation-direction=right:translate-x-[-50%]',
+  'skui:data-starting-style:data-activation-direction=left:translate-x-[-50%]',
+  'skui:data-starting-style:data-activation-direction=right:translate-x-[50%]',
+  'skui:xs:w-(--popup-width)'
 ]);
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -69,6 +134,12 @@ function scopeOneSelector(selector) {
   });
   assert(!nestingFound, `Nested selectors are not accepted: ${selector}`);
   assert(!selectorHasExplicitScopeAttribute(selector), `Source selector owns ${SCOPE_ATTRIBUTE}: ${selector}`);
+  selector.walkClasses((className) => {
+    // shadcn/tailwind.css owns a literal reduced-motion `.shimmer` rule outside
+    // its @utility block. Tailwind prefixes the utility and its variants but
+    // intentionally does not rewrite that literal support selector.
+    if (className.value === 'shimmer') className.value = 'skui:shimmer';
+  });
 
   const rootPseudos = [];
   selector.walkPseudos((pseudo) => {
@@ -334,15 +405,48 @@ function valueSegments(value) {
   return segments;
 }
 
-function assertAnimationValue(value, { keyframes, animationVariables, allowVariable }) {
+function assertAnimationValue(value, { keyframes, animationVariables, allowVariable, nameOnly = false }) {
   for (const segment of valueSegments(value)) {
     assert(segment.length > 0, `Empty animation value segment is not accepted: ${value}`);
     const first = segment[0];
     if (first.type === 'word') {
       if (['none', 'initial', 'inherit', 'unset', 'revert', 'revert-layer'].includes(first.value.toLowerCase())) {
         assert(segment.length === 1, `Ambiguous animation shorthand is not accepted: ${value}`);
-      } else {
+      } else if (nameOnly) {
+        assert(segment.length === 1, `Ambiguous animation-name value is not accepted: ${value}`);
         assert(keyframes.has(first.value), `Animation uses an unscoped or missing keyframe: ${first.value}`);
+      } else {
+        const componentKeywords = new Set([
+          'normal',
+          'reverse',
+          'alternate',
+          'alternate-reverse',
+          'none',
+          'forwards',
+          'backwards',
+          'both',
+          'running',
+          'paused',
+          'ease',
+          'ease-in',
+          'ease-out',
+          'ease-in-out',
+          'linear',
+          'step-start',
+          'step-end',
+          'infinite'
+        ]);
+        const nameCandidates = segment.filter(
+          (node) =>
+            node.type === 'word' &&
+            !componentKeywords.has(node.value.toLowerCase()) &&
+            !/^-?(?:\d+|\d*\.\d+)(?:ms|s)?$/u.test(node.value)
+        );
+        assert(nameCandidates.length === 1, `Ambiguous animation shorthand is not accepted: ${value}`);
+        assert(
+          keyframes.has(nameCandidates[0].value),
+          `Animation uses an unscoped or missing keyframe: ${nameCandidates[0].value}`
+        );
       }
       continue;
     }
@@ -391,7 +495,7 @@ export function auditScopedTailwindCss({ css, scopeValue, candidates = [], allow
   const scope = scopeSelector(scopeValue);
   const boundary = scopeBoundaryParams(scopeValue);
   const emittedCandidates = new Set();
-  const allowedClassSet = new Set(allowedClasses);
+  const allowedClassSet = new Set([...allowedClasses, 'skui:shimmer']);
   const keyframes = new Set();
   const referencedKeyframes = new Set();
   const animationVariables = new Map();
@@ -449,10 +553,19 @@ export function auditScopedTailwindCss({ css, scopeValue, candidates = [], allow
       selector.walkTags((tag) => {
         assert(!['html', 'body'].includes(tag.value.toLowerCase()), `Page selector remains: ${selector}`);
       });
-      selector.walkClasses((className) => {
-        assert(allowedClassSet.has(className.value), `Unexpected emitted CSS class: ${className.value}`);
-        if (!insideNegation(className)) emittedCandidates.add(className.value);
-      });
+      const selectorClasses = [];
+      selector.walkClasses((className) => selectorClasses.push(className));
+      const hasOwnedClass = selectorClasses.some((className) => allowedClassSet.has(className.value));
+      for (const className of selectorClasses) {
+        const reviewedExternalClass = /^(?:rdp-|recharts-)/u.test(className.value);
+        assert(
+          allowedClassSet.has(className.value) || (reviewedExternalClass && hasOwnedClass),
+          `Unexpected emitted CSS class: ${className.value}`
+        );
+        if (allowedClassSet.has(className.value) && !insideNegation(className)) {
+          emittedCandidates.add(className.value);
+        }
+      }
     }
     for (const selector of descendantSelectors) {
       assert(selfSelectors.has(selector), `Selector lacks its :where(:scope) self variant: ${selector}`);
@@ -477,7 +590,9 @@ export function auditScopedTailwindCss({ css, scopeValue, candidates = [], allow
     }
   });
   for (const values of animationVariables.values()) {
-    for (const value of values) assertAnimationValue(value, { keyframes, animationVariables, allowVariable: false });
+    for (const value of values) {
+      assertAnimationValue(value, { keyframes, animationVariables, allowVariable: false });
+    }
   }
 
   root.walkDecls((declaration) => {
@@ -488,7 +603,12 @@ export function auditScopedTailwindCss({ css, scopeValue, candidates = [], allow
       return word;
     });
     if (['animation', 'animation-name', '-webkit-animation', '-webkit-animation-name'].includes(declaration.prop.toLowerCase())) {
-      assertAnimationValue(declaration.value, { keyframes, animationVariables, allowVariable: true });
+      assertAnimationValue(declaration.value, {
+        keyframes,
+        animationVariables,
+        allowVariable: true,
+        nameOnly: declaration.prop.toLowerCase().endsWith('animation-name')
+      });
     }
     valueParser(declaration.value).walk((node) => {
       if (node.type === 'word' && node.value.startsWith(`${scopeValue}-`)) referencedKeyframes.add(node.value);
@@ -507,6 +627,7 @@ export function auditScopedTailwindCss({ css, scopeValue, candidates = [], allow
     assert(referencedKeyframes.has(keyframe), `Scoped keyframe is not referenced: ${keyframe}`);
   }
   for (const candidate of candidates) {
+    if (REVIEWED_NON_EMITTING_CANDIDATES.has(candidate)) continue;
     assert(emittedCandidates.has(candidate), `Tailwind candidate did not emit a positive selector: ${candidate}`);
   }
   return { candidateCount: candidates.length, keyframeCount: keyframes.size, containerCount: containers.size };

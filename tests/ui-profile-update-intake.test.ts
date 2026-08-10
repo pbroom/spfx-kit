@@ -325,6 +325,9 @@ describe('pinned shadcn network intake', () => {
     const { packageRoot, resolvedRegistryUrl } = installedToolchain();
     const committedRoot = path.resolve('packages/ui-profile');
     const provenance = JSON.parse(await readFile(path.join(committedRoot, 'provenance.json'), 'utf8'));
+    expect(provenance.registryDependencyTagResolutions).toEqual({
+      'react-day-picker@latest': '10.0.1'
+    });
     const cliItems = await Promise.all(
       provenance.registryIds.map(async (id: string) =>
         JSON.parse(await readFile(path.join(committedRoot, 'snapshots', 'canonical', `${id}.json`), 'utf8'))
@@ -341,7 +344,8 @@ describe('pinned shadcn network intake', () => {
       registryIds: provenance.registryIds,
       dependencyPolicy: {
         excludedDependencies: provenance.excludedDependencies,
-        directProductionDependencies: provenance.directProductionDependencies
+        directProductionDependencies: provenance.directProductionDependencies,
+        registryDependencyTagResolutions: provenance.registryDependencyTagResolutions
       },
       fetchImpl,
       getRegistryItemsImpl: async () => cliItems,

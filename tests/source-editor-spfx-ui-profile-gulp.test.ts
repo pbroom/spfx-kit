@@ -54,9 +54,11 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
     const closure = JSON.parse(
       await readFile(path.join(repositoryRoot, 'packages', 'ui-profile', 'dependency-closure.json'), 'utf8')
     );
+    const portableLayout = createPortableClosureLayout(closure);
+    expect(closure.packages.filter((entry: any) => entry.name === 'react-is')).toHaveLength(3);
     const lockPackages = Object.fromEntries(
       closure.packages.map((entry: any) => [
-        lockPath(entry.name),
+        portableLayout.get(entry.path)!,
         {
           version: entry.version,
           integrity: entry.integrity,
@@ -74,20 +76,27 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
     const lock = {
       lockfileVersion: 3,
       packages: {
-        '': { dependencies: { '@base-ui/react': '1.6.0' } },
+        '': {
+          dependencies: Object.fromEntries(
+            closure.productionRoots.map((name: string) => [
+              name,
+              closure.packages.find((entry: any) => portableLayout.get(entry.path) === `node_modules/${name}`)!.version
+            ])
+          )
+        },
         ...lockPackages
       }
     };
     await writeFile(
       path.join(appRoot, 'package.json'),
-      `${JSON.stringify({ name: 'better-text-spfx', dependencies: { '@base-ui/react': '1.6.0' } })}\n`
+      `${JSON.stringify({ name: 'better-text-spfx', dependencies: lock.packages[''].dependencies })}\n`
     );
     const appLockPath = path.join(appRoot, 'package-lock.json');
     await writeFile(appLockPath, `${JSON.stringify(lock)}\n`);
     const installedBaseUi = path.join(repositoryRoot, 'node_modules', '@base-ui', 'react');
     for (const entry of closure.packages) {
-      const source = path.join(repositoryRoot, 'node_modules', ...entry.name.split('/'));
-      const target = path.join(appRoot, ...lockPath(entry.name).split('/'));
+      const source = path.join(repositoryRoot, ...entry.path.split('/'));
+      const target = path.join(appRoot, ...portableLayout.get(entry.path)!.split('/'));
       await mkdir(path.dirname(target), { recursive: true });
       await cp(source, target, { recursive: true });
     }
@@ -554,7 +563,7 @@ describe('portable Better Text SPFx UI profile build adapter', () => {
 
     for (const entry of closure.packages) {
       const driftedLock = structuredClone(lock);
-      driftedLock.packages[lockPath(entry.name)].version = '0.0.0-drift';
+      driftedLock.packages[portableLayout.get(entry.path)!].version = '0.0.0-drift';
       await writeFile(appLockPath, `${JSON.stringify(driftedLock)}\n`);
       expect(() => registerSpfxUiProfileGulp(createBuildStub(), { appRoot, profileRoot })).toThrow(
         `Installed ${entry.name} lock identity differs from the dependency closure.`
@@ -724,6 +733,87 @@ async function writeLegacyPreparationLock(
 
 function lockPath(name: string): string {
   return name === 'reselect' ? 'node_modules/@base-ui/utils/node_modules/reselect' : `node_modules/${name}`;
+}
+
+function createPortableClosureLayout(closure: any): Map<string, string> {
+  const accepted = new Map<string, any>(closure.packages.map((entry: any) => [entry.path, entry]));
+  const installed = new Map<string, any>();
+  const layout = new Map<string, string>();
+  const queue: string[] = [];
+
+  for (const name of closure.productionRoots) {
+    const expectedPath = resolveFixtureDependency(accepted, 'packages/ui-profile', name);
+    if (!expectedPath) throw new Error(`Fixture closure omits production root ${name}`);
+    const installedPath = `node_modules/${name}`;
+    if (installed.has(installedPath)) throw new Error(`Fixture production root path collides: ${installedPath}`);
+    installed.set(installedPath, accepted.get(expectedPath));
+    layout.set(expectedPath, installedPath);
+    queue.push(expectedPath);
+  }
+
+  for (const [expectedPath, entry] of accepted) {
+    const rootCandidate = `node_modules/${entry.name}`;
+    if (expectedPath !== rootCandidate || layout.has(expectedPath) || installed.has(rootCandidate)) continue;
+    installed.set(rootCandidate, entry);
+    layout.set(expectedPath, rootCandidate);
+  }
+
+  const visited = new Set<string>();
+  while (queue.length > 0) {
+    const expectedPath = queue.shift()!;
+    if (visited.has(expectedPath)) continue;
+    visited.add(expectedPath);
+    const entry = accepted.get(expectedPath);
+    const installedParent = layout.get(expectedPath)!;
+    for (const dependency of Object.keys(entry.dependencies)) {
+      const expectedDependencyPath = resolveFixtureDependency(accepted, expectedPath, dependency);
+      if (!expectedDependencyPath) throw new Error(`Fixture closure omits ${entry.name} dependency ${dependency}`);
+      const expectedDependency = accepted.get(expectedDependencyPath);
+      let installedDependencyPath = layout.get(expectedDependencyPath);
+      if (!installedDependencyPath) {
+        const visible = resolveFixtureDependency(installed, installedParent, dependency);
+        if (visible && samePackageIdentity(installed.get(visible), expectedDependency)) {
+          installedDependencyPath = visible;
+        } else {
+          const rootCandidate = `node_modules/${dependency}`;
+          installedDependencyPath = installed.has(rootCandidate)
+            ? path.posix.join(installedParent, 'node_modules', dependency)
+            : rootCandidate;
+          if (installed.has(installedDependencyPath)) {
+            throw new Error(`Fixture dependency path collides: ${installedDependencyPath}`);
+          }
+          installed.set(installedDependencyPath, expectedDependency);
+        }
+        layout.set(expectedDependencyPath, installedDependencyPath);
+      }
+      const resolved = resolveFixtureDependency(installed, installedParent, dependency);
+      if (resolved !== installedDependencyPath) {
+        throw new Error(`Fixture cannot preserve ${entry.name} dependency edge ${dependency}`);
+      }
+      queue.push(expectedDependencyPath);
+    }
+  }
+  if (layout.size !== accepted.size) {
+    throw new Error(`Fixture layout size ${layout.size} differs from closure ${accepted.size}`);
+  }
+  return layout;
+}
+
+function resolveFixtureDependency(packages: Map<string, any>, fromPath: string, dependency: string): string | undefined {
+  let current = fromPath;
+  while (current && current !== '.') {
+    const candidate = path.posix.join(current, 'node_modules', dependency);
+    if (packages.has(candidate)) return candidate;
+    const parent = path.posix.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  const rootCandidate = `node_modules/${dependency}`;
+  return packages.has(rootCandidate) ? rootCandidate : undefined;
+}
+
+function samePackageIdentity(left: any, right: any): boolean {
+  return left?.name === right?.name && left?.version === right?.version && left?.integrity === right?.integrity;
 }
 
 function createBuildStub(): any {

@@ -1,213 +1,409 @@
 {
   "$schema": "./provenance.schema.json",
-  "schemaVersion": 1,
-  "generatorVersion": "1.3.0",
-  "profileId": "spfx-react17-base-nova-v1",
-  "registry": {
-    "preset": "base-nova",
-    "endpointTemplate": "https://ui.shadcn.com/r/styles/base-nova/{id}.json",
-    "toolSourceRepository": "https://github.com/shadcn-ui/ui",
-    "toolSourceRevision": "cb2bcd88d93b2f9bddb030e9136f1f8773e7eac4",
-    "cli": {
-      "name": "shadcn",
-      "version": "4.16.1",
-      "integrity": "sha512-XLFzfNNIUPlUlyheFEzj0H4Vnhi9nI0nl3Nfgg8HYXW1FkUVhVT1X+mgmOUW8aWL5SeG0A+yJIV5fm3Hr9MVkQ=="
-    },
-    "mutableHostedResponses": true,
-    "hostedResponsesRevisionBound": false
-  },
-  "runtime": {
-    "react": "17.0.1",
-    "reactDom": "17.0.1",
-    "baseUi": "1.6.0",
-    "lucideReact": "1.25.0"
-  },
-  "reactTypeContract": {
-    "@types/react": "17.0.45",
-    "@types/react-dom": "17.0.17"
-  },
-  "utilities": {
-    "class-variance-authority": "0.7.1",
-    "clsx": "2.1.1",
-    "tailwind-merge": "3.6.0"
-  },
   "cssToolchain": {
-    "tailwindcss": {
-      "version": "4.3.3",
-      "integrity": "sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ=="
-    },
     "@tailwindcss/cli": {
-      "version": "4.3.3",
-      "integrity": "sha512-ZvS/n1ZHOBKcVlhkt8l5NNr1EDXk1NboYO5CYDOs6NUmvT9z6bzkwsosaJftY57T/3gWNzWMJzIXLodZC8ssdw=="
+      "integrity": "sha512-ZvS/n1ZHOBKcVlhkt8l5NNr1EDXk1NboYO5CYDOs6NUmvT9z6bzkwsosaJftY57T/3gWNzWMJzIXLodZC8ssdw==",
+      "version": "4.3.3"
     },
     "postcss": {
-      "version": "8.5.19",
-      "integrity": "sha512-Mz8SaolMd8nB+G13WkORcxQKHZ/NE4xXevtkJHVuG+guo9/wYKlIMTKAqGdEmYOXR2ijPjTYNHssizdaVSUNdQ=="
+      "integrity": "sha512-Mz8SaolMd8nB+G13WkORcxQKHZ/NE4xXevtkJHVuG+guo9/wYKlIMTKAqGdEmYOXR2ijPjTYNHssizdaVSUNdQ==",
+      "version": "8.5.19"
     },
     "postcss-selector-parser": {
-      "version": "7.1.4",
-      "integrity": "sha512-HeP7D2wyhkR+XaK6v4W8oRF62Dsz4flyuczALJp61GckGm42u1saSSJ/0auvcBqxs3jMRFEcPK34At/0JBKdOg=="
+      "integrity": "sha512-HeP7D2wyhkR+XaK6v4W8oRF62Dsz4flyuczALJp61GckGm42u1saSSJ/0auvcBqxs3jMRFEcPK34At/0JBKdOg==",
+      "version": "7.1.4"
     },
     "postcss-value-parser": {
-      "version": "4.2.0",
-      "integrity": "sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ=="
+      "integrity": "sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ==",
+      "version": "4.2.0"
+    },
+    "tailwindcss": {
+      "integrity": "sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==",
+      "version": "4.3.3"
     },
     "tw-animate-css": {
-      "version": "1.4.0",
-      "integrity": "sha512-7bziOlRqH0hJx80h/3mbicLW7o8qLsH5+RaLR2t+OHM3D0JlWGODQKQ4cxbK7WlvmUxpcj6Kgu6EKqjrGFe3QQ=="
+      "integrity": "sha512-7bziOlRqH0hJx80h/3mbicLW7o8qLsH5+RaLR2t+OHM3D0JlWGODQKQ4cxbK7WlvmUxpcj6Kgu6EKqjrGFe3QQ==",
+      "version": "1.4.0"
     }
   },
-  "tailwindCompilerClosureSha256": "69d2578c8b570be1f3c2bdcde507a3c4d49b30531bacdd6f62b2398872a5e0ce",
   "dependencyResolutionPins": {
     "@floating-ui/core": "1.7.5",
     "@floating-ui/dom": "1.7.6",
     "@floating-ui/react-dom": "2.1.8",
     "@floating-ui/utils": "0.2.11"
   },
-  "typescriptMatrix": ["5.3.3", "5.8.3"],
-  "normalization": {
-    "contractVersion": "react17-classic-jsx-skui-v4",
-    "configuration": {
-      "tailwindPrefix": "skui",
-      "rtl": false,
-      "menuColor": null,
-      "fontHeadingMarker": "font-heading"
-    },
-    "implementation": "scripts/lib/profile.mjs",
-    "implementationSha256": "2bf17557cad55c8f41145365f3f582ad4b9615bec93e46d2d5f2104ac88f7dc9"
-  },
-  "registryIds": [
-    "button",
-    "input",
-    "field",
-    "textarea",
-    "checkbox",
-    "switch",
-    "select",
-    "combobox",
-    "toggle-group",
-    "tabs",
-    "accordion",
-    "dropdown-menu",
-    "dialog",
-    "sheet",
-    "popover",
-    "tooltip",
-    "alert",
-    "badge",
-    "spinner",
-    "label",
-    "separator",
-    "input-group",
-    "toggle",
-    "utils"
-  ],
-  "registrySnapshots": {
-    "button": {
-      "rawSha256": "434eb70c9158f687770752468a88fd9e164417620ab7047da10d06fe923a04bc",
-      "canonicalSha256": "e7f2a3eb916b7fd0ed1506ea7ce7205bb50ab18bef3ee7d29b3a112f1b95e407"
-    },
-    "input": {
-      "rawSha256": "00e3d8e2bbf597b632bafde6cc1b6006d2f759b9083b32bfd024f0b2edeb2fc1",
-      "canonicalSha256": "981b9be554c9a0a8ff4d463356578086e2e971ef7647bdb57e579490b1c1e0a9"
-    },
-    "field": {
-      "rawSha256": "ebeeb6e0def63bce60ff4270c9c028ac8635e68d1d654f4f09a65c80505cdc38",
-      "canonicalSha256": "808fe30010b506e02664f06387068453659c09fb2634736fef818e19e00da058"
-    },
-    "textarea": {
-      "rawSha256": "8bd80124e0c845fef615f7d1da05f77521ee50bb4be15676860aa48a74a9f8d8",
-      "canonicalSha256": "f72ac933b59e736da0f2d56d1c1568c88753fe5cbce2ee0641deb5ebeb9ff856"
-    },
-    "checkbox": {
-      "rawSha256": "88da4986fb88c20601369ce3bbf138c8baf7834bc760893bd4ed553e0c50187b",
-      "canonicalSha256": "f7eb599c3c47a977212878c4c29f11a554a20f41f2a067d1611d143a395aea02"
-    },
-    "switch": {
-      "rawSha256": "954741233ca5c0eac9eb42e3928c4e8087846e71d2b0b781e65ca072767456fb",
-      "canonicalSha256": "e4cb767b84022b988c016eff16adf33aecb7c17bef9379c0dfab570efefe2a43"
-    },
-    "select": {
-      "rawSha256": "bac6f97b9dd3ad2c2f1fb587099fc4dbfc06d66b8d5b3f535486225550843997",
-      "canonicalSha256": "aca3d460c8f1eac00d1c18c48524db601353b84e0df9a2afbf1cd4a1e1606ff4"
-    },
-    "combobox": {
-      "rawSha256": "aa9233050ea97499948cfbd50fddcc3215710607f0f36924c651931440e6e209",
-      "canonicalSha256": "33c97dc4e5835e5d53435f6cb0a0785b59a78ad983fc4e7cf83b6ff71d60fbc2"
-    },
-    "toggle-group": {
-      "rawSha256": "de923fb386aefd1829ae22586413fa35436181acc65af9a06c1608935c69b5a4",
-      "canonicalSha256": "65e8470516f9d508a0db7cb9200d1b093d5a04c7be90a647dc09548a9e2b2c1f"
-    },
-    "tabs": {
-      "rawSha256": "2d55e20ae416ce9ca89253b5b4e5288a23b5a36013293685c8d5ebd3e9331ecb",
-      "canonicalSha256": "4179b303aa457dac2cfb9c85b703b1b25a455a28dc53906a177979a6bf13b8fd"
-    },
-    "accordion": {
-      "rawSha256": "ecb8e864a54894642c7f008ff95efae1885a7c0338c5eb64c9474e213cb9d36d",
-      "canonicalSha256": "5695e7ddfd8b8e050d5f2e391e2a11067b659534079b2e875da376ca0994ba46"
-    },
-    "dropdown-menu": {
-      "rawSha256": "0a7909c9c8ce8dcbcfb4b355071daad0aae56cf31dfde808253309346e5fdd64",
-      "canonicalSha256": "abafbe52c9b25b92ed6f88d0c7d0a80d0d8b655758ac7def2f777e6d0752c043"
-    },
-    "dialog": {
-      "rawSha256": "99e9d7851f7d00fa85cd66157dd6ee3d6759f149a0a2b850d837407fba61648f",
-      "canonicalSha256": "523ae921e2ffaa94bc13d67cc23735ce2193114ee6db215647fd1cc4e041f80c"
-    },
-    "sheet": {
-      "rawSha256": "d3eae408d743da78ac8fad76480bece794679b6f7b8e61317eac8d97e6f8db0a",
-      "canonicalSha256": "54f6430d36b63266f27c1e7ccb80c85c84c0107e5b8ef52b45816c340a8e76a2"
-    },
-    "popover": {
-      "rawSha256": "8c6cec209d1004a1ca4ea06d41c50f54eca991535f75bc72c3c9b3672d4a6f43",
-      "canonicalSha256": "5d634ad32fe4da572110a4b495e0baa46b686a505dedac4ca9ab6f72087ac859"
-    },
-    "tooltip": {
-      "rawSha256": "8a3be42a6400f31a8631a03b76c5221b1f4ce3d667b1e7a6ad51cdf6a89e00b6",
-      "canonicalSha256": "4cc26bc8653d76197dafd1ae67ef8a7db8199b4bf9f37ca45528aad30d9b775b"
-    },
-    "alert": {
-      "rawSha256": "f48151ef5f0a8a77d503d382bcf833c25b4d3b1a8e956dd7a0e30af8048b60de",
-      "canonicalSha256": "060db530bfaad8467bb495fc432dbbadfa322ef1d28c590e0d3270f456e6e33f"
-    },
-    "badge": {
-      "rawSha256": "a8ceb87a9ea72b744909215319a48d9a69983a76dca94831bf66bab21d8d85fb",
-      "canonicalSha256": "bab55dbf38a65f508ccfdc07a1cd5b33c91432a6856931cdb27ee02085aad2ee"
-    },
-    "spinner": {
-      "rawSha256": "f969d7c19667752d1696767ea2e823766825e705351b93d8ad018cd556b1d17f",
-      "canonicalSha256": "086e87fdd5cc0cf4bf70832756f6fa07fff3e9c7ad5f185954b9651c1dc7c3e6"
-    },
-    "label": {
-      "rawSha256": "5fb122b9665fa5c68e900b07d88d167a43eb1af5d751654dc8d8ba2313073af9",
-      "canonicalSha256": "37e20674d12c0ed3d9a17fd7f74dff963389e37fc6b7770131804a5295a87104"
-    },
-    "separator": {
-      "rawSha256": "11022cc2607efcaf8394b5b927c1926475624dc0db920557d51ab06e96343032",
-      "canonicalSha256": "2b86438d2d4d96d32d2f5bd821c93670573e0406effb08f196e5b67fc26406ef"
-    },
-    "input-group": {
-      "rawSha256": "2dd738138ad08fd8ac7e44d10a1db0078142c6354ef41ebe0880fb40936559c1",
-      "canonicalSha256": "fd2a3d04580ff2aac6379bfb5a8befcb1896fc194eded4e3591653ab39973f99"
-    },
-    "toggle": {
-      "rawSha256": "b763397b40e49430614d2ea525e19f64c9e0ebad75b41080aa49292b861a953c",
-      "canonicalSha256": "51566899e5f2d6a2380af1076fc88ca79d1a24eef8b6f34c110a6d2bc5127945"
-    },
-    "utils": {
-      "rawSha256": "af372df97b7b1017008b14be3f723ff73524759022123bf9717689f4f778025e",
-      "canonicalSha256": "8c1ac292b1798286eeff6ec6cb4ece7803b2550344d5c8363c5c0091e424426f"
-    }
-  },
-  "excludedDependencies": ["cmdk@1.1.1", "sonner@2.0.7", "@radix-ui/*", "react-aria-components", "vaul"],
   "directProductionDependencies": {
     "@base-ui/react": "1.6.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "date-fns": "4.4.0",
+    "embla-carousel-react": "8.6.0",
+    "input-otp": "1.4.2",
     "lucide-react": "1.25.0",
     "react": "17.0.1",
+    "react-day-picker": "10.0.1",
     "react-dom": "17.0.1",
+    "react-is": "17.0.2",
+    "react-redux": "8.1.3",
+    "recharts": "3.8.0",
+    "tailwind-merge": "3.6.0"
+  },
+  "excludedDependencies": [
+    "cmdk@1.1.1",
+    "@shadcn/react@0.3.0",
+    "react-resizable-panels@4.12.2",
+    "sonner@2.0.8",
+    "@radix-ui/*",
+    "react-aria-components",
+    "vaul"
+  ],
+  "generatorVersion": "1.3.0",
+  "normalization": {
+    "configuration": {
+      "fontHeadingMarker": "font-heading",
+      "menuColor": null,
+      "rtl": false,
+      "tailwindPrefix": "skui"
+    },
+    "contractVersion": "react17-classic-jsx-skui-v4",
+    "implementation": "scripts/lib/profile.mjs",
+    "implementationSha256": "bc86fc3a6289a093df7d220aa670f2d2a73d65d6cc0168b456fc5120c25914d6"
+  },
+  "profileId": "spfx-react17-base-nova-v1",
+  "reactTypeContract": {
+    "@types/react": "17.0.45",
+    "@types/react-dom": "17.0.17"
+  },
+  "registry": {
+    "cli": {
+      "integrity": "sha512-XLFzfNNIUPlUlyheFEzj0H4Vnhi9nI0nl3Nfgg8HYXW1FkUVhVT1X+mgmOUW8aWL5SeG0A+yJIV5fm3Hr9MVkQ==",
+      "name": "shadcn",
+      "version": "4.16.1"
+    },
+    "endpointTemplate": "https://ui.shadcn.com/r/styles/base-nova/{id}.json",
+    "hostedResponsesRevisionBound": false,
+    "mutableHostedResponses": true,
+    "preset": "base-nova",
+    "toolSourceRepository": "https://github.com/shadcn-ui/ui",
+    "toolSourceRevision": "cb2bcd88d93b2f9bddb030e9136f1f8773e7eac4"
+  },
+  "registryDependencyTagResolutions": {
+    "react-day-picker@latest": "10.0.1"
+  },
+  "registryIds": [
+    "accordion",
+    "alert",
+    "alert-dialog",
+    "aspect-ratio",
+    "attachment",
+    "avatar",
+    "badge",
+    "breadcrumb",
+    "bubble",
+    "button",
+    "button-group",
+    "calendar",
+    "card",
+    "carousel",
+    "chart",
+    "checkbox",
+    "collapsible",
+    "combobox",
+    "context-menu",
+    "dialog",
+    "direction",
+    "drawer",
+    "dropdown-menu",
+    "empty",
+    "field",
+    "hover-card",
+    "input",
+    "input-group",
+    "input-otp",
+    "item",
+    "kbd",
+    "label",
+    "marker",
+    "menubar",
+    "message",
+    "native-select",
+    "navigation-menu",
+    "pagination",
+    "popover",
+    "progress",
+    "radio-group",
+    "scroll-area",
+    "select",
+    "separator",
+    "sheet",
+    "sidebar",
+    "skeleton",
+    "slider",
+    "spinner",
+    "switch",
+    "table",
+    "tabs",
+    "textarea",
+    "toast",
+    "toggle",
+    "toggle-group",
+    "tooltip",
+    "utils",
+    "use-mobile"
+  ],
+  "registrySnapshots": {
+    "accordion": {
+      "canonicalSha256": "5695e7ddfd8b8e050d5f2e391e2a11067b659534079b2e875da376ca0994ba46",
+      "rawSha256": "ecb8e864a54894642c7f008ff95efae1885a7c0338c5eb64c9474e213cb9d36d"
+    },
+    "alert": {
+      "canonicalSha256": "060db530bfaad8467bb495fc432dbbadfa322ef1d28c590e0d3270f456e6e33f",
+      "rawSha256": "f48151ef5f0a8a77d503d382bcf833c25b4d3b1a8e956dd7a0e30af8048b60de"
+    },
+    "alert-dialog": {
+      "canonicalSha256": "c2a0865069b8af9fd6ff04c345a519fdeeb5dfbd896d1bbcbc2ab7e78756a338",
+      "rawSha256": "3a3af9f62265a2b9bbe2cd9c30e91e09ee72303734cefe67423627e541f49978"
+    },
+    "aspect-ratio": {
+      "canonicalSha256": "6fe1b10ed34875713f882cbd6cac5b5588fac220a87316af36859573859f5dc1",
+      "rawSha256": "1a11ce16a93dca33c50f166c2ae0194e4f164c21cdea2c76e0d6ecd5abd93a6f"
+    },
+    "attachment": {
+      "canonicalSha256": "9fa259f7fdbe45ef3677bc666ebd8a108163bc0c9c3606cfb50f0cdb5f14655e",
+      "rawSha256": "c5d0659800cbddc78da3715815d77849d892947410fddd6c4dab158da2bac18d"
+    },
+    "avatar": {
+      "canonicalSha256": "6abf56a5dba8aea47bb40f123f7422e18e6e3e2d4216fd91a31fdd95a9b0e5b4",
+      "rawSha256": "879a6109286241f81739a7b52254ae6c2d7fb7cfdd66ee435837196d539a92f2"
+    },
+    "badge": {
+      "canonicalSha256": "bab55dbf38a65f508ccfdc07a1cd5b33c91432a6856931cdb27ee02085aad2ee",
+      "rawSha256": "a8ceb87a9ea72b744909215319a48d9a69983a76dca94831bf66bab21d8d85fb"
+    },
+    "breadcrumb": {
+      "canonicalSha256": "d884b43cec67bcb5f0803266ce4fd3147e036c017dc383cd15654d2e6ca67029",
+      "rawSha256": "72e58fe971e46db1d33104c6a7773509d8b04f09a1206ddfd8028a968d5edd77"
+    },
+    "bubble": {
+      "canonicalSha256": "5da99e985c28773452da24943b2cc3cbecfba923c3354b3f18b7409901ba295b",
+      "rawSha256": "9a2f0a480ed97cd9fe9863d8ae80261cc0fa2ec3514a83048ceacbbe1ac9bb25"
+    },
+    "button": {
+      "canonicalSha256": "e7f2a3eb916b7fd0ed1506ea7ce7205bb50ab18bef3ee7d29b3a112f1b95e407",
+      "rawSha256": "434eb70c9158f687770752468a88fd9e164417620ab7047da10d06fe923a04bc"
+    },
+    "button-group": {
+      "canonicalSha256": "58d98f3cb08254c85c16cdeed9b381091ec46af92a7c5c3b1ba1ef8e39b72931",
+      "rawSha256": "eac578d3cd7973016e0600c7605555a8fa70b2f2acf470b472867b567e6648ae"
+    },
+    "calendar": {
+      "canonicalSha256": "a763ecf4a508a8cc96ccc8404d34a5b819d3470a63cc19ad294224d0443672a9",
+      "rawSha256": "c54f51b2d6fbe894200a424107eba58b5e37ff380adb9fed6dde7111487c96aa"
+    },
+    "card": {
+      "canonicalSha256": "ba7d9a3f146a48b5c96fb16ce8221a9e269d9ce20af71091317b47f88be71fba",
+      "rawSha256": "62f890e9a241abb694eb2cdbfe1c2560298352c8a13618de7d973661ebf98a04"
+    },
+    "carousel": {
+      "canonicalSha256": "a647dd93fcfc6e50079c903097259be0fcba7e998c8c277c6063f0419933125b",
+      "rawSha256": "93478214db1f581dd738728bfd80bb4a052b7f5a40e484c0d533b46e63aee76d"
+    },
+    "chart": {
+      "canonicalSha256": "1ffea2b26d14f419db039002e9afe1699df647864a718afef0ce406a9d36de44",
+      "rawSha256": "3316bc79d124ea27573f0755e34a2a09770a2c3a95e193fd6f8009260b7037a4"
+    },
+    "checkbox": {
+      "canonicalSha256": "f7eb599c3c47a977212878c4c29f11a554a20f41f2a067d1611d143a395aea02",
+      "rawSha256": "88da4986fb88c20601369ce3bbf138c8baf7834bc760893bd4ed553e0c50187b"
+    },
+    "collapsible": {
+      "canonicalSha256": "f72764cd4fe90f813166383f191de6d003a78af4b795648f62672053a49d172f",
+      "rawSha256": "74f78cd88a30185243847968977cf1de9ffbf576547f2ec1f14b5ef55505b90d"
+    },
+    "combobox": {
+      "canonicalSha256": "33c97dc4e5835e5d53435f6cb0a0785b59a78ad983fc4e7cf83b6ff71d60fbc2",
+      "rawSha256": "aa9233050ea97499948cfbd50fddcc3215710607f0f36924c651931440e6e209"
+    },
+    "context-menu": {
+      "canonicalSha256": "51746db6a9a254c39cff2a4c88f9cc27c437b4e151ef00886638c70f3194fd51",
+      "rawSha256": "4f459a67eca2411a4d6f957d4323a90c4201ef895c8cf4982dd3972eae9aaddc"
+    },
+    "dialog": {
+      "canonicalSha256": "523ae921e2ffaa94bc13d67cc23735ce2193114ee6db215647fd1cc4e041f80c",
+      "rawSha256": "99e9d7851f7d00fa85cd66157dd6ee3d6759f149a0a2b850d837407fba61648f"
+    },
+    "direction": {
+      "canonicalSha256": "4cae31bba94dad9a8f7b70d2d8bc2cfed8fc6b5f45ec27c35defb4068dd4badf",
+      "rawSha256": "bf226602a949b5da7b3f8b3cbd0ed962d1e5d8a76c634055cdb05816c6bd1f32"
+    },
+    "drawer": {
+      "canonicalSha256": "72312ba605f71183f3cb90c4dca585b9ccce53bf1c2e7d17fe6802f2da8d4460",
+      "rawSha256": "bbd8662fb6a63465f26494f392713c60e9dd381f98d17db79c90b557d52f14c0"
+    },
+    "dropdown-menu": {
+      "canonicalSha256": "abafbe52c9b25b92ed6f88d0c7d0a80d0d8b655758ac7def2f777e6d0752c043",
+      "rawSha256": "0a7909c9c8ce8dcbcfb4b355071daad0aae56cf31dfde808253309346e5fdd64"
+    },
+    "empty": {
+      "canonicalSha256": "d52ba2622ef3e57a26234c97cb567387674741330c4d735e9d70ce6bdd2aa923",
+      "rawSha256": "110bd02e9f757f2d876c7209376faa05c7645c5f41275d516576ae782142542f"
+    },
+    "field": {
+      "canonicalSha256": "808fe30010b506e02664f06387068453659c09fb2634736fef818e19e00da058",
+      "rawSha256": "ebeeb6e0def63bce60ff4270c9c028ac8635e68d1d654f4f09a65c80505cdc38"
+    },
+    "hover-card": {
+      "canonicalSha256": "47d409dfec98458b25b4f304275af4f0d537246106cbd2bbc90d4eca1240c32e",
+      "rawSha256": "d1473472766f316799e44a7c6d2e598a5fe16e592c822779ad7d84e8b91437ae"
+    },
+    "input": {
+      "canonicalSha256": "981b9be554c9a0a8ff4d463356578086e2e971ef7647bdb57e579490b1c1e0a9",
+      "rawSha256": "00e3d8e2bbf597b632bafde6cc1b6006d2f759b9083b32bfd024f0b2edeb2fc1"
+    },
+    "input-group": {
+      "canonicalSha256": "fd2a3d04580ff2aac6379bfb5a8befcb1896fc194eded4e3591653ab39973f99",
+      "rawSha256": "2dd738138ad08fd8ac7e44d10a1db0078142c6354ef41ebe0880fb40936559c1"
+    },
+    "input-otp": {
+      "canonicalSha256": "e76e2ceb4af2fce4e5c0e3213fd36867b82ca5dc90ff80c36f0ee3bc03ce9b17",
+      "rawSha256": "06014de9816bc5e6836bdb180a4f75763281fa62d560a587f69d64ff9d540ef7"
+    },
+    "item": {
+      "canonicalSha256": "f17526c8133b748b255d5850446f1b68621b87da8b93da395e0d9c131c7345e8",
+      "rawSha256": "47a4b9736e88545d3adf7b0ed3692235510916a9bdd2bbb303fe8f8bb977a7e7"
+    },
+    "kbd": {
+      "canonicalSha256": "f24073e10f7984c55dd502f2c507646b08459c252f03c31d5323b65209e4a92c",
+      "rawSha256": "3087a78e912980ce52051009584a38be84368670259506ff46415329e7bfd866"
+    },
+    "label": {
+      "canonicalSha256": "37e20674d12c0ed3d9a17fd7f74dff963389e37fc6b7770131804a5295a87104",
+      "rawSha256": "5fb122b9665fa5c68e900b07d88d167a43eb1af5d751654dc8d8ba2313073af9"
+    },
+    "marker": {
+      "canonicalSha256": "509c1b1b428464e62a184b4bdbb8a583bdefba1246de32338c8c215dfe403f2e",
+      "rawSha256": "85f5cc4b9abc999ab8c5092c5fbd6ed3e94a82069e748447de9e06587deca77e"
+    },
+    "menubar": {
+      "canonicalSha256": "93b68fe03e996f7504e019e5aa8b761a48544170def430707c25d8130239566d",
+      "rawSha256": "b431712cbd496876244accb3949e735a5e910c37bbe1b5ace8b10664ca55d0bb"
+    },
+    "message": {
+      "canonicalSha256": "5148124ad0f32aa3b2dab3e4b6f94ad48c0732b024bd048e9d24980ec872b386",
+      "rawSha256": "c7feea6b4b9bd2140fedcc49cf3443787d3fd5e21e13f8ccac40a6a7ef5be59b"
+    },
+    "native-select": {
+      "canonicalSha256": "a6b1cb629776a4dd3bcd07a27146587c7c4df904d937d9676c079caace6808fb",
+      "rawSha256": "b926601a960d5ce166d19be2ef20d0dc1cd2f2228c44f9d03d3d7b6334a40aef"
+    },
+    "navigation-menu": {
+      "canonicalSha256": "687e1424f1f70b5ccc01408f37f34146a485920ce84da7001626ce4ecb564e68",
+      "rawSha256": "3a74b54149268f96fd76057aa509bacf46b0ab5503d8634581ee0409ede2794a"
+    },
+    "pagination": {
+      "canonicalSha256": "8d9ea54eb4b4f5a131282523a044c9f89cfc81bc067b61159c4329ec73265438",
+      "rawSha256": "30fdca8ec4a5fa3d9175f29e3933443583ee39f638a478e25da56896bd799777"
+    },
+    "popover": {
+      "canonicalSha256": "5d634ad32fe4da572110a4b495e0baa46b686a505dedac4ca9ab6f72087ac859",
+      "rawSha256": "8c6cec209d1004a1ca4ea06d41c50f54eca991535f75bc72c3c9b3672d4a6f43"
+    },
+    "progress": {
+      "canonicalSha256": "ff2fbb30d5a25d350da677173c096f5b0b7a2b63704afd6a19443460eb55b0ed",
+      "rawSha256": "dc9dffcae98fb6f012095e8eb2f74a16d79b62e6a3276d5ef02df4ebbebbe9cc"
+    },
+    "radio-group": {
+      "canonicalSha256": "26329679f523ec4bfa3f88be7ca26b6fa2b3b2e5a4ca997879c961eff2bb8182",
+      "rawSha256": "7f38176aec0d25ee2e4261bd7f3571514e509ca796f02879a221ca7cbddfee53"
+    },
+    "scroll-area": {
+      "canonicalSha256": "f8394f6245c9859a950511e217ecb53ae80e43b4b9aebe67c9366237b338bfbf",
+      "rawSha256": "284e5d896b1fed19c4c2a7469c9bf7dfd658edf10d802014a9bfdcc19a61106b"
+    },
+    "select": {
+      "canonicalSha256": "aca3d460c8f1eac00d1c18c48524db601353b84e0df9a2afbf1cd4a1e1606ff4",
+      "rawSha256": "bac6f97b9dd3ad2c2f1fb587099fc4dbfc06d66b8d5b3f535486225550843997"
+    },
+    "separator": {
+      "canonicalSha256": "2b86438d2d4d96d32d2f5bd821c93670573e0406effb08f196e5b67fc26406ef",
+      "rawSha256": "11022cc2607efcaf8394b5b927c1926475624dc0db920557d51ab06e96343032"
+    },
+    "sheet": {
+      "canonicalSha256": "54f6430d36b63266f27c1e7ccb80c85c84c0107e5b8ef52b45816c340a8e76a2",
+      "rawSha256": "d3eae408d743da78ac8fad76480bece794679b6f7b8e61317eac8d97e6f8db0a"
+    },
+    "sidebar": {
+      "canonicalSha256": "9cef34bdf56ad5d92c0083922de00da30de13bcf50d84084467673057b846375",
+      "rawSha256": "a6fbc976277a6c22402f5ab23a53edb551ec0cce18353777ece5c57e690824e1"
+    },
+    "skeleton": {
+      "canonicalSha256": "de4eda932d17ce14e12d158bea1852c941e0d51856b348d02e416ecc30e191c7",
+      "rawSha256": "f049b762673185353721b8904115941e80acd09cd38721be0d171ff1b75c9c48"
+    },
+    "slider": {
+      "canonicalSha256": "c32d96c3189679a01a2b2ab961242ac513eae0181d2fc9c09724b7bd5d00f041",
+      "rawSha256": "d334fd798f85e866228f74550a7c315071f8346db1fe442aca2a9ec4d12b63bd"
+    },
+    "spinner": {
+      "canonicalSha256": "086e87fdd5cc0cf4bf70832756f6fa07fff3e9c7ad5f185954b9651c1dc7c3e6",
+      "rawSha256": "f969d7c19667752d1696767ea2e823766825e705351b93d8ad018cd556b1d17f"
+    },
+    "switch": {
+      "canonicalSha256": "e4cb767b84022b988c016eff16adf33aecb7c17bef9379c0dfab570efefe2a43",
+      "rawSha256": "954741233ca5c0eac9eb42e3928c4e8087846e71d2b0b781e65ca072767456fb"
+    },
+    "table": {
+      "canonicalSha256": "f92db04d0d732059139df32e43cc4a0330db6c3931050e6b7dacebc07ea0b8ac",
+      "rawSha256": "8d3a3822ecf010dc37638f2c438f18804b461b1b8168252024987ce8a55cab3b"
+    },
+    "tabs": {
+      "canonicalSha256": "4179b303aa457dac2cfb9c85b703b1b25a455a28dc53906a177979a6bf13b8fd",
+      "rawSha256": "2d55e20ae416ce9ca89253b5b4e5288a23b5a36013293685c8d5ebd3e9331ecb"
+    },
+    "textarea": {
+      "canonicalSha256": "f72ac933b59e736da0f2d56d1c1568c88753fe5cbce2ee0641deb5ebeb9ff856",
+      "rawSha256": "8bd80124e0c845fef615f7d1da05f77521ee50bb4be15676860aa48a74a9f8d8"
+    },
+    "toast": {
+      "canonicalSha256": "e4fb3b038453157b474178a25d751220ec5fd97d0c7e807d3d695741c414943d",
+      "rawSha256": "ebc423d7b813fcf49d28fdf41360479f0c88bd3840688341f81e469441026ac6"
+    },
+    "toggle": {
+      "canonicalSha256": "51566899e5f2d6a2380af1076fc88ca79d1a24eef8b6f34c110a6d2bc5127945",
+      "rawSha256": "b763397b40e49430614d2ea525e19f64c9e0ebad75b41080aa49292b861a953c"
+    },
+    "toggle-group": {
+      "canonicalSha256": "65e8470516f9d508a0db7cb9200d1b093d5a04c7be90a647dc09548a9e2b2c1f",
+      "rawSha256": "de923fb386aefd1829ae22586413fa35436181acc65af9a06c1608935c69b5a4"
+    },
+    "tooltip": {
+      "canonicalSha256": "4cc26bc8653d76197dafd1ae67ef8a7db8199b4bf9f37ca45528aad30d9b775b",
+      "rawSha256": "8a3be42a6400f31a8631a03b76c5221b1f4ce3d667b1e7a6ad51cdf6a89e00b6"
+    },
+    "use-mobile": {
+      "canonicalSha256": "5c1b0220d3e94e239e9154c616c5c954c97a85331ecb20622d4d3ee1cf180bdd",
+      "rawSha256": "f4bfd840445a84352265d7cf66fcd886454b6a2f3834f7caf29d00f68620f87d"
+    },
+    "utils": {
+      "canonicalSha256": "8c1ac292b1798286eeff6ec6cb4ece7803b2550344d5c8363c5c0091e424426f",
+      "rawSha256": "af372df97b7b1017008b14be3f723ff73524759022123bf9717689f4f778025e"
+    }
+  },
+  "runtime": {
+    "baseUi": "1.6.0",
+    "lucideReact": "1.25.0",
+    "react": "17.0.1",
+    "reactDom": "17.0.1"
+  },
+  "schemaVersion": 1,
+  "tailwindCompilerClosureSha256": "69d2578c8b570be1f3c2bdcde507a3c4d49b30531bacdd6f62b2398872a5e0ce",
+  "typescriptMatrix": [
+    "5.3.3",
+    "5.8.3"
+  ],
+  "utilities": {
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
     "tailwind-merge": "3.6.0"
   }
 }

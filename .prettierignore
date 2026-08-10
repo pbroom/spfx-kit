@@ -10,7 +10,9 @@ docs/evidence/shadcn-migration/monaco-0.53.0-min-vs-inventory.json
 docs/evidence/shadcn-migration/workbench-v1-public-source-format-inventory.json
 packages/ui-profile/compat/base-ui-1.6.0/select-value
 packages/ui-profile/generated/tailwind-profile.css
+packages/ui-profile/dependency-closure.json
 packages/ui-profile/normalized
 packages/ui-profile/profile.json
+packages/ui-profile/provenance.json
 packages/ui-profile/snapshots
 packages/source-editor-react/src/ui-profile

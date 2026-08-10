@@ -10,9 +10,15 @@ import './styles/lab.css';
 const root = document.getElementById('root');
 if (!root) throw new Error('Lab root element is missing');
 
-const isUiProfileContractRoute = new URLSearchParams(window.location.search).get('ui-profile-contract') === '1';
+const searchParams = new URLSearchParams(window.location.search);
+const isUiProfileCatalogRoute = searchParams.get('ui-profile-catalog') === '1';
+const isUiProfileContractRoute = searchParams.get('ui-profile-contract') === '1';
 
-if (isUiProfileContractRoute) {
+if (isUiProfileCatalogRoute) {
+  void import('./components/UiProfileCatalogHarness').then(({ mountUiProfileCatalogHarness }) => {
+    mountUiProfileCatalogHarness(root);
+  });
+} else if (isUiProfileContractRoute) {
   void import('./components/UiProfileContractHarness').then(({ mountUiProfileContractHarness }) => {
     mountUiProfileContractHarness(root);
   });

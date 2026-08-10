@@ -1,6 +1,724 @@
 {
-  "schemaVersion": 1,
-  "profileId": "spfx-react17-base-nova-v1",
+  "packages": [
+    {
+      "dependencies": {},
+      "integrity": "sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==",
+      "name": "@babel/runtime",
+      "path": "node_modules/@babel/runtime",
+      "peerDependencies": {},
+      "version": "7.29.7"
+    },
+    {
+      "dependencies": {
+        "@babel/runtime": "^7.29.2",
+        "@base-ui/utils": "0.3.1",
+        "@floating-ui/react-dom": "^2.1.8",
+        "@floating-ui/utils": "^0.2.11",
+        "use-sync-external-store": "^1.6.0"
+      },
+      "integrity": "sha512-/jzjTWJYXhRFO45Bev9lc3cHbmjzCMpUqbMZ2AgKy/z25mY9B6shGSNcXcjQar9n5doM0KYW1W8fcFv2jZBuMw==",
+      "name": "@base-ui/react",
+      "optionalPeers": [
+        "@date-fns/tz",
+        "@types/react",
+        "date-fns"
+      ],
+      "path": "node_modules/@base-ui/react",
+      "peerDependencies": {
+        "@date-fns/tz": "^1.2.0",
+        "@types/react": "^17 || ^18 || ^19",
+        "date-fns": "^4.0.0",
+        "react": "^17 || ^18 || ^19",
+        "react-dom": "^17 || ^18 || ^19"
+      },
+      "version": "1.6.0"
+    },
+    {
+      "dependencies": {
+        "@babel/runtime": "^7.29.2",
+        "@floating-ui/utils": "^0.2.11",
+        "reselect": "^5.2.0",
+        "use-sync-external-store": "^1.6.0"
+      },
+      "integrity": "sha512-gFFiltORVmW/N6IILTGxizP3PBpVpysqML1ALY5Vk0mH+7faVkCknOU31goYHN5Aoek2dkjxva1XOD2Ce9WuIg==",
+      "name": "@base-ui/utils",
+      "optionalPeers": [
+        "@types/react"
+      ],
+      "path": "node_modules/@base-ui/utils",
+      "peerDependencies": {
+        "@types/react": "^17 || ^18 || ^19",
+        "react": "^17 || ^18 || ^19",
+        "react-dom": "^17 || ^18 || ^19"
+      },
+      "version": "0.3.1"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-lwYN/vDPeNRULcepoE/LO2Pgx+7/RV+S9ARfbc9lr2DtGkOD7pAiruHvbR1RX3Qyf6ja47EWJDMsNK5vK08DJg==",
+      "name": "@date-fns/tz",
+      "path": "node_modules/@date-fns/tz",
+      "peerDependencies": {},
+      "version": "1.5.0"
+    },
+    {
+      "dependencies": {
+        "@floating-ui/utils": "^0.2.11"
+      },
+      "integrity": "sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ==",
+      "name": "@floating-ui/core",
+      "path": "node_modules/@floating-ui/core",
+      "peerDependencies": {},
+      "version": "1.7.5"
+    },
+    {
+      "dependencies": {
+        "@floating-ui/core": "^1.7.5",
+        "@floating-ui/utils": "^0.2.11"
+      },
+      "integrity": "sha512-9gZSAI5XM36880PPMm//9dfiEngYoC6Am2izES1FF406YFsjvyBMmeJ2g4SAju3xWwtuynNRFL2s9hgxpLI5SQ==",
+      "name": "@floating-ui/dom",
+      "path": "node_modules/@floating-ui/dom",
+      "peerDependencies": {},
+      "version": "1.7.6"
+    },
+    {
+      "dependencies": {
+        "@floating-ui/dom": "^1.7.6"
+      },
+      "integrity": "sha512-cC52bHwM/n/CxS87FH0yWdngEZrjdtLW/qVruo68qg+prK7ZQ4YGdut2GyDVpoGeAYe/h899rVeOVm6Oi40k2A==",
+      "name": "@floating-ui/react-dom",
+      "path": "node_modules/@floating-ui/react-dom",
+      "peerDependencies": {
+        "react": ">=16.8.0",
+        "react-dom": ">=16.8.0"
+      },
+      "version": "2.1.8"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==",
+      "name": "@floating-ui/utils",
+      "path": "node_modules/@floating-ui/utils",
+      "peerDependencies": {},
+      "version": "0.2.11"
+    },
+    {
+      "dependencies": {
+        "@standard-schema/spec": "^1.0.0",
+        "@standard-schema/utils": "^0.3.0",
+        "immer": "^11.0.0",
+        "redux": "^5.0.1",
+        "redux-thunk": "^3.1.0",
+        "reselect": "^5.1.0"
+      },
+      "integrity": "sha512-KiT+RzZbp6mQET+Mg+h2c97+9j1sNflUxQkIHI7Yuzf6Peu+OYpmkn6nbHWmLLWj+1ZODUJFwGZ7gx3L9R9EOw==",
+      "name": "@reduxjs/toolkit",
+      "optionalPeers": [
+        "react",
+        "react-redux"
+      ],
+      "path": "node_modules/@reduxjs/toolkit",
+      "peerDependencies": {
+        "react": "^16.9.0 || ^17.0.0 || ^18 || ^19",
+        "react-redux": "^7.2.1 || ^8.1.3 || ^9.0.0"
+      },
+      "version": "2.12.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-Xs7H9rBc+kti1J6RueUvbEBkmOz7jqj11XYgf+YMXAYzu8EeE7hwZ9poLXdVfVnGmJu7QAf41T7H2KuF6QoK6Q==",
+      "name": "immer",
+      "path": "node_modules/@reduxjs/toolkit/node_modules/immer",
+      "peerDependencies": {},
+      "version": "11.1.16"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==",
+      "name": "@standard-schema/spec",
+      "path": "node_modules/@standard-schema/spec",
+      "peerDependencies": {},
+      "version": "1.1.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==",
+      "name": "@standard-schema/utils",
+      "path": "node_modules/@standard-schema/utils",
+      "peerDependencies": {},
+      "version": "0.3.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw==",
+      "name": "@types/d3-array",
+      "path": "node_modules/@types/d3-array",
+      "peerDependencies": {},
+      "version": "3.2.2"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-iO90scth9WAbmgv7ogoq57O9YpKmFBbmoEoCHDB2xMBY0+/KVrqAaCDyCE16dUspeOvIxFFRI+0sEtqDqy2b4A==",
+      "name": "@types/d3-color",
+      "path": "node_modules/@types/d3-color",
+      "peerDependencies": {},
+      "version": "3.1.3"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-NcV1JjO5oDzoK26oMzbILE6HW7uVXOHLQvHshBUW4UMdZGfiY6v5BeQwh9a9tCzv+CeefZQHJt5SRgK154RtiA==",
+      "name": "@types/d3-ease",
+      "path": "node_modules/@types/d3-ease",
+      "peerDependencies": {},
+      "version": "3.0.2"
+    },
+    {
+      "dependencies": {
+        "@types/d3-color": "*"
+      },
+      "integrity": "sha512-mgLPETlrpVV1YRJIglr4Ez47g7Yxjl1lj7YKsiMCb27VJH9W8NVM6Bb9d8kkpG/uAQS5AmbA48q2IAolKKo1MA==",
+      "name": "@types/d3-interpolate",
+      "path": "node_modules/@types/d3-interpolate",
+      "peerDependencies": {},
+      "version": "3.0.4"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-VMZBYyQvbGmWyWVea0EHs/BwLgxc+MKi1zLDCONksozI4YJMcTt8ZEuIR4Sb1MMTE8MMW49v0IwI5+b7RmfWlg==",
+      "name": "@types/d3-path",
+      "path": "node_modules/@types/d3-path",
+      "peerDependencies": {},
+      "version": "3.1.1"
+    },
+    {
+      "dependencies": {
+        "@types/d3-time": "*"
+      },
+      "integrity": "sha512-dLmtwB8zkAeO/juAMfnV+sItKjlsw2lKdZVVy6LRr0cBmegxSABiLEpGVmSJJ8O08i4+sGR6qQtb6WtuwJdvVw==",
+      "name": "@types/d3-scale",
+      "path": "node_modules/@types/d3-scale",
+      "peerDependencies": {},
+      "version": "4.0.9"
+    },
+    {
+      "dependencies": {
+        "@types/d3-path": "*"
+      },
+      "integrity": "sha512-lae0iWfcDeR7qt7rA88BNiqdvPS5pFVPpo5OfjElwNaT2yyekbM0C9vK+yqBqEmHr6lDkRnYNoTBYlAgJa7a4w==",
+      "name": "@types/d3-shape",
+      "path": "node_modules/@types/d3-shape",
+      "peerDependencies": {},
+      "version": "3.1.8"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-yuzZug1nkAAaBlBBikKZTgzCeA+k1uy4ZFwWANOfKw5z5LRhV0gNA7gNkKm7HoK+HRN0wX3EkxGk0fpbWhmB7g==",
+      "name": "@types/d3-time",
+      "path": "node_modules/@types/d3-time",
+      "peerDependencies": {},
+      "version": "3.0.4"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-Ps3T8E8dZDam6fUyNiMkekK3XUsaUEik+idO9/YjPtfj2qruF8tFBXS7XhtE4iIXBLxhmLjP3SXpLhVf21I9Lw==",
+      "name": "@types/d3-timer",
+      "path": "node_modules/@types/d3-timer",
+      "peerDependencies": {},
+      "version": "3.0.2"
+    },
+    {
+      "dependencies": {
+        "hoist-non-react-statics": "^3.3.0"
+      },
+      "integrity": "sha512-PQTyIulDkIDro8P+IHbKCsw7U2xxBYflVzW/FgWdCAePD9xGSidgA76/GeJ6lBKoblyhf9pBY763gbrN+1dI8g==",
+      "name": "@types/hoist-non-react-statics",
+      "path": "node_modules/@types/hoist-non-react-statics",
+      "peerDependencies": {
+        "@types/react": "*"
+      },
+      "version": "3.3.7"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-EwmlvuaxPNej9+T4v5AuBPJa2x2UOJVdjCtDHgcDqitUeOtjnJKJ+apYjVcAoBEMjKW1VVFGZLUb5+qqa09XFA==",
+      "name": "@types/use-sync-external-store",
+      "path": "node_modules/@types/use-sync-external-store",
+      "peerDependencies": {},
+      "version": "0.0.3"
+    },
+    {
+      "dependencies": {
+        "clsx": "^2.1.1"
+      },
+      "integrity": "sha512-Ka+9Trutv7G8M6WT6SeiRWz792K5qEqIGEGzXKhAE6xOWAY6pPH8U+9IY3oCMv6kqTmLsv7Xh/2w2RigkePMsg==",
+      "name": "class-variance-authority",
+      "path": "node_modules/class-variance-authority",
+      "peerDependencies": {},
+      "version": "0.7.1"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==",
+      "name": "clsx",
+      "path": "node_modules/clsx",
+      "peerDependencies": {},
+      "version": "2.1.1"
+    },
+    {
+      "dependencies": {
+        "internmap": "1 - 2"
+      },
+      "integrity": "sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg==",
+      "name": "d3-array",
+      "path": "node_modules/d3-array",
+      "peerDependencies": {},
+      "version": "3.2.4"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-zg/chbXyeBtMQ1LbD/WSoW2DpC3I0mpmPdW+ynRTj/x2DAWYrIY7qeZIHidozwV24m4iavr15lNwIwLxRmOxhA==",
+      "name": "d3-color",
+      "path": "node_modules/d3-color",
+      "peerDependencies": {},
+      "version": "3.1.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-wR/XK3D3XcLIZwpbvQwQ5fK+8Ykds1ip7A2Txe0yxncXSdq1L9skcG7blcedkOX+ZcgxGAmLX1FrRGbADwzi0w==",
+      "name": "d3-ease",
+      "path": "node_modules/d3-ease",
+      "peerDependencies": {},
+      "version": "3.0.1"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-AJDdYOdnyRDV5b6ArilzCPPwc1ejkHcoyFarqlPqT7zRYjhavcT3uSrqcMvsgh2CgoPbK3RCwyHaVyxYcP2Arg==",
+      "name": "d3-format",
+      "path": "node_modules/d3-format",
+      "peerDependencies": {},
+      "version": "3.1.2"
+    },
+    {
+      "dependencies": {
+        "d3-color": "1 - 3"
+      },
+      "integrity": "sha512-3bYs1rOD33uo8aqJfKP3JWPAibgw8Zm2+L9vBKEHJ2Rg+viTR7o5Mmv5mZcieN+FRYaAOWX5SJATX6k1PWz72g==",
+      "name": "d3-interpolate",
+      "path": "node_modules/d3-interpolate",
+      "peerDependencies": {},
+      "version": "3.0.1"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-p3KP5HCf/bvjBSSKuXid6Zqijx7wIfNW+J/maPs+iwR35at5JCbLUT0LzF1cnjbCHWhqzQTIN2Jpe8pRebIEFQ==",
+      "name": "d3-path",
+      "path": "node_modules/d3-path",
+      "peerDependencies": {},
+      "version": "3.1.0"
+    },
+    {
+      "dependencies": {
+        "d3-array": "2.10.0 - 3",
+        "d3-format": "1 - 3",
+        "d3-interpolate": "1.2.0 - 3",
+        "d3-time": "2.1.1 - 3",
+        "d3-time-format": "2 - 4"
+      },
+      "integrity": "sha512-GZW464g1SH7ag3Y7hXjf8RoUuAFIqklOAq3MRl4OaWabTFJY9PN/E1YklhXLh+OQ3fM9yS2nOkCoS+WLZ6kvxQ==",
+      "name": "d3-scale",
+      "path": "node_modules/d3-scale",
+      "peerDependencies": {},
+      "version": "4.0.2"
+    },
+    {
+      "dependencies": {
+        "d3-path": "^3.1.0"
+      },
+      "integrity": "sha512-SaLBuwGm3MOViRq2ABk3eLoxwZELpH6zhl3FbAoJ7Vm1gofKx6El1Ib5z23NUEhF9AsGl7y+dzLe5Cw2AArGTA==",
+      "name": "d3-shape",
+      "path": "node_modules/d3-shape",
+      "peerDependencies": {},
+      "version": "3.2.0"
+    },
+    {
+      "dependencies": {
+        "d3-array": "2 - 3"
+      },
+      "integrity": "sha512-VqKjzBLejbSMT4IgbmVgDjpkYrNWUYJnbCGo874u7MMKIWsILRX+OpX/gTk8MqjpT1A/c6HY2dCA77ZN0lkQ2Q==",
+      "name": "d3-time",
+      "path": "node_modules/d3-time",
+      "peerDependencies": {},
+      "version": "3.1.0"
+    },
+    {
+      "dependencies": {
+        "d3-time": "1 - 3"
+      },
+      "integrity": "sha512-dJxPBlzC7NugB2PDLwo9Q8JiTR3M3e4/XANkreKSUxF8vvXKqm1Yfq4Q5dl8budlunRVlUUaDUgFt7eA8D6NLg==",
+      "name": "d3-time-format",
+      "path": "node_modules/d3-time-format",
+      "peerDependencies": {},
+      "version": "4.1.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-ndfJ/JxxMd3nw31uyKoY2naivF+r29V+Lc0svZxe1JvvIRmi8hUsrMvdOwgS1o6uBHmiz91geQ0ylPP0aj1VUA==",
+      "name": "d3-timer",
+      "path": "node_modules/d3-timer",
+      "peerDependencies": {},
+      "version": "3.0.1"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-+1UMbeh68lH1SegH83CGWwpb6OHHbpSgr3+s5Eww5M4CAgswBpoWS0AjTOfEJ33HiYKz1hdj/KTFprzXHmq/6w==",
+      "name": "date-fns",
+      "path": "node_modules/date-fns",
+      "peerDependencies": {},
+      "version": "4.4.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-qIMFpTMZmny+MMIitAB6D7iVPEorVw6YQRWkvarTkT4tBeSLLiHzcwj6q0MmYSFCiVpiqPJTJEYIrpcPzVEIvg==",
+      "name": "decimal.js-light",
+      "path": "node_modules/decimal.js-light",
+      "peerDependencies": {},
+      "version": "2.5.1"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-SjWyZBHJPbqxHOzckOfo8lHisEaJWmwd23XppYFYVh10bU66/Pn5tkVkbkCMZVdbUE5eTCI2nD8OyIP4Z+uwkA==",
+      "name": "embla-carousel",
+      "path": "node_modules/embla-carousel",
+      "peerDependencies": {},
+      "version": "8.6.0"
+    },
+    {
+      "dependencies": {
+        "embla-carousel": "8.6.0",
+        "embla-carousel-reactive-utils": "8.6.0"
+      },
+      "integrity": "sha512-0/PjqU7geVmo6F734pmPqpyHqiM99olvyecY7zdweCw+6tKEXnrE90pBiBbMMU8s5tICemzpQ3hi5EpxzGW+JA==",
+      "name": "embla-carousel-react",
+      "path": "node_modules/embla-carousel-react",
+      "peerDependencies": {
+        "react": "^16.8.0 || ^17.0.1 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc"
+      },
+      "version": "8.6.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-fMVUDUEx0/uIEDM0Mz3dHznDhfX+znCCDCeIophYb1QGVM7YThSWX+wz11zlYwWFOr74b4QLGg0hrGPJeG2s4A==",
+      "name": "embla-carousel-reactive-utils",
+      "path": "node_modules/embla-carousel-reactive-utils",
+      "peerDependencies": {
+        "embla-carousel": "8.6.0"
+      },
+      "version": "8.6.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-OyZKhUVvEep9ITEiwHn8GKnMRQIVqoSIX7WnRbkWgJkllCujilqP2rD0u979tkl8wqyc8ICwlc1UBVv/Sl1G6w==",
+      "name": "es-toolkit",
+      "path": "node_modules/es-toolkit",
+      "peerDependencies": {},
+      "version": "1.50.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==",
+      "name": "eventemitter3",
+      "path": "node_modules/eventemitter3",
+      "peerDependencies": {},
+      "version": "5.0.4"
+    },
+    {
+      "dependencies": {
+        "react-is": "^16.7.0"
+      },
+      "integrity": "sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==",
+      "name": "hoist-non-react-statics",
+      "path": "node_modules/hoist-non-react-statics",
+      "peerDependencies": {},
+      "version": "3.3.2"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-d/+XTN3zfODyjr89gM3mPq1WNX2B8pYsu7eORitdwyA2sBubnTl3laYlBk4sXY5FUa5qTZGBDPJICVbvqzjlbw==",
+      "name": "immer",
+      "path": "node_modules/immer",
+      "peerDependencies": {},
+      "version": "10.2.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-l3jWwYNvrEa6NTCt7BECfCm48GvwuZzkoeG3gBL2w4CHeOXW3eKFmf9UNYkNfYc3mxMrthMnxjIE07MT0zLBQA==",
+      "name": "input-otp",
+      "path": "node_modules/input-otp",
+      "peerDependencies": {
+        "react": "^16.8 || ^17.0 || ^18.0 || ^19.0.0 || ^19.0.0-rc",
+        "react-dom": "^16.8 || ^17.0 || ^18.0 || ^19.0.0 || ^19.0.0-rc"
+      },
+      "version": "1.4.2"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==",
+      "name": "internmap",
+      "path": "node_modules/internmap",
+      "peerDependencies": {},
+      "version": "2.0.3"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==",
+      "name": "js-tokens",
+      "path": "node_modules/js-tokens",
+      "peerDependencies": {},
+      "version": "4.0.0"
+    },
+    {
+      "dependencies": {
+        "js-tokens": "^3.0.0 || ^4.0.0"
+      },
+      "integrity": "sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==",
+      "name": "loose-envify",
+      "path": "node_modules/loose-envify",
+      "peerDependencies": {},
+      "version": "1.4.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-/mdJTRbiwcLOQ1NZZK1amZF9rIZyvO18D6r9TngE6TG1NmqHgFuT4eE7Xrkm9UsXMbBJD1NlfwHVltCDWHrOTw==",
+      "name": "lucide-react",
+      "path": "node_modules/lucide-react",
+      "peerDependencies": {
+        "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+      },
+      "version": "1.25.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==",
+      "name": "object-assign",
+      "path": "node_modules/object-assign",
+      "peerDependencies": {},
+      "version": "4.1.1"
+    },
+    {
+      "dependencies": {
+        "loose-envify": "^1.1.0",
+        "object-assign": "^4.1.1"
+      },
+      "integrity": "sha512-lG9c9UuMHdcAexXtigOZLX8exLWkW0Ku29qPRU8uhF2R9BN96dLCt0psvzPLlHc5OWkgymP3qwTRgbnw5BKx3w==",
+      "name": "react",
+      "path": "node_modules/react",
+      "peerDependencies": {},
+      "version": "17.0.1"
+    },
+    {
+      "dependencies": {
+        "@date-fns/tz": "^1.4.1",
+        "date-fns": "^4.1.0"
+      },
+      "integrity": "sha512-eNh6BlwcYInWaJtRv18mXQ06Ys/H6rdTZAnTaSdOYJuTpwP1JMCHNd1FDRadA+gbeinq+psdULN5Xnowy9mV8w==",
+      "name": "react-day-picker",
+      "optionalPeers": [
+        "@types/react"
+      ],
+      "path": "node_modules/react-day-picker",
+      "peerDependencies": {
+        "@types/react": ">=16.8.0",
+        "react": ">=16.8.0"
+      },
+      "version": "10.0.1"
+    },
+    {
+      "dependencies": {
+        "loose-envify": "^1.1.0",
+        "object-assign": "^4.1.1",
+        "scheduler": "^0.20.1"
+      },
+      "integrity": "sha512-6eV150oJZ9U2t9svnsspTMrWNyHc6chX0KzDeAOXftRa8bNeOKTTfCJ7KorIwenkHd2xqVTBTCZd79yk/lx/Ug==",
+      "name": "react-dom",
+      "path": "node_modules/react-dom",
+      "peerDependencies": {
+        "react": "17.0.1"
+      },
+      "version": "17.0.1"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==",
+      "name": "react-is",
+      "path": "node_modules/react-is",
+      "peerDependencies": {},
+      "version": "16.13.1"
+    },
+    {
+      "dependencies": {
+        "@babel/runtime": "^7.12.1",
+        "@types/hoist-non-react-statics": "^3.3.1",
+        "@types/use-sync-external-store": "^0.0.3",
+        "hoist-non-react-statics": "^3.3.2",
+        "react-is": "^18.0.0",
+        "use-sync-external-store": "^1.0.0"
+      },
+      "integrity": "sha512-n0ZrutD7DaX/j9VscF+uTALI3oUPa/pO4Z3soOBIjuRn/FzVu6aehhysxZCLi6y7duMf52WNZGMl7CtuK5EnRw==",
+      "name": "react-redux",
+      "optionalPeers": [
+        "@types/react",
+        "@types/react-dom",
+        "react-dom",
+        "react-native",
+        "redux"
+      ],
+      "path": "node_modules/react-redux",
+      "peerDependencies": {
+        "@types/react": "^16.8 || ^17.0 || ^18.0",
+        "@types/react-dom": "^16.8 || ^17.0 || ^18.0",
+        "react": "^16.8 || ^17.0 || ^18.0",
+        "react-dom": "^16.8 || ^17.0 || ^18.0",
+        "react-native": ">=0.59",
+        "redux": "^4 || ^5.0.0-beta.0"
+      },
+      "version": "8.1.3"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==",
+      "name": "react-is",
+      "path": "node_modules/react-redux/node_modules/react-is",
+      "peerDependencies": {},
+      "version": "18.3.1"
+    },
+    {
+      "dependencies": {
+        "@reduxjs/toolkit": "^1.9.0 || 2.x.x",
+        "clsx": "^2.1.1",
+        "decimal.js-light": "^2.5.1",
+        "es-toolkit": "^1.39.3",
+        "eventemitter3": "^5.0.1",
+        "immer": "^10.1.1",
+        "react-redux": "8.x.x || 9.x.x",
+        "reselect": "5.1.1",
+        "tiny-invariant": "^1.3.3",
+        "use-sync-external-store": "^1.2.2",
+        "victory-vendor": "^37.0.2"
+      },
+      "integrity": "sha512-Z/m38DX3L73ExO4Tpc9/iZWHmHnlzWG4njQbxsF5aSjwqmHNDDIm0rdEBArkwsBvR8U6EirlEHiQNYWCVh9sGQ==",
+      "name": "recharts",
+      "path": "node_modules/recharts",
+      "peerDependencies": {
+        "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
+        "react-dom": "^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
+        "react-is": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+      },
+      "version": "3.8.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-K/BG6eIky/SBpzfHZv/dd+9JBFiS4SWV7FIujVyJRux6e45+73RaUHXLmIR1f7WOMaQ0U1km6qwklRQxpJJY0w==",
+      "name": "reselect",
+      "path": "node_modules/recharts/node_modules/reselect",
+      "peerDependencies": {},
+      "version": "5.1.1"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-M9/ELqF6fy8FwmkpnF0S3YKOqMyoWJ4+CS5Efg2ct3oY9daQvd/Pc71FpGZsVsbl3Cpb+IIcjBDUnnyBdQbq4w==",
+      "name": "redux",
+      "path": "node_modules/redux",
+      "peerDependencies": {},
+      "version": "5.0.1"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-NW2r5T6ksUKXCabzhL9z+h206HQw/NJkcLm1GPImRQ8IzfXwRGqjVhKJGauHirT0DAuyy6hjdnMZaRoAcy0Klw==",
+      "name": "redux-thunk",
+      "path": "node_modules/redux-thunk",
+      "peerDependencies": {
+        "redux": "^5.0.0"
+      },
+      "version": "3.1.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-AgZ3UOZm3YndfrJ4OYjgrT7bmCm/1iqkjvEfH/oYjzh6PD2qw4QuT3jjnXIrpdt4MTpMXclMT3lXbmRY+XRakw==",
+      "name": "reselect",
+      "path": "node_modules/reselect",
+      "peerDependencies": {},
+      "version": "5.2.0"
+    },
+    {
+      "dependencies": {
+        "loose-envify": "^1.1.0",
+        "object-assign": "^4.1.1"
+      },
+      "integrity": "sha512-2eWfGgAqqWFGqtdMmcL5zCMK1U8KlXv8SQFGglL3CEtd0aDVDWgeF/YoCmvln55m5zSk3J/20hTaSBeSObsQDQ==",
+      "name": "scheduler",
+      "path": "node_modules/scheduler",
+      "peerDependencies": {},
+      "version": "0.20.2"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w==",
+      "name": "tailwind-merge",
+      "path": "node_modules/tailwind-merge",
+      "peerDependencies": {},
+      "version": "3.6.0"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-+FbBPE1o9QAYvviau/qC5SE3caw21q3xkvWKBtja5vgqOWIHHJ3ioaq1VPfn/Szqctz2bU/oYeKd9/z5BL+PVg==",
+      "name": "tiny-invariant",
+      "path": "node_modules/tiny-invariant",
+      "peerDependencies": {},
+      "version": "1.3.3"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==",
+      "name": "use-sync-external-store",
+      "path": "node_modules/use-sync-external-store",
+      "peerDependencies": {
+        "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+      },
+      "version": "1.6.0"
+    },
+    {
+      "dependencies": {
+        "@types/d3-array": "^3.0.3",
+        "@types/d3-ease": "^3.0.0",
+        "@types/d3-interpolate": "^3.0.1",
+        "@types/d3-scale": "^4.0.2",
+        "@types/d3-shape": "^3.1.0",
+        "@types/d3-time": "^3.0.0",
+        "@types/d3-timer": "^3.0.0",
+        "d3-array": "^3.1.6",
+        "d3-ease": "^3.0.1",
+        "d3-interpolate": "^3.0.1",
+        "d3-scale": "^4.0.2",
+        "d3-shape": "^3.1.0",
+        "d3-time": "^3.0.0",
+        "d3-timer": "^3.0.1"
+      },
+      "integrity": "sha512-SbPDPdDBYp+5MJHhBCAyI7wKM3d5ivekigc2Dk2s7pgbZ9wIgIBYGVw4zGHBml/qTFbexrofXW6Gu4noGxrOwQ==",
+      "name": "victory-vendor",
+      "path": "node_modules/victory-vendor",
+      "peerDependencies": {},
+      "version": "37.3.6"
+    },
+    {
+      "dependencies": {},
+      "integrity": "sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==",
+      "name": "react-is",
+      "path": "packages/ui-profile/node_modules/react-is",
+      "peerDependencies": {},
+      "version": "17.0.2"
+    }
+  ],
   "policy": {
     "allowForcedPeerResolution": false,
     "allowLegacyPeerDeps": false
@@ -9,183 +727,18 @@
     "@base-ui/react",
     "class-variance-authority",
     "clsx",
+    "date-fns",
+    "embla-carousel-react",
+    "input-otp",
     "lucide-react",
+    "react-day-picker",
+    "react-is",
+    "react-redux",
+    "recharts",
+    "tailwind-merge",
     "react",
-    "react-dom",
-    "tailwind-merge"
+    "react-dom"
   ],
-  "packages": [
-    {
-      "name": "@babel/runtime",
-      "version": "7.29.7",
-      "integrity": "sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==",
-      "dependencies": {},
-      "peerDependencies": {}
-    },
-    {
-      "name": "@base-ui/react",
-      "version": "1.6.0",
-      "integrity": "sha512-/jzjTWJYXhRFO45Bev9lc3cHbmjzCMpUqbMZ2AgKy/z25mY9B6shGSNcXcjQar9n5doM0KYW1W8fcFv2jZBuMw==",
-      "dependencies": {
-        "@babel/runtime": "^7.29.2",
-        "@base-ui/utils": "0.3.1",
-        "@floating-ui/react-dom": "^2.1.8",
-        "@floating-ui/utils": "^0.2.11",
-        "use-sync-external-store": "^1.6.0"
-      },
-      "peerDependencies": {
-        "@date-fns/tz": "^1.2.0",
-        "@types/react": "^17 || ^18 || ^19",
-        "date-fns": "^4.0.0",
-        "react": "^17 || ^18 || ^19",
-        "react-dom": "^17 || ^18 || ^19"
-      },
-      "optionalPeers": ["@date-fns/tz", "@types/react", "date-fns"]
-    },
-    {
-      "name": "@base-ui/utils",
-      "version": "0.3.1",
-      "integrity": "sha512-gFFiltORVmW/N6IILTGxizP3PBpVpysqML1ALY5Vk0mH+7faVkCknOU31goYHN5Aoek2dkjxva1XOD2Ce9WuIg==",
-      "dependencies": {
-        "@babel/runtime": "^7.29.2",
-        "@floating-ui/utils": "^0.2.11",
-        "reselect": "^5.2.0",
-        "use-sync-external-store": "^1.6.0"
-      },
-      "peerDependencies": {
-        "@types/react": "^17 || ^18 || ^19",
-        "react": "^17 || ^18 || ^19",
-        "react-dom": "^17 || ^18 || ^19"
-      },
-      "optionalPeers": ["@types/react"]
-    },
-    {
-      "name": "@floating-ui/core",
-      "version": "1.7.5",
-      "integrity": "sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ==",
-      "dependencies": { "@floating-ui/utils": "^0.2.11" },
-      "peerDependencies": {}
-    },
-    {
-      "name": "@floating-ui/dom",
-      "version": "1.7.6",
-      "integrity": "sha512-9gZSAI5XM36880PPMm//9dfiEngYoC6Am2izES1FF406YFsjvyBMmeJ2g4SAju3xWwtuynNRFL2s9hgxpLI5SQ==",
-      "dependencies": {
-        "@floating-ui/core": "^1.7.5",
-        "@floating-ui/utils": "^0.2.11"
-      },
-      "peerDependencies": {}
-    },
-    {
-      "name": "@floating-ui/react-dom",
-      "version": "2.1.8",
-      "integrity": "sha512-cC52bHwM/n/CxS87FH0yWdngEZrjdtLW/qVruo68qg+prK7ZQ4YGdut2GyDVpoGeAYe/h899rVeOVm6Oi40k2A==",
-      "dependencies": { "@floating-ui/dom": "^1.7.6" },
-      "peerDependencies": {
-        "react": ">=16.8.0",
-        "react-dom": ">=16.8.0"
-      }
-    },
-    {
-      "name": "@floating-ui/utils",
-      "version": "0.2.11",
-      "integrity": "sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==",
-      "dependencies": {},
-      "peerDependencies": {}
-    },
-    {
-      "name": "class-variance-authority",
-      "version": "0.7.1",
-      "integrity": "sha512-Ka+9Trutv7G8M6WT6SeiRWz792K5qEqIGEGzXKhAE6xOWAY6pPH8U+9IY3oCMv6kqTmLsv7Xh/2w2RigkePMsg==",
-      "dependencies": { "clsx": "^2.1.1" },
-      "peerDependencies": {}
-    },
-    {
-      "name": "clsx",
-      "version": "2.1.1",
-      "integrity": "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==",
-      "dependencies": {},
-      "peerDependencies": {}
-    },
-    {
-      "name": "js-tokens",
-      "version": "4.0.0",
-      "integrity": "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==",
-      "dependencies": {},
-      "peerDependencies": {}
-    },
-    {
-      "name": "loose-envify",
-      "version": "1.4.0",
-      "integrity": "sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==",
-      "dependencies": { "js-tokens": "^3.0.0 || ^4.0.0" },
-      "peerDependencies": {}
-    },
-    {
-      "name": "lucide-react",
-      "version": "1.25.0",
-      "integrity": "sha512-/mdJTRbiwcLOQ1NZZK1amZF9rIZyvO18D6r9TngE6TG1NmqHgFuT4eE7Xrkm9UsXMbBJD1NlfwHVltCDWHrOTw==",
-      "dependencies": {},
-      "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" }
-    },
-    {
-      "name": "object-assign",
-      "version": "4.1.1",
-      "integrity": "sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==",
-      "dependencies": {},
-      "peerDependencies": {}
-    },
-    {
-      "name": "react",
-      "version": "17.0.1",
-      "integrity": "sha512-lG9c9UuMHdcAexXtigOZLX8exLWkW0Ku29qPRU8uhF2R9BN96dLCt0psvzPLlHc5OWkgymP3qwTRgbnw5BKx3w==",
-      "dependencies": {
-        "loose-envify": "^1.1.0",
-        "object-assign": "^4.1.1"
-      },
-      "peerDependencies": {}
-    },
-    {
-      "name": "react-dom",
-      "version": "17.0.1",
-      "integrity": "sha512-6eV150oJZ9U2t9svnsspTMrWNyHc6chX0KzDeAOXftRa8bNeOKTTfCJ7KorIwenkHd2xqVTBTCZd79yk/lx/Ug==",
-      "dependencies": {
-        "loose-envify": "^1.1.0",
-        "object-assign": "^4.1.1",
-        "scheduler": "^0.20.1"
-      },
-      "peerDependencies": { "react": "17.0.1" }
-    },
-    {
-      "name": "reselect",
-      "version": "5.2.0",
-      "integrity": "sha512-AgZ3UOZm3YndfrJ4OYjgrT7bmCm/1iqkjvEfH/oYjzh6PD2qw4QuT3jjnXIrpdt4MTpMXclMT3lXbmRY+XRakw==",
-      "dependencies": {},
-      "peerDependencies": {}
-    },
-    {
-      "name": "scheduler",
-      "version": "0.20.2",
-      "integrity": "sha512-2eWfGgAqqWFGqtdMmcL5zCMK1U8KlXv8SQFGglL3CEtd0aDVDWgeF/YoCmvln55m5zSk3J/20hTaSBeSObsQDQ==",
-      "dependencies": {
-        "loose-envify": "^1.1.0",
-        "object-assign": "^4.1.1"
-      },
-      "peerDependencies": {}
-    },
-    {
-      "name": "tailwind-merge",
-      "version": "3.6.0",
-      "integrity": "sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w==",
-      "dependencies": {},
-      "peerDependencies": {}
-    },
-    {
-      "name": "use-sync-external-store",
-      "version": "1.6.0",
-      "integrity": "sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==",
-      "dependencies": {},
-      "peerDependencies": { "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" }
-    }
-  ]
+  "profileId": "spfx-react17-base-nova-v1",
+  "schemaVersion": 1
 }

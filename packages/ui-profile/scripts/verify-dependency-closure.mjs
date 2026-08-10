@@ -15,6 +15,8 @@ const closure = JSON.parse(await readFile(path.join(packageRoot, 'dependency-clo
 const manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
 const provenance = JSON.parse(await readFile(path.join(packageRoot, 'provenance.json'), 'utf8'));
 const rootManifest = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
+const packageLock = JSON.parse(await readFile(path.join(repositoryRoot, 'package-lock.json'), 'utf8'));
+const REVIEWED_TYPE_ONLY_PEERS = new Set(['@types/hoist-non-react-statics>@types/react']);
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -22,6 +24,19 @@ function assert(condition, message) {
 
 function assertExact(actual, expected, message) {
   assert(canonicalJson(actual) === canonicalJson(expected), message);
+}
+
+function resolveLockedDependency(lock, fromPath, dependency) {
+  let current = fromPath;
+  while (true) {
+    const candidate = path.posix.join(current, 'node_modules', dependency);
+    if (lock.packages[candidate]) return candidate;
+    const parent = path.posix.dirname(current);
+    if (parent === current || current === '.') break;
+    current = parent;
+  }
+  const rootCandidate = `node_modules/${dependency}`;
+  return lock.packages[rootCandidate] ? rootCandidate : null;
 }
 
 assert(closure.schemaVersion === 1 && closure.profileId === 'spfx-react17-base-nova-v1', 'Closure identity differs');
@@ -37,20 +52,28 @@ assert(
 
 const accepted = new Map();
 for (const entry of closure.packages) {
-  assert(!accepted.has(entry.name), `Duplicate closure package ${entry.name}`);
+  assert(
+    typeof entry.path === 'string' &&
+      path.posix.normalize(entry.path) === entry.path &&
+      (entry.path.startsWith('node_modules/') || entry.path.startsWith('packages/ui-profile/node_modules/')),
+    `${entry.name}: lock path is missing`
+  );
+  assert(!accepted.has(entry.path), `Duplicate closure package path ${entry.path}`);
   assert(/^sha512-/.test(entry.integrity), `${entry.name}: npm integrity is missing`);
-  accepted.set(entry.name, entry);
+  accepted.set(entry.path, entry);
 }
 for (const root of closure.productionRoots) {
-  const entry = accepted.get(root);
+  const rootPath = resolveLockedDependency(packageLock, 'packages/ui-profile', root);
+  const entry = accepted.get(rootPath);
   assert(
-    entry && entry.version === (manifest.dependencies?.[root] || manifest.peerDependencies?.[root]),
+    entry?.name === root && entry.version === (manifest.dependencies?.[root] || manifest.peerDependencies?.[root]),
     `${root}: direct version differs`
   );
 }
 for (const entry of closure.packages) {
   for (const dependency of Object.keys(entry.dependencies)) {
-    assert(accepted.has(dependency), `${entry.name}: dependency ${dependency} is absent from the closure`);
+    const resolvedPath = resolveLockedDependency(packageLock, entry.path, dependency);
+    assert(resolvedPath && accepted.has(resolvedPath), `${entry.name}: dependency ${dependency} is absent from the closure`);
   }
 }
 const reactEntries = closure.packages.filter((entry) => entry.name === 'react');
@@ -124,16 +147,7 @@ if (!manifestOnly) {
   }
 
   function resolveDependency(fromPath, dependency) {
-    let current = fromPath;
-    while (true) {
-      const candidate = path.posix.join(current, 'node_modules', dependency);
-      if (lock.packages[candidate]) return candidate;
-      const parent = path.posix.dirname(current);
-      if (parent === current || current === '.') break;
-      current = parent;
-    }
-    const rootCandidate = `node_modules/${dependency}`;
-    return lock.packages[rootCandidate] ? rootCandidate : null;
+    return resolveLockedDependency(lock, fromPath, dependency);
   }
 
   const reached = new Map();
@@ -152,8 +166,8 @@ if (!manifestOnly) {
   assert(reached.size === accepted.size, `Lockfile closure size ${reached.size} differs from accepted ${accepted.size}`);
   for (const [resolvedPath, name] of reached) {
     const locked = lock.packages[resolvedPath];
-    const expected = accepted.get(name);
-    assert(expected, `Unexpected production-closure dependency ${name}`);
+    const expected = accepted.get(resolvedPath);
+    assert(expected?.name === name, `Unexpected production-closure dependency ${name} at ${resolvedPath}`);
     assert(locked.version === expected.version, `${name}: lock version differs`);
     assert(locked.integrity === expected.integrity, `${name}: lock integrity differs`);
     assertExact(locked.dependencies ?? {}, expected.dependencies, `${name}: dependency metadata differs`);
@@ -225,13 +239,14 @@ if (!manifestOnly) {
   assert(installedProfile, 'Installed npm tree omits the UI profile workspace');
   for (const root of closure.productionRoots) {
     const installed = installedProfile.dependencies?.[root];
-    const expected = accepted.get(root);
+    const rootPath = resolveDependency(workspaceKey, root);
+    const expected = accepted.get(rootPath);
     assert(installed, `Installed npm tree omits production root ${root}`);
     assert(installed.link !== true, `Installed npm tree links production root ${root}`);
     assert(installed.version === expected.version, `${root}: installed root version differs`);
     for (const dependency of Object.keys(expected.dependencies)) {
       assert(
-        installed.dependencies?.[dependency]?.version === accepted.get(dependency)?.version,
+        installed.dependencies?.[dependency]?.version === accepted.get(resolveDependency(rootPath, dependency))?.version,
         `${root}: installed dependency edge ${dependency} differs from the accepted closure`
       );
     }
@@ -308,8 +323,8 @@ if (!manifestOnly) {
         const canonicalPackageDirectory = await realpath(packageDirectory);
         const canonicalManifestPath = await realpath(candidate);
         assert(
-          isContainedPath(canonicalNodeModulesRoot, canonicalPackageDirectory),
-          `${name}: installed package root resolves outside repository node_modules`
+          isContainedPath(canonicalRepositoryRoot, canonicalPackageDirectory),
+          `${name}: installed package root resolves outside repository`
         );
         assert(
           canonicalPackageDirectory === path.resolve(packageDirectory) &&
@@ -337,8 +352,9 @@ if (!manifestOnly) {
   const reachedInstalled = new Set();
   const visitedInstalledManifests = new Set();
   async function verifyInstalledPackage(name, resolved, ancestry) {
-    const expected = accepted.get(name);
-    assert(expected, `Installed npm tree contains unexpected production package ${name}`);
+    const lockPath = path.relative(canonicalRepositoryRoot, resolved.packageDirectory).replaceAll(path.sep, '/');
+    const expected = accepted.get(lockPath);
+    assert(expected?.name === name, `Installed npm tree contains unexpected production package ${name} at ${lockPath}`);
     assert(resolved.manifest.name === name, `${ancestry}: installed package identity differs`);
     assert(resolved.manifest.version === expected.version, `${ancestry}: installed version differs`);
     assertExact(
@@ -367,7 +383,7 @@ if (!manifestOnly) {
       [...(expected.optionalPeers ?? [])].sort(),
       `${ancestry}: installed optional peers differ`
     );
-    reachedInstalled.add(name);
+    reachedInstalled.add(lockPath);
     if (visitedInstalledManifests.has(resolved.manifestPath)) return;
     visitedInstalledManifests.add(resolved.manifestPath);
     for (const dependency of Object.keys(expected.dependencies)) {
@@ -375,11 +391,14 @@ if (!manifestOnly) {
       await verifyInstalledPackage(dependency, child, `${ancestry} > ${dependency}`);
     }
     for (const peer of Object.keys(expected.peerDependencies).filter((peer) => !(expected.optionalPeers ?? []).includes(peer))) {
-      const expectedPeer = accepted.get(peer);
+      if (REVIEWED_TYPE_ONLY_PEERS.has(`${name}>${peer}`)) continue;
+      const expectedPeerPath = resolveDependency(lockPath, peer);
+      const expectedPeer = accepted.get(expectedPeerPath);
       assert(expectedPeer, `${ancestry}: required installed peer ${peer} is outside the accepted closure`);
       const installedPeer = await resolveInstalledManifest(resolved.packageDirectory, peer);
+      const installedPeerPath = path.relative(canonicalRepositoryRoot, installedPeer.packageDirectory).replaceAll(path.sep, '/');
       assert(
-        installedPeer.manifest.version === expectedPeer.version,
+        installedPeerPath === expectedPeerPath && installedPeer.manifest.version === expectedPeer.version,
         `${ancestry}: required installed peer ${peer} version differs`
       );
     }

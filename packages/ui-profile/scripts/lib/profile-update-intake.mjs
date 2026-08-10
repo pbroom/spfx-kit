@@ -24,7 +24,7 @@ const SHADCN_INTEGRITY = 'sha512-XLFzfNNIUPlUlyheFEzj0H4Vnhi9nI0nl3Nfgg8HYXW1FkU
 // SHADCN_RESOLVED/SHADCN_INTEGRITY artifact. This includes package-local dependency overrides.
 const SHADCN_TREE_SHA256 = 'd2c030d535d89f866050bd40d843b34802bb9a0ba35acca50508c64a883457ea';
 const SHADCN_RUNTIME_CLOSURE_SHA256 = '7a19e506f9e733dc03a9533aab875a2df1b76fd9bc498c356763c5274af62868';
-const PROVENANCE_SCHEMA_SHA256 = '3c7011e554de1eb7e01399f4239ddde69dea1ebb73c64c1b747042c634468e61';
+const PROVENANCE_SCHEMA_SHA256 = '7b452e40688c76bc6d2305a7a2b033e8d7f130824fa58e2590dc5471456d7575';
 const DEFAULT_REGISTRY_ITEM_MAX_BYTES = 256 * 1024;
 const DEFAULT_REGISTRY_AGGREGATE_MAX_BYTES = 4 * 1024 * 1024;
 const DEFAULT_REGISTRY_REQUEST_TIMEOUT_MS = 30_000;
@@ -309,8 +309,9 @@ function assertAllowedProductionDependency(specifier, label, policy) {
   const expectedVersion = policy.directProductionDependencies[dependency.name];
   assert(expectedVersion, `${label} uses undeclared production dependency ${dependency.name}`);
   if (dependency.version) {
+    const tagResolution = policy.registryDependencyTagResolutions?.[`${dependency.name}@${dependency.version}`];
     assert(
-      dependency.version === expectedVersion,
+      dependency.version === expectedVersion || tagResolution === expectedVersion,
       `${label} requires ${dependency.name}@${dependency.version} instead of the pinned ${expectedVersion}`
     );
   }
@@ -398,9 +399,10 @@ export function assertFetchedRegistryClosure(items, registryIds, policy, expecte
           assertAllowedProductionDependency('lucide-react', file.path, policy);
           continue;
         }
-        const registrySource = /^@\/registry\/base-nova\/(?:ui\/([a-z0-9-]+)|lib\/(utils))$/u.exec(specifier);
+        const registrySource =
+          /^@\/registry\/base-nova\/(?:ui\/([a-z0-9-]+)|lib\/(utils)|hooks\/([a-z0-9-]+))$/u.exec(specifier);
         if (registrySource) {
-          const dependency = registrySource[1] ?? registrySource[2];
+          const dependency = registrySource[1] ?? registrySource[2] ?? registrySource[3];
           assert(
             registryIdSet.has(dependency),
             `${file.path} requires source outside the fetched registry closure: ${dependency}`
@@ -636,6 +638,7 @@ export async function fetchValidatedProfileUpdateSnapshots({
     dependencyPolicy: {
       excludedDependencies: provenance.excludedDependencies,
       directProductionDependencies: provenance.directProductionDependencies,
+      registryDependencyTagResolutions: provenance.registryDependencyTagResolutions,
       allowedTypeDirectives: pinnedTypeDirectiveNames(manifest.devDependencies)
     },
     expectedSourcePathsById,

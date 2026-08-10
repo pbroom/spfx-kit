@@ -12,6 +12,7 @@ import {
 
 const require = createRequire(import.meta.url);
 const tailwindCli = path.join(path.dirname(require.resolve('@tailwindcss/cli/package.json')), 'dist', 'index.mjs');
+const dynamicClassExpressionError = /dynamic class expressions? (?:is|are) not accepted/u;
 
 describe('UI profile Tailwind prefix normalization', () => {
   it('places the prefix before variants, arbitrary selectors, groups, and containers', () => {
@@ -98,42 +99,40 @@ describe('UI profile Tailwind prefix normalization', () => {
   });
 
   it('fails closed when a generated class branch is dynamic', () => {
-    expect(() => prefixTailwindClassCandidates('<div className={getClass()} />')).toThrow(
-      'dynamic class expressions are not accepted'
-    );
+    expect(() => prefixTailwindClassCandidates('<div className={getClass()} />')).toThrow(dynamicClassExpressionError);
     expect(() => prefixTailwindClassCandidates('<div className={flag ? "flex" : getClass()} />')).toThrow(
-      'dynamic class expressions are not accepted'
+      dynamicClassExpressionError
     );
     expect(() =>
       prefixTailwindClassCandidates(
         'import { cn } from "./lib/utils"; export function Probe({ className }) { return <div className={cn(flag && getClass(), className)} /> }'
       )
-    ).toThrow('dynamic class expressions are not accepted');
+    ).toThrow(dynamicClassExpressionError);
     expect(() =>
       prefixTailwindClassCandidates(
         'import { cn } from "./lib/utils"; export function Probe({ className }) { return <div className={cn(flag || "flex", className)} /> }'
       )
-    ).toThrow('dynamic class expressions are not accepted');
+    ).toThrow(dynamicClassExpressionError);
     expect(() =>
       prefixTailwindClassCandidates(
         'import { cn } from "./lib/utils"; const fallback = getClass(); export function Probe({ className }) { return <div className={cn(fallback, className)} /> }'
       )
-    ).toThrow('dynamic class expressions are not accepted');
+    ).toThrow(dynamicClassExpressionError);
     expect(() =>
       prefixTailwindClassCandidates(
         'import { cva } from "class-variance-authority"; let styles = cva("flex"); styles = () => getClass(); <div className={styles()} />'
       )
-    ).toThrow('dynamic class expressions are not accepted');
+    ).toThrow(dynamicClassExpressionError);
     expect(() =>
       prefixTailwindClassCandidates(
         'import { cva } from "class-variance-authority"; const styles = cva("flex"); export function Probe(styles) { return <div className={styles()} /> }'
       )
-    ).toThrow('dynamic class expressions are not accepted');
+    ).toThrow(dynamicClassExpressionError);
     expect(() =>
       prefixTailwindClassCandidates(
         'export function Probe({ className }) { className = getClass(); return <div className={className} /> }'
       )
-    ).toThrow('dynamic class expressions are not accepted');
+    ).toThrow(dynamicClassExpressionError);
 
     expect(
       prefixTailwindClassCandidates(
@@ -154,12 +153,12 @@ describe('UI profile Tailwind prefix normalization', () => {
     ).toContain('rootClass = "skui:hidden"');
     expect(() =>
       prefixTailwindClassCandidates('export function Probe({ className = getClass() }) { return <div className={className} /> }')
-    ).toThrow('dynamic class expressions are not accepted');
+    ).toThrow(dynamicClassExpressionError);
     expect(() =>
       prefixTailwindClassCandidates(
         'export function Probe({ className: rootClass = getClass() }) { return <div className={rootClass} /> }'
       )
-    ).toThrow('dynamic class expressions are not accepted');
+    ).toThrow(dynamicClassExpressionError);
     expect(
       prefixTailwindClassCandidates(
         'export function Probe({ className } = { className: "block" }) { return <div className={className} /> }'
@@ -206,7 +205,7 @@ describe('UI profile Tailwind prefix normalization', () => {
       'styles({ class: "skui:block" })'
     );
     expect(() => prefixTailwindClassCandidates(`${prefix}<div className={styles({ className: getClass() })} />`)).toThrow(
-      'dynamic class expressions are not accepted'
+      dynamicClassExpressionError
     );
     expect(() => prefixTailwindClassCandidates(`${prefix}<div className={styles({ ...props })} />`)).toThrow(
       'cva factory props contain an ambiguous class source'
@@ -295,7 +294,7 @@ describe('UI profile Tailwind prefix normalization', () => {
       ).source
     ).toContain('className: cn("skui:flex", className)');
     expect(() => prefixTailwindClassCandidates('mergeProps({ className: getClass() }, props)')).toThrow(
-      'dynamic class expressions are not accepted'
+      dynamicClassExpressionError
     );
     expect(() => prefixTailwindClassCandidates('mergeProps({ className: "flex", ...shared }, props)')).toThrow(
       'className object contains an ambiguous class source'
@@ -446,9 +445,7 @@ describe('UI profile Tailwind prefix normalization', () => {
     expect(prefixTailwindClassCandidates('<div {...{ className: "flex", role: "group" }} />').source).toBe(
       '<div {...{ className: "skui:flex", role: "group" }} />'
     );
-    expect(() => prefixTailwindClassCandidates('<div {...{ className: getClass() }} />')).toThrow(
-      'dynamic class expressions are not accepted'
-    );
+    expect(() => prefixTailwindClassCandidates('<div {...{ className: getClass() }} />')).toThrow(dynamicClassExpressionError);
     expect(() => prefixTailwindClassCandidates('<div {...{ ...sharedProps }} />')).toThrow(
       'JSX spread contains an ambiguous class source'
     );
@@ -589,7 +586,7 @@ describe('UI profile Tailwind prefix normalization', () => {
       prefixTailwindClassCandidates(
         'const entries = getEntries(); export function Probe() { return entries.map(({ className }) => <div className={className} />) }'
       )
-    ).toThrow('dynamic class expressions are not accepted');
+    ).toThrow(dynamicClassExpressionError);
     const callbackProps =
       'const entries = getEntries(); export function Probe() { return entries.map((props) => <div {...props} />) }';
     expect(() => prefixTailwindClassCandidates(callbackProps)).toThrow(
