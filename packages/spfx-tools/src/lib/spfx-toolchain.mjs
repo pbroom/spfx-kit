@@ -56,7 +56,7 @@ export function spfxVersionFromPackage(packageJson) {
 
 export function standaloneScriptsForToolchain(toolchain, { monaco = false, uiProfile = false } = {}) {
   const copyMonaco = monaco ? ' && node scripts/copy-monaco-assets.mjs --app .' : '';
-  const verifyUiProfile = uiProfile ? 'node scripts/verify-ui-profile.mjs && ' : '';
+  const verifyUiProfile = uiProfile ? 'spfx-ui-profile-verify && ' : '';
   if (toolchain === 'heft') {
     return {
       build: `${verifyUiProfile}heft test --clean --production && heft package-solution --production`,

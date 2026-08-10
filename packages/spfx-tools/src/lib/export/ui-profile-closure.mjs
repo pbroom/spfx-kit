@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { copyFile, lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import { readSppkgClientSideAssets } from '../sppkg.mjs';
@@ -113,6 +115,7 @@ export async function materializeStandaloneUiProfileClosure(sourceDir, targetDir
   const profileRoot = await realpath(path.dirname(closure.profilePath));
   const materialRoot = safeTargetPath(targetDir, 'spfx-ui-profile');
   await rm(materialRoot, { recursive: true, force: true });
+  const packageDependency = await packStandaloneUiProfilePackage(profileRoot, materialRoot);
   const targetAssets = await materializeUiProfileTargetAssets(targetDir, closure);
   for (const [sourceName, targetName, expectedSha256] of [
     ['profile.json', 'spfx-ui-profile/profile.json', closure.descriptor.profileSha256],
@@ -134,7 +137,10 @@ export async function materializeStandaloneUiProfileClosure(sourceDir, targetDir
     const rewritten = replaceExactCssImport(source, binding.importSpecifier, rewrittenImport);
     await writeFile(targetSource, rewritten);
   }
-  return verifyStandaloneUiProfileClosure(sourceDir, targetDir, closure, { targetAssets });
+  return {
+    ...(await verifyStandaloneUiProfileClosure(sourceDir, targetDir, closure, { targetAssets })),
+    packageDependency
+  };
 }
 
 export async function verifyStandaloneUiProfileClosure(sourceDir, targetDir, closure, options = {}) {
@@ -215,11 +221,13 @@ async function findExactCssImports(sourceRoot, closure) {
     const source = (await readFile(file.absolutePath)).toString('utf8');
     const importSpecifiers = [];
     for (const match of source.matchAll(/(?:import|require\()\s*(?:[^'";]+?\s+from\s*)?['"]([^'"]+\.css)['"]/gu)) {
-      const candidate = path.resolve(path.dirname(file.absolutePath), match[1]);
       try {
+        const candidate = resolveCssImport(file.absolutePath, match[1]);
         if ((await realpath(candidate)) === (await realpathFromDescriptor(closure))) importSpecifiers.push(match[1]);
       } catch (error) {
-        if (error?.code !== 'ENOENT') throw error;
+        if (error?.code !== 'ENOENT' && error?.code !== 'MODULE_NOT_FOUND' && error?.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
+          throw error;
+        }
       }
     }
     for (const importSpecifier of importSpecifiers) {
@@ -232,6 +240,73 @@ async function findExactCssImports(sourceRoot, closure) {
     }
   }
   return result.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function resolveCssImport(sourceFile, importSpecifier) {
+  if (importSpecifier.startsWith('.') || path.isAbsolute(importSpecifier)) {
+    return path.resolve(path.dirname(sourceFile), importSpecifier);
+  }
+  return createRequire(sourceFile).resolve(importSpecifier);
+}
+
+async function packStandaloneUiProfilePackage(profileRoot, materialRoot) {
+  await ensureUiProfileRuntime(profileRoot);
+  await mkdir(materialRoot, { recursive: true });
+  const cacheRoot = path.join(materialRoot, '.npm-cache');
+  const result = spawnSync(
+    'npm',
+    ['pack', '--ignore-scripts', '--json', '--cache', cacheRoot, '--pack-destination', materialRoot, profileRoot],
+    { encoding: 'utf8' }
+  );
+  await rm(cacheRoot, { recursive: true, force: true });
+  if (result.status !== 0) {
+    throw new Error(`Could not package the standalone UI profile dependency: ${result.stderr || result.stdout}`);
+  }
+  let filename;
+  try {
+    filename = JSON.parse(result.stdout)?.[0]?.filename;
+  } catch {
+    throw new Error('Could not parse the standalone UI profile package result');
+  }
+  if (!filename || path.basename(filename) !== filename || !filename.endsWith('.tgz')) {
+    throw new Error('Standalone UI profile packaging returned an invalid archive name');
+  }
+  const packageFile = safeTargetPath(materialRoot, filename);
+  const stats = await lstat(packageFile);
+  if (!stats.isFile() || stats.isSymbolicLink()) {
+    throw new Error('Standalone UI profile dependency must be a regular package archive');
+  }
+  return `file:./spfx-ui-profile/${filename}`;
+}
+
+async function ensureUiProfileRuntime(profileRoot) {
+  const required = [
+    'dist/src/index.js',
+    'dist/src/index.d.ts',
+    '.prepared/base-ui/package.json',
+    'spfx-ui-webpack.cjs'
+  ];
+  if (await hasRequiredUiProfileRuntime(profileRoot, required)) return;
+  const result = spawnSync('npm', ['run', 'build:runtime'], {
+    cwd: profileRoot,
+    encoding: 'utf8'
+  });
+  if (result.status !== 0 || !(await hasRequiredUiProfileRuntime(profileRoot, required))) {
+    throw new Error(`Could not build the standalone UI profile runtime: ${result.stderr || result.stdout}`);
+  }
+}
+
+async function hasRequiredUiProfileRuntime(profileRoot, required) {
+  for (const relativePath of required) {
+    try {
+      const stats = await lstat(path.join(profileRoot, relativePath));
+      if (stats.isSymbolicLink()) return false;
+    } catch (error) {
+      if (error?.code === 'ENOENT') return false;
+      throw error;
+    }
+  }
+  return true;
 }
 
 async function realpathFromDescriptor(closure) {
