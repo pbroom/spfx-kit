@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   uiProfileCatalogDocumentation,
   uiProfileCatalogEntries,
-  uiProfileCatalogImportPath
+  uiProfileCatalogImportPath,
+  uiProfileCatalogPageSections
 } from '../apps/lab/src/components/uiProfileCatalogEntries';
 
 const harnessPath = 'apps/lab/src/components/UiProfileCatalogHarness.tsx';
@@ -110,6 +111,20 @@ describe('Lab UI profile catalog harness', () => {
       expect(documentation.summary).not.toMatch(/installation|React Aria|Radix/iu);
       expect(uiProfileCatalogImportPath(entry.id)).toBe(`@spfx-kit/ui-profile/${entry.id}`);
     }
+
+    const sectionIds = uiProfileCatalogEntries.flatMap((entry) =>
+      uiProfileCatalogPageSections(entry.id).flatMap((section) => [
+        section.id,
+        ...(section.children?.map((child) => child.id) ?? [])
+      ])
+    );
+    expect(new Set(sectionIds).size).toBe(sectionIds.length);
+    for (const entry of uiProfileCatalogEntries) {
+      const sections = uiProfileCatalogPageSections(entry.id);
+      expect(sections[0]).toMatchObject({ kind: 'examples' });
+      expect(sections[1]).toMatchObject({ kind: 'usage' });
+      expect(sections.every((section) => section.id.startsWith(`ui-library-${entry.id}-`))).toBe(true);
+    }
   });
 
   it('uses Breadcrumb as the complete typed documentation contract', () => {
@@ -142,12 +157,54 @@ describe('Lab UI profile catalog harness', () => {
     const harnessSource = readFileSync(harnessPath, 'utf8');
     const breadcrumbSource = harnessSource.slice(
       harnessSource.indexOf('function BreadcrumbDocumentationExamples'),
-      harnessSource.indexOf('function ButtonDocumentationExamples')
+      harnessSource.indexOf('interface AccordionDocumentationExamplesProps')
     );
-    const liveExampleIds = [...breadcrumbSource.matchAll(/data-catalog-example="([a-z0-9-]+)"/gu)].map((match) => match[1]);
+    const liveExampleIds = [...breadcrumbSource.matchAll(/<CatalogDocumentationExample id="([a-z0-9-]+)"/gu)].map(
+      (match) => match[1]
+    );
     expect(liveExampleIds).toEqual(breadcrumb.examples?.map((example) => example.id));
     expect(harnessSource).toContain("useSpfxUiId('catalog:breadcrumb-dropdown-content')");
     expect(harnessSource).toContain("useSpfxUiId('catalog:breadcrumb-responsive-content')");
+    expect(harnessSource).toContain('uiProfileCatalogExampleSectionId(activeComponent, id)');
+    expect(harnessSource).toContain('aria-label={`${title} example view`}');
+  });
+
+  it('uses Accordion as the complete Base UI disclosure documentation contract', () => {
+    const accordion = uiProfileCatalogDocumentation.accordion;
+
+    expect(accordion.examples?.map((example) => example.id)).toEqual([
+      'primary',
+      'basic',
+      'multiple',
+      'disabled',
+      'borders',
+      'card',
+      'rtl'
+    ]);
+    expect(accordion.api?.map((part) => part.name)).toEqual([
+      'Accordion',
+      'AccordionItem',
+      'AccordionTrigger',
+      'AccordionContent'
+    ]);
+    expect(accordion.composition).toHaveLength(4);
+    for (const example of accordion.examples ?? []) {
+      expect(example.code).toContain('@spfx-kit/ui-profile/accordion');
+      expect(example.code).not.toMatch(/installation|React Aria|Radix/iu);
+    }
+
+    const harnessSource = readFileSync(harnessPath, 'utf8');
+    const accordionSource = harnessSource.slice(
+      harnessSource.indexOf('function AccordionDocumentationExamples'),
+      harnessSource.indexOf('function ButtonDocumentationExamples')
+    );
+    const liveExampleIds = [...accordionSource.matchAll(/<CatalogDocumentationExample id="([a-z0-9-]+)"/gu)].map(
+      (match) => match[1]
+    );
+    expect(liveExampleIds).toEqual(accordion.examples?.map((example) => example.id));
+    expect(accordionSource).toContain('useSpfxUiDerivedId(baseId');
+    expect(accordionSource).toContain("defaultValue={['notifications', 'privacy']} multiple");
+    expect(accordionSource).toContain('<DirectionProvider direction="rtl">');
   });
 
   it('documents the complete Button, Button Group, and Spinner family contracts', () => {

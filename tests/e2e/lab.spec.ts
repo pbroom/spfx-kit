@@ -216,7 +216,7 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   const componentDocs = page.getByRole('article', { name: 'Accordion' });
   await expect(componentDocs).toBeVisible();
   await expect(componentDocs).toContainText('Organizes related content into disclosure sections');
-  await expect(componentDocs.getByRole('heading', { name: 'Preview' })).toBeVisible();
+  await expect(componentDocs.getByRole('heading', { name: 'Examples' })).toBeVisible();
   await expect(componentDocs.getByRole('heading', { name: 'Usage' })).toBeVisible();
   await expect(componentDocs.getByLabel('Public import for Accordion')).toContainText(
     "import { Accordion } from '@spfx-kit/ui-profile/accordion';"
@@ -234,10 +234,72 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   await expect(componentNavigation).toHaveCSS('padding-left', '0px');
   await expect(componentNavigation).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(componentNavigation).toHaveCSS('box-shadow', 'none');
-  const [componentNavigationBox, galleryBox] = await Promise.all([componentNavigation.boundingBox(), gallery.boundingBox()]);
+  const [workspaceBox, componentNavigationBox, galleryBox, componentDocsBox] = await Promise.all([
+    page.locator('.ui-library-workspace').boundingBox(),
+    componentNavigation.boundingBox(),
+    gallery.boundingBox(),
+    componentDocs.boundingBox()
+  ]);
+  expect(workspaceBox).not.toBeNull();
   expect(componentNavigationBox).not.toBeNull();
   expect(galleryBox).not.toBeNull();
+  expect(componentDocsBox).not.toBeNull();
   expect(componentNavigationBox!.x + componentNavigationBox!.width).toBeLessThanOrEqual(galleryBox!.x);
+  expect(componentDocsBox!.width).toBeLessThanOrEqual(760);
+  expect(workspaceBox!.width).toBeGreaterThan(componentDocsBox!.width + componentNavigationBox!.width);
+
+  const accordionExamples = componentDocs.locator('[data-catalog-documentation-examples="accordion"] [data-catalog-example]');
+  await expect(accordionExamples).toHaveCount(7);
+  await expect(componentDocs.getByRole('heading', { name: 'Composition' })).toBeVisible();
+  await expect(componentDocs.getByRole('heading', { name: 'API reference' })).toBeVisible();
+  await expect(componentDocs.locator('.ui-library-docs__api')).toHaveCount(4);
+  await expect(componentDocs.locator('[data-catalog-documentation-examples="accordion"] [data-slot="tabs-list"]')).toHaveCount(7);
+  const accordionOutline = page.getByRole('navigation', { name: 'On this page' });
+  await expect(accordionOutline.getByRole('link', { name: 'Multiple', exact: true })).toHaveAttribute(
+    'href',
+    '#ui-library-accordion-example-multiple'
+  );
+  await expect(accordionOutline.getByRole('link', { name: 'AccordionContent', exact: true })).toHaveAttribute(
+    'href',
+    '#ui-library-accordion-api-accordion-content'
+  );
+  const primaryAccordion = accordionExamples.filter({ has: page.getByRole('heading', { name: 'Primary demo' }) });
+  await expect(primaryAccordion.getByText('Standard delivery takes three to five business days')).toBeVisible();
+  await primaryAccordion.getByRole('tab', { name: 'Code' }).click();
+  await expect(primaryAccordion.getByLabel('Primary demo code for Accordion')).toContainText(
+    "from '@spfx-kit/ui-profile/accordion'"
+  );
+  await primaryAccordion.getByRole('tab', { name: 'Preview' }).click();
+  const disabledAccordion = accordionExamples.filter({ has: page.getByRole('heading', { name: 'Disabled item' }) });
+  await expect(disabledAccordion.getByRole('button', { name: 'Premium feature details' })).toBeDisabled();
+
+  const centerScroll = page.locator('.ui-library-catalog-shell');
+  const initialIndependentScroll = await Promise.all([
+    centerScroll.evaluate((element) => element.scrollTop),
+    componentNavigationList.evaluate((element) => element.scrollTop),
+    componentNavigation.evaluate((element) => element.getBoundingClientRect().top)
+  ]);
+  await centerScroll.evaluate((element) => {
+    element.scrollTop = Math.min(900, element.scrollHeight - element.clientHeight);
+  });
+  await expect.poll(() => centerScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  const centerScrollTop = await centerScroll.evaluate((element) => element.scrollTop);
+  expect(await componentNavigationList.evaluate((element) => element.scrollTop)).toBe(initialIndependentScroll[1]);
+  expect(await componentNavigation.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(
+    initialIndependentScroll[2],
+    0
+  );
+  await componentNavigationList.evaluate((element) => {
+    element.scrollTop = Math.min(320, element.scrollHeight - element.clientHeight);
+  });
+  await expect.poll(() => componentNavigationList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  expect(await centerScroll.evaluate((element) => element.scrollTop)).toBe(centerScrollTop);
+  await centerScroll.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await componentNavigationList.evaluate((element) => {
+    element.scrollTop = 0;
+  });
 
   const accordionNavigationLink = componentNavigation.getByRole('link', { name: 'Accordion', exact: true });
   const buttonNavigationLink = componentNavigation.getByRole('link', { name: 'Button', exact: true });
@@ -280,9 +342,30 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   await expect(breadcrumbLiveExamples.getByRole('heading', { name: 'Right-to-left' })).toBeVisible();
   await expect(breadcrumbDocs.getByRole('heading', { name: 'Composition' })).toBeVisible();
   await expect(breadcrumbDocs.getByRole('heading', { name: 'API reference' })).toBeVisible();
-  await expect(breadcrumbDocs.getByLabel('Dropdown code for Breadcrumb')).toContainText(
-    "from '@spfx-kit/ui-profile/dropdown-menu'"
+  const breadcrumbOutline = page.getByRole('navigation', { name: 'On this page' });
+  await expect(breadcrumbOutline).toBeVisible();
+  await expect(breadcrumbOutline.getByRole('link', { name: 'Dropdown', exact: true })).toHaveAttribute(
+    'href',
+    '#ui-library-breadcrumb-example-dropdown'
   );
+  await expect(breadcrumbOutline.getByRole('link', { name: 'BreadcrumbLink', exact: true })).toHaveAttribute(
+    'href',
+    '#ui-library-breadcrumb-api-breadcrumb-link'
+  );
+  const [breadcrumbArticleBox, breadcrumbOutlineBox] = await Promise.all([
+    breadcrumbDocs.boundingBox(),
+    breadcrumbOutline.boundingBox()
+  ]);
+  expect(breadcrumbArticleBox).not.toBeNull();
+  expect(breadcrumbOutlineBox).not.toBeNull();
+  expect(breadcrumbArticleBox!.x + breadcrumbArticleBox!.width).toBeLessThanOrEqual(breadcrumbOutlineBox!.x);
+  const dropdownExample = gallery.locator('[data-catalog-example="dropdown"]');
+  await dropdownExample.getByRole('tab', { name: 'Code' }).click();
+  const dropdownCode = dropdownExample.getByLabel('Dropdown code for Breadcrumb');
+  await expect(dropdownCode).toBeVisible();
+  await expect(dropdownCode).toContainText("from '@spfx-kit/ui-profile/dropdown-menu'");
+  await expect(dropdownCode.locator('.ui-library-docs__syntax-token')).not.toHaveCount(0);
+  await dropdownExample.getByRole('tab', { name: 'Preview' }).click();
   await expect(breadcrumbDocs.getByRole('heading', { name: /Installation/iu })).toHaveCount(0);
   await gallery.getByRole('button', { name: 'Open intermediate pages' }).click();
   const breadcrumbDropdown = page.getByRole('menu');
@@ -303,8 +386,8 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   await expect(detailsPanel).toBeVisible();
   await expect(detailsPanel.getByText('Not an SPFx app', { exact: true })).toHaveCount(0);
   await expect(detailsPanel.getByText(/^This first-party workspace is delivered with the Lab/u)).toHaveCount(0);
-  await expect(detailsPanel).toContainText('57 public components');
-  await expect(detailsPanel).toContainText('Lab Vite bundle');
+  await expect(detailsPanel).toContainText('On This Page');
+  await expect(detailsPanel.getByRole('navigation', { name: 'On this page' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open app menu' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Export package' })).toHaveCount(0);
   await expect(page.getByRole('tablist', { name: 'App package mode' })).toHaveCount(0);
@@ -333,6 +416,18 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   await expect(componentNavigationLinks).toHaveCount(57);
   await expect(componentNavigationList).toHaveCSS('flex-direction', 'row');
   await expect.poll(() => componentNavigationList.evaluate((list) => list.scrollWidth > list.clientWidth)).toBe(true);
+  const breadcrumbNarrowLink = componentNavigation.getByRole('link', { name: 'Breadcrumb', exact: true });
+  await breadcrumbNarrowLink.click();
+  const narrowBreadcrumbDocs = page.getByRole('article', { name: 'Breadcrumb' });
+  const narrowDropdownExample = narrowBreadcrumbDocs.locator('[data-catalog-example="dropdown"]');
+  await narrowDropdownExample.getByRole('tab', { name: 'Code' }).click();
+  await expect(narrowDropdownExample.getByLabel('Dropdown code for Breadcrumb')).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'On this page' })).toBeHidden();
+  await expect
+    .poll(() => page.locator('.ui-library-workspace').evaluate((workspace) => workspace.scrollWidth <= workspace.clientWidth))
+    .toBe(true);
+  await page.goBack();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBeNull();
   const tooltipNavigationLink = componentNavigation.getByRole('link', { name: 'Tooltip', exact: true });
   await tooltipNavigationLink.click();
   await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('tooltip');
@@ -399,7 +494,11 @@ test('documents the complete Button, Button Group, and Spinner action family in 
   const buttonDocs = page.getByRole('article', { name: 'Button' });
   await expect(buttonDocs).toBeVisible();
   await expect(catalog.locator('[data-catalog-documentation-examples="button"] [data-catalog-example]')).toHaveCount(14);
-  await expect(buttonDocs.getByRole('region', { name: 'Example code' }).locator('pre')).toHaveCount(14);
+  await expect(buttonDocs.getByRole('tablist', { name: /example view$/u })).toHaveCount(14);
+  const defaultButtonExample = buttonDocs.locator('[data-catalog-example="default"]');
+  await defaultButtonExample.getByRole('tab', { name: 'Code' }).click();
+  await expect(defaultButtonExample.getByLabel('Default code for Button')).toBeVisible();
+  await defaultButtonExample.getByRole('tab', { name: 'Preview' }).click();
   await expect(buttonDocs.getByRole('region', { name: 'API reference' }).locator('table')).toHaveCount(1);
   await expect(buttonDocs.getByRole('link', { name: 'Login' })).toHaveAttribute('href', '#catalog-login');
   await expect(buttonDocs.getByRole('button', { name: 'Generating' }).locator('svg')).toHaveAttribute('aria-hidden', 'true');
@@ -409,7 +508,7 @@ test('documents the complete Button, Button Group, and Spinner action family in 
   await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('button-group');
   const buttonGroupDocs = page.getByRole('article', { name: 'Button Group' });
   await expect(catalog.locator('[data-catalog-documentation-examples="button-group"] [data-catalog-example]')).toHaveCount(12);
-  await expect(buttonGroupDocs.getByRole('region', { name: 'Example code' }).locator('pre')).toHaveCount(12);
+  await expect(buttonGroupDocs.getByRole('tablist', { name: /example view$/u })).toHaveCount(12);
   await expect(buttonGroupDocs.getByRole('region', { name: 'API reference' }).locator('table')).toHaveCount(3);
 
   await buttonGroupDocs.getByRole('button', { name: 'More follow options' }).click();
@@ -434,7 +533,7 @@ test('documents the complete Button, Button Group, and Spinner action family in 
   await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('spinner');
   const spinnerDocs = page.getByRole('article', { name: 'Spinner' });
   await expect(catalog.locator('[data-catalog-documentation-examples="spinner"] [data-catalog-example]')).toHaveCount(7);
-  await expect(spinnerDocs.getByRole('region', { name: 'Example code' }).locator('pre')).toHaveCount(7);
+  await expect(spinnerDocs.getByRole('tablist', { name: /example view$/u })).toHaveCount(7);
   await expect(spinnerDocs.getByRole('region', { name: 'API reference' }).locator('table')).toHaveCount(1);
 
   await page.goBack();
@@ -467,7 +566,7 @@ test('documents the complete Alert, Badge, and Progress feedback family in the o
   const alertDocs = page.getByRole('article', { name: 'Alert' });
   await expect(alertDocs).toBeVisible();
   await expect(catalog.locator('[data-catalog-documentation-examples="alert"] [data-catalog-example]')).toHaveCount(4);
-  await expect(alertDocs.getByRole('region', { name: 'Example code' }).locator('pre')).toHaveCount(4);
+  await expect(alertDocs.getByRole('tablist', { name: /example view$/u })).toHaveCount(4);
   await expect(alertDocs.getByRole('region', { name: 'API reference' }).locator('table')).toHaveCount(4);
   await expect(alertDocs.getByRole('alert')).toHaveCount(4);
   await expect(alertDocs.getByRole('button', { name: 'Enable' })).toBeVisible();
@@ -476,7 +575,7 @@ test('documents the complete Alert, Badge, and Progress feedback family in the o
   await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('badge');
   const badgeDocs = page.getByRole('article', { name: 'Badge' });
   await expect(catalog.locator('[data-catalog-documentation-examples="badge"] [data-catalog-example]')).toHaveCount(5);
-  await expect(badgeDocs.getByRole('region', { name: 'Example code' }).locator('pre')).toHaveCount(5);
+  await expect(badgeDocs.getByRole('tablist', { name: /example view$/u })).toHaveCount(5);
   await expect(badgeDocs.getByRole('region', { name: 'API reference' }).locator('table')).toHaveCount(1);
   await expect(badgeDocs.getByRole('link', { name: 'Open release' })).toHaveAttribute('href', '#catalog-release');
   await expect(badgeDocs.getByText('Generating').locator('svg')).toHaveAttribute('aria-hidden', 'true');
@@ -485,7 +584,7 @@ test('documents the complete Alert, Badge, and Progress feedback family in the o
   await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('progress');
   const progressDocs = page.getByRole('article', { name: 'Progress' });
   await expect(catalog.locator('[data-catalog-documentation-examples="progress"] [data-catalog-example]')).toHaveCount(4);
-  await expect(progressDocs.getByRole('region', { name: 'Example code' }).locator('pre')).toHaveCount(4);
+  await expect(progressDocs.getByRole('tablist', { name: /example view$/u })).toHaveCount(4);
   await expect(progressDocs.getByRole('region', { name: 'API reference' }).locator('table')).toHaveCount(5);
   await expect(progressDocs.getByRole('progressbar')).toHaveCount(4);
 

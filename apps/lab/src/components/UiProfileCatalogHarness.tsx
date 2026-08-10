@@ -140,8 +140,14 @@ import {
 import { Toggle } from '@spfx-kit/ui-profile/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@spfx-kit/ui-profile/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@spfx-kit/ui-profile/tooltip';
-import { uiProfileCatalogSectionId, type UiProfileCatalogComponentId } from './uiProfileCatalogEntries';
-import { createSpfxUiHost, SpfxUiHostProvider, useSpfxUiId } from '@spfx-kit/ui-profile';
+import {
+  uiProfileCatalogDocumentation,
+  uiProfileCatalogExampleSectionId,
+  uiProfileCatalogSectionId,
+  type UiProfileCatalogComponentId
+} from './uiProfileCatalogEntries';
+import { UiLibraryCodeBlock } from './UiLibraryCodeBlock';
+import { createSpfxUiHost, SpfxUiHostProvider, useSpfxUiDerivedId, useSpfxUiId } from '@spfx-kit/ui-profile';
 import { createLabTheme } from '@spfx-kit/spfx-lab-runtime';
 import { createLabUiThemeTokens } from '../ui-profile/lab-theme';
 
@@ -196,11 +202,42 @@ interface CatalogDocumentationExampleProps {
 }
 
 function CatalogDocumentationExample({ children, id, title }: CatalogDocumentationExampleProps): React.ReactElement {
+  const activeComponent = React.useContext(ActiveCatalogComponentContext);
+  const tabsId = useSpfxUiId(`catalog:${activeComponent ?? 'gallery'}:example:${id}:tabs`);
+  const documentation = activeComponent ? uiProfileCatalogDocumentation[activeComponent] : undefined;
+  const example = documentation?.examples?.find((candidate) => candidate.id === id);
+
+  if (!activeComponent || !example) {
+    return (
+      <div data-catalog-example={id}>
+        <h4>{title}</h4>
+        <div data-catalog-example-content>{children}</div>
+      </div>
+    );
+  }
+
   return (
-    <div data-catalog-example={id}>
-      <h4>{title}</h4>
-      {children}
-    </div>
+    <section data-catalog-example={id} id={uiProfileCatalogExampleSectionId(activeComponent, id)}>
+      <div className="ui-library-docs__example-heading">
+        <h4>{title}</h4>
+        <p>{example.summary}</p>
+      </div>
+      <Tabs className="ui-library-docs__example-tabs" defaultValue="preview" id={tabsId}>
+        <TabsList aria-label={`${title} example view`} variant="line">
+          <TabsTrigger value="preview">Preview</TabsTrigger>
+          <TabsTrigger value="code">Code</TabsTrigger>
+        </TabsList>
+        <TabsContent value="preview">
+          <div data-catalog-example-content>{children}</div>
+        </TabsContent>
+        <TabsContent value="code">
+          <UiLibraryCodeBlock
+            code={example.code}
+            label={`${title} code for ${uiProfileCatalogDocumentation[activeComponent].primaryExport}`}
+          />
+        </TabsContent>
+      </Tabs>
+    </section>
   );
 }
 
@@ -243,13 +280,11 @@ function BreadcrumbDocumentationExamples({
 }: BreadcrumbDocumentationExamplesProps): React.ReactElement {
   return (
     <div data-catalog-documentation-examples="breadcrumb">
-      <div data-catalog-example="basic">
-        <h4>Basic</h4>
+      <CatalogDocumentationExample id="basic" title="Basic">
         <BreadcrumbBasic />
-      </div>
+      </CatalogDocumentationExample>
 
-      <div data-catalog-example="custom-separator">
-        <h4>Custom separator</h4>
+      <CatalogDocumentationExample id="custom-separator" title="Custom separator">
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
@@ -261,10 +296,9 @@ function BreadcrumbDocumentationExamples({
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
-      </div>
+      </CatalogDocumentationExample>
 
-      <div data-catalog-example="dropdown">
-        <h4>Dropdown</h4>
+      <CatalogDocumentationExample id="dropdown" title="Dropdown">
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
@@ -292,10 +326,9 @@ function BreadcrumbDocumentationExamples({
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
-      </div>
+      </CatalogDocumentationExample>
 
-      <div data-catalog-example="collapsed">
-        <h4>Collapsed</h4>
+      <CatalogDocumentationExample id="collapsed" title="Collapsed">
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
@@ -311,10 +344,9 @@ function BreadcrumbDocumentationExamples({
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
-      </div>
+      </CatalogDocumentationExample>
 
-      <div data-catalog-example="custom-link">
-        <h4>Custom link</h4>
+      <CatalogDocumentationExample id="custom-link" title="Custom link">
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
@@ -328,10 +360,9 @@ function BreadcrumbDocumentationExamples({
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
-      </div>
+      </CatalogDocumentationExample>
 
-      <div data-catalog-example="responsive">
-        <h4>Responsive hierarchy</h4>
+      <CatalogDocumentationExample id="responsive" title="Responsive hierarchy">
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
@@ -359,24 +390,249 @@ function BreadcrumbDocumentationExamples({
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
-      </div>
+      </CatalogDocumentationExample>
 
-      <div data-catalog-example="rtl" dir="rtl">
-        <h4>Right-to-left</h4>
-        <DirectionProvider direction="rtl">
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink href="#catalog-home">الرئيسية</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>المكونات</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </DirectionProvider>
-      </div>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="#catalog-home">الرئيسية</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>المكونات</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
+interface AccordionDocumentationExamplesProps {
+  baseId: string;
+}
+
+interface CatalogAccordionItemData {
+  content: string;
+  disabled?: boolean;
+  id: string;
+  title: string;
+  value: string;
+}
+
+function CatalogAccordionItems({ items }: { items: readonly CatalogAccordionItemData[] }): React.ReactElement {
+  return (
+    <>
+      {items.map((item) => (
+        <AccordionItem disabled={item.disabled} id={item.id} key={item.value} value={item.value}>
+          <AccordionTrigger>{item.title}</AccordionTrigger>
+          <AccordionContent>{item.content}</AccordionContent>
+        </AccordionItem>
+      ))}
+    </>
+  );
+}
+
+function AccordionDocumentationExamples({ baseId }: AccordionDocumentationExamplesProps): React.ReactElement {
+  const primaryItems = [
+    {
+      content: 'Standard delivery takes three to five business days, with expedited service available at checkout.',
+      id: useSpfxUiDerivedId(baseId, 'primary-shipping'),
+      title: 'What delivery options are available?',
+      value: 'shipping'
+    },
+    {
+      content: 'Unused items can be returned within thirty days from the original delivery date.',
+      id: useSpfxUiDerivedId(baseId, 'primary-returns'),
+      title: 'What is the return window?',
+      value: 'returns'
+    },
+    {
+      content: 'Support is available through the account portal during normal business hours.',
+      id: useSpfxUiDerivedId(baseId, 'primary-support'),
+      title: 'How do I contact support?',
+      value: 'support'
+    }
+  ] as const;
+  const basicItems = [
+    {
+      content: 'Use the reset link on the sign-in screen. The emailed link remains active for one hour.',
+      id: useSpfxUiDerivedId(baseId, 'basic-password'),
+      title: 'How do I reset my password?',
+      value: 'password'
+    },
+    {
+      content: 'Plan changes take effect at the start of the next billing period.',
+      id: useSpfxUiDerivedId(baseId, 'basic-plan'),
+      title: 'Can I change my plan?',
+      value: 'plan'
+    },
+    {
+      content: 'The account accepts major cards and approved purchase orders.',
+      id: useSpfxUiDerivedId(baseId, 'basic-payment'),
+      title: 'Which payment methods are supported?',
+      value: 'payment'
+    }
+  ] as const;
+  const multipleItems = [
+    {
+      content: 'Choose immediate alerts, daily summaries, or both from notification settings.',
+      id: useSpfxUiDerivedId(baseId, 'multiple-notifications'),
+      title: 'Notification settings',
+      value: 'notifications'
+    },
+    {
+      content: 'Review active sessions and revoke devices from the security page.',
+      id: useSpfxUiDerivedId(baseId, 'multiple-privacy'),
+      title: 'Privacy and security',
+      value: 'privacy'
+    },
+    {
+      content: 'Invoices and renewal dates remain available in the billing workspace.',
+      id: useSpfxUiDerivedId(baseId, 'multiple-billing'),
+      title: 'Billing and subscription',
+      value: 'billing'
+    }
+  ] as const;
+  const disabledItems = [
+    {
+      content: 'Account history is retained for the period shown in the organization policy.',
+      id: useSpfxUiDerivedId(baseId, 'disabled-history'),
+      title: 'Can I review account history?',
+      value: 'history'
+    },
+    {
+      content: 'This feature becomes available after the workspace upgrade is complete.',
+      disabled: true,
+      id: useSpfxUiDerivedId(baseId, 'disabled-premium'),
+      title: 'Premium feature details',
+      value: 'premium'
+    },
+    {
+      content: 'Update the address from profile settings, then confirm the verification message.',
+      id: useSpfxUiDerivedId(baseId, 'disabled-email'),
+      title: 'How do I update my email?',
+      value: 'email'
+    }
+  ] as const;
+  const borderedItems = [
+    {
+      content: 'Billing runs at the start of each cycle and invoices remain available in the account.',
+      id: useSpfxUiDerivedId(baseId, 'borders-billing'),
+      title: 'How does billing work?',
+      value: 'billing'
+    },
+    {
+      content: 'Workspace data is encrypted in transit and at rest.',
+      id: useSpfxUiDerivedId(baseId, 'borders-security'),
+      title: 'How is data protected?',
+      value: 'security'
+    },
+    {
+      content: 'Available connectors are listed in the organization integration catalog.',
+      id: useSpfxUiDerivedId(baseId, 'borders-integrations'),
+      title: 'Which integrations are available?',
+      value: 'integrations'
+    }
+  ] as const;
+  const cardItems = [
+    {
+      content: 'Choose the tier that matches the workspace size and governance needs.',
+      id: useSpfxUiDerivedId(baseId, 'card-plans'),
+      title: 'Which plans are offered?',
+      value: 'plans'
+    },
+    {
+      content: 'Renewals follow the billing cadence selected by the organization owner.',
+      id: useSpfxUiDerivedId(baseId, 'card-billing'),
+      title: 'When does billing renew?',
+      value: 'billing'
+    },
+    {
+      content: 'An owner can cancel renewal while retaining access through the paid period.',
+      id: useSpfxUiDerivedId(baseId, 'card-cancel'),
+      title: 'How do I cancel renewal?',
+      value: 'cancel'
+    }
+  ] as const;
+  const rtlItems = [
+    {
+      content: 'استخدم رابط إعادة التعيين في صفحة تسجيل الدخول ثم راجع رسالة التحقق.',
+      id: useSpfxUiDerivedId(baseId, 'rtl-password'),
+      title: 'كيف يمكنني إعادة تعيين كلمة المرور؟',
+      value: 'password'
+    },
+    {
+      content: 'تدخل تغييرات الخطة حيز التنفيذ في دورة الفوترة التالية.',
+      id: useSpfxUiDerivedId(baseId, 'rtl-plan'),
+      title: 'هل يمكنني تغيير خطة الاشتراك؟',
+      value: 'plan'
+    },
+    {
+      content: 'تظهر وسائل الدفع المتاحة عند إتمام الطلب.',
+      id: useSpfxUiDerivedId(baseId, 'rtl-payment'),
+      title: 'ما هي طرق الدفع المتاحة؟',
+      value: 'payment'
+    }
+  ] as const;
+
+  return (
+    <div data-catalog-documentation-examples="accordion">
+      <CatalogDocumentationExample id="primary" title="Primary demo">
+        <Accordion defaultValue={['shipping']}>
+          <CatalogAccordionItems items={primaryItems} />
+        </Accordion>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="basic" title="Basic">
+        <Accordion defaultValue={['password']}>
+          <CatalogAccordionItems items={basicItems} />
+        </Accordion>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="multiple" title="Multiple">
+        <Accordion defaultValue={['notifications', 'privacy']} multiple>
+          <CatalogAccordionItems items={multipleItems} />
+        </Accordion>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="disabled" title="Disabled item">
+        <Accordion defaultValue={['history']}>
+          <CatalogAccordionItems items={disabledItems} />
+        </Accordion>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="borders" title="Borders">
+        <Accordion
+          defaultValue={['billing']}
+          style={{ border: '1px solid var(--spfx-ui-color-border)', borderRadius: 'var(--spfx-ui-radius-lg)' }}
+        >
+          <CatalogAccordionItems items={borderedItems} />
+        </Accordion>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="card" title="Card">
+        <Card>
+          <CardHeader>
+            <CardTitle>Plans and billing</CardTitle>
+            <CardDescription>Common questions about plans, renewal, and cancellation.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Accordion defaultValue={['plans']}>
+              <CatalogAccordionItems items={cardItems} />
+            </Accordion>
+          </CardContent>
+        </Card>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <Accordion defaultValue={['password']}>
+              <CatalogAccordionItems items={rtlItems} />
+            </Accordion>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
     </div>
   );
 }
@@ -848,6 +1104,7 @@ export function UiProfileCatalogHarness({
   const alertDialogTitleId = useSpfxUiId('catalog:alert-dialog-title');
   const alertDialogDescriptionId = useSpfxUiId('catalog:alert-dialog-description');
   const accordionItemId = useSpfxUiId('catalog:accordion-item');
+  const accordionExamplesId = useSpfxUiId('catalog:accordion-examples');
   const chartId = useSpfxUiId('catalog:chart');
   const checkboxId = useSpfxUiId('catalog:checkbox');
   const breadcrumbDropdownTriggerId = useSpfxUiId('catalog:breadcrumb-dropdown-trigger');
@@ -909,12 +1166,16 @@ export function UiProfileCatalogHarness({
       <h2>Shared UI component catalog</h2>
 
       <CatalogSample component="accordion" title="Accordion">
-        <Accordion>
-          <AccordionItem id={accordionItemId} value="catalog-item">
-            <AccordionTrigger>Is this the official default?</AccordionTrigger>
-            <AccordionContent>Yes. The catalog classes and behavior are preserved.</AccordionContent>
-          </AccordionItem>
-        </Accordion>
+        {activeComponent === 'accordion' ? (
+          <AccordionDocumentationExamples baseId={accordionExamplesId} />
+        ) : (
+          <Accordion>
+            <AccordionItem id={accordionItemId} value="catalog-item">
+              <AccordionTrigger>Is this the official default?</AccordionTrigger>
+              <AccordionContent>Yes. The catalog classes and behavior are preserved.</AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        )}
       </CatalogSample>
 
       <CatalogSample component="alert" title="Alert">

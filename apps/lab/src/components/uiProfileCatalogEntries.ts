@@ -89,6 +89,15 @@ export interface UiProfileCatalogDocumentation {
   compatibilityNotes?: readonly string[];
 }
 
+export type UiProfileCatalogPageSectionKind = 'examples' | 'usage' | 'composition' | 'api' | 'compatibility';
+
+export interface UiProfileCatalogPageSection {
+  id: string;
+  kind: UiProfileCatalogPageSectionKind;
+  title: string;
+  children?: readonly { id: string; title: string }[];
+}
+
 function publicExample(
   id: string,
   title: string,
@@ -105,7 +114,200 @@ function publicExample(
 export const uiProfileCatalogDocumentation: Record<UiProfileCatalogComponentId, UiProfileCatalogDocumentation> = {
   accordion: {
     primaryExport: 'Accordion',
-    summary: 'Organizes related content into disclosure sections that people can expand as needed.'
+    summary: 'Organizes related content into disclosure sections that people can expand as needed.',
+    composition: [
+      'Accordion owns the collection value and the single- or multiple-selection behavior.',
+      'Each AccordionItem pairs one AccordionTrigger with one AccordionContent panel.',
+      'Use defaultValue for initial uncontrolled state, or value with onValueChange when application state owns the open items.',
+      'AccordionTrigger renders the public button while the wrapper keeps the Base UI heading part internal.'
+    ],
+    examples: [
+      publicExample(
+        'primary',
+        'Primary demo',
+        'A concise FAQ opens its first delivery question by default.',
+        [['accordion', 'Accordion, AccordionContent, AccordionItem, AccordionTrigger']],
+        '<Accordion defaultValue={["shipping"]}><AccordionItem value="shipping"><AccordionTrigger>What delivery options are available?</AccordionTrigger><AccordionContent>Standard delivery takes three to five business days.</AccordionContent></AccordionItem><AccordionItem value="returns"><AccordionTrigger>What is the return window?</AccordionTrigger><AccordionContent>Unused items can be returned within thirty days.</AccordionContent></AccordionItem></Accordion>'
+      ),
+      publicExample(
+        'basic',
+        'Basic',
+        'One item starts open while the root keeps single-selection behavior.',
+        [['accordion', 'Accordion, AccordionContent, AccordionItem, AccordionTrigger']],
+        '<Accordion defaultValue={["password"]}><AccordionItem value="password"><AccordionTrigger>How do I reset my password?</AccordionTrigger><AccordionContent>Use the reset link on the sign-in screen.</AccordionContent></AccordionItem><AccordionItem value="plan"><AccordionTrigger>Can I change my plan?</AccordionTrigger><AccordionContent>Changes apply during the next billing period.</AccordionContent></AccordionItem></Accordion>'
+      ),
+      publicExample(
+        'multiple',
+        'Multiple',
+        'The multiple prop permits more than one item value to remain open.',
+        [['accordion', 'Accordion, AccordionContent, AccordionItem, AccordionTrigger']],
+        '<Accordion defaultValue={["notifications", "privacy"]} multiple><AccordionItem value="notifications"><AccordionTrigger>Notification settings</AccordionTrigger><AccordionContent>Choose immediate alerts or daily summaries.</AccordionContent></AccordionItem><AccordionItem value="privacy"><AccordionTrigger>Privacy and security</AccordionTrigger><AccordionContent>Review and revoke active sessions.</AccordionContent></AccordionItem></Accordion>'
+      ),
+      publicExample(
+        'disabled',
+        'Disabled item',
+        'An unavailable item remains visible but its trigger cannot be activated.',
+        [['accordion', 'Accordion, AccordionContent, AccordionItem, AccordionTrigger']],
+        '<Accordion defaultValue={["history"]}><AccordionItem value="history"><AccordionTrigger>Can I review account history?</AccordionTrigger><AccordionContent>History follows the organization retention policy.</AccordionContent></AccordionItem><AccordionItem disabled value="premium"><AccordionTrigger>Premium feature details</AccordionTrigger><AccordionContent>This feature is not available.</AccordionContent></AccordionItem></Accordion>'
+      ),
+      publicExample(
+        'borders',
+        'Borders',
+        'A semantic token border frames the collection without changing its disclosure behavior.',
+        [['accordion', 'Accordion, AccordionContent, AccordionItem, AccordionTrigger']],
+        '<Accordion defaultValue={["billing"]} style={{ border: "1px solid var(--spfx-ui-color-border)", borderRadius: "var(--spfx-ui-radius-lg)" }}><AccordionItem value="billing"><AccordionTrigger>How does billing work?</AccordionTrigger><AccordionContent>Billing runs at the start of each cycle.</AccordionContent></AccordionItem><AccordionItem value="security"><AccordionTrigger>How is data protected?</AccordionTrigger><AccordionContent>Data is encrypted in transit and at rest.</AccordionContent></AccordionItem></Accordion>'
+      ),
+      publicExample(
+        'card',
+        'Card',
+        'Card supplies title and supporting context around the disclosure collection.',
+        [
+          ['accordion', 'Accordion, AccordionContent, AccordionItem, AccordionTrigger'],
+          ['card', 'Card, CardContent, CardDescription, CardHeader, CardTitle']
+        ],
+        '<Card><CardHeader><CardTitle>Plans and billing</CardTitle><CardDescription>Common renewal questions.</CardDescription></CardHeader><CardContent><Accordion defaultValue={["plans"]}><AccordionItem value="plans"><AccordionTrigger>Which plans are offered?</AccordionTrigger><AccordionContent>Choose the tier that matches the workspace.</AccordionContent></AccordionItem></Accordion></CardContent></Card>'
+      ),
+      publicExample(
+        'rtl',
+        'Right-to-left',
+        'The disclosure labels, chevrons, and content follow the nearest reading direction.',
+        [
+          ['accordion', 'Accordion, AccordionContent, AccordionItem, AccordionTrigger'],
+          ['direction', 'DirectionProvider']
+        ],
+        '<div dir="rtl"><DirectionProvider direction="rtl"><Accordion defaultValue={["password"]}><AccordionItem value="password"><AccordionTrigger>كيف يمكنني إعادة تعيين كلمة المرور؟</AccordionTrigger><AccordionContent>استخدم رابط إعادة التعيين في صفحة تسجيل الدخول.</AccordionContent></AccordionItem></Accordion></DirectionProvider></div>'
+      )
+    ],
+    api: [
+      {
+        name: 'Accordion',
+        element: 'div',
+        props: [
+          { name: 'defaultValue', type: 'Value[]', description: 'Sets the initially open items for uncontrolled state.' },
+          { name: 'value', type: 'Value[]', description: 'Controls the currently open item values.' },
+          {
+            name: 'onValueChange',
+            type: '(value: Value[], details) => void',
+            description: 'Reports the next collection value and Base UI change details.'
+          },
+          {
+            name: 'multiple',
+            type: 'boolean',
+            defaultValue: 'false',
+            description: 'Allows more than one item to remain open.'
+          },
+          {
+            name: 'disabled',
+            type: 'boolean',
+            defaultValue: 'false',
+            description: 'Ignores interaction for the entire collection.'
+          },
+          {
+            name: 'hiddenUntilFound',
+            type: 'boolean',
+            defaultValue: 'false',
+            description: 'Keeps closed content searchable with the browser until-found behavior.'
+          },
+          {
+            name: 'keepMounted',
+            type: 'boolean',
+            defaultValue: 'false',
+            description: 'Keeps closed panels in the DOM unless hiddenUntilFound overrides it.'
+          },
+          {
+            name: 'loopFocus',
+            type: 'boolean',
+            description: 'Deprecated Base UI compatibility prop that no longer changes focus behavior.'
+          },
+          {
+            name: 'orientation',
+            type: '"horizontal" | "vertical"',
+            defaultValue: '"vertical"',
+            description: 'Deprecated compatibility prop that no longer changes keyboard focus behavior.'
+          },
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Replaces the root element while merging accordion props and state.'
+          },
+          { name: 'className', type: 'string | function', description: 'Adds classes to the accordion root.' },
+          { name: 'style', type: 'CSSProperties | function', description: 'Adds styles to the accordion root.' }
+        ]
+      },
+      {
+        name: 'AccordionItem',
+        element: 'div',
+        props: [
+          { name: 'value', type: 'Value', description: 'Uniquely identifies the item in the root value array.' },
+          {
+            name: 'onOpenChange',
+            type: '(open: boolean, details) => void',
+            description: 'Reports when this item opens or closes.'
+          },
+          {
+            name: 'disabled',
+            type: 'boolean',
+            defaultValue: 'false',
+            description: 'Prevents this item from being toggled.'
+          },
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Replaces the item element while merging its state.'
+          },
+          { name: 'className', type: 'string | function', description: 'Adds classes to the item.' },
+          { name: 'style', type: 'CSSProperties | function', description: 'Adds styles to the item.' }
+        ]
+      },
+      {
+        name: 'AccordionTrigger',
+        element: 'button',
+        props: [
+          {
+            name: 'nativeButton',
+            type: 'boolean',
+            defaultValue: 'true',
+            description: 'Indicates whether the rendered element is a native button.'
+          },
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Replaces the button while merging disclosure state and interaction props.'
+          },
+          { name: 'className', type: 'string | function', description: 'Adds classes to the trigger button.' },
+          { name: 'style', type: 'CSSProperties | function', description: 'Adds styles to the trigger button.' }
+        ]
+      },
+      {
+        name: 'AccordionContent',
+        element: 'div',
+        props: [
+          {
+            name: 'hiddenUntilFound',
+            type: 'boolean',
+            defaultValue: 'false',
+            description: 'Keeps closed content available to browser page search.'
+          },
+          {
+            name: 'keepMounted',
+            type: 'boolean',
+            defaultValue: 'false',
+            description: 'Keeps the closed panel mounted when until-found behavior is not active.'
+          },
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Replaces the Base UI panel element while preserving disclosure state.'
+          },
+          { name: 'className', type: 'string | function', description: 'Adds classes to the inner content wrapper.' },
+          { name: 'style', type: 'CSSProperties | function', description: 'Adds styles to the Base UI panel.' }
+        ]
+      }
+    ],
+    compatibilityNotes: [
+      'The wrapper keeps the Base UI heading element internal, so it is not documented as a public component part.',
+      'The bordered example uses the public style prop with shared semantic tokens; it does not promise consumer Tailwind utility compilation.'
+    ]
   },
   alert: {
     primaryExport: 'Alert',
@@ -1313,4 +1515,61 @@ export function isUiProfileCatalogComponentId(value: string | undefined): value 
 
 export function uiProfileCatalogSectionId(component: UiProfileCatalogComponentId): string {
   return `ui-library-component-${component}`;
+}
+
+export function uiProfileCatalogPageSections(component: UiProfileCatalogComponentId): readonly UiProfileCatalogPageSection[] {
+  const documentation = uiProfileCatalogDocumentation[component];
+  const sections: UiProfileCatalogPageSection[] = [
+    {
+      id: uiProfileCatalogPageSectionId(component, 'examples'),
+      kind: 'examples',
+      title: documentation.examples ? 'Examples' : 'Preview',
+      children: documentation.examples?.map((example) => ({
+        id: uiProfileCatalogExampleSectionId(component, example.id),
+        title: example.title
+      }))
+    },
+    { id: uiProfileCatalogPageSectionId(component, 'usage'), kind: 'usage', title: 'Usage' }
+  ];
+
+  if (documentation.composition?.length) {
+    sections.push({ id: uiProfileCatalogPageSectionId(component, 'composition'), kind: 'composition', title: 'Composition' });
+  }
+  if (documentation.api?.length) {
+    sections.push({
+      id: uiProfileCatalogPageSectionId(component, 'api'),
+      kind: 'api',
+      title: 'API Reference',
+      children: documentation.api.map((part) => ({ id: uiProfileCatalogApiSectionId(component, part.name), title: part.name }))
+    });
+  }
+  if (documentation.compatibilityNotes?.length) {
+    sections.push({
+      id: uiProfileCatalogPageSectionId(component, 'compatibility'),
+      kind: 'compatibility',
+      title: 'Compatibility Notes'
+    });
+  }
+
+  return sections;
+}
+
+export function uiProfileCatalogPageSectionId(
+  component: UiProfileCatalogComponentId,
+  kind: UiProfileCatalogPageSectionKind
+): string {
+  return `ui-library-${component}-${kind}`;
+}
+
+export function uiProfileCatalogExampleSectionId(component: UiProfileCatalogComponentId, exampleId: string): string {
+  return `ui-library-${component}-example-${exampleId}`;
+}
+
+export function uiProfileCatalogApiSectionId(component: UiProfileCatalogComponentId, partName: string): string {
+  const partSlug = partName
+    .replace(/([a-z0-9])([A-Z])/gu, '$1-$2')
+    .replace(/[^a-zA-Z0-9]+/gu, '-')
+    .replace(/^-|-$/gu, '')
+    .toLowerCase();
+  return `ui-library-${component}-api-${partSlug}`;
 }
