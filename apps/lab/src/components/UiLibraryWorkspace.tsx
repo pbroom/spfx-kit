@@ -56,7 +56,6 @@ export function UiLibraryWorkspaceDetails({ breakpoint, themeMode }: Omit<UiLibr
         <strong>UI Library</strong>
       </div>
       <div className="ui-library-details__content">
-        <Badge variant="outline">Not an SPFx app</Badge>
         <p>This first-party workspace is delivered with the Lab and is excluded from app selection, export, and CDN delivery.</p>
         <Separator />
         <dl>

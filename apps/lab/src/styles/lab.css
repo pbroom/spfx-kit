@@ -2039,7 +2039,6 @@ textarea {
   border-radius: var(--spfx-ui-radius-lg);
   padding: 16px;
   background: var(--spfx-ui-color-card);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 5%);
 }
 
 .ui-library-catalog-shell [data-catalog-component] > h3 {
@@ -2059,16 +2058,20 @@ textarea {
 .ui-library-navigation {
   display: flex;
   align-self: start;
+  align-items: flex-start;
   flex-direction: column;
   gap: 4px;
-  border: 1px solid var(--spfx-ui-color-border);
-  border-radius: var(--spfx-ui-radius-lg);
-  padding: 8px;
-  background: var(--spfx-ui-color-card);
+  box-shadow: none;
 }
 
 .ui-library-navigation > button {
   justify-content: flex-start;
+}
+
+.ui-library-navigation > button[aria-current='page'] {
+  color: var(--spfx-ui-color-accent-foreground);
+  background: var(--spfx-ui-color-accent);
+  font-weight: 600;
 }
 
 .ui-library-preview-canvas {
@@ -2083,7 +2086,6 @@ textarea {
   border-radius: var(--spfx-ui-radius-xl);
   padding: clamp(20px, 4vw, 40px);
   background: var(--spfx-ui-color-card);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 6%);
 }
 
 .ui-library-overview,

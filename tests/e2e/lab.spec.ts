@@ -217,9 +217,15 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   expect(new Set(galleryComponentIds).size).toBe(57);
   expect(galleryComponentIds).toContain('accordion');
   expect(galleryComponentIds).toContain('tooltip');
+  const buttonDemo = gallery.locator('[data-catalog-component="button"]');
+  await expect(buttonDemo).toHaveCSS('box-shadow', 'none');
   await expect(page.getByRole('button', { name: 'Return to Lab workspace' })).toBeVisible();
   await expect(catalog.getByRole('button', { name: 'Return to Lab', exact: true })).toBeVisible();
   await expect(page.getByRole('tablist', { name: 'SharePoint breakpoint' })).toBeVisible();
+  const detailsPanel = page.getByRole('complementary', { name: 'UI Library details' });
+  await expect(detailsPanel).toBeVisible();
+  await expect(detailsPanel.getByText('Not an SPFx app', { exact: true })).toHaveCount(0);
+  await expect(detailsPanel).toContainText('excluded from app selection, export, and CDN delivery');
   await expect(page.getByRole('button', { name: 'Open app menu' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Export package' })).toHaveCount(0);
   await expect(page.getByRole('tablist', { name: 'App package mode' })).toHaveCount(0);
@@ -251,6 +257,7 @@ test('navigates to the first-party UI Library without exposing app, export, or C
     consoleErrors
   };
   expect(narrowCatalogState).toEqual({ catalogCount: 57, consoleErrors: [] });
+  await expect(buttonDemo).toHaveCSS('box-shadow', 'none');
   await expect(page.getByRole('complementary', { name: 'UI Library details' })).toBeHidden();
   await expect(gallery.locator('[data-catalog-component="button"]')).toBeVisible();
 
