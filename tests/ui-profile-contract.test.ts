@@ -382,7 +382,7 @@ describe('shared offline React 17 UI profile artifacts', () => {
     expect(manifest.exports).toMatchObject({
       '.': { types: './dist/src/index.d.ts', import: './dist/src/index.js' },
       './button': {
-        types: './normalized/src/components/ui/button.tsx',
+        types: './dist/normalized/src/components/ui/button.d.ts',
         import: './dist/normalized/src/components/ui/button.js'
       },
       './styles.css': './generated/tailwind-profile.css',

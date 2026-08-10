@@ -9,73 +9,73 @@
   "typesVersions": {
     "*": {
       "accordion": [
-        "normalized/src/components/ui/accordion.tsx"
+        "dist/normalized/src/components/ui/accordion.d.ts"
       ],
       "alert": [
-        "normalized/src/components/ui/alert.tsx"
+        "dist/normalized/src/components/ui/alert.d.ts"
       ],
       "badge": [
-        "normalized/src/components/ui/badge.tsx"
+        "dist/normalized/src/components/ui/badge.d.ts"
       ],
       "button": [
-        "normalized/src/components/ui/button.tsx"
+        "dist/normalized/src/components/ui/button.d.ts"
       ],
       "checkbox": [
-        "normalized/src/components/ui/checkbox.tsx"
+        "dist/normalized/src/components/ui/checkbox.d.ts"
       ],
       "combobox": [
-        "normalized/src/components/ui/combobox.tsx"
+        "dist/normalized/src/components/ui/combobox.d.ts"
       ],
       "dialog": [
-        "normalized/src/components/ui/dialog.tsx"
+        "dist/normalized/src/components/ui/dialog.d.ts"
       ],
       "dropdown-menu": [
-        "normalized/src/components/ui/dropdown-menu.tsx"
+        "dist/normalized/src/components/ui/dropdown-menu.d.ts"
       ],
       "field": [
-        "normalized/src/components/ui/field.tsx"
+        "dist/normalized/src/components/ui/field.d.ts"
       ],
       "input": [
-        "normalized/src/components/ui/input.tsx"
+        "dist/normalized/src/components/ui/input.d.ts"
       ],
       "input-group": [
-        "normalized/src/components/ui/input-group.tsx"
+        "dist/normalized/src/components/ui/input-group.d.ts"
       ],
       "label": [
-        "normalized/src/components/ui/label.tsx"
+        "dist/normalized/src/components/ui/label.d.ts"
       ],
       "popover": [
-        "normalized/src/components/ui/popover.tsx"
+        "dist/normalized/src/components/ui/popover.d.ts"
       ],
       "select": [
-        "normalized/src/components/ui/select.tsx"
+        "dist/normalized/src/components/ui/select.d.ts"
       ],
       "separator": [
-        "normalized/src/components/ui/separator.tsx"
+        "dist/normalized/src/components/ui/separator.d.ts"
       ],
       "sheet": [
-        "normalized/src/components/ui/sheet.tsx"
+        "dist/normalized/src/components/ui/sheet.d.ts"
       ],
       "spinner": [
-        "normalized/src/components/ui/spinner.tsx"
+        "dist/normalized/src/components/ui/spinner.d.ts"
       ],
       "switch": [
-        "normalized/src/components/ui/switch.tsx"
+        "dist/normalized/src/components/ui/switch.d.ts"
       ],
       "tabs": [
-        "normalized/src/components/ui/tabs.tsx"
+        "dist/normalized/src/components/ui/tabs.d.ts"
       ],
       "textarea": [
-        "normalized/src/components/ui/textarea.tsx"
+        "dist/normalized/src/components/ui/textarea.d.ts"
       ],
       "toggle": [
-        "normalized/src/components/ui/toggle.tsx"
+        "dist/normalized/src/components/ui/toggle.d.ts"
       ],
       "toggle-group": [
-        "normalized/src/components/ui/toggle-group.tsx"
+        "dist/normalized/src/components/ui/toggle-group.d.ts"
       ],
       "tooltip": [
-        "normalized/src/components/ui/tooltip.tsx"
+        "dist/normalized/src/components/ui/tooltip.d.ts"
       ],
       "delivery": [
         "delivery.d.ts"
@@ -91,95 +91,95 @@
       "import": "./dist/src/index.js"
     },
     "./accordion": {
-      "types": "./normalized/src/components/ui/accordion.tsx",
+      "types": "./dist/normalized/src/components/ui/accordion.d.ts",
       "import": "./dist/normalized/src/components/ui/accordion.js"
     },
     "./alert": {
-      "types": "./normalized/src/components/ui/alert.tsx",
+      "types": "./dist/normalized/src/components/ui/alert.d.ts",
       "import": "./dist/normalized/src/components/ui/alert.js"
     },
     "./badge": {
-      "types": "./normalized/src/components/ui/badge.tsx",
+      "types": "./dist/normalized/src/components/ui/badge.d.ts",
       "import": "./dist/normalized/src/components/ui/badge.js"
     },
     "./button": {
-      "types": "./normalized/src/components/ui/button.tsx",
+      "types": "./dist/normalized/src/components/ui/button.d.ts",
       "import": "./dist/normalized/src/components/ui/button.js"
     },
     "./checkbox": {
-      "types": "./normalized/src/components/ui/checkbox.tsx",
+      "types": "./dist/normalized/src/components/ui/checkbox.d.ts",
       "import": "./dist/normalized/src/components/ui/checkbox.js"
     },
     "./combobox": {
-      "types": "./normalized/src/components/ui/combobox.tsx",
+      "types": "./dist/normalized/src/components/ui/combobox.d.ts",
       "import": "./dist/normalized/src/components/ui/combobox.js"
     },
     "./dialog": {
-      "types": "./normalized/src/components/ui/dialog.tsx",
+      "types": "./dist/normalized/src/components/ui/dialog.d.ts",
       "import": "./dist/normalized/src/components/ui/dialog.js"
     },
     "./dropdown-menu": {
-      "types": "./normalized/src/components/ui/dropdown-menu.tsx",
+      "types": "./dist/normalized/src/components/ui/dropdown-menu.d.ts",
       "import": "./dist/normalized/src/components/ui/dropdown-menu.js"
     },
     "./field": {
-      "types": "./normalized/src/components/ui/field.tsx",
+      "types": "./dist/normalized/src/components/ui/field.d.ts",
       "import": "./dist/normalized/src/components/ui/field.js"
     },
     "./input": {
-      "types": "./normalized/src/components/ui/input.tsx",
+      "types": "./dist/normalized/src/components/ui/input.d.ts",
       "import": "./dist/normalized/src/components/ui/input.js"
     },
     "./input-group": {
-      "types": "./normalized/src/components/ui/input-group.tsx",
+      "types": "./dist/normalized/src/components/ui/input-group.d.ts",
       "import": "./dist/normalized/src/components/ui/input-group.js"
     },
     "./label": {
-      "types": "./normalized/src/components/ui/label.tsx",
+      "types": "./dist/normalized/src/components/ui/label.d.ts",
       "import": "./dist/normalized/src/components/ui/label.js"
     },
     "./popover": {
-      "types": "./normalized/src/components/ui/popover.tsx",
+      "types": "./dist/normalized/src/components/ui/popover.d.ts",
       "import": "./dist/normalized/src/components/ui/popover.js"
     },
     "./select": {
-      "types": "./normalized/src/components/ui/select.tsx",
+      "types": "./dist/normalized/src/components/ui/select.d.ts",
       "import": "./dist/normalized/src/components/ui/select.js"
     },
     "./separator": {
-      "types": "./normalized/src/components/ui/separator.tsx",
+      "types": "./dist/normalized/src/components/ui/separator.d.ts",
       "import": "./dist/normalized/src/components/ui/separator.js"
     },
     "./sheet": {
-      "types": "./normalized/src/components/ui/sheet.tsx",
+      "types": "./dist/normalized/src/components/ui/sheet.d.ts",
       "import": "./dist/normalized/src/components/ui/sheet.js"
     },
     "./spinner": {
-      "types": "./normalized/src/components/ui/spinner.tsx",
+      "types": "./dist/normalized/src/components/ui/spinner.d.ts",
       "import": "./dist/normalized/src/components/ui/spinner.js"
     },
     "./switch": {
-      "types": "./normalized/src/components/ui/switch.tsx",
+      "types": "./dist/normalized/src/components/ui/switch.d.ts",
       "import": "./dist/normalized/src/components/ui/switch.js"
     },
     "./tabs": {
-      "types": "./normalized/src/components/ui/tabs.tsx",
+      "types": "./dist/normalized/src/components/ui/tabs.d.ts",
       "import": "./dist/normalized/src/components/ui/tabs.js"
     },
     "./textarea": {
-      "types": "./normalized/src/components/ui/textarea.tsx",
+      "types": "./dist/normalized/src/components/ui/textarea.d.ts",
       "import": "./dist/normalized/src/components/ui/textarea.js"
     },
     "./toggle": {
-      "types": "./normalized/src/components/ui/toggle.tsx",
+      "types": "./dist/normalized/src/components/ui/toggle.d.ts",
       "import": "./dist/normalized/src/components/ui/toggle.js"
     },
     "./toggle-group": {
-      "types": "./normalized/src/components/ui/toggle-group.tsx",
+      "types": "./dist/normalized/src/components/ui/toggle-group.d.ts",
       "import": "./dist/normalized/src/components/ui/toggle-group.js"
     },
     "./tooltip": {
-      "types": "./normalized/src/components/ui/tooltip.tsx",
+      "types": "./dist/normalized/src/components/ui/tooltip.d.ts",
       "import": "./dist/normalized/src/components/ui/tooltip.js"
     },
     "./styles.css": "./generated/tailwind-profile.css",

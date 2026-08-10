@@ -162,6 +162,12 @@ describe('committed build integration', () => {
     expect(webpackPatch.patchFiles).toEqual(['./config/webpack-patch/ui-profile.cjs']);
     expect(source).toContain("import '@spfx-kit/ui-profile/styles.css';");
   });
+
+  it('loads the Lab stylesheet through the verifying Vite delivery module', async () => {
+    const source = await readFile(path.join(repositoryRoot, 'apps/lab/src/main.tsx'), 'utf8');
+    expect(source).toContain("import 'virtual:spfx-ui-profile-delivery';");
+    expect(source).not.toContain("import '@spfx-kit/ui-profile/styles.css';");
+  });
 });
 
 async function copyDeliveryFixture(): Promise<string> {

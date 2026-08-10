@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import { createSpfxUiHost, SpfxUiHostProvider } from '@spfx-kit/ui-profile';
-import '@spfx-kit/ui-profile/styles.css';
+import 'virtual:spfx-ui-profile-delivery';
 import { LabApp } from './LabApp';
 import { createLabTheme } from '@spfx-kit/spfx-lab-runtime';
 import { createLabUiThemeTokens } from './ui-profile/lab-theme';
