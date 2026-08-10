@@ -453,6 +453,66 @@ test('documents the complete Button, Button Group, and Spinner action family in 
   expect(consoleErrors).toEqual([]);
 });
 
+test('documents the complete Alert, Badge, and Progress feedback family in the owned Lab host', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  const pageErrors: Error[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('pageerror', (error) => pageErrors.push(error));
+
+  await page.goto('/?workspace=ui-library&component=alert');
+  const catalog = page.locator('[data-ui-profile-catalog="base-nova"]');
+  const componentNavigation = page.getByRole('navigation', { name: 'UI Library components' });
+  const alertDocs = page.getByRole('article', { name: 'Alert' });
+  await expect(alertDocs).toBeVisible();
+  await expect(catalog.locator('[data-catalog-documentation-examples="alert"] [data-catalog-example]')).toHaveCount(4);
+  await expect(alertDocs.getByRole('region', { name: 'Example code' }).locator('pre')).toHaveCount(4);
+  await expect(alertDocs.getByRole('region', { name: 'API reference' }).locator('table')).toHaveCount(4);
+  await expect(alertDocs.getByRole('alert')).toHaveCount(4);
+  await expect(alertDocs.getByRole('button', { name: 'Enable' })).toBeVisible();
+
+  await componentNavigation.getByRole('link', { name: 'Badge', exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('badge');
+  const badgeDocs = page.getByRole('article', { name: 'Badge' });
+  await expect(catalog.locator('[data-catalog-documentation-examples="badge"] [data-catalog-example]')).toHaveCount(5);
+  await expect(badgeDocs.getByRole('region', { name: 'Example code' }).locator('pre')).toHaveCount(5);
+  await expect(badgeDocs.getByRole('region', { name: 'API reference' }).locator('table')).toHaveCount(1);
+  await expect(badgeDocs.getByRole('link', { name: 'Open release' })).toHaveAttribute('href', '#catalog-release');
+  await expect(badgeDocs.getByText('Generating').locator('svg')).toHaveAttribute('aria-hidden', 'true');
+
+  await componentNavigation.getByRole('link', { name: 'Progress', exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('progress');
+  const progressDocs = page.getByRole('article', { name: 'Progress' });
+  await expect(catalog.locator('[data-catalog-documentation-examples="progress"] [data-catalog-example]')).toHaveCount(4);
+  await expect(progressDocs.getByRole('region', { name: 'Example code' }).locator('pre')).toHaveCount(4);
+  await expect(progressDocs.getByRole('region', { name: 'API reference' }).locator('table')).toHaveCount(5);
+  await expect(progressDocs.getByRole('progressbar')).toHaveCount(4);
+
+  const controlledExample = progressDocs.locator('[data-catalog-example="controlled"]');
+  const controlledProgress = controlledExample.getByRole('progressbar');
+  const controlledSlider = controlledExample.getByRole('group', { name: 'Set export progress' }).getByRole('slider');
+  await expect(controlledProgress).toHaveAttribute('aria-valuenow', '42');
+  await controlledSlider.focus();
+  await controlledSlider.press('ArrowRight');
+  await expect(controlledProgress).toHaveAttribute('aria-valuenow', '43');
+
+  await page.goBack();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('badge');
+  await expect(page.getByRole('article', { name: 'Badge' })).toBeVisible();
+  await page.goForward();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('progress');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('article', { name: 'Progress' })).toBeVisible();
+  await expect(componentNavigation.locator('[data-ui-library-navigation-link]')).toHaveCount(57);
+  await expect(page.getByRole('button', { name: 'Open app menu' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Export package' })).toHaveCount(0);
+  await expect(page.getByRole('tablist', { name: 'App package mode' })).toHaveCount(0);
+  expect(pageErrors.map((error) => error.stack)).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+});
+
 test('orders the segmented package mode and bucket controls after export while keeping display mode independent', async ({
   page
 }) => {

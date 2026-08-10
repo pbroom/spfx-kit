@@ -2,7 +2,7 @@ import * as React from 'react';
 import * as ReactDom from 'react-dom';
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@spfx-kit/ui-profile/accordion';
-import { Alert, AlertDescription, AlertTitle } from '@spfx-kit/ui-profile/alert';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@spfx-kit/ui-profile/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -685,6 +685,157 @@ function SpinnerDocumentationExamples(): React.ReactElement {
   );
 }
 
+function CatalogStatusIcon({ destructive = false }: { destructive?: boolean }): React.ReactElement {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" fill="none" r="7" stroke="currentColor" />
+      {destructive ? (
+        <path d="M10 6v5m0 3h.01" fill="none" stroke="currentColor" strokeLinecap="round" />
+      ) : (
+        <path d="m6.5 10 2.25 2.25 4.75-5" fill="none" stroke="currentColor" strokeLinecap="round" />
+      )}
+    </svg>
+  );
+}
+
+function AlertDocumentationExamples(): React.ReactElement {
+  return (
+    <div data-catalog-documentation-examples="alert">
+      <CatalogDocumentationExample id="basic" title="Basic">
+        <Alert>
+          <CatalogStatusIcon />
+          <AlertTitle>Account updated successfully</AlertTitle>
+          <AlertDescription>Your profile information has been saved.</AlertDescription>
+        </Alert>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="destructive" title="Destructive">
+        <Alert variant="destructive">
+          <CatalogStatusIcon destructive />
+          <AlertTitle>Payment failed</AlertTitle>
+          <AlertDescription>Check the payment method and try again.</AlertDescription>
+        </Alert>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="action" title="Action">
+        <Alert>
+          <CatalogStatusIcon />
+          <AlertTitle>Dark mode is available</AlertTitle>
+          <AlertDescription>Enable it in profile settings when you are ready.</AlertDescription>
+          <AlertAction>
+            <Button variant="outline">Enable</Button>
+          </AlertAction>
+        </Alert>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <Alert>
+              <CatalogStatusIcon />
+              <AlertTitle>تم الدفع بنجاح</AlertTitle>
+              <AlertDescription>تمت معالجة الدفعة وإرسال الإيصال.</AlertDescription>
+            </Alert>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
+function BadgeDocumentationExamples(): React.ReactElement {
+  return (
+    <div data-catalog-documentation-examples="badge">
+      <CatalogDocumentationExample id="variants" title="Variants">
+        <Badge>Default</Badge>
+        <Badge variant="secondary">Secondary</Badge>
+        <Badge variant="destructive">Destructive</Badge>
+        <Badge variant="outline">Outline</Badge>
+        <Badge variant="ghost">Ghost</Badge>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="with-icon" title="With icon">
+        <Badge>
+          <CatalogStatusIcon />
+          Verified
+        </Badge>
+        <Badge variant="outline">
+          Bookmark
+          <span aria-hidden="true" data-icon="inline-end">
+            +
+          </span>
+        </Badge>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="with-spinner" title="With spinner">
+        <Badge variant="secondary">
+          <Spinner aria-hidden="true" data-icon="inline-start" />
+          Generating
+        </Badge>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="link" title="Link">
+        <Badge render={<a href="#catalog-release" />}>Open release</Badge>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <Badge>متحقق</Badge>
+            <Badge variant="secondary">ثانوي</Badge>
+            <Badge variant="outline">مخطط</Badge>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
+interface ProgressDocumentationExamplesProps {
+  basicId: string;
+  controlledId: string;
+  labelledId: string;
+  rtlId: string;
+}
+
+function ProgressDocumentationExamples({
+  basicId,
+  controlledId,
+  labelledId,
+  rtlId
+}: ProgressDocumentationExamplesProps): React.ReactElement {
+  const [controlledValue, setControlledValue] = React.useState(42);
+
+  return (
+    <div data-catalog-documentation-examples="progress">
+      <CatalogDocumentationExample id="basic" title="Basic">
+        <Progress aria-label="Task progress" id={basicId} value={33} />
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="label" title="Label and value">
+        <Progress id={labelledId} value={56}>
+          <ProgressLabel>Upload progress</ProgressLabel>
+          <ProgressValue />
+        </Progress>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="controlled" title="Controlled">
+        <Progress id={controlledId} value={controlledValue}>
+          <ProgressLabel>Export progress</ProgressLabel>
+          <ProgressValue />
+        </Progress>
+        <Slider
+          aria-label="Set export progress"
+          max={100}
+          onValueChange={(value) => setControlledValue(typeof value === 'number' ? value : (value[0] ?? 0))}
+          value={[controlledValue]}
+        />
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <Progress id={rtlId} value={56}>
+              <ProgressLabel>تقدم الرفع</ProgressLabel>
+              <ProgressValue />
+            </Progress>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
 /** A browser-smoke gallery for every React 17-compatible public catalog subpath. */
 export function UiProfileCatalogHarness({
   activeComponent
@@ -730,6 +881,9 @@ export function UiProfileCatalogHarness({
   const popoverTriggerId = useSpfxUiId('catalog:popover-trigger');
   const popoverContentId = useSpfxUiId('catalog:popover-content');
   const progressId = useSpfxUiId('catalog:progress');
+  const progressControlledId = useSpfxUiId('catalog:progress-controlled');
+  const progressLabelledId = useSpfxUiId('catalog:progress-labelled');
+  const progressRtlId = useSpfxUiId('catalog:progress-rtl');
   const radioGroupId = useSpfxUiId('catalog:radio-group');
   const selectId = useSpfxUiId('catalog:select-root');
   const selectTriggerId = useSpfxUiId('catalog:select-trigger');
@@ -764,10 +918,14 @@ export function UiProfileCatalogHarness({
       </CatalogSample>
 
       <CatalogSample component="alert" title="Alert">
-        <Alert>
-          <AlertTitle>Catalog ready</AlertTitle>
-          <AlertDescription>Default Base Nova alert styling.</AlertDescription>
-        </Alert>
+        {activeComponent === 'alert' ? (
+          <AlertDocumentationExamples />
+        ) : (
+          <Alert>
+            <AlertTitle>Catalog ready</AlertTitle>
+            <AlertDescription>Default Base Nova alert styling.</AlertDescription>
+          </Alert>
+        )}
       </CatalogSample>
 
       <CatalogSample component="alert-dialog" title="Alert Dialog">
@@ -817,7 +975,7 @@ export function UiProfileCatalogHarness({
       </CatalogSample>
 
       <CatalogSample component="badge" title="Badge">
-        <Badge>Default</Badge>
+        {activeComponent === 'badge' ? <BadgeDocumentationExamples /> : <Badge>Default</Badge>}
       </CatalogSample>
 
       <CatalogSample component="breadcrumb" title="Breadcrumb">
@@ -1157,10 +1315,19 @@ export function UiProfileCatalogHarness({
       </CatalogSample>
 
       <CatalogSample component="progress" title="Progress">
-        <Progress id={progressId} value={68}>
-          <ProgressLabel>Coverage</ProgressLabel>
-          <ProgressValue />
-        </Progress>
+        {activeComponent === 'progress' ? (
+          <ProgressDocumentationExamples
+            basicId={progressId}
+            controlledId={progressControlledId}
+            labelledId={progressLabelledId}
+            rtlId={progressRtlId}
+          />
+        ) : (
+          <Progress id={progressId} value={68}>
+            <ProgressLabel>Coverage</ProgressLabel>
+            <ProgressValue />
+          </Progress>
+        )}
       </CatalogSample>
 
       <CatalogSample component="radio-group" title="Radio Group">

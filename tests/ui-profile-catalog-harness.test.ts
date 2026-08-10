@@ -188,7 +188,7 @@ describe('Lab UI profile catalog harness', () => {
     const functionBounds = {
       button: ['function ButtonDocumentationExamples', 'interface ButtonGroupDocumentationExamplesProps'],
       'button-group': ['function ButtonGroupDocumentationExamples', 'function SpinnerDocumentationExamples'],
-      spinner: ['function SpinnerDocumentationExamples', '/** A browser-smoke gallery']
+      spinner: ['function SpinnerDocumentationExamples', 'function CatalogStatusIcon']
     } as const;
 
     for (const [component, expectedIds] of Object.entries(expectations)) {
@@ -211,6 +211,47 @@ describe('Lab UI profile catalog harness', () => {
     expect(harnessSource).toContain('aria-controls={selectContentId}');
     expect(harnessSource).toContain('aria-controls={popoverContentId}');
     expect(harnessSource).toContain('aria-controls={dropdownContentId}');
+  });
+
+  it('documents the complete Alert, Badge, and Progress feedback family contracts', () => {
+    const harnessSource = readFileSync(harnessPath, 'utf8');
+    const expectations = {
+      alert: ['basic', 'destructive', 'action', 'rtl'],
+      badge: ['variants', 'with-icon', 'with-spinner', 'link', 'rtl'],
+      progress: ['basic', 'label', 'controlled', 'rtl']
+    } as const;
+    const apiParts = {
+      alert: ['Alert', 'AlertTitle', 'AlertDescription', 'AlertAction'],
+      badge: ['Badge'],
+      progress: ['Progress', 'ProgressTrack', 'ProgressIndicator', 'ProgressValue', 'ProgressLabel']
+    } as const;
+    const functionBounds = {
+      alert: ['function AlertDocumentationExamples', 'function BadgeDocumentationExamples'],
+      badge: ['function BadgeDocumentationExamples', 'interface ProgressDocumentationExamplesProps'],
+      progress: ['function ProgressDocumentationExamples', '/** A browser-smoke gallery']
+    } as const;
+
+    for (const [component, expectedIds] of Object.entries(expectations)) {
+      const documentation = uiProfileCatalogDocumentation[component as keyof typeof expectations];
+      expect(documentation.examples?.map((example) => example.id)).toEqual(expectedIds);
+      expect(documentation.composition?.length).toBeGreaterThanOrEqual(4);
+      expect(documentation.api?.map((part) => part.name)).toEqual(apiParts[component as keyof typeof apiParts]);
+      for (const example of documentation.examples ?? []) {
+        expect(example.code).toContain('@spfx-kit/ui-profile/');
+        expect(example.code).not.toMatch(/installation|React Aria|Radix/iu);
+      }
+
+      const [startMarker, endMarker] = functionBounds[component as keyof typeof functionBounds];
+      const functionSource = harnessSource.slice(harnessSource.indexOf(startMarker), harnessSource.indexOf(endMarker));
+      const liveIds = [...functionSource.matchAll(/id="([a-z0-9-]+)" title=/gu)].map((match) => match[1]);
+      expect(liveIds).toEqual(expectedIds);
+    }
+
+    expect(harnessSource).toContain('<Badge render={<a href="#catalog-release" />}>');
+    expect(harnessSource).toContain('<Spinner aria-hidden="true" data-icon="inline-start" />');
+    expect(harnessSource).toContain("useSpfxUiId('catalog:progress-controlled')");
+    expect(harnessSource).toContain("useSpfxUiId('catalog:progress-labelled')");
+    expect(harnessSource).toContain("useSpfxUiId('catalog:progress-rtl')");
   });
 
   it('keeps official component visuals and scoped host ownership intact', () => {

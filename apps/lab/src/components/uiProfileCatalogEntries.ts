@@ -109,7 +109,82 @@ export const uiProfileCatalogDocumentation: Record<UiProfileCatalogComponentId, 
   },
   alert: {
     primaryExport: 'Alert',
-    summary: 'Presents a concise inline status or message without interrupting the current task.'
+    summary: 'Presents a concise inline status or message without interrupting the current task.',
+    composition: [
+      'Alert provides the assertive status region and the shared default or destructive treatment.',
+      'AlertTitle names the message while AlertDescription supplies the supporting detail.',
+      'A leading icon should be decorative when the title and description already announce the same meaning.',
+      'AlertAction reserves the trailing action area for one short, directly related control.'
+    ],
+    examples: [
+      publicExample(
+        'basic',
+        'Basic',
+        'A title and description communicate a successful account update.',
+        [['alert', 'Alert, AlertDescription, AlertTitle']],
+        '<Alert><span aria-hidden data-icon="inline-start">✓</span><AlertTitle>Account updated successfully</AlertTitle><AlertDescription>Your profile information has been saved.</AlertDescription></Alert>'
+      ),
+      publicExample(
+        'destructive',
+        'Destructive',
+        'The destructive variant is reserved for an error that needs immediate attention.',
+        [['alert', 'Alert, AlertDescription, AlertTitle']],
+        '<Alert variant="destructive"><span aria-hidden data-icon="inline-start">!</span><AlertTitle>Payment failed</AlertTitle><AlertDescription>Check the payment method and try again.</AlertDescription></Alert>'
+      ),
+      publicExample(
+        'action',
+        'Action',
+        'A single compact action can sit beside the message without obscuring its status.',
+        [
+          ['alert', 'Alert, AlertAction, AlertDescription, AlertTitle'],
+          ['button', 'Button']
+        ],
+        '<Alert><AlertTitle>Dark mode is available</AlertTitle><AlertDescription>Enable it when you are ready.</AlertDescription><AlertAction><Button variant="outline">Enable</Button></AlertAction></Alert>'
+      ),
+      publicExample(
+        'rtl',
+        'Right-to-left',
+        'The message grid and reading order follow the nearest direction provider.',
+        [
+          ['alert', 'Alert, AlertDescription, AlertTitle'],
+          ['direction', 'DirectionProvider']
+        ],
+        '<div dir="rtl"><DirectionProvider direction="rtl"><Alert><AlertTitle>تم الدفع بنجاح</AlertTitle><AlertDescription>تمت معالجة الدفعة وإرسال الإيصال.</AlertDescription></Alert></DirectionProvider></div>'
+      )
+    ],
+    api: [
+      {
+        name: 'Alert',
+        element: 'div',
+        props: [
+          {
+            name: 'variant',
+            type: '"default" | "destructive"',
+            defaultValue: '"default"',
+            description: 'Selects the semantic status treatment.'
+          },
+          { name: 'className', type: 'string', description: 'Adds classes to the alert region.' }
+        ]
+      },
+      {
+        name: 'AlertTitle',
+        element: 'div',
+        props: [{ name: 'className', type: 'string', description: 'Adds classes to the message title.' }]
+      },
+      {
+        name: 'AlertDescription',
+        element: 'div',
+        props: [{ name: 'className', type: 'string', description: 'Adds classes to the supporting description.' }]
+      },
+      {
+        name: 'AlertAction',
+        element: 'div',
+        props: [{ name: 'className', type: 'string', description: 'Adds classes to the trailing action area.' }]
+      }
+    ],
+    compatibilityNotes: [
+      'Custom color overrides are not reproduced here because they bypass the shared semantic theme tokens; add a profile variant when a reusable status color is required.'
+    ]
   },
   'alert-dialog': {
     primaryExport: 'AlertDialog',
@@ -129,7 +204,79 @@ export const uiProfileCatalogDocumentation: Record<UiProfileCatalogComponentId, 
   },
   badge: {
     primaryExport: 'Badge',
-    summary: 'Adds a compact status, category, or count beside related content.'
+    summary: 'Adds a compact status, category, or count beside related content.',
+    composition: [
+      'Choose a built-in semantic variant before adding presentation classes.',
+      'A leading or trailing icon uses data-icon so the shared profile owns inline spacing.',
+      'A spinner is decorative when the adjacent label already communicates the pending state.',
+      'Use the render prop to compose a semantic anchor when the badge is a destination rather than a status.'
+    ],
+    examples: [
+      publicExample(
+        'variants',
+        'Variants',
+        'The built-in variants cover primary, supporting, destructive, bordered, and low-emphasis labels.',
+        [['badge', 'Badge']],
+        '<><Badge>Default</Badge><Badge variant="secondary">Secondary</Badge><Badge variant="destructive">Destructive</Badge><Badge variant="outline">Outline</Badge><Badge variant="ghost">Ghost</Badge></>'
+      ),
+      publicExample(
+        'with-icon',
+        'With icon',
+        'An icon can reinforce the badge label without becoming its accessible name.',
+        [['badge', 'Badge']],
+        '<Badge><span aria-hidden data-icon="inline-start">✓</span>Verified</Badge>'
+      ),
+      publicExample(
+        'with-spinner',
+        'With spinner',
+        'A decorative spinner pairs with text that names the pending operation.',
+        [
+          ['badge', 'Badge'],
+          ['spinner', 'Spinner']
+        ],
+        '<Badge variant="secondary"><Spinner aria-hidden data-icon="inline-start" />Generating</Badge>'
+      ),
+      publicExample(
+        'link',
+        'Link',
+        'The Base UI render prop substitutes an anchor without nesting interactive elements.',
+        [['badge', 'Badge']],
+        '<Badge render={<a href="#catalog-release" />}>Open release</Badge>'
+      ),
+      publicExample(
+        'rtl',
+        'Right-to-left',
+        'Badge order and inline spacing follow the nearest reading direction.',
+        [
+          ['badge', 'Badge'],
+          ['direction', 'DirectionProvider']
+        ],
+        '<div dir="rtl"><DirectionProvider direction="rtl"><Badge>متحقق</Badge><Badge variant="secondary">ثانوي</Badge><Badge variant="outline">مخطط</Badge></DirectionProvider></div>'
+      )
+    ],
+    api: [
+      {
+        name: 'Badge',
+        element: 'span',
+        props: [
+          {
+            name: 'variant',
+            type: '"default" | "secondary" | "destructive" | "outline" | "ghost" | "link"',
+            defaultValue: '"default"',
+            description: 'Selects the semantic visual treatment.'
+          },
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Replaces the default span while merging the badge props and state.'
+          },
+          { name: 'className', type: 'string', description: 'Adds classes to the rendered badge element.' }
+        ]
+      }
+    ],
+    compatibilityNotes: [
+      'Custom color overrides are omitted because status colors belong to the shared semantic profile rather than an individual Lab example.'
+    ]
   },
   breadcrumb: {
     primaryExport: 'Breadcrumb',
@@ -846,7 +993,148 @@ const contentId = useSpfxUiId('docs:button-group:popover-content');
   },
   progress: {
     primaryExport: 'Progress',
-    summary: 'Communicates completion for a measurable task or operation.'
+    summary: 'Communicates completion for a measurable task or operation.',
+    composition: [
+      'Progress owns the accessible root and appends its shared ProgressTrack and ProgressIndicator after any label content.',
+      'ProgressLabel and ProgressValue provide a visible name and formatted value inside the same root.',
+      'Pass value for a determinate operation or null while its completion cannot yet be measured.',
+      'A controlled value can be driven by task state or by another accessible input such as Slider.'
+    ],
+    examples: [
+      publicExample(
+        'basic',
+        'Basic',
+        'A named progressbar communicates a determinate task value.',
+        [['progress', 'Progress']],
+        '<Progress aria-label="Task progress" value={33} />'
+      ),
+      publicExample(
+        'label',
+        'Label and value',
+        'Visible label and formatted value content travel with the progressbar.',
+        [['progress', 'Progress, ProgressLabel, ProgressValue']],
+        '<Progress value={56}><ProgressLabel>Upload progress</ProgressLabel><ProgressValue /></Progress>'
+      ),
+      publicExample(
+        'controlled',
+        'Controlled',
+        'Application state keeps the progressbar and an accessible Slider synchronized.',
+        [
+          ['progress', 'Progress, ProgressLabel, ProgressValue'],
+          ['slider', 'Slider']
+        ],
+        `import * as React from 'react';
+
+function ExportProgress() {
+  const [value, setValue] = React.useState(42);
+  return <><Progress value={value}><ProgressLabel>Export progress</ProgressLabel><ProgressValue /></Progress><Slider aria-label="Set export progress" max={100} onValueChange={(next) => setValue(typeof next === 'number' ? next : (next[0] ?? 0))} value={[value]} /></>;
+}`
+      ),
+      publicExample(
+        'rtl',
+        'Right-to-left',
+        'The visible label, value, and fill direction follow the nearest direction provider.',
+        [
+          ['progress', 'Progress, ProgressLabel, ProgressValue'],
+          ['direction', 'DirectionProvider']
+        ],
+        '<div dir="rtl"><DirectionProvider direction="rtl"><Progress value={56}><ProgressLabel>تقدم الرفع</ProgressLabel><ProgressValue /></Progress></DirectionProvider></div>'
+      )
+    ],
+    api: [
+      {
+        name: 'Progress',
+        element: 'div',
+        props: [
+          {
+            name: 'value',
+            type: 'number | null',
+            description: 'Sets the current determinate value, or null for an indeterminate operation.'
+          },
+          { name: 'min', type: 'number', defaultValue: '0', description: 'Sets the lower bound.' },
+          { name: 'max', type: 'number', defaultValue: '100', description: 'Sets the upper bound.' },
+          {
+            name: 'aria-valuetext',
+            type: 'string',
+            description: 'Supplies an accessible text alternative for the numeric value.'
+          },
+          {
+            name: 'getAriaValueText',
+            type: '(formattedValue: string, value: number) => string',
+            description: 'Builds accessible value text from the formatted and numeric values.'
+          },
+          {
+            name: 'locale',
+            type: 'string | string[]',
+            description: 'Chooses the locale used to format ProgressValue.'
+          },
+          {
+            name: 'format',
+            type: 'Intl.NumberFormatOptions',
+            description: 'Customizes the visible and accessible number format.'
+          },
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Replaces the default root element while merging progress props and state.'
+          },
+          { name: 'className', type: 'string', description: 'Adds classes to the progress root.' }
+        ]
+      },
+      {
+        name: 'ProgressTrack',
+        element: 'div',
+        props: [
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Replaces the default track element while preserving its progress state.'
+          },
+          { name: 'className', type: 'string', description: 'Adds classes to the track.' }
+        ]
+      },
+      {
+        name: 'ProgressIndicator',
+        element: 'div',
+        props: [
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Replaces the default indicator element while preserving its progress state.'
+          },
+          { name: 'className', type: 'string', description: 'Adds classes to the fill indicator.' }
+        ]
+      },
+      {
+        name: 'ProgressValue',
+        element: 'span',
+        props: [
+          {
+            name: 'children',
+            type: 'ReactNode | (formattedValue: string, value: number) => ReactNode',
+            description: 'Overrides or formats the visible value content.'
+          },
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Replaces the default value element while preserving progress state.'
+          },
+          { name: 'className', type: 'string', description: 'Adds classes to the visible value.' }
+        ]
+      },
+      {
+        name: 'ProgressLabel',
+        element: 'span',
+        props: [
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Replaces the default label element while preserving progress state.'
+          },
+          { name: 'className', type: 'string', description: 'Adds classes to the visible label.' }
+        ]
+      }
+    ]
   },
   'radio-group': {
     primaryExport: 'RadioGroup',
