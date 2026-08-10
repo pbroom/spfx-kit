@@ -299,18 +299,34 @@ test('orders the segmented package mode and bucket controls after export while k
   const packageModes = page.getByRole('tablist', { name: 'App package mode' });
   const bucketButton = page.getByRole('button', { name: 'Local CDN bucket' });
   const displayModes = page.getByRole('tablist', { name: 'Lab display mode' });
-  const [exportBox, packageBox, bucketBox] = await Promise.all([
+  const workspaceButton = page.getByRole('button', { name: 'Open UI Library' });
+  const [exportBox, packageBox, bucketBox, displayModesBox, workspaceButtonBox] = await Promise.all([
     exportButton.boundingBox(),
     packageModes.boundingBox(),
-    bucketButton.boundingBox()
+    bucketButton.boundingBox(),
+    displayModes.boundingBox(),
+    workspaceButton.boundingBox()
   ]);
   expect(exportBox).not.toBeNull();
   expect(packageBox).not.toBeNull();
   expect(bucketBox).not.toBeNull();
+  expect(displayModesBox).not.toBeNull();
+  expect(workspaceButtonBox).not.toBeNull();
   expect(exportBox!.x + exportBox!.width).toBeLessThanOrEqual(packageBox!.x);
   expect(packageBox!.x + packageBox!.width).toBeLessThanOrEqual(bucketBox!.x);
+  expect(displayModesBox!.x + displayModesBox!.width).toBeLessThanOrEqual(workspaceButtonBox!.x);
   await expect(packageModes).toHaveClass(/lab-mode-tabs/);
   await expect(displayModes).toHaveClass(/lab-mode-tabs/);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const [narrowDisplayModesBox, narrowWorkspaceButtonBox] = await Promise.all([
+    displayModes.boundingBox(),
+    workspaceButton.boundingBox()
+  ]);
+  expect(narrowDisplayModesBox).not.toBeNull();
+  expect(narrowWorkspaceButtonBox).not.toBeNull();
+  expect(narrowDisplayModesBox!.x + narrowDisplayModesBox!.width).toBeLessThanOrEqual(narrowWorkspaceButtonBox!.x);
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   await page.getByRole('tab', { name: 'CDN', exact: true }).focus();
   await page.keyboard.press('ArrowLeft');

@@ -450,15 +450,6 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
           )}
 
           <div className="preview-toolbar__modes">
-            <Button
-              aria-label={uiLibraryMode ? 'Return to Lab workspace' : 'Open UI Library'}
-              className="preview-toolbar__workspace-button"
-              size="sm"
-              variant="ghost"
-              onClick={() => navigateWorkspace(uiLibraryMode ? { workspace: 'lab' } : { workspace: 'ui-library' })}
-            >
-              {uiLibraryMode ? 'Lab' : 'UI Library'}
-            </Button>
             {!uiLibraryMode ? (
               <Tabs
                 className="lab-tabs-root"
@@ -477,6 +468,15 @@ export function LabApp({ uiHost }: LabAppProps): JSX.Element {
                 </TabsList>
               </Tabs>
             ) : null}
+            <Button
+              aria-label={uiLibraryMode ? 'Return to Lab workspace' : 'Open UI Library'}
+              className="preview-toolbar__workspace-button"
+              size="sm"
+              variant="ghost"
+              onClick={() => navigateWorkspace(uiLibraryMode ? { workspace: 'lab' } : { workspace: 'ui-library' })}
+            >
+              {uiLibraryMode ? 'Lab' : 'UI Library'}
+            </Button>
           </div>
         </div>
 
