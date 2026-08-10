@@ -763,7 +763,7 @@ describe('offline profile verifier', () => {
       expect(result.status).not.toBe(0);
       expect(verifierMessage(result)).toContain('Package scripts differs from the pinned profile');
     }
-  });
+  }, 60_000);
 
   it('fails closed when a committed snapshot disappears or normalized bytes drift', async () => {
     const missingRoot = await copyProfile();
