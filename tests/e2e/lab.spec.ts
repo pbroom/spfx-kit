@@ -186,7 +186,11 @@ test('loads the committed web part and supports a core toolbar interaction', asy
 });
 
 test('navigates to the first-party UI Library without exposing app, export, or CDN behavior', async ({ page }) => {
+  const consoleErrors: string[] = [];
   const pageErrors: Error[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
   page.on('pageerror', (error) => pageErrors.push(error));
   await page.addInitScript((key) => window.localStorage.setItem(key, 'hello-card-spfx'), pinnedAppStorageKey);
   await page.goto('/');
@@ -202,6 +206,20 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   const catalog = page.getByRole('region', { name: 'UI Library' });
   await expect(catalog).toBeVisible();
   await expect(catalog.getByRole('heading', { name: 'UI Library' })).toBeVisible();
+  const gallery = page.locator('[data-ui-profile-catalog="base-nova"]');
+  await expect(gallery).toBeVisible();
+  await expect(gallery).toHaveAttribute('aria-label', 'Shared UI component catalog');
+  const galleryItems = gallery.locator(':scope > [data-catalog-component]');
+  await expect(galleryItems).toHaveCount(57);
+  const galleryComponentIds = await galleryItems.evaluateAll((items) =>
+    items.map((item) => item.getAttribute('data-catalog-component'))
+  );
+  expect(new Set(galleryComponentIds).size).toBe(57);
+  expect(galleryComponentIds).toContain('accordion');
+  expect(galleryComponentIds).toContain('tooltip');
+  await expect(page.getByRole('button', { name: 'Return to Lab workspace' })).toBeVisible();
+  await expect(catalog.getByRole('button', { name: 'Return to Lab', exact: true })).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'SharePoint breakpoint' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open app menu' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Export package' })).toHaveCount(0);
   await expect(page.getByRole('tablist', { name: 'App package mode' })).toHaveCount(0);
@@ -212,9 +230,37 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   await expect(page.getByRole('region', { name: 'Web part preview area' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Theme: Light' })).toBeVisible();
 
+  const galleryColumnCount = () =>
+    gallery.evaluate((element) => getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/u).length);
+  await expect.poll(galleryColumnCount).toBe(2);
+  await page.getByRole('tab', { name: '2/3' }).click();
+  await expect.poll(galleryColumnCount).toBe(2);
+  await page.getByRole('tab', { name: '1/2' }).click();
+  await expect.poll(galleryColumnCount).toBe(1);
+  await page.getByRole('tab', { name: '1/3' }).click();
+  await expect.poll(galleryColumnCount).toBe(1);
+  await page.getByRole('tab', { name: 'Mobile' }).click();
+  await expect.poll(galleryColumnCount).toBe(1);
+  await page.getByRole('tab', { name: '1-col' }).click();
+  await expect.poll(galleryColumnCount).toBe(2);
+
   await page.setViewportSize({ width: 390, height: 844 });
+  expect(pageErrors.map((error) => error.stack)).toEqual([]);
+  const narrowCatalogState = {
+    catalogCount: await page.locator('[data-catalog-component]').count(),
+    consoleErrors
+  };
+  expect(narrowCatalogState).toEqual({ catalogCount: 57, consoleErrors: [] });
   await expect(page.getByRole('complementary', { name: 'UI Library details' })).toBeHidden();
-  await expect(catalog.getByRole('heading', { name: 'Button', exact: true })).toBeVisible();
+  await expect(gallery.locator('[data-catalog-component="button"]')).toBeVisible();
+
+  await gallery.locator('[data-catalog-component="dialog"]').getByRole('button', { name: 'Open dialog' }).click();
+  const catalogDialog = page.getByRole('dialog', { name: 'Catalog dialog' });
+  await expect(catalogDialog).toBeVisible();
+  await expect(catalogDialog.locator('xpath=ancestor::*[@data-spfx-ui-portal-host]')).toHaveCount(1);
+  await catalogDialog.press('Escape');
+  await expect(catalogDialog).toBeHidden();
+  await expect(galleryItems).toHaveCount(57);
 
   for (const shortcut of ['Control+e', 'Control+o', 'Control+n']) {
     await page.keyboard.press(shortcut);

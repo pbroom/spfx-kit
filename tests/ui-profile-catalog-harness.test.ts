@@ -94,6 +94,7 @@ describe('Lab UI profile catalog harness', () => {
     expect(source).not.toMatch(/(?:id|aria-controls|aria-describedby|aria-labelledby)="catalog:/u);
     expect(source).toContain("useSpfxUiId('catalog:toast-portal')");
     expect(source).toContain('<ToastPortal id={toastPortalId}>');
+    expect(source).toContain('<Sidebar collapsible="none" id={sidebarId}>');
     expect(source).toContain('const toastManager = React.useMemo(() => createToastManager(), []);');
     expect(source).not.toMatch(/\b(?:document|window)\./u);
   });
@@ -105,5 +106,22 @@ describe('Lab UI profile catalog harness', () => {
     expect(entrySource).toContain("import('./components/UiProfileCatalogHarness')");
     expect(entrySource).toContain('mountUiProfileCatalogHarness(root)');
     expect(entrySource).toMatch(/if \(isUiProfileCatalogRoute\)[^]*else if \(isUiProfileContractRoute\)/u);
+  });
+
+  it('reuses the complete gallery inside the query-routed first-party Lab workspace', () => {
+    const harnessSource = readFileSync(harnessPath, 'utf8');
+    const workspaceSource = readFileSync('apps/lab/src/components/UiLibraryWorkspace.tsx', 'utf8');
+    const labSource = readFileSync('apps/lab/src/LabApp.tsx', 'utf8');
+
+    expect(workspaceSource).toContain("import('./UiProfileCatalogHarness')");
+    expect(workspaceSource).toContain('module.UiProfileCatalogHarness');
+    expect(workspaceSource).toContain('<React.Suspense');
+    expect(workspaceSource).toContain('<UiProfileCatalogHarness />');
+    expect(workspaceSource).toContain('const includedComponentCount = 57');
+    expect(workspaceSource).not.toContain('foundationPreviews');
+    expect(harnessSource).toContain('<section aria-label="Shared UI component catalog"');
+    expect(harnessSource).not.toContain('<main aria-label="Shared UI component catalog"');
+    expect(labSource).toContain('<UiLibraryWorkspace');
+    expect(labSource).not.toContain('mountUiProfileCatalogHarness');
   });
 });

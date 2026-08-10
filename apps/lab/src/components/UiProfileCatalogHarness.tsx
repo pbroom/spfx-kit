@@ -233,7 +233,7 @@ export function UiProfileCatalogHarness(): React.ReactElement {
   const tooltipContentId = useSpfxUiId('catalog:tooltip-content');
 
   return (
-    <main aria-label="Shared UI component catalog" data-ui-profile-catalog="base-nova">
+    <section aria-label="Shared UI component catalog" data-ui-profile-catalog="base-nova">
       <h2>Shared UI component catalog</h2>
 
       <CatalogSample component="accordion" title="Accordion">
@@ -682,7 +682,7 @@ export function UiProfileCatalogHarness(): React.ReactElement {
 
       <CatalogSample component="sidebar" title="Sidebar">
         <SidebarProvider defaultOpen={false}>
-          <Sidebar id={sidebarId}>
+          <Sidebar collapsible="none" id={sidebarId}>
             <SidebarContent>
               <SidebarGroup>
                 <SidebarGroupLabel>Catalog</SidebarGroupLabel>
@@ -795,7 +795,7 @@ export function UiProfileCatalogHarness(): React.ReactElement {
           </Tooltip>
         </TooltipProvider>
       </CatalogSample>
-    </main>
+    </section>
   );
 }
 
