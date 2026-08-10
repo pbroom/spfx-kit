@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { Badge } from '@spfx-kit/ui-profile/badge';
 import { Button } from '@spfx-kit/ui-profile/button';
-import { Separator } from '@spfx-kit/ui-profile/separator';
 import type { LabBreakpoint, LabThemeMode } from '@spfx-kit/spfx-lab-runtime';
 import type { LabWorkspaceRoute } from '../lib/uiLibraryRoute';
 import {
@@ -117,8 +116,6 @@ export function UiLibraryWorkspaceDetails({ breakpoint, themeMode }: Omit<UiLibr
         <strong>UI Library</strong>
       </div>
       <div className="ui-library-details__content">
-        <p>This first-party workspace is delivered with the Lab and is excluded from app selection, export, and CDN delivery.</p>
-        <Separator />
         <dl>
           <div>
             <dt>Catalog</dt>

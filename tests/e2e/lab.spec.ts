@@ -262,7 +262,9 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   const detailsPanel = page.getByRole('complementary', { name: 'UI Library details' });
   await expect(detailsPanel).toBeVisible();
   await expect(detailsPanel.getByText('Not an SPFx app', { exact: true })).toHaveCount(0);
-  await expect(detailsPanel).toContainText('excluded from app selection, export, and CDN delivery');
+  await expect(detailsPanel.getByText(/^This first-party workspace is delivered with the Lab/u)).toHaveCount(0);
+  await expect(detailsPanel).toContainText('57 public components');
+  await expect(detailsPanel).toContainText('Lab Vite bundle');
   await expect(page.getByRole('button', { name: 'Open app menu' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Export package' })).toHaveCount(0);
   await expect(page.getByRole('tablist', { name: 'App package mode' })).toHaveCount(0);
