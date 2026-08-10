@@ -152,21 +152,16 @@ interface CatalogSampleProps {
 
 const ActiveCatalogComponentContext = React.createContext<UiProfileCatalogComponentId | undefined>(undefined);
 
-function CatalogSample({ children, component, title }: CatalogSampleProps): React.ReactElement {
+function CatalogSample({ children, component, title }: CatalogSampleProps): React.ReactElement | null {
   const activeComponent = React.useContext(ActiveCatalogComponentContext);
   const active = activeComponent === component;
-  const sampleRef = React.useRef<HTMLElement>(null);
-
-  React.useEffect(() => {
-    if (active) sampleRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [active]);
+  if (activeComponent !== undefined && !active) return null;
 
   return (
     <section
       data-catalog-active={active ? 'true' : undefined}
       data-catalog-component={component}
       id={uiProfileCatalogSectionId(component)}
-      ref={sampleRef}
     >
       <h3>{title}</h3>
       {children}
@@ -251,7 +246,11 @@ export function UiProfileCatalogHarness({
   const tooltipContentId = useSpfxUiId('catalog:tooltip-content');
 
   const catalog = (
-    <section aria-label="Shared UI component catalog" data-ui-profile-catalog="base-nova">
+    <section
+      aria-label="Shared UI component catalog"
+      data-catalog-mode={activeComponent === undefined ? 'gallery' : 'single'}
+      data-ui-profile-catalog="base-nova"
+    >
       <h2>Shared UI component catalog</h2>
 
       <CatalogSample component="accordion" title="Accordion">

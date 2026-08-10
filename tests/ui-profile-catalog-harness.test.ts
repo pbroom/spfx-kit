@@ -1,5 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import {
+  uiProfileCatalogDocumentation,
+  uiProfileCatalogEntries,
+  uiProfileCatalogImportPath
+} from '../apps/lab/src/components/uiProfileCatalogEntries';
 
 const harnessPath = 'apps/lab/src/components/UiProfileCatalogHarness.tsx';
 const entriesPath = 'apps/lab/src/components/uiProfileCatalogEntries.ts';
@@ -93,6 +98,20 @@ describe('Lab UI profile catalog harness', () => {
     expect(source).toContain('data-ui-profile-catalog="base-nova"');
   });
 
+  it('provides original documentation metadata for every supported entry', () => {
+    const documentedComponentIds = Object.keys(uiProfileCatalogDocumentation);
+
+    expect(documentedComponentIds).toEqual(catalogSubpaths);
+    expect(uiProfileCatalogEntries.map((entry) => entry.id)).toEqual(catalogSubpaths);
+    for (const entry of uiProfileCatalogEntries) {
+      const documentation = uiProfileCatalogDocumentation[entry.id];
+      expect(documentation.primaryExport).toMatch(/^[A-Z][A-Za-z0-9]+$/u);
+      expect(documentation.summary.length).toBeGreaterThan(24);
+      expect(documentation.summary).not.toMatch(/installation|React Aria|Radix/iu);
+      expect(uiProfileCatalogImportPath(entry.id)).toBe(`@spfx-kit/ui-profile/${entry.id}`);
+    }
+  });
+
   it('keeps official component visuals and scoped host ownership intact', () => {
     const source = readFileSync(harnessPath, 'utf8');
 
@@ -114,7 +133,7 @@ describe('Lab UI profile catalog harness', () => {
     expect(entrySource).toMatch(/if \(isUiProfileCatalogRoute\)[^]*else if \(isUiProfileContractRoute\)/u);
   });
 
-  it('reuses the complete gallery inside the query-routed first-party Lab workspace', () => {
+  it('reuses the complete catalog as a selected preview inside the query-routed first-party Lab workspace', () => {
     const harnessSource = readFileSync(harnessPath, 'utf8');
     const workspaceSource = readFileSync('apps/lab/src/components/UiLibraryWorkspace.tsx', 'utf8');
     const labSource = readFileSync('apps/lab/src/LabApp.tsx', 'utf8');
@@ -128,7 +147,9 @@ describe('Lab UI profile catalog harness', () => {
     expect(workspaceSource).toContain("aria-current={entry.id === activeComponent ? 'location' : undefined}");
     expect(workspaceSource).toContain("onNavigate({ workspace: 'ui-library', component: entry.id })");
     expect(workspaceSource).not.toContain('foundationPreviews');
-    expect(harnessSource).toContain('<section aria-label="Shared UI component catalog"');
+    expect(harnessSource).toContain('aria-label="Shared UI component catalog"');
+    expect(harnessSource).toContain("data-catalog-mode={activeComponent === undefined ? 'gallery' : 'single'}");
+    expect(harnessSource).toContain('if (activeComponent !== undefined && !active) return null;');
     expect(harnessSource).not.toContain('<main aria-label="Shared UI component catalog"');
     expect(labSource).toContain('<UiLibraryWorkspace');
     expect(labSource).not.toContain('mountUiProfileCatalogHarness');

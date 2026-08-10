@@ -5,7 +5,9 @@ import type { LabBreakpoint, LabThemeMode } from '@spfx-kit/spfx-lab-runtime';
 import type { LabWorkspaceRoute } from '../lib/uiLibraryRoute';
 import {
   isUiProfileCatalogComponentId,
+  uiProfileCatalogDocumentation,
   uiProfileCatalogEntries,
+  uiProfileCatalogImportPath,
   uiProfileCatalogSectionId
 } from './uiProfileCatalogEntries';
 
@@ -25,6 +27,9 @@ const includedComponentCount = uiProfileCatalogEntries.length;
 export function UiLibraryWorkspace({ breakpoint, route, themeMode, onNavigate }: UiLibraryWorkspaceProps): JSX.Element {
   const navigationListRef = React.useRef<HTMLUListElement>(null);
   const activeComponent = isUiProfileCatalogComponentId(route.component) ? route.component : uiProfileCatalogEntries[0].id;
+  const activeEntry = uiProfileCatalogEntries.find((entry) => entry.id === activeComponent) ?? uiProfileCatalogEntries[0];
+  const activeDocumentation = uiProfileCatalogDocumentation[activeComponent];
+  const publicImport = `import { ${activeDocumentation.primaryExport} } from '${uiProfileCatalogImportPath(activeComponent)}';`;
 
   React.useEffect(() => {
     const list = navigationListRef.current;
@@ -79,9 +84,38 @@ export function UiLibraryWorkspace({ breakpoint, route, themeMode, onNavigate }:
         </nav>
 
         <div className="ui-library-catalog-shell" style={{ width: `min(${breakpoint.width}px, 100%)` }}>
-          <React.Suspense fallback={<div role="status">Loading UI Library…</div>}>
-            <UiProfileCatalogHarness activeComponent={activeComponent} />
-          </React.Suspense>
+          <article aria-labelledby="ui-library-component-title" className="ui-library-docs">
+            <header className="ui-library-docs__header">
+              <h2 id="ui-library-component-title">{activeEntry.title}</h2>
+              <p>{activeDocumentation.summary}</p>
+            </header>
+
+            <section aria-labelledby="ui-library-preview-title" className="ui-library-docs__section">
+              <div className="ui-library-docs__section-heading">
+                <h3 id="ui-library-preview-title">Preview</h3>
+                <p>Default shared-profile presentation inside the active Lab host and theme.</p>
+              </div>
+              <div className="ui-library-docs__preview-frame">
+                <React.Suspense fallback={<div role="status">Loading {activeEntry.title}…</div>}>
+                  <UiProfileCatalogHarness activeComponent={activeComponent} />
+                </React.Suspense>
+              </div>
+            </section>
+
+            <section aria-labelledby="ui-library-usage-title" className="ui-library-docs__section">
+              <div className="ui-library-docs__section-heading">
+                <h3 id="ui-library-usage-title">Usage</h3>
+                <p>Import the component family from its public package entry point.</p>
+              </div>
+              <pre aria-label={`Public import for ${activeEntry.title}`} className="ui-library-docs__code">
+                <code>{publicImport}</code>
+              </pre>
+              <p className="ui-library-docs__note">
+                The live example above uses the package’s curated React 17 implementation and the Lab’s owned host, portal, and ID
+                contracts.
+              </p>
+            </section>
+          </article>
         </div>
       </div>
 
@@ -109,7 +143,14 @@ function moveCatalogNavigationFocus(event: React.KeyboardEvent<HTMLUListElement>
   links[nextIndex]?.focus();
 }
 
-export function UiLibraryWorkspaceDetails({ breakpoint, themeMode }: Omit<UiLibraryWorkspaceProps, 'onNavigate'>): JSX.Element {
+export function UiLibraryWorkspaceDetails({
+  breakpoint,
+  route,
+  themeMode
+}: Omit<UiLibraryWorkspaceProps, 'onNavigate'>): JSX.Element {
+  const activeComponent = isUiProfileCatalogComponentId(route.component) ? route.component : uiProfileCatalogEntries[0].id;
+  const activeEntry = uiProfileCatalogEntries.find((entry) => entry.id === activeComponent) ?? uiProfileCatalogEntries[0];
+
   return (
     <div className="ui-library-details">
       <div className="lab-toolbar lab-toolbar--panel ui-library-details__toolbar">
@@ -117,6 +158,16 @@ export function UiLibraryWorkspaceDetails({ breakpoint, themeMode }: Omit<UiLibr
       </div>
       <div className="ui-library-details__content">
         <dl>
+          <div>
+            <dt>Selected</dt>
+            <dd>{activeEntry.title}</dd>
+          </div>
+          <div>
+            <dt>Public import</dt>
+            <dd>
+              <code>{uiProfileCatalogImportPath(activeComponent)}</code>
+            </dd>
+          </div>
           <div>
             <dt>Catalog</dt>
             <dd>{includedComponentCount} public components</dd>

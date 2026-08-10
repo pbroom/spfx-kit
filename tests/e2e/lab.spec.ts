@@ -209,14 +209,20 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   const gallery = page.locator('[data-ui-profile-catalog="base-nova"]');
   await expect(gallery).toBeVisible();
   await expect(gallery).toHaveAttribute('aria-label', 'Shared UI component catalog');
+  await expect(gallery).toHaveAttribute('data-catalog-mode', 'single');
   const galleryItems = gallery.locator(':scope > [data-catalog-component]');
-  await expect(galleryItems).toHaveCount(57);
-  const galleryComponentIds = await galleryItems.evaluateAll((items) =>
-    items.map((item) => item.getAttribute('data-catalog-component'))
+  await expect(galleryItems).toHaveCount(1);
+  await expect(galleryItems).toHaveAttribute('data-catalog-component', 'accordion');
+  const componentDocs = page.getByRole('article', { name: 'Accordion' });
+  await expect(componentDocs).toBeVisible();
+  await expect(componentDocs).toContainText('Organizes related content into disclosure sections');
+  await expect(componentDocs.getByRole('heading', { name: 'Preview' })).toBeVisible();
+  await expect(componentDocs.getByRole('heading', { name: 'Usage' })).toBeVisible();
+  await expect(componentDocs.getByLabel('Public import for Accordion')).toContainText(
+    "import { Accordion } from '@spfx-kit/ui-profile/accordion';"
   );
-  expect(new Set(galleryComponentIds).size).toBe(57);
-  expect(galleryComponentIds).toContain('accordion');
-  expect(galleryComponentIds).toContain('tooltip');
+  await expect(componentDocs.getByRole('heading', { name: /Installation/iu })).toHaveCount(0);
+  await expect(componentDocs.getByText(/React Aria|Radix/iu)).toHaveCount(0);
   const componentNavigation = page.getByRole('navigation', { name: 'UI Library components' });
   const componentNavigationList = componentNavigation.locator('.ui-library-navigation__list');
   const componentNavigationLinks = componentNavigation.locator('[data-ui-library-navigation-link]');
@@ -240,7 +246,11 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   await buttonNavigationLink.click();
   await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('button');
   await expect(buttonNavigationLink).toHaveAttribute('aria-current', 'location');
+  await expect(galleryItems).toHaveCount(1);
   await expect(gallery.locator('[data-catalog-component="button"]')).toHaveAttribute('data-catalog-active', 'true');
+  await expect(page.getByRole('article', { name: 'Button' })).toContainText(
+    "import { Button } from '@spfx-kit/ui-profile/button';"
+  );
   await buttonNavigationLink.press('ArrowRight');
   await expect(buttonGroupNavigationLink).toBeFocused();
   await buttonGroupNavigationLink.press('Enter');
@@ -253,9 +263,10 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   await page.goBack();
   await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBeNull();
   await expect(accordionNavigationLink).toHaveAttribute('aria-current', 'location');
+  await expect(galleryItems).toHaveAttribute('data-catalog-component', 'accordion');
 
-  const buttonDemo = gallery.locator('[data-catalog-component="button"]');
-  await expect(buttonDemo).toHaveCSS('box-shadow', 'none');
+  const previewFrame = page.locator('.ui-library-docs__preview-frame');
+  await expect(previewFrame).toHaveCSS('box-shadow', 'none');
   await expect(page.getByRole('button', { name: 'Return to Lab workspace' })).toBeVisible();
   await expect(catalog.getByRole('button', { name: 'Return to Lab', exact: true })).toBeVisible();
   await expect(page.getByRole('tablist', { name: 'SharePoint breakpoint' })).toBeVisible();
@@ -275,19 +286,11 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   await expect(page.getByRole('region', { name: 'Web part preview area' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Theme: Light' })).toBeVisible();
 
-  const galleryColumnCount = () =>
-    gallery.evaluate((element) => getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/u).length);
-  await expect.poll(galleryColumnCount).toBe(2);
-  await page.getByRole('tab', { name: '2/3' }).click();
-  await expect.poll(galleryColumnCount).toBe(2);
-  await page.getByRole('tab', { name: '1/2' }).click();
-  await expect.poll(galleryColumnCount).toBe(1);
-  await page.getByRole('tab', { name: '1/3' }).click();
-  await expect.poll(galleryColumnCount).toBe(1);
-  await page.getByRole('tab', { name: 'Mobile' }).click();
-  await expect.poll(galleryColumnCount).toBe(1);
-  await page.getByRole('tab', { name: '1-col' }).click();
-  await expect.poll(galleryColumnCount).toBe(2);
+  for (const breakpoint of ['2/3', '1/2', '1/3', 'Mobile', '1-col']) {
+    await page.getByRole('tab', { name: breakpoint }).click();
+    await expect(componentDocs).toBeVisible();
+    await expect(galleryItems).toHaveCount(1);
+  }
 
   await page.setViewportSize({ width: 390, height: 844 });
   expect(pageErrors.map((error) => error.stack)).toEqual([]);
@@ -295,8 +298,8 @@ test('navigates to the first-party UI Library without exposing app, export, or C
     catalogCount: await page.locator('[data-catalog-component]').count(),
     consoleErrors
   };
-  expect(narrowCatalogState).toEqual({ catalogCount: 57, consoleErrors: [] });
-  await expect(buttonDemo).toHaveCSS('box-shadow', 'none');
+  expect(narrowCatalogState).toEqual({ catalogCount: 1, consoleErrors: [] });
+  await expect(previewFrame).toHaveCSS('box-shadow', 'none');
   await expect(componentNavigation).toBeVisible();
   await expect(componentNavigationLinks).toHaveCount(57);
   await expect(componentNavigationList).toHaveCSS('flex-direction', 'row');
@@ -306,18 +309,25 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('tooltip');
   await expect(tooltipNavigationLink).toHaveAttribute('aria-current', 'location');
   await expect(gallery.locator('[data-catalog-component="tooltip"]')).toHaveAttribute('data-catalog-active', 'true');
+  await expect(galleryItems).toHaveCount(1);
+  await expect(page.getByRole('article', { name: 'Tooltip' })).toBeVisible();
   await page.goBack();
   await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBeNull();
   await expect(page.getByRole('complementary', { name: 'UI Library details' })).toBeHidden();
-  await expect(gallery.locator('[data-catalog-component="button"]')).toBeVisible();
+  await expect(gallery.locator('[data-catalog-component="accordion"]')).toBeVisible();
 
+  const dialogNavigationLink = componentNavigation.getByRole('link', { name: 'Dialog', exact: true });
+  await dialogNavigationLink.click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('dialog');
   await gallery.locator('[data-catalog-component="dialog"]').getByRole('button', { name: 'Open dialog' }).click();
   const catalogDialog = page.getByRole('dialog', { name: 'Catalog dialog' });
   await expect(catalogDialog).toBeVisible();
   await expect(catalogDialog.locator('xpath=ancestor::*[@data-spfx-ui-portal-host]')).toHaveCount(1);
   await catalogDialog.press('Escape');
   await expect(catalogDialog).toBeHidden();
-  await expect(galleryItems).toHaveCount(57);
+  await expect(galleryItems).toHaveCount(1);
+  await page.goBack();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBeNull();
 
   for (const shortcut of ['Control+e', 'Control+o', 'Control+n']) {
     await page.keyboard.press(shortcut);
