@@ -162,6 +162,9 @@ describe('committed build integration', () => {
     );
     expect(packageJson.scripts.build).toMatch(/^npm run prepare:ui-profile && heft /u);
     expect(packageJson.scripts.ship).toMatch(/^npm run prepare:ui-profile && heft /u);
+    expect(packageJson.scripts.pretest).toBe('npm run prepare:ui-profile');
+    expect(packageJson.scripts.preserve).toBe('npm run prepare:ui-profile');
+    expect(packageJson.scripts.prestart).toBe('npm run prepare:ui-profile');
     expect(webpackPatch.patchFiles).toEqual(['./config/webpack-patch/ui-profile.cjs']);
     expect(source).toContain("import '@spfx-kit/ui-profile/styles.css';");
   });

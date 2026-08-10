@@ -72,8 +72,8 @@ async function main() {
     if (await exists(path.join(appDir, 'packages'))) {
       issues.push('standalone app must not contain a top-level packages/ workspace');
     }
-    if (hasMonorepoOnlyDependency(packageJson)) {
-      issues.push('standalone app package.json must not depend on @spfx-kit/* or file:../../packages dependencies');
+    if (await hasMonorepoOnlyDependency(packageJson, appDir)) {
+      issues.push('standalone app package.json must not depend on monorepo-only @spfx-kit/* or file:../../packages dependencies');
     }
   }
   if (!summary.spfxVersion) {
@@ -155,9 +155,20 @@ async function hasLabAdapter(appDir) {
   );
 }
 
-function hasMonorepoOnlyDependency(packageJson) {
+async function hasMonorepoOnlyDependency(packageJson, appDir) {
   const all = { ...(packageJson.dependencies || {}), ...(packageJson.devDependencies || {}) };
-  return Object.entries(all).some(([name, spec]) => name.startsWith('@spfx-kit/') || String(spec).includes('../../packages'));
+  for (const [name, value] of Object.entries(all)) {
+    const spec = String(value);
+    if (
+      name === '@spfx-kit/ui-profile' &&
+      /^file:\.\/spfx-ui-profile\/[^/]+\.tgz$/u.test(spec) &&
+      (await exists(path.resolve(appDir, spec.slice('file:'.length))))
+    ) {
+      continue;
+    }
+    if (name.startsWith('@spfx-kit/') || spec.includes('../../packages')) return true;
+  }
+  return false;
 }
 
 function isValidCdnBasePath(value) {
