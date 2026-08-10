@@ -386,6 +386,73 @@ test('navigates to the first-party UI Library without exposing app, export, or C
   await expect(exportOptions.getByRole('option', { name: /^UI Library$/u })).toHaveCount(0);
 });
 
+test('documents the complete Button, Button Group, and Spinner action family in the owned Lab host', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  const pageErrors: Error[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('pageerror', (error) => pageErrors.push(error));
+
+  await page.goto('/?workspace=ui-library&component=button');
+  const catalog = page.locator('[data-ui-profile-catalog="base-nova"]');
+  const buttonDocs = page.getByRole('article', { name: 'Button' });
+  await expect(buttonDocs).toBeVisible();
+  await expect(catalog.locator('[data-catalog-documentation-examples="button"] [data-catalog-example]')).toHaveCount(14);
+  await expect(buttonDocs.getByRole('region', { name: 'Example code' }).locator('pre')).toHaveCount(14);
+  await expect(buttonDocs.getByRole('region', { name: 'API reference' }).locator('table')).toHaveCount(1);
+  await expect(buttonDocs.getByRole('link', { name: 'Login' })).toHaveAttribute('href', '#catalog-login');
+  await expect(buttonDocs.getByRole('button', { name: 'Generating' }).locator('svg')).toHaveAttribute('aria-hidden', 'true');
+
+  const componentNavigation = page.getByRole('navigation', { name: 'UI Library components' });
+  await componentNavigation.getByRole('link', { name: 'Button Group', exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('button-group');
+  const buttonGroupDocs = page.getByRole('article', { name: 'Button Group' });
+  await expect(catalog.locator('[data-catalog-documentation-examples="button-group"] [data-catalog-example]')).toHaveCount(12);
+  await expect(buttonGroupDocs.getByRole('region', { name: 'Example code' }).locator('pre')).toHaveCount(12);
+  await expect(buttonGroupDocs.getByRole('region', { name: 'API reference' }).locator('table')).toHaveCount(3);
+
+  await buttonGroupDocs.getByRole('button', { name: 'More follow options' }).click();
+  const menu = page.getByRole('menu');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('xpath=ancestor::*[@data-spfx-ui-portal-host]')).toHaveCount(1);
+  await menu.press('Escape');
+
+  await buttonGroupDocs.getByRole('combobox', { name: 'Currency' }).click();
+  const selectContent = page.locator('[data-slot="select-content"]');
+  await expect(selectContent).toBeVisible();
+  await expect(selectContent.locator('xpath=ancestor::*[@data-spfx-ui-portal-host]')).toHaveCount(1);
+  await page.getByRole('option', { name: 'EUR' }).click();
+
+  await buttonGroupDocs.getByRole('button', { name: 'Open assistant options' }).click();
+  const popoverContent = page.locator('[data-slot="popover-content"]');
+  await expect(popoverContent).toBeVisible();
+  await expect(popoverContent.locator('xpath=ancestor::*[@data-spfx-ui-portal-host]')).toHaveCount(1);
+  await buttonGroupDocs.getByRole('button', { name: 'Open assistant options' }).click();
+
+  await componentNavigation.getByRole('link', { name: 'Spinner', exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('spinner');
+  const spinnerDocs = page.getByRole('article', { name: 'Spinner' });
+  await expect(catalog.locator('[data-catalog-documentation-examples="spinner"] [data-catalog-example]')).toHaveCount(7);
+  await expect(spinnerDocs.getByRole('region', { name: 'Example code' }).locator('pre')).toHaveCount(7);
+  await expect(spinnerDocs.getByRole('region', { name: 'API reference' }).locator('table')).toHaveCount(1);
+
+  await page.goBack();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('button-group');
+  await expect(page.getByRole('article', { name: 'Button Group' })).toBeVisible();
+  await page.goForward();
+  await expect.poll(() => new URL(page.url()).searchParams.get('component')).toBe('spinner');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('article', { name: 'Spinner' })).toBeVisible();
+  await expect(componentNavigation.locator('[data-ui-library-navigation-link]')).toHaveCount(57);
+  await expect(page.getByRole('button', { name: 'Open app menu' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Export package' })).toHaveCount(0);
+  await expect(page.getByRole('tablist', { name: 'App package mode' })).toHaveCount(0);
+  expect(pageErrors.map((error) => error.stack)).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+});
+
 test('orders the segmented package mode and bucket controls after export while keeping display mode independent', async ({
   page
 }) => {

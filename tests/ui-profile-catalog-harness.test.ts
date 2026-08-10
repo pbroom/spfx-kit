@@ -135,21 +135,88 @@ describe('Lab UI profile catalog harness', () => {
     ]);
     expect(breadcrumb.composition).toHaveLength(4);
     for (const example of breadcrumb.examples ?? []) {
-      expect(example.code).toContain("@spfx-kit/ui-profile/");
+      expect(example.code).toContain('@spfx-kit/ui-profile/');
       expect(example.code).not.toMatch(/installation|React Aria|Radix/iu);
     }
 
     const harnessSource = readFileSync(harnessPath, 'utf8');
-    const liveExampleIds = [...harnessSource.matchAll(/data-catalog-example="([a-z0-9-]+)"/gu)].map((match) => match[1]);
+    const breadcrumbSource = harnessSource.slice(
+      harnessSource.indexOf('function BreadcrumbDocumentationExamples'),
+      harnessSource.indexOf('function ButtonDocumentationExamples')
+    );
+    const liveExampleIds = [...breadcrumbSource.matchAll(/data-catalog-example="([a-z0-9-]+)"/gu)].map((match) => match[1]);
     expect(liveExampleIds).toEqual(breadcrumb.examples?.map((example) => example.id));
     expect(harnessSource).toContain("useSpfxUiId('catalog:breadcrumb-dropdown-content')");
     expect(harnessSource).toContain("useSpfxUiId('catalog:breadcrumb-responsive-content')");
   });
 
+  it('documents the complete Button, Button Group, and Spinner family contracts', () => {
+    const harnessSource = readFileSync(harnessPath, 'utf8');
+    const expectations = {
+      button: [
+        'sizes',
+        'default',
+        'outline',
+        'secondary',
+        'ghost',
+        'destructive',
+        'link',
+        'icon',
+        'with-icon',
+        'rounded',
+        'spinner',
+        'button-group',
+        'as-link',
+        'rtl'
+      ],
+      'button-group': [
+        'basic',
+        'orientation',
+        'sizes',
+        'nested',
+        'separator',
+        'split',
+        'input',
+        'input-group',
+        'dropdown-menu',
+        'select',
+        'popover',
+        'rtl'
+      ],
+      spinner: ['basic', 'sizes', 'button', 'badge', 'input-group', 'empty', 'rtl']
+    } as const;
+    const functionBounds = {
+      button: ['function ButtonDocumentationExamples', 'interface ButtonGroupDocumentationExamplesProps'],
+      'button-group': ['function ButtonGroupDocumentationExamples', 'function SpinnerDocumentationExamples'],
+      spinner: ['function SpinnerDocumentationExamples', '/** A browser-smoke gallery']
+    } as const;
+
+    for (const [component, expectedIds] of Object.entries(expectations)) {
+      const documentation = uiProfileCatalogDocumentation[component as keyof typeof expectations];
+      expect(documentation.examples?.map((example) => example.id)).toEqual(expectedIds);
+      expect(documentation.composition?.length).toBeGreaterThanOrEqual(4);
+      expect(documentation.api?.length).toBeGreaterThan(0);
+      for (const example of documentation.examples ?? []) {
+        expect(example.code).toContain('@spfx-kit/ui-profile/');
+        expect(example.code).not.toMatch(/installation|React Aria|Radix/iu);
+      }
+
+      const [startMarker, endMarker] = functionBounds[component as keyof typeof functionBounds];
+      const functionSource = harnessSource.slice(harnessSource.indexOf(startMarker), harnessSource.indexOf(endMarker));
+      const liveIds = [...functionSource.matchAll(/id="([a-z0-9-]+)" title=/gu)].map((match) => match[1]);
+      expect(liveIds).toEqual(expectedIds);
+    }
+
+    expect(harnessSource).toContain("className={buttonVariants({ variant: 'outline' })}");
+    expect(harnessSource).toContain('aria-controls={selectContentId}');
+    expect(harnessSource).toContain('aria-controls={popoverContentId}');
+    expect(harnessSource).toContain('aria-controls={dropdownContentId}');
+  });
+
   it('keeps official component visuals and scoped host ownership intact', () => {
     const source = readFileSync(harnessPath, 'utf8');
 
-    expect(source).not.toContain('className=');
+    expect(source).not.toMatch(/className="(?:bg|text|border|shadow)-/u);
     expect(source).not.toMatch(/(?:id|aria-controls|aria-describedby|aria-labelledby)="catalog:/u);
     expect(source).toContain("useSpfxUiId('catalog:toast-portal')");
     expect(source).toContain('<ToastPortal id={toastPortalId}>');

@@ -35,7 +35,7 @@ import {
   BreadcrumbSeparator
 } from '@spfx-kit/ui-profile/breadcrumb';
 import { Bubble, BubbleContent, BubbleGroup } from '@spfx-kit/ui-profile/bubble';
-import { Button } from '@spfx-kit/ui-profile/button';
+import { Button, buttonVariants } from '@spfx-kit/ui-profile/button';
 import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from '@spfx-kit/ui-profile/button-group';
 import { Calendar } from '@spfx-kit/ui-profile/calendar';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@spfx-kit/ui-profile/card';
@@ -186,6 +186,29 @@ function CatalogToastList(): React.ReactElement {
         </Toast>
       ))}
     </>
+  );
+}
+
+interface CatalogDocumentationExampleProps {
+  children: React.ReactNode;
+  id: string;
+  title: string;
+}
+
+function CatalogDocumentationExample({ children, id, title }: CatalogDocumentationExampleProps): React.ReactElement {
+  return (
+    <div data-catalog-example={id}>
+      <h4>{title}</h4>
+      {children}
+    </div>
+  );
+}
+
+function CatalogInlineIcon({ position = 'inline-start' }: { position?: 'inline-start' | 'inline-end' }): React.ReactElement {
+  return (
+    <svg aria-hidden="true" data-icon={position} viewBox="0 0 16 16">
+      <path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -358,6 +381,310 @@ function BreadcrumbDocumentationExamples({
   );
 }
 
+function ButtonDocumentationExamples(): React.ReactElement {
+  return (
+    <div data-catalog-documentation-examples="button">
+      <CatalogDocumentationExample id="sizes" title="Sizes">
+        <ButtonGroup aria-label="Button sizes">
+          <Button size="xs">Extra small</Button>
+          <Button size="sm">Small</Button>
+          <Button>Default</Button>
+          <Button size="lg">Large</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="default" title="Default">
+        <Button>Button</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="outline" title="Outline">
+        <Button variant="outline">Outline</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="secondary" title="Secondary">
+        <Button variant="secondary">Secondary</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="ghost" title="Ghost">
+        <Button variant="ghost">Ghost</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="destructive" title="Destructive">
+        <Button variant="destructive">Delete</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="link" title="Link variant">
+        <Button variant="link">Link-styled action</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="icon" title="Icon button">
+        <Button aria-label="Create item" size="icon">
+          <CatalogInlineIcon />
+        </Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="with-icon" title="With icon">
+        <Button>
+          <CatalogInlineIcon />
+          Create branch
+        </Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rounded" title="Rounded">
+        <Button className="rounded-full">Get started</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="spinner" title="Spinner">
+        <Button disabled>
+          <Spinner aria-hidden="true" data-icon="inline-start" />
+          Generating
+        </Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="button-group" title="Button group">
+        <ButtonGroup aria-label="Message actions">
+          <Button variant="outline">Archive</Button>
+          <Button variant="outline">Report</Button>
+          <Button variant="outline">Snooze</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="as-link" title="As link">
+        <a className={buttonVariants({ variant: 'outline' })} href="#catalog-login">
+          Login
+        </a>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <ButtonGroup aria-label="إجراءات">
+              <Button>إرسال</Button>
+              <Button variant="destructive">حذف</Button>
+            </ButtonGroup>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
+interface ButtonGroupDocumentationExamplesProps {
+  dropdownContentId: string;
+  dropdownTriggerId: string;
+  inputId: string;
+  popoverContentId: string;
+  popoverTriggerId: string;
+  selectContentId: string;
+  selectId: string;
+  selectTriggerId: string;
+}
+
+function ButtonGroupDocumentationExamples({
+  dropdownContentId,
+  dropdownTriggerId,
+  inputId,
+  popoverContentId,
+  popoverTriggerId,
+  selectContentId,
+  selectId,
+  selectTriggerId
+}: ButtonGroupDocumentationExamplesProps): React.ReactElement {
+  return (
+    <div data-catalog-documentation-examples="button-group">
+      <CatalogDocumentationExample id="basic" title="Basic">
+        <ButtonGroup aria-label="Document actions">
+          <Button variant="outline">Archive</Button>
+          <Button variant="outline">Report</Button>
+          <Button variant="outline">Snooze</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="orientation" title="Orientation">
+        <ButtonGroup aria-label="Zoom controls" orientation="vertical">
+          <Button aria-label="Zoom in" size="icon" variant="outline">
+            <CatalogInlineIcon />
+          </Button>
+          <Button aria-label="Zoom out" size="icon" variant="outline">
+            −
+          </Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="sizes" title="Sizes">
+        <ButtonGroup aria-label="Small actions">
+          <Button size="sm">Small</Button>
+          <Button size="sm">Group</Button>
+        </ButtonGroup>
+        <ButtonGroup aria-label="Default actions">
+          <Button>Default</Button>
+          <Button>Group</Button>
+        </ButtonGroup>
+        <ButtonGroup aria-label="Large actions">
+          <Button size="lg">Large</Button>
+          <Button size="lg">Group</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="nested" title="Nested groups">
+        <ButtonGroup aria-label="Message composer">
+          <ButtonGroup>
+            <Button aria-label="Attach" size="icon" variant="outline">
+              <CatalogInlineIcon />
+            </Button>
+          </ButtonGroup>
+          <ButtonGroup>
+            <Input aria-label="Message" placeholder="Send a message…" />
+          </ButtonGroup>
+          <ButtonGroup>
+            <Button variant="outline">Send</Button>
+          </ButtonGroup>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="separator" title="Separator">
+        <ButtonGroup aria-label="Clipboard actions">
+          <Button>Copy</Button>
+          <ButtonGroupSeparator />
+          <Button>Paste</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="split" title="Split action">
+        <ButtonGroup aria-label="Create actions">
+          <Button>Create</Button>
+          <ButtonGroupSeparator />
+          <Button aria-label="More create options" size="icon">
+            <span aria-hidden="true">⌄</span>
+          </Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="input" title="Input">
+        <ButtonGroup aria-label="Search">
+          <Input id={inputId} placeholder="Search…" />
+          <Button variant="outline">Search</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="input-group" title="Input group">
+        <ButtonGroup aria-label="Send a message">
+          <InputGroup>
+            <InputGroupInput aria-label="Message" placeholder="Send a message…" />
+            <InputGroupAddon>
+              <InputGroupText>Draft</InputGroupText>
+            </InputGroupAddon>
+          </InputGroup>
+          <Button>Send</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="dropdown-menu" title="Dropdown menu">
+        <ButtonGroup aria-label="Follow actions">
+          <Button>Follow</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-controls={dropdownContentId}
+              aria-label="More follow options"
+              id={dropdownTriggerId}
+              render={<Button size="icon" />}
+            >
+              ⌄
+            </DropdownMenuTrigger>
+            <DropdownMenuContent id={dropdownContentId}>
+              <DropdownMenuGroup>
+                <DropdownMenuItem>Follow quietly</DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="select" title="Select">
+        <ButtonGroup aria-label="Amount and currency">
+          <ButtonGroupText>$</ButtonGroupText>
+          <Input aria-label="Amount" defaultValue="10.00" />
+          <Select defaultValue="usd" id={selectId}>
+            <SelectTrigger aria-controls={selectContentId} aria-label="Currency" id={selectTriggerId}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent id={selectContentId}>
+              <SelectGroup>
+                <SelectItem value="usd">USD</SelectItem>
+                <SelectItem value="eur">EUR</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="popover" title="Popover">
+        <ButtonGroup aria-label="Assistant actions">
+          <Button>Copilot</Button>
+          <Popover>
+            <PopoverTrigger
+              aria-controls={popoverContentId}
+              aria-label="Open assistant options"
+              id={popoverTriggerId}
+              render={<Button size="icon" />}
+            >
+              ⌄
+            </PopoverTrigger>
+            <PopoverContent id={popoverContentId}>
+              <PopoverTitle>Assistant options</PopoverTitle>
+              <PopoverDescription>Choose how the assistant should respond.</PopoverDescription>
+            </PopoverContent>
+          </Popover>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <ButtonGroup aria-label="إجراءات">
+              <Button variant="outline">أرشفة</Button>
+              <Button variant="outline">تقرير</Button>
+              <Button variant="outline">تأجيل</Button>
+            </ButtonGroup>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
+function SpinnerDocumentationExamples(): React.ReactElement {
+  return (
+    <div data-catalog-documentation-examples="spinner">
+      <CatalogDocumentationExample id="basic" title="Basic">
+        <Spinner aria-label="Loading" />
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="sizes" title="Sizes">
+        <Spinner aria-label="Loading" className="size-6" />
+        <Spinner aria-label="Loading" className="size-8" />
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="button" title="Button">
+        <Button disabled>
+          <Spinner aria-hidden="true" data-icon="inline-start" />
+          Loading
+        </Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="badge" title="Badge">
+        <Badge>
+          <Spinner aria-hidden="true" data-icon="inline-start" />
+          Syncing
+        </Badge>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="input-group" title="Input group">
+        <InputGroup>
+          <InputGroupInput aria-label="Message" placeholder="Send a message…" />
+          <InputGroupAddon>
+            <Spinner aria-hidden="true" />
+            <InputGroupText>Validating…</InputGroupText>
+          </InputGroupAddon>
+        </InputGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="empty" title="Empty state">
+        <Empty>
+          <EmptyHeader>
+            <Spinner aria-hidden="true" />
+            <EmptyTitle>Processing your request</EmptyTitle>
+            <EmptyDescription>Please wait while the request completes.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline">Cancel</Button>
+          </EmptyContent>
+        </Empty>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <span>
+              <Spinner aria-hidden="true" /> جاري معالجة الدفع…
+            </span>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
 /** A browser-smoke gallery for every React 17-compatible public catalog subpath. */
 export function UiProfileCatalogHarness({
   activeComponent
@@ -515,17 +842,30 @@ export function UiProfileCatalogHarness({
       </CatalogSample>
 
       <CatalogSample component="button" title="Button">
-        <Button>Button</Button>
+        {activeComponent === 'button' ? <ButtonDocumentationExamples /> : <Button>Button</Button>}
       </CatalogSample>
 
       <CatalogSample component="button-group" title="Button Group">
-        <ButtonGroup>
-          <Button variant="outline">Previous</Button>
-          <ButtonGroupSeparator />
-          <ButtonGroupText>1 of 3</ButtonGroupText>
-          <ButtonGroupSeparator />
-          <Button variant="outline">Next</Button>
-        </ButtonGroup>
+        {activeComponent === 'button-group' ? (
+          <ButtonGroupDocumentationExamples
+            dropdownContentId={dropdownContentId}
+            dropdownTriggerId={dropdownTriggerId}
+            inputId={inputId}
+            popoverContentId={popoverContentId}
+            popoverTriggerId={popoverTriggerId}
+            selectContentId={selectContentId}
+            selectId={selectId}
+            selectTriggerId={selectTriggerId}
+          />
+        ) : (
+          <ButtonGroup aria-label="Pagination actions">
+            <Button variant="outline">Previous</Button>
+            <ButtonGroupSeparator />
+            <ButtonGroupText>1 of 3</ButtonGroupText>
+            <ButtonGroupSeparator />
+            <Button variant="outline">Next</Button>
+          </ButtonGroup>
+        )}
       </CatalogSample>
 
       <CatalogSample component="calendar" title="Calendar">
@@ -902,7 +1242,7 @@ export function UiProfileCatalogHarness({
       </CatalogSample>
 
       <CatalogSample component="spinner" title="Spinner">
-        <Spinner aria-label="Loading catalog" />
+        {activeComponent === 'spinner' ? <SpinnerDocumentationExamples /> : <Spinner aria-label="Loading catalog" />}
       </CatalogSample>
 
       <CatalogSample component="switch" title="Switch">

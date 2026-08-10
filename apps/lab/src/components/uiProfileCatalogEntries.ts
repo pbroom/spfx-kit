@@ -89,6 +89,19 @@ export interface UiProfileCatalogDocumentation {
   compatibilityNotes?: readonly string[];
 }
 
+function publicExample(
+  id: string,
+  title: string,
+  summary: string,
+  imports: ReadonlyArray<readonly [subpath: UiProfileCatalogComponentId | '', names: string]>,
+  jsx: string
+): UiProfileCatalogExampleDocumentation {
+  const importCode = imports
+    .map(([subpath, names]) => `import { ${names} } from '@spfx-kit/ui-profile${subpath ? `/${subpath}` : ''}';`)
+    .join('\n');
+  return { id, title, summary, code: `${importCode}\n\n${jsx}` };
+}
+
 export const uiProfileCatalogDocumentation: Record<UiProfileCatalogComponentId, UiProfileCatalogDocumentation> = {
   accordion: {
     primaryExport: 'Accordion',
@@ -321,18 +334,38 @@ import {
       }
     ],
     api: [
-      { name: 'Breadcrumb', element: 'nav', props: [{ name: 'className', type: 'string', description: 'Adds classes to the navigation landmark.' }] },
-      { name: 'BreadcrumbList', element: 'ol', props: [{ name: 'className', type: 'string', description: 'Adds classes to the ordered list.' }] },
-      { name: 'BreadcrumbItem', element: 'li', props: [{ name: 'className', type: 'string', description: 'Adds classes to an individual hierarchy item.' }] },
+      {
+        name: 'Breadcrumb',
+        element: 'nav',
+        props: [{ name: 'className', type: 'string', description: 'Adds classes to the navigation landmark.' }]
+      },
+      {
+        name: 'BreadcrumbList',
+        element: 'ol',
+        props: [{ name: 'className', type: 'string', description: 'Adds classes to the ordered list.' }]
+      },
+      {
+        name: 'BreadcrumbItem',
+        element: 'li',
+        props: [{ name: 'className', type: 'string', description: 'Adds classes to an individual hierarchy item.' }]
+      },
       {
         name: 'BreadcrumbLink',
         element: 'a',
         props: [
-          { name: 'render', type: 'ReactElement | function', description: 'Composes a custom link element through Base UI without nested anchors.' },
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Composes a custom link element through Base UI without nested anchors.'
+          },
           { name: 'className', type: 'string', description: 'Adds classes to the link.' }
         ]
       },
-      { name: 'BreadcrumbPage', element: 'span', props: [{ name: 'className', type: 'string', description: 'Adds classes to the current-page label.' }] },
+      {
+        name: 'BreadcrumbPage',
+        element: 'span',
+        props: [{ name: 'className', type: 'string', description: 'Adds classes to the current-page label.' }]
+      },
       {
         name: 'BreadcrumbSeparator',
         element: 'li',
@@ -341,7 +374,11 @@ import {
           { name: 'className', type: 'string', description: 'Adds classes to the separator.' }
         ]
       },
-      { name: 'BreadcrumbEllipsis', element: 'span', props: [{ name: 'className', type: 'string', description: 'Adds classes to the collapsed-level indicator.' }] }
+      {
+        name: 'BreadcrumbEllipsis',
+        element: 'span',
+        props: [{ name: 'className', type: 'string', description: 'Adds classes to the collapsed-level indicator.' }]
+      }
     ]
   },
   bubble: {
@@ -350,11 +387,350 @@ import {
   },
   button: {
     primaryExport: 'Button',
-    summary: 'Triggers an action using the shared profile’s accessible interaction states.'
+    summary: 'Triggers an action using the shared profile’s accessible interaction states.',
+    composition: [
+      'Choose a built-in variant and size before adding layout classes.',
+      'Icon-only buttons need an accessible name; inline icons use data-icon for profile-owned spacing.',
+      'Loading actions compose Spinner with a disabled Button instead of an invented loading prop.',
+      'Use buttonVariants on a plain anchor for navigation because Base UI Button intentionally retains button semantics.'
+    ],
+    examples: [
+      publicExample(
+        'sizes',
+        'Sizes',
+        'The built-in size scale covers labelled and icon-only actions.',
+        [['button', 'Button']],
+        '<><Button size="xs">Extra small</Button><Button size="sm">Small</Button><Button>Default</Button><Button size="lg">Large</Button></>'
+      ),
+      publicExample('default', 'Default', 'The primary action treatment.', [['button', 'Button']], '<Button>Button</Button>'),
+      publicExample(
+        'outline',
+        'Outline',
+        'A bordered action with lower visual priority.',
+        [['button', 'Button']],
+        '<Button variant="outline">Outline</Button>'
+      ),
+      publicExample(
+        'secondary',
+        'Secondary',
+        'A filled secondary action.',
+        [['button', 'Button']],
+        '<Button variant="secondary">Secondary</Button>'
+      ),
+      publicExample(
+        'ghost',
+        'Ghost',
+        'A low-emphasis action without a persistent surface.',
+        [['button', 'Button']],
+        '<Button variant="ghost">Ghost</Button>'
+      ),
+      publicExample(
+        'destructive',
+        'Destructive',
+        'A destructive action using the semantic danger treatment.',
+        [['button', 'Button']],
+        '<Button variant="destructive">Delete</Button>'
+      ),
+      publicExample(
+        'link',
+        'Link variant',
+        'A button action presented with link-like styling.',
+        [['button', 'Button']],
+        '<Button variant="link">Link-styled action</Button>'
+      ),
+      publicExample(
+        'icon',
+        'Icon button',
+        'A compact icon-only action with an explicit accessible label.',
+        [['button', 'Button']],
+        '<Button aria-label="Create item" size="icon"><span aria-hidden>+</span></Button>'
+      ),
+      publicExample(
+        'with-icon',
+        'With icon',
+        'A labelled action whose icon participates in profile-owned spacing.',
+        [['button', 'Button']],
+        '<Button><span aria-hidden data-icon="inline-start">+</span>Create branch</Button>'
+      ),
+      publicExample(
+        'rounded',
+        'Rounded',
+        'A pill-shaped presentation using the official layout utility.',
+        [['button', 'Button']],
+        '<Button className="rounded-full">Get started</Button>'
+      ),
+      publicExample(
+        'spinner',
+        'Spinner',
+        'A disabled action communicates that its operation is still running.',
+        [
+          ['button', 'Button'],
+          ['spinner', 'Spinner']
+        ],
+        '<Button disabled><Spinner aria-hidden data-icon="inline-start" />Generating</Button>'
+      ),
+      publicExample(
+        'button-group',
+        'Button group',
+        'Closely related actions can share a labelled group surface.',
+        [
+          ['button', 'Button'],
+          ['button-group', 'ButtonGroup']
+        ],
+        '<ButtonGroup aria-label="Message actions"><Button variant="outline">Archive</Button><Button variant="outline">Report</Button><Button variant="outline">Snooze</Button></ButtonGroup>'
+      ),
+      publicExample(
+        'as-link',
+        'As link',
+        'Navigation uses a semantic anchor with the exported variant helper.',
+        [['button', 'buttonVariants']],
+        '<a className={buttonVariants({ variant: "outline" })} href="/login">Login</a>'
+      ),
+      publicExample(
+        'rtl',
+        'Right-to-left',
+        'Action order and inline spacing follow the nearest reading direction.',
+        [
+          ['direction', 'DirectionProvider'],
+          ['button', 'Button']
+        ],
+        '<div dir="rtl"><DirectionProvider direction="rtl"><Button>إرسال</Button></DirectionProvider></div>'
+      )
+    ],
+    api: [
+      {
+        name: 'Button',
+        element: 'button',
+        props: [
+          {
+            name: 'variant',
+            type: '"default" | "outline" | "ghost" | "destructive" | "secondary" | "link"',
+            defaultValue: '"default"',
+            description: 'Selects the semantic visual treatment.'
+          },
+          {
+            name: 'size',
+            type: '"default" | "xs" | "sm" | "lg" | "icon" | "icon-xs" | "icon-sm" | "icon-lg"',
+            defaultValue: '"default"',
+            description: 'Selects the control size.'
+          },
+          { name: 'disabled', type: 'boolean', defaultValue: 'false', description: 'Prevents activation.' },
+          {
+            name: 'focusableWhenDisabled',
+            type: 'boolean',
+            defaultValue: 'false',
+            description: 'Keeps a disabled Base UI button in the focus order when required.'
+          },
+          {
+            name: 'nativeButton',
+            type: 'boolean',
+            defaultValue: 'true',
+            description: 'Controls Base UI native-button behavior; keep true for actions.'
+          },
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Composes a custom rendered element while retaining button semantics.'
+          },
+          { name: 'className', type: 'string', description: 'Adds layout-oriented classes to the button.' }
+        ]
+      }
+    ]
   },
   'button-group': {
     primaryExport: 'ButtonGroup',
-    summary: 'Arranges closely related actions as one visually connected control set.'
+    summary: 'Arranges closely related actions as one visually connected control set.',
+    composition: [
+      'ButtonGroup supplies role="group"; give every group an accessible name.',
+      'Use ButtonGroup for actions and ToggleGroup for persistent selected state.',
+      'Button, Input, InputGroup, Select, and owned overlay triggers can participate in a group.',
+      'ButtonGroupSeparator divides filled actions; outlined buttons already provide their own boundary.'
+    ],
+    examples: [
+      publicExample(
+        'basic',
+        'Basic',
+        'Three related document actions share a labelled group.',
+        [
+          ['button', 'Button'],
+          ['button-group', 'ButtonGroup']
+        ],
+        '<ButtonGroup aria-label="Document actions"><Button variant="outline">Archive</Button><Button variant="outline">Report</Button><Button variant="outline">Snooze</Button></ButtonGroup>'
+      ),
+      publicExample(
+        'orientation',
+        'Orientation',
+        'Vertical orientation stacks a compact control pair.',
+        [
+          ['button', 'Button'],
+          ['button-group', 'ButtonGroup']
+        ],
+        '<ButtonGroup aria-label="Zoom controls" orientation="vertical"><Button aria-label="Zoom in" size="icon">+</Button><Button aria-label="Zoom out" size="icon">−</Button></ButtonGroup>'
+      ),
+      publicExample(
+        'sizes',
+        'Sizes',
+        'Each child Button controls its size while the group preserves connected edges.',
+        [
+          ['button', 'Button'],
+          ['button-group', 'ButtonGroup']
+        ],
+        '<ButtonGroup aria-label="Large actions"><Button size="lg">Large</Button><Button size="lg">Group</Button></ButtonGroup>'
+      ),
+      publicExample(
+        'nested',
+        'Nested groups',
+        'Nested groups divide a compound composer into independently meaningful regions.',
+        [
+          ['button', 'Button'],
+          ['button-group', 'ButtonGroup'],
+          ['input', 'Input']
+        ],
+        '<ButtonGroup aria-label="Message composer"><ButtonGroup aria-label="Attachments"><Button aria-label="Attach" size="icon">+</Button></ButtonGroup><ButtonGroup aria-label="Message"><Input aria-label="Message" /></ButtonGroup><ButtonGroup aria-label="Send"><Button>Send</Button></ButtonGroup></ButtonGroup>'
+      ),
+      publicExample(
+        'separator',
+        'Separator',
+        'A separator reinforces the boundary between adjacent filled actions.',
+        [
+          ['button', 'Button'],
+          ['button-group', 'ButtonGroup, ButtonGroupSeparator']
+        ],
+        '<ButtonGroup aria-label="Clipboard actions"><Button>Copy</Button><ButtonGroupSeparator /><Button>Paste</Button></ButtonGroup>'
+      ),
+      publicExample(
+        'split',
+        'Split action',
+        'A primary action and its options trigger form one split control.',
+        [
+          ['button', 'Button'],
+          ['button-group', 'ButtonGroup, ButtonGroupSeparator']
+        ],
+        '<ButtonGroup aria-label="Create actions"><Button>Create</Button><ButtonGroupSeparator /><Button aria-label="More create options" size="icon">⌄</Button></ButtonGroup>'
+      ),
+      publicExample(
+        'input',
+        'Input',
+        'An input and action share a single search control boundary.',
+        [
+          ['button', 'Button'],
+          ['button-group', 'ButtonGroup'],
+          ['input', 'Input']
+        ],
+        '<ButtonGroup aria-label="Search"><Input aria-label="Search terms" placeholder="Search…" /><Button>Search</Button></ButtonGroup>'
+      ),
+      publicExample(
+        'input-group',
+        'Input group',
+        'InputGroup can be nested beside a send action for richer input context.',
+        [
+          ['button', 'Button'],
+          ['button-group', 'ButtonGroup'],
+          ['input-group', 'InputGroup, InputGroupAddon, InputGroupInput, InputGroupText']
+        ],
+        '<ButtonGroup aria-label="Send a message"><InputGroup><InputGroupInput aria-label="Message" /><InputGroupAddon><InputGroupText>Draft</InputGroupText></InputGroupAddon></InputGroup><Button>Send</Button></ButtonGroup>'
+      ),
+      publicExample(
+        'dropdown-menu',
+        'Dropdown menu',
+        'A split menu uses host-owned trigger and content IDs.',
+        [
+          ['', 'useSpfxUiId'],
+          ['button', 'Button'],
+          ['button-group', 'ButtonGroup'],
+          ['dropdown-menu', 'DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger']
+        ],
+        `const triggerId = useSpfxUiId('docs:button-group:menu-trigger');
+const contentId = useSpfxUiId('docs:button-group:menu-content');
+
+<ButtonGroup aria-label="Follow actions"><Button>Follow</Button><DropdownMenu><DropdownMenuTrigger aria-controls={contentId} aria-label="More follow options" id={triggerId} render={<Button size="icon" />}>⌄</DropdownMenuTrigger><DropdownMenuContent id={contentId}><DropdownMenuGroup><DropdownMenuItem>Follow quietly</DropdownMenuItem></DropdownMenuGroup></DropdownMenuContent></DropdownMenu></ButtonGroup>`
+      ),
+      publicExample(
+        'select',
+        'Select',
+        'A value input and owned Select form a compact amount control.',
+        [
+          ['', 'useSpfxUiId'],
+          ['button-group', 'ButtonGroup, ButtonGroupText'],
+          ['input', 'Input'],
+          ['select', 'Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue']
+        ],
+        `const rootId = useSpfxUiId('docs:button-group:select');
+const triggerId = useSpfxUiId('docs:button-group:select-trigger');
+const contentId = useSpfxUiId('docs:button-group:select-content');
+
+<ButtonGroup aria-label="Amount and currency"><ButtonGroupText>$</ButtonGroupText><Input aria-label="Amount" /><Select defaultValue="usd" id={rootId}><SelectTrigger aria-controls={contentId} aria-label="Currency" id={triggerId}><SelectValue /></SelectTrigger><SelectContent id={contentId}><SelectGroup><SelectItem value="usd">USD</SelectItem></SelectGroup></SelectContent></Select></ButtonGroup>`
+      ),
+      publicExample(
+        'popover',
+        'Popover',
+        'An owned Popover supplies supporting options for a grouped action.',
+        [
+          ['', 'useSpfxUiId'],
+          ['button', 'Button'],
+          ['button-group', 'ButtonGroup'],
+          ['popover', 'Popover, PopoverContent, PopoverDescription, PopoverTitle, PopoverTrigger']
+        ],
+        `const triggerId = useSpfxUiId('docs:button-group:popover-trigger');
+const contentId = useSpfxUiId('docs:button-group:popover-content');
+
+<ButtonGroup aria-label="Assistant actions"><Button>Copilot</Button><Popover><PopoverTrigger aria-controls={contentId} aria-label="Open assistant options" id={triggerId} render={<Button size="icon" />}>⌄</PopoverTrigger><PopoverContent id={contentId}><PopoverTitle>Assistant options</PopoverTitle><PopoverDescription>Choose a response mode.</PopoverDescription></PopoverContent></Popover></ButtonGroup>`
+      ),
+      publicExample(
+        'rtl',
+        'Right-to-left',
+        'The connected control follows the nearest RTL direction.',
+        [
+          ['direction', 'DirectionProvider'],
+          ['button', 'Button'],
+          ['button-group', 'ButtonGroup']
+        ],
+        '<div dir="rtl"><DirectionProvider direction="rtl"><ButtonGroup aria-label="إجراءات"><Button variant="outline">أرشفة</Button><Button variant="outline">تقرير</Button><Button variant="outline">تأجيل</Button></ButtonGroup></DirectionProvider></div>'
+      )
+    ],
+    api: [
+      {
+        name: 'ButtonGroup',
+        element: 'div',
+        props: [
+          {
+            name: 'orientation',
+            type: '"horizontal" | "vertical"',
+            defaultValue: '"horizontal"',
+            description: 'Controls the connected layout direction.'
+          },
+          { name: 'aria-label', type: 'string', description: 'Names the action group when no visible label exists.' },
+          { name: 'className', type: 'string', description: 'Adds layout-oriented classes.' }
+        ]
+      },
+      {
+        name: 'ButtonGroupSeparator',
+        element: 'div',
+        props: [
+          {
+            name: 'orientation',
+            type: '"horizontal" | "vertical"',
+            defaultValue: '"vertical"',
+            description: 'Controls the separator line direction.'
+          }
+        ]
+      },
+      {
+        name: 'ButtonGroupText',
+        element: 'div',
+        props: [
+          {
+            name: 'render',
+            type: 'ReactElement | function',
+            description: 'Uses the Base UI render contract to compose a label or other text element.'
+          },
+          { name: 'className', type: 'string', description: 'Adds layout-oriented classes.' }
+        ]
+      }
+    ],
+    compatibilityNotes: [
+      'The public Base UI package exposes render for ButtonGroupText composition; examples do not use the alternate asChild API.'
+    ]
   },
   calendar: {
     primaryExport: 'Calendar',
@@ -506,7 +882,104 @@ import {
   },
   spinner: {
     primaryExport: 'Spinner',
-    summary: 'Signals that a short operation is currently in progress.'
+    summary: 'Signals that a short operation is currently in progress.',
+    composition: [
+      'Use a labelled Spinner when it is the only loading announcement.',
+      'Set aria-hidden when nearby text or a parent status already communicates the same loading state.',
+      'Inside Button or Badge, data-icon gives the spinner the shared inline spacing.',
+      'Size customization uses profile-compiled size utilities; replacing the shared icon belongs in the package source, not a consumer page.'
+    ],
+    examples: [
+      publicExample(
+        'basic',
+        'Basic',
+        'A standalone spinner carries its own accessible loading label.',
+        [['spinner', 'Spinner']],
+        '<Spinner aria-label="Loading" />'
+      ),
+      publicExample(
+        'sizes',
+        'Sizes',
+        'Profile-compiled size utilities scale the SVG without changing its semantics.',
+        [['spinner', 'Spinner']],
+        '<><Spinner aria-label="Loading" className="size-6" /><Spinner aria-label="Loading" className="size-8" /></>'
+      ),
+      publicExample(
+        'button',
+        'Button',
+        'A disabled Button owns the visible loading label while the spinner remains decorative.',
+        [
+          ['button', 'Button'],
+          ['spinner', 'Spinner']
+        ],
+        '<Button disabled><Spinner aria-hidden data-icon="inline-start" />Loading</Button>'
+      ),
+      publicExample(
+        'badge',
+        'Badge',
+        'A compact status badge can pair text with a decorative spinner.',
+        [
+          ['badge', 'Badge'],
+          ['spinner', 'Spinner']
+        ],
+        '<Badge><Spinner aria-hidden data-icon="inline-start" />Syncing</Badge>'
+      ),
+      publicExample(
+        'input-group',
+        'Input group',
+        'Validation progress appears beside an input without replacing its accessible name.',
+        [
+          ['input-group', 'InputGroup, InputGroupAddon, InputGroupInput, InputGroupText'],
+          ['spinner', 'Spinner']
+        ],
+        '<InputGroup><InputGroupInput aria-label="Message" /><InputGroupAddon><Spinner aria-hidden /><InputGroupText>Validating…</InputGroupText></InputGroupAddon></InputGroup>'
+      ),
+      publicExample(
+        'empty',
+        'Empty state',
+        'An empty-state composition explains a longer operation and offers cancellation.',
+        [
+          ['button', 'Button'],
+          ['empty', 'Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle'],
+          ['spinner', 'Spinner']
+        ],
+        '<Empty><EmptyHeader><Spinner aria-hidden /><EmptyTitle>Processing your request</EmptyTitle><EmptyDescription>Please wait while the request completes.</EmptyDescription></EmptyHeader><EmptyContent><Button variant="outline">Cancel</Button></EmptyContent></Empty>'
+      ),
+      publicExample(
+        'rtl',
+        'Right-to-left',
+        'The status text follows the nearest reading direction.',
+        [
+          ['direction', 'DirectionProvider'],
+          ['spinner', 'Spinner']
+        ],
+        '<div dir="rtl"><DirectionProvider direction="rtl"><span><Spinner aria-hidden /> جاري معالجة الدفع…</span></DirectionProvider></div>'
+      )
+    ],
+    api: [
+      {
+        name: 'Spinner',
+        element: 'svg',
+        props: [
+          { name: 'aria-label', type: 'string', description: 'Names a standalone loading status.' },
+          {
+            name: 'aria-hidden',
+            type: 'boolean',
+            defaultValue: 'false',
+            description: 'Hides a decorative spinner when adjacent text already announces the state.'
+          },
+          {
+            name: 'data-icon',
+            type: '"inline-start" | "inline-end"',
+            description: 'Uses component-owned spacing inside controls and badges.'
+          },
+          { name: 'className', type: 'string', description: 'Adds layout or profile-compiled sizing utilities.' }
+        ]
+      }
+    ],
+    compatibilityNotes: [
+      'The package owns the shared spinner glyph; consumer pages can size or compose it but do not replace its implementation.'
+    ]
   },
   switch: {
     primaryExport: 'Switch',
