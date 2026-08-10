@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
-import { profileId, scopeValue } from 'virtual:spfx-ui-profile-delivery';
-import { createSpfxUiHost, SpfxUiHostProvider } from '../../../packages/ui-profile/normalized/src/lib/ui-root';
+import { createSpfxUiHost, SpfxUiHostProvider } from '@spfx-kit/ui-profile';
+import '@spfx-kit/ui-profile/styles.css';
 import { LabApp } from './LabApp';
 import { createLabTheme } from '@spfx-kit/spfx-lab-runtime';
 import { createLabUiThemeTokens } from './ui-profile/lab-theme';
@@ -22,8 +22,6 @@ if (isUiProfileContractRoute) {
     portalParent: root,
     targetDocument: root.ownerDocument,
     instanceId: 'spfx-kit-lab-shell',
-    profileId,
-    scopeValue,
     theme: createLabUiThemeTokens('light', createLabTheme('light'))
   });
   ReactDom.render(

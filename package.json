@@ -41,7 +41,7 @@
     "lint": "eslint --no-config-lookup --config eslint.config.mjs .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "pretest": "npm --workspace @spfx-kit/ui-profile run profile:prepare:base-ui",
+    "pretest": "npm --workspace @spfx-kit/ui-profile run build:runtime",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:cdn": "node scripts/tests/run-lab-cdn-e2e.mjs",

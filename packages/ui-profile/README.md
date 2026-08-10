@@ -1,8 +1,26 @@
-# React 17 Base Nova source profile
+# Shared React 17 UI foundation
 
-`@spfx-kit/ui-profile` is a private, tooling-only workspace. It records the
-reviewed `spfx-react17-base-nova-v1` registry inputs and the deterministic
-normalization needed by the first ADR-0001 implementation boundary.
+`@spfx-kit/ui-profile` is the shared UI source of truth for the SPFx Kit Lab
+and SPFx application builds. It records the reviewed
+`spfx-react17-base-nova-v1` registry inputs, owns the public component and host
+API, and produces the one scoped stylesheet consumed by every supported build
+adapter. The workspace remains `private` because this change does not authorize
+an npm publication or release.
+
+Consumers import only declared package entry points. Components use direct
+subpaths so a consumer does not traverse a large component barrel:
+
+```ts
+import { createSpfxUiHost, SpfxUiHostProvider } from '@spfx-kit/ui-profile';
+import { Button } from '@spfx-kit/ui-profile/button';
+import '@spfx-kit/ui-profile/styles.css';
+```
+
+The root host factory binds the immutable profile ID and CSS scope shipped by
+the package. Consumers supply only their mount point, portal parent, owning
+document, stable instance ID, and theme tokens. Vite uses
+`@spfx-kit/ui-profile/vite`; Heft/Webpack and retained Gulp use
+`@spfx-kit/ui-profile/spfx-webpack` and `@spfx-kit/ui-profile/spfx-gulp`.
 
 Normal builds and verification are offline. They read the committed raw,
 canonical, and normalized snapshots and fail when a snapshot is missing or its
@@ -33,11 +51,11 @@ path-injected metadata are preserved and fail closed. Do not manually remove a
 journaled generation lock, staging directory, or backup. Hard-kill regression
 tests cover every backup, install, commit, cleanup, and journal boundary.
 
-All workspace package requirements are development-only, so production installs
-add no profile dependency surface. The profile still records the exact direct
-production dependencies and transitive closure that its reviewed sources would
-eventually require. The normalized sources are evidence inputs, not a production
-package export.
+The Base UI, class, icon, and merge utilities required by the reviewed source
+are package dependencies. React and ReactDOM remain exact `17.0.1` peers so the
+host supplies one SPFx-compatible runtime. Normalized files remain generated
+evidence inputs; the package export map, not their filesystem layout, defines
+the supported API.
 
 Normalized profile-owned class literals use Tailwind 4's `skui:` prefix as the
 first candidate segment, including variants, named groups, arbitrary selectors,
@@ -103,10 +121,23 @@ dependency on SPFx packages. This first host contract deliberately accepts an
 evidenced integration boundary. Consumers must unmount React before disposing
 the host.
 
+The generated `.prepared/base-ui` tree is an explicit compatibility boundary
+for the pinned Base UI `1.6.0` declaration, popup-lifecycle, and deterministic-ID
+corrections. Public Vite, Webpack, and Gulp adapters own its alias, and packed
+artifacts include the verified prepared tree plus the inputs required to rebuild
+it. Source-editor exports retain their digest-bound app-local preparation and
+vendoring adapter because those downstream repositories require committed
+source rather than a package install. Application code must not reach into
+`normalized/`, `owned/`, `generated/`, or `scripts/` as imports.
+
 The Lab query-route canary establishes same-document Vite/browser proof for two
-concurrent roots and their generated components. It does not yet establish
-secondary-document or independent-bundle browser proof, Heft/Gulp package
-proof, SharePoint workbench proof, or standalone-export proof.
+concurrent roots and their generated components. The tracked `hello-card` canary
+establishes the public CSS and Webpack adapter through a production Heft build
+and inspected `.sppkg`, including the host and Button runtime. A tarball-installed
+fixture proves Node10 type resolution and a production Vite bundle through the
+public adapter. These checks do not yet establish secondary-document or
+independent-bundle browser proof, a tarball-installed SPFx Heft build, Gulp
+runtime proof, SharePoint workbench proof, or standalone-export proof.
 Its public 1,940-option Combobox fixture proves exact-scale cardinality and
 basic DOM behavior only; it does not claim the real-font workload required for
 the final ADR-0001 Phase 1 exit.

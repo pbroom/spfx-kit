@@ -2,38 +2,16 @@ import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import { act, Simulate } from 'react-dom/test-utils';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { Button } from '../../../packages/ui-profile/normalized/src/components/ui/button';
-import { Checkbox } from '../../../packages/ui-profile/normalized/src/components/ui/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogTrigger
-} from '../../../packages/ui-profile/normalized/src/components/ui/dialog';
-import { Input } from '../../../packages/ui-profile/normalized/src/components/ui/input';
-import { Switch } from '../../../packages/ui-profile/normalized/src/components/ui/switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '../../../packages/ui-profile/normalized/src/components/ui/select';
-import { Spinner } from '../../../packages/ui-profile/normalized/src/components/ui/spinner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../packages/ui-profile/normalized/src/components/ui/tabs';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
-} from '../../../packages/ui-profile/normalized/src/components/ui/tooltip';
-import {
-  SpfxUiHostProvider,
-  createSpfxUiHost,
-  mapSharePointTheme,
-  type SpfxUiHost
-} from '../../../packages/ui-profile/normalized/src/lib/ui-root';
-import profile from '../../../packages/ui-profile/profile.json';
+import { Button } from '@spfx-kit/ui-profile/button';
+import { Checkbox } from '@spfx-kit/ui-profile/checkbox';
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@spfx-kit/ui-profile/dialog';
+import { Input } from '@spfx-kit/ui-profile/input';
+import { Switch } from '@spfx-kit/ui-profile/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@spfx-kit/ui-profile/select';
+import { Spinner } from '@spfx-kit/ui-profile/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@spfx-kit/ui-profile/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@spfx-kit/ui-profile/tooltip';
+import { SpfxUiHostProvider, createSpfxUiHost, mapSharePointTheme, type SpfxUiHost } from '@spfx-kit/ui-profile';
 
 const h = React.createElement;
 let container: HTMLDivElement;
@@ -48,8 +26,6 @@ beforeEach(() => {
     portalParent: mountPoint,
     targetDocument: document,
     instanceId: 'react17-exit-root',
-    profileId: profile.profileId,
-    scopeValue: profile.css.scopeValue,
     theme: mapSharePointTheme(testSharePointTheme(false))
   });
   container = host.appRoot as HTMLDivElement;

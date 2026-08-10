@@ -1,14 +1,9 @@
 import * as React from 'react';
-import { Button } from '../../../../packages/ui-profile/normalized/src/components/ui/button';
-import { Field, FieldLabel } from '../../../../packages/ui-profile/normalized/src/components/ui/field';
-import { Input } from '../../../../packages/ui-profile/normalized/src/components/ui/input';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTitle,
-  PopoverTrigger
-} from '../../../../packages/ui-profile/normalized/src/components/ui/popover';
-import { useSpfxUiDerivedId, useSpfxUiHost } from '../../../../packages/ui-profile/normalized/src/lib/ui-root';
+import { Button } from '@spfx-kit/ui-profile/button';
+import { Field, FieldLabel } from '@spfx-kit/ui-profile/field';
+import { Input } from '@spfx-kit/ui-profile/input';
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@spfx-kit/ui-profile/popover';
+import { useSpfxUiDerivedId, useSpfxUiHost } from '@spfx-kit/ui-profile';
 import {
   clampPercentage,
   clampUnit,

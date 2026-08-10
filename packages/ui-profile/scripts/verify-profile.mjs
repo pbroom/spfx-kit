@@ -76,8 +76,16 @@ const expectedDirectDependencies = {
   'tailwind-merge': '3.6.0'
 };
 
+const expectedRuntimeDependencies = Object.fromEntries(
+  Object.entries(expectedDirectDependencies).filter(([name]) => name !== 'react' && name !== 'react-dom')
+);
+
+const expectedPeerDependencies = {
+  react: '17.0.1',
+  'react-dom': '17.0.1'
+};
+
 const expectedDevDependencies = {
-  ...expectedDirectDependencies,
   '@floating-ui/core': '1.7.5',
   '@floating-ui/dom': '1.7.6',
   '@floating-ui/react-dom': '2.1.8',
@@ -90,6 +98,8 @@ const expectedDevDependencies = {
   postcss: '8.5.19',
   'postcss-selector-parser': '7.1.4',
   'postcss-value-parser': '4.2.0',
+  react: '17.0.1',
+  'react-dom': '17.0.1',
   shadcn: '4.16.1',
   tailwindcss: '4.3.3',
   'tw-animate-css': '1.4.0',
@@ -125,6 +135,8 @@ const expectedCssToolchain = {
 };
 
 const expectedScripts = {
+  'build:runtime':
+    'npm run profile:prepare:base-ui && node ./scripts/clean-runtime.mjs && tsc -p ./tsconfig.build.json && node ./scripts/finalize-runtime-imports.mjs',
   'css:build': 'node ./scripts/build-tailwind-css.mjs',
   'css:verify': 'node ./scripts/verify-tailwind-css.mjs',
   'delivery:verify': 'node ./scripts/verify-delivery-artifact.mjs',
@@ -139,7 +151,8 @@ const expectedScripts = {
   'typecheck:ts58': 'node ./scripts/typecheck.mjs typescript-5-8 5.8.3 ./tsconfig.ts58.json',
   typecheck: 'npm run profile:prepare:base-ui && npm run typecheck:ts53 && npm run typecheck:ts58',
   verify: 'npm run profile:verify && npm run profile:verify:base-ui && npm run profile:verify:closure',
-  build: 'npm run verify && npm run delivery:verify && npm run typecheck'
+  build: 'npm run verify && npm run delivery:verify && npm run typecheck && npm run build:runtime',
+  prepack: 'npm run build'
 };
 
 function assert(condition, message) {
@@ -291,10 +304,8 @@ assertExact(
 );
 assertExact(provenance.registryIds, expectedIds, 'Registry allowlist');
 assertExact(provenance.directProductionDependencies, expectedDirectDependencies, 'Provenance production dependencies');
-assert(manifest.dependencies === undefined, 'Tooling-only package must not declare production dependencies');
-for (const [name, version] of Object.entries(expectedDirectDependencies)) {
-  assert(manifest.devDependencies[name] === version, `${name}: package development dependency differs`);
-}
+assertExact(manifest.dependencies, expectedRuntimeDependencies, 'Package runtime dependencies');
+assertExact(manifest.peerDependencies, expectedPeerDependencies, 'Package React peer dependencies');
 assertExact(manifest.devDependencies, expectedDevDependencies, 'Package development dependencies');
 assert(!manifest.overrides && !manifest.resolutions, 'Forced dependency overrides are not accepted');
 

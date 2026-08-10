@@ -1,4 +1,7 @@
+#!/usr/bin/env node
+
 import { createHash } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import { access, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -53,16 +56,24 @@ export async function baseUiTreeSha256(root) {
 async function installedBaseUiRoot() {
   const require = createRequire(import.meta.url);
   const packageManifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
-  const lock = JSON.parse(await readFile(path.join(repositoryRoot, 'package-lock.json'), 'utf8'));
-  if (packageManifest.devDependencies?.['@base-ui/react'] !== BASE_UI_VERSION) {
+  let workspaceLock;
+  try {
+    const candidate = JSON.parse(await readFile(path.join(repositoryRoot, 'package-lock.json'), 'utf8'));
+    if (candidate.packages?.['packages/ui-profile']?.name === '@spfx-kit/ui-profile') workspaceLock = candidate;
+  } catch (error) {
+    if (!error || typeof error !== 'object' || error.code !== 'ENOENT') throw error;
+  }
+  if (packageManifest.dependencies?.['@base-ui/react'] !== BASE_UI_VERSION) {
     throw new Error('Base UI package dependency differs from the pinned preparation contract');
   }
-  if (lock.packages?.['packages/ui-profile']?.devDependencies?.['@base-ui/react'] !== BASE_UI_VERSION) {
-    throw new Error('Base UI workspace lock dependency differs from the pinned preparation contract');
-  }
-  const locked = lock.packages?.['node_modules/@base-ui/react'];
-  if (locked?.version !== BASE_UI_VERSION || locked.resolved !== BASE_UI_RESOLVED || locked.integrity !== BASE_UI_INTEGRITY) {
-    throw new Error('Base UI lockfile identity differs from the pinned preparation contract');
+  if (workspaceLock) {
+    if (workspaceLock.packages['packages/ui-profile'].dependencies?.['@base-ui/react'] !== BASE_UI_VERSION) {
+      throw new Error('Base UI workspace lock dependency differs from the pinned preparation contract');
+    }
+    const locked = workspaceLock.packages?.['node_modules/@base-ui/react'];
+    if (locked?.version !== BASE_UI_VERSION || locked.resolved !== BASE_UI_RESOLVED || locked.integrity !== BASE_UI_INTEGRITY) {
+      throw new Error('Base UI lockfile identity differs from the pinned preparation contract');
+    }
   }
   const resolvedManifestPath = require.resolve('@base-ui/react/package.json');
   const resolvedManifest = JSON.parse(await readFile(resolvedManifestPath, 'utf8'));
@@ -72,8 +83,10 @@ async function installedBaseUiRoot() {
     );
   }
   const resolvedRoot = await realpath(path.dirname(resolvedManifestPath));
-  const lockedRoot = await realpath(path.join(repositoryRoot, 'node_modules/@base-ui/react'));
-  if (resolvedRoot !== lockedRoot) throw new Error('Resolved Base UI root differs from the lockfile package root');
+  if (workspaceLock) {
+    const lockedRoot = await realpath(path.join(repositoryRoot, 'node_modules/@base-ui/react'));
+    if (resolvedRoot !== lockedRoot) throw new Error('Resolved Base UI root differs from the lockfile package root');
+  }
   if ((await baseUiTreeSha256(resolvedRoot)) !== BASE_UI_TREE_SHA256) {
     throw new Error('Installed Base UI package tree differs from the pinned preparation contract');
   }
@@ -141,7 +154,13 @@ export async function prepareBaseUi() {
   });
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isDirectExecution()) {
   await prepareBaseUi();
   console.log('Prepared isolated @base-ui/react@1.6.0 compatibility copy');
+}
+
+function isDirectExecution() {
+  const entry = process.argv[1];
+  if (!entry || entry.startsWith('file:')) return false;
+  return realpathSync(entry) === fileURLToPath(import.meta.url);
 }

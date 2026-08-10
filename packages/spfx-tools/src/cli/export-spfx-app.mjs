@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parseArgs, required } from '../lib/args.mjs';
 import { writeJson } from '../lib/fs.mjs';
 import { appSlugFromDir } from '../lib/spfx.mjs';
@@ -16,7 +15,7 @@ import {
   writeUiProfileDeliveryEvidence
 } from '../lib/export/ui-profile-closure.mjs';
 import { withAppliedExportConfig } from '../lib/export/config.mjs';
-import { resolveUiProfileDeliveryArtifact } from '../../../ui-profile/scripts/lib/delivery-artifact.mjs';
+import { resolveUiProfileDeliveryArtifact } from '@spfx-kit/ui-profile/delivery';
 
 const usage = `Usage:
   export-spfx-app --app .spfx-kit/apps/<slug>-spfx --target single,cdn,staging-cdn,standalone [--out <dir>] [--json] [--progress-json]
@@ -67,9 +66,8 @@ async function main() {
 async function runExport({ appDir, args, cdnRelease, localMockCdn, stagingCdnRoot, targets }) {
   const slug = appSlugFromDir(appDir);
   const outDir = path.resolve(args.out || path.join(process.cwd(), '.spfx-kit', 'exports', slug, timestamp()));
-  const profileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../ui-profile');
   const uiProfileClosure = await bindUiProfileExportClosureToApp(
-    await createUiProfileExportClosure(resolveUiProfileDeliveryArtifact({ packageRoot: profileRoot })),
+    await createUiProfileExportClosure(resolveUiProfileDeliveryArtifact()),
     appDir
   );
   const summary = {

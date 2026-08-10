@@ -87,23 +87,23 @@
     },
     {
       "path": "scripts/verify-dependency-closure.mjs",
-      "sha256": "1628d5d7e0c63048acae149b05d8cf7e890d76ea5b8dcf1421a8de5669efe3f7"
+      "sha256": "e5d37862608d0fb5f7a0a5885d56e03fa85517aa3251c438352a2ca1d7882c5e"
     },
     {
       "path": "scripts/prepare-base-ui.mjs",
-      "sha256": "a6c6bfda562bb1bc4348eb3f6accd2849f65d502ad7854e9fbcb38beae87e2a7"
+      "sha256": "f8a12a9fce5de28dd976f9c46daf44f829d891175d8c59e14a40b3f208b01ef1"
     },
     {
       "path": "scripts/transform-base-ui-select-value.mjs",
-      "sha256": "dfaf3125753bd1979c7d9ab02b875d4bc81e12d72edf340a07758499a6033e9c"
+      "sha256": "e1ce5dd1ba84a0255cebd2b612bf02628a0800edefd6eb6c4b6e2c41d8323c9e"
     },
     {
       "path": "scripts/transform-base-ui-popup-lifecycle.mjs",
-      "sha256": "6c4e1979c96f64b69833c2420caf6af3329a90fe663d6a4860e5d835663d7604"
+      "sha256": "009d9fa4cf6440ac649c04326e3fe65ade38ee4da8f0fda21258c473a87f1ce3"
     },
     {
       "path": "scripts/transform-base-ui-id-ownership.mjs",
-      "sha256": "6433f8aec3d8a09bed2950873da9538dfd45d92b82b5dfbc3379f1f796d916ea"
+      "sha256": "b3dd360bb4c028f92992169175f1be1b4a0b9ae63e72bd4c2e6151fb8c4402a6"
     },
     {
       "path": "scripts/lib/preparation-lock.mjs",

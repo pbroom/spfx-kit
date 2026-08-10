@@ -3,7 +3,7 @@ import * as ReactDom from 'react-dom';
 import { act } from 'react-dom/test-utils';
 import { Window as HappyWindow } from 'happy-dom';
 import { afterEach, expect, it } from 'vitest';
-import { Dialog, DialogContent, DialogPortal } from '../../../packages/ui-profile/normalized/src/components/ui/dialog';
+import { Dialog, DialogContent, DialogPortal } from '@spfx-kit/ui-profile/dialog';
 import {
   SPFX_UI_PORTAL_ATTRIBUTE,
   SPFX_UI_PROFILE_ATTRIBUTE,
@@ -17,9 +17,10 @@ import {
   useSpfxUiDerivedId,
   useSpfxUiId,
   useSpfxUiPortalId,
+  SPFX_UI_PROFILE_ID,
+  SPFX_UI_SCOPE_VALUE,
   type SpfxUiHost
-} from '../../../packages/ui-profile/normalized/src/lib/ui-root';
-import profile from '../../../packages/ui-profile/profile.json';
+} from '@spfx-kit/ui-profile';
 
 const ownedHosts: SpfxUiHost[] = [];
 const mountPoints: HTMLElement[] = [];
@@ -43,8 +44,8 @@ it('mirrors scope and SharePoint theme tokens to both owned surfaces without mut
   expect(host.appRoot.getAttribute(SPFX_UI_ROOT_ATTRIBUTE)).toBe('theme-root');
   expect(host.portalHost.getAttribute(SPFX_UI_PORTAL_ATTRIBUTE)).toBe('theme-root');
   for (const element of [host.appRoot, host.portalHost]) {
-    expect(element.getAttribute(SPFX_UI_PROFILE_ATTRIBUTE)).toBe(profile.profileId);
-    expect(element.getAttribute(SPFX_UI_SCOPE_ATTRIBUTE)).toBe(profile.css.scopeValue);
+    expect(element.getAttribute(SPFX_UI_PROFILE_ATTRIBUTE)).toBe(SPFX_UI_PROFILE_ID);
+    expect(element.getAttribute(SPFX_UI_SCOPE_ATTRIBUTE)).toBe(SPFX_UI_SCOPE_VALUE);
     expect(element.getAttribute(SPFX_UI_THEME_ATTRIBUTE)).toBe('light');
     expect(element.style.getPropertyValue('--spfx-ui-color-primary')).toBe('#0f6cbd');
     expect(element.style.getPropertyValue('--spfx-ui-font-heading')).toBe('Aptos');
@@ -320,8 +321,6 @@ it('rejects cross-document host inputs and derives the window only from the supp
       portalParent: localPortalParent,
       targetDocument: foreignDocument,
       instanceId: 'foreign-root',
-      profileId: profile.profileId,
-      scopeValue: profile.css.scopeValue,
       theme: mapSharePointTheme(testSharePointTheme(false))
     })
   ).toThrow('portalParent must belong to targetDocument');
@@ -333,8 +332,6 @@ it('rejects cross-document host inputs and derives the window only from the supp
     portalParent: foreignPortalParent,
     targetDocument: foreignDocument,
     instanceId: 'foreign-root',
-    profileId: profile.profileId,
-    scopeValue: profile.css.scopeValue,
     theme: mapSharePointTheme(testSharePointTheme(false))
   });
   expect(host.targetDocument).toBe(foreignDocument);
@@ -356,8 +353,6 @@ function createHost(mountPoint: HTMLElement, instanceId: string, isInverted: boo
     portalParent: mountPoint,
     targetDocument: document,
     instanceId,
-    profileId: profile.profileId,
-    scopeValue: profile.css.scopeValue,
     theme: mapSharePointTheme(testSharePointTheme(isInverted))
   });
   ownedHosts.push(host);

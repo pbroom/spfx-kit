@@ -7,17 +7,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
-// @ts-expect-error plain .mjs build integration module
-import { resolveUiProfileDeliveryArtifact } from '../packages/ui-profile/scripts/lib/delivery-artifact.mjs';
-// @ts-expect-error plain .mjs Vite integration module
-import {
-  spfxUiProfileDeliveryPlugin,
-  UI_PROFILE_DELIVERY_MODULE_ID
-} from '../packages/ui-profile/scripts/lib/vite-delivery-plugin.mjs';
+import { resolveUiProfileDeliveryArtifact } from '@spfx-kit/ui-profile/delivery';
+import { spfxUiProfileVite, UI_PROFILE_DELIVERY_MODULE_ID } from '@spfx-kit/ui-profile/vite';
 
 const require = createRequire(import.meta.url);
-const configureSpfxUiProfileCss = require('../packages/ui-profile/spfx-ui-webpack.cjs');
-const registerSpfxUiProfileGulp = require('../packages/ui-profile/spfx-ui-gulp.cjs');
+const configureSpfxUiProfileCss = require('@spfx-kit/ui-profile/spfx-webpack');
+const registerSpfxUiProfileGulp = require('@spfx-kit/ui-profile/spfx-gulp');
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const profileRoot = path.join(repositoryRoot, 'packages', 'ui-profile');
 const temporaryDirectories: string[] = [];
@@ -28,9 +23,10 @@ afterEach(async () => {
 
 describe('UI profile delivery artifact', () => {
   it('resolves the manifest-declared CSS bytes and immutable identity', async () => {
-    const artifact = await resolveUiProfileDeliveryArtifact({ packageRoot: profileRoot });
+    const artifact = await resolveUiProfileDeliveryArtifact();
     const profile = JSON.parse(await readFile(path.join(profileRoot, 'profile.json'), 'utf8'));
 
+    expect(path.dirname(artifact.profilePath)).toBe(profileRoot);
     expect(artifact).toMatchObject({
       profileId: profile.profileId,
       provenanceSha256: profile.provenanceSha256,
@@ -62,7 +58,8 @@ describe('UI profile delivery artifact', () => {
 
 describe('Vite UI profile delivery adapter', () => {
   it('loads one virtual module bound to the manifest-declared CSS path and digests', async () => {
-    const plugin = spfxUiProfileDeliveryPlugin({ packageRoot: profileRoot });
+    const { deliveryPlugin: plugin, alias } = spfxUiProfileVite({ packageRoot: profileRoot });
+    expect(alias['@base-ui/react']).toBe(path.join(profileRoot, '.prepared', 'base-ui'));
     const resolvedId = plugin.resolveId(UI_PROFILE_DELIVERY_MODULE_ID);
     expect(resolvedId).toBe(`\0${UI_PROFILE_DELIVERY_MODULE_ID}`);
     expect(plugin.resolveId('unrelated')).toBeNull();
@@ -80,13 +77,17 @@ describe('SPFx UI profile webpack adapter', () => {
   it('routes only the exact manifest CSS through the global loader and stays idempotent', () => {
     const moduleRule = createCssRule(true);
     const globalRule = createCssRule(false);
-    const webpackConfiguration = { module: { rules: [moduleRule, globalRule] } };
-    const artifact = require('../packages/ui-profile/scripts/lib/delivery-artifact.cjs').resolveUiProfileDeliveryArtifact({
+    const webpackConfiguration = {
+      module: { rules: [moduleRule, globalRule] },
+      resolve: { alias: {} as Record<string, string> }
+    };
+    const artifact = require('@spfx-kit/ui-profile/delivery').resolveUiProfileDeliveryArtifact({
       packageRoot: profileRoot
     });
 
     expect(configureSpfxUiProfileCss(webpackConfiguration, { packageRoot: profileRoot })).toBe(webpackConfiguration);
     expect(configureSpfxUiProfileCss(webpackConfiguration, { packageRoot: profileRoot })).toBe(webpackConfiguration);
+    expect(webpackConfiguration.resolve.alias['@base-ui/react']).toBe(path.join(profileRoot, '.prepared', 'base-ui'));
     expect(webpackConfiguration.module.rules).toHaveLength(3);
 
     const exactCondition = webpackConfiguration.module.rules[2].test;
@@ -135,9 +136,8 @@ describe('SPFx UI profile webpack adapter', () => {
     expect(webpackConfiguration.module.rules).toHaveLength(3);
   });
 
-  it('fails closed without a profile root or recognizable SPFx CSS rules', () => {
-    expect(() => configureSpfxUiProfileCss({ module: { rules: [] } })).toThrow('requires packageRoot');
-    expect(() => configureSpfxUiProfileCss({ module: { rules: [] } }, { packageRoot: profileRoot })).toThrow(
+  it('uses the package root by default and fails closed without recognizable SPFx CSS rules', () => {
+    expect(() => configureSpfxUiProfileCss({ module: { rules: [] } })).toThrow(
       'Could not find the SPFx module and global CSS loader rules.'
     );
     expect(() => registerSpfxUiProfileGulp({}, { packageRoot: profileRoot })).toThrow(
@@ -157,14 +157,10 @@ describe('committed build integration', () => {
       'utf8'
     );
 
-    expect(packageJson.scripts.build).toMatch(
-      /^node \.\.\/\.\.\/packages\/ui-profile\/scripts\/verify-delivery-artifact\.mjs && heft /u
-    );
-    expect(packageJson.scripts.ship).toMatch(
-      /^node \.\.\/\.\.\/packages\/ui-profile\/scripts\/verify-delivery-artifact\.mjs && heft /u
-    );
+    expect(packageJson.scripts.build).toMatch(/^spfx-ui-profile-prepare && spfx-ui-profile-verify && heft /u);
+    expect(packageJson.scripts.ship).toMatch(/^spfx-ui-profile-prepare && spfx-ui-profile-verify && heft /u);
     expect(webpackPatch.patchFiles).toEqual(['./config/webpack-patch/ui-profile.cjs']);
-    expect(source).toContain("import '../../../../../packages/ui-profile/generated/tailwind-profile.css';");
+    expect(source).toContain("import '@spfx-kit/ui-profile/styles.css';");
   });
 });
 

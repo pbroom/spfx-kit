@@ -2,20 +2,8 @@ import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import { act, Simulate } from 'react-dom/test-utils';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList
-} from '../../../packages/ui-profile/normalized/src/components/ui/combobox';
-import {
-  SpfxUiHostProvider,
-  createSpfxUiHost,
-  mapSharePointTheme,
-  type SpfxUiHost
-} from '../../../packages/ui-profile/normalized/src/lib/ui-root';
-import profile from '../../../packages/ui-profile/profile.json';
+import { Combobox, ComboboxContent, ComboboxInput, ComboboxItem, ComboboxList } from '@spfx-kit/ui-profile/combobox';
+import { SpfxUiHostProvider, createSpfxUiHost, mapSharePointTheme, type SpfxUiHost } from '@spfx-kit/ui-profile';
 // @ts-expect-error plain .mjs exact-scale workload fixture without type declarations
 import { FONT_OPTIONS } from './font-options.mjs';
 
@@ -37,8 +25,6 @@ beforeEach(() => {
     portalParent: mountPoint,
     targetDocument: document,
     instanceId: 'combobox-workload-root',
-    profileId: profile.profileId,
-    scopeValue: profile.css.scopeValue,
     theme: mapSharePointTheme({
       palette: {
         white: '#ffffff',

@@ -1,34 +1,10 @@
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
-import { profileId, scopeValue } from 'virtual:spfx-ui-profile-delivery';
-import { Badge } from '../../../../packages/ui-profile/normalized/src/components/ui/badge';
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogTrigger
-} from '../../../../packages/ui-profile/normalized/src/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '../../../../packages/ui-profile/normalized/src/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '../../../../packages/ui-profile/normalized/src/components/ui/select';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
-} from '../../../../packages/ui-profile/normalized/src/components/ui/tooltip';
+import { Badge } from '@spfx-kit/ui-profile/badge';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@spfx-kit/ui-profile/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@spfx-kit/ui-profile/dropdown-menu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@spfx-kit/ui-profile/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@spfx-kit/ui-profile/tooltip';
 import {
   createSpfxUiHost,
   mapSharePointTheme,
@@ -37,7 +13,7 @@ import {
   type SpfxUiThemeMode,
   type SpfxUiThemeTokens,
   useSpfxUiId
-} from '../../../../packages/ui-profile/normalized/src/lib/ui-root';
+} from '@spfx-kit/ui-profile';
 
 const triggerStyle: React.CSSProperties = {
   alignItems: 'center',
@@ -339,8 +315,6 @@ function createMountedRootController(
       portalParent: fixture.portalParent,
       targetDocument: fixture.mountPoint.ownerDocument,
       instanceId,
-      profileId,
-      scopeValue,
       theme: themes[initialTheme]
     });
     ReactDom.render(

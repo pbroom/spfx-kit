@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { Button } from '../../../../packages/ui-profile/normalized/src/components/ui/button';
-import { Spinner } from '../../../../packages/ui-profile/normalized/src/components/ui/spinner';
+import { Button } from '@spfx-kit/ui-profile/button';
+import { Spinner } from '@spfx-kit/ui-profile/spinner';
 import { loadCdnPackageDescriptor, type CdnPackageDescriptor } from '../api/packageRuntime';
 import { cdnPackageSelectionKey, type LabPackageMode } from '../lib/packageMode';
 import { CdnSmokeCheck, type CdnSmokeCheckStatus } from './CdnSmokeCheck';

@@ -141,6 +141,10 @@ textarea {
   font-size: 12px;
 }
 
+.lab-mode-tabs [role='tab']:not([data-active]) {
+  color: var(--lab-muted);
+}
+
 .package-mode-tabs [role='tab'] {
   min-width: auto;
 }

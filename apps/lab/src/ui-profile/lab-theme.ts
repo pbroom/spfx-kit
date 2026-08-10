@@ -1,5 +1,5 @@
 import type { LabThemeContext, LabThemeMode } from '@spfx-kit/spfx-lab-runtime';
-import type { SpfxUiThemeTokens } from '../../../../packages/ui-profile/normalized/src/lib/ui-root';
+import type { SpfxUiThemeTokens } from '@spfx-kit/ui-profile';
 
 export function createLabUiThemeTokens(mode: LabThemeMode, theme: LabThemeContext): SpfxUiThemeTokens {
   const dark = mode === 'dark';

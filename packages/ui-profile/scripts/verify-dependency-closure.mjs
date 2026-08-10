@@ -29,11 +29,10 @@ assert(closure.policy.allowForcedPeerResolution === false, 'Forced peer resoluti
 assert(closure.policy.allowLegacyPeerDeps === false, 'Legacy peer resolution must remain disabled');
 assert(!manifest.overrides && !manifest.resolutions, 'UI profile manifest contains forced dependency resolution');
 assert(!rootManifest.overrides && !rootManifest.resolutions, 'Repository root manifest contains forced dependency resolution');
-assert(manifest.dependencies === undefined, 'Tooling-only profile must not declare production dependencies');
 assertProductionDependencyRoots(closure.productionRoots, provenance.directProductionDependencies);
 assert(
-  closure.productionRoots.every((dependency) => manifest.devDependencies[dependency]),
-  'Closure roots must be development dependencies'
+  closure.productionRoots.every((dependency) => manifest.dependencies?.[dependency] || manifest.peerDependencies?.[dependency]),
+  'Closure roots must be package dependencies or React peer dependencies'
 );
 
 const accepted = new Map();
@@ -44,7 +43,10 @@ for (const entry of closure.packages) {
 }
 for (const root of closure.productionRoots) {
   const entry = accepted.get(root);
-  assert(entry && entry.version === manifest.devDependencies[root], `${root}: direct version differs`);
+  assert(
+    entry && entry.version === (manifest.dependencies?.[root] || manifest.peerDependencies?.[root]),
+    `${root}: direct version differs`
+  );
 }
 for (const entry of closure.packages) {
   for (const dependency of Object.keys(entry.dependencies)) {
@@ -91,7 +93,12 @@ if (!manifestOnly) {
     selectedManifest.name === manifest.name && selectedManifest.version === manifest.version,
     'Selected UI profile identity differs'
   );
-  assert(selectedManifest.dependencies === undefined, 'Selected tooling-only profile must not declare production dependencies');
+  assertExact(selectedManifest.dependencies ?? {}, manifest.dependencies ?? {}, 'Selected UI profile dependencies differ');
+  assertExact(
+    selectedManifest.peerDependencies ?? {},
+    manifest.peerDependencies ?? {},
+    'Selected UI profile peer dependencies differ'
+  );
   assertExact(
     selectedManifest.devDependencies ?? {},
     manifest.devDependencies,
@@ -106,7 +113,8 @@ if (!manifestOnly) {
     'Lockfile UI profile workspace identity differs'
   );
   assert(!workspace.hasInstallScript, 'UI profile must not use install-time mutation');
-  assert(workspace.dependencies === undefined, 'Lockfile workspace must not contain production dependencies');
+  assertExact(workspace.dependencies ?? {}, manifest.dependencies ?? {}, 'Lockfile workspace dependencies differ');
+  assertExact(workspace.peerDependencies ?? {}, manifest.peerDependencies ?? {}, 'Lockfile workspace peer dependencies differ');
   assertExact(workspace.devDependencies ?? {}, manifest.devDependencies, 'Lockfile workspace development dependencies differ');
 
   function packageName(lockPath) {

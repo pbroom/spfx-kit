@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite';
-import path from 'node:path';
 import react from '@vitejs/plugin-react';
-import { spfxUiProfileDeliveryPlugin } from '../../packages/ui-profile/scripts/lib/vite-delivery-plugin.mjs';
+import { spfxUiProfileVite } from '@spfx-kit/ui-profile/vite';
 import { spfxAppApi } from './server/apps-api';
 import { spfxExportApi } from './server/export-api';
 import { spfxLabPackagesApi } from './server/lab-packages-api';
@@ -11,13 +10,12 @@ import { rootDir } from './server/paths';
 const labAllowedHost = String(process.env.SPFX_LAB_ALLOWED_HOST || '')
   .trim()
   .toLowerCase();
+const uiProfile = spfxUiProfileVite();
 
 export default defineConfig({
-  plugins: [spfxUiProfileDeliveryPlugin(), react(), spfxAppApi(), spfxExportApi(), spfxLabPackagesApi(), spfxLocalCdnAdminApi()],
+  plugins: [uiProfile.deliveryPlugin, react(), spfxAppApi(), spfxExportApi(), spfxLabPackagesApi(), spfxLocalCdnAdminApi()],
   resolve: {
-    alias: {
-      '@base-ui/react': path.resolve(rootDir, 'packages/ui-profile/.prepared/base-ui')
-    },
+    alias: uiProfile.alias,
     dedupe: ['react', 'react-dom']
   },
   server: {

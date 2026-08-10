@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "declaration": true,
+    "noEmit": false,
+    "outDir": "./dist",
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "normalized/src/**/*.ts", "normalized/src/**/*.tsx", "compat-consumers/react17-base-ui-jsx.d.ts"]
+}
