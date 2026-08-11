@@ -2,7 +2,7 @@ import * as React from 'react';
 import * as ReactDom from 'react-dom';
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@spfx-kit/ui-profile/accordion';
-import { Alert, AlertDescription, AlertTitle } from '@spfx-kit/ui-profile/alert';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@spfx-kit/ui-profile/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +27,7 @@ import { Avatar, AvatarFallback } from '@spfx-kit/ui-profile/avatar';
 import { Badge } from '@spfx-kit/ui-profile/badge';
 import {
   Breadcrumb,
+  BreadcrumbEllipsis,
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
@@ -34,7 +35,7 @@ import {
   BreadcrumbSeparator
 } from '@spfx-kit/ui-profile/breadcrumb';
 import { Bubble, BubbleContent, BubbleGroup } from '@spfx-kit/ui-profile/bubble';
-import { Button } from '@spfx-kit/ui-profile/button';
+import { Button, buttonVariants } from '@spfx-kit/ui-profile/button';
 import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from '@spfx-kit/ui-profile/button-group';
 import { Calendar } from '@spfx-kit/ui-profile/calendar';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@spfx-kit/ui-profile/card';
@@ -139,19 +140,37 @@ import {
 import { Toggle } from '@spfx-kit/ui-profile/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@spfx-kit/ui-profile/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@spfx-kit/ui-profile/tooltip';
-import { createSpfxUiHost, SpfxUiHostProvider, useSpfxUiId } from '@spfx-kit/ui-profile';
+import {
+  uiProfileCatalogDocumentation,
+  uiProfileCatalogExampleSectionId,
+  uiProfileCatalogSectionId,
+  type UiProfileCatalogComponentId
+} from './uiProfileCatalogEntries';
+import { UiLibraryCodeBlock } from './UiLibraryCodeBlock';
+import { createSpfxUiHost, SpfxUiHostProvider, useSpfxUiDerivedId, useSpfxUiId } from '@spfx-kit/ui-profile';
 import { createLabTheme } from '@spfx-kit/spfx-lab-runtime';
 import { createLabUiThemeTokens } from '../ui-profile/lab-theme';
 
 interface CatalogSampleProps {
   children: React.ReactNode;
-  component: string;
+  component: UiProfileCatalogComponentId;
   title: string;
 }
 
-function CatalogSample({ children, component, title }: CatalogSampleProps): React.ReactElement {
+const ActiveCatalogComponentContext = React.createContext<UiProfileCatalogComponentId | undefined>(undefined);
+const ActiveCatalogExampleContext = React.createContext<string | undefined>(undefined);
+
+function CatalogSample({ children, component, title }: CatalogSampleProps): React.ReactElement | null {
+  const activeComponent = React.useContext(ActiveCatalogComponentContext);
+  const active = activeComponent === component;
+  if (activeComponent !== undefined && !active) return null;
+
   return (
-    <section data-catalog-component={component}>
+    <section
+      data-catalog-active={active ? 'true' : undefined}
+      data-catalog-component={component}
+      id={uiProfileCatalogSectionId(component)}
+    >
       <h3>{title}</h3>
       {children}
     </section>
@@ -177,8 +196,929 @@ function CatalogToastList(): React.ReactElement {
   );
 }
 
+interface CatalogDocumentationExampleProps {
+  children: React.ReactNode;
+  id: string;
+  title: string;
+}
+
+function CatalogDocumentationExample({ children, id, title }: CatalogDocumentationExampleProps): React.ReactElement {
+  const activeComponent = React.useContext(ActiveCatalogComponentContext);
+  const activeExample = React.useContext(ActiveCatalogExampleContext);
+  const sectionRef = React.useRef<HTMLElement>(null);
+  const tabsId = useSpfxUiId(`catalog:${activeComponent ?? 'gallery'}:example:${id}:tabs`);
+  const documentation = activeComponent ? uiProfileCatalogDocumentation[activeComponent] : undefined;
+  const example = documentation?.examples?.find((candidate) => candidate.id === id);
+  const selected = activeExample === id;
+
+  React.useEffect(() => {
+    const section = sectionRef.current;
+    if (!selected || !section) return;
+
+    section.focus({ preventScroll: true });
+    section.scrollIntoView({ block: 'start' });
+
+    return () => {
+      if (section.ownerDocument.activeElement === section) section.blur();
+    };
+  }, [selected]);
+
+  if (!activeComponent || !example) {
+    return (
+      <div data-catalog-example={id}>
+        <h4>{title}</h4>
+        <div data-catalog-example-content>{children}</div>
+      </div>
+    );
+  }
+
+  return (
+    <section
+      data-catalog-example={id}
+      data-catalog-example-active={selected ? 'true' : undefined}
+      id={uiProfileCatalogExampleSectionId(activeComponent, id)}
+      ref={sectionRef}
+      tabIndex={selected ? -1 : undefined}
+    >
+      <div className="ui-library-docs__example-heading">
+        <h4>{title}</h4>
+        <p>{example.summary}</p>
+      </div>
+      <Tabs className="ui-library-docs__example-tabs" defaultValue="preview" id={tabsId}>
+        <TabsList aria-label={`${title} example view`} variant="line">
+          <TabsTrigger value="preview">Preview</TabsTrigger>
+          <TabsTrigger value="code">Code</TabsTrigger>
+        </TabsList>
+        <TabsContent value="preview">
+          <div data-catalog-example-content>{children}</div>
+        </TabsContent>
+        <TabsContent value="code">
+          <UiLibraryCodeBlock
+            code={example.code}
+            label={`${title} code for ${uiProfileCatalogDocumentation[activeComponent].primaryExport}`}
+          />
+        </TabsContent>
+      </Tabs>
+    </section>
+  );
+}
+
+function CatalogInlineIcon({ position = 'inline-start' }: { position?: 'inline-start' | 'inline-end' }): React.ReactElement {
+  return (
+    <svg aria-hidden="true" data-icon={position} viewBox="0 0 16 16">
+      <path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+interface BreadcrumbDocumentationExamplesProps {
+  dropdownContentId: string;
+  dropdownTriggerId: string;
+  responsiveContentId: string;
+  responsiveTriggerId: string;
+}
+
+function BreadcrumbBasic(): React.ReactElement {
+  return (
+    <Breadcrumb>
+      <BreadcrumbList>
+        <BreadcrumbItem>
+          <BreadcrumbLink href="#catalog-home">Home</BreadcrumbLink>
+        </BreadcrumbItem>
+        <BreadcrumbSeparator />
+        <BreadcrumbItem>
+          <BreadcrumbPage>Components</BreadcrumbPage>
+        </BreadcrumbItem>
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
+}
+
+function BreadcrumbDocumentationExamples({
+  dropdownContentId,
+  dropdownTriggerId,
+  responsiveContentId,
+  responsiveTriggerId
+}: BreadcrumbDocumentationExamplesProps): React.ReactElement {
+  return (
+    <div data-catalog-documentation-examples="breadcrumb">
+      <CatalogDocumentationExample id="basic" title="Basic">
+        <BreadcrumbBasic />
+      </CatalogDocumentationExample>
+
+      <CatalogDocumentationExample id="custom-separator" title="Custom separator">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="#catalog-home">Home</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator>/</BreadcrumbSeparator>
+            <BreadcrumbItem>
+              <BreadcrumbPage>Components</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </CatalogDocumentationExample>
+
+      <CatalogDocumentationExample id="dropdown" title="Dropdown">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="#catalog-home">Home</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-controls={dropdownContentId}
+                  aria-label="Open intermediate pages"
+                  id={dropdownTriggerId}
+                >
+                  <BreadcrumbEllipsis />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent id={dropdownContentId}>
+                  <DropdownMenuItem>Documentation</DropdownMenuItem>
+                  <DropdownMenuItem>Components</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Breadcrumb</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </CatalogDocumentationExample>
+
+      <CatalogDocumentationExample id="collapsed" title="Collapsed">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="#catalog-home">Home</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbEllipsis />
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Breadcrumb</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </CatalogDocumentationExample>
+
+      <CatalogDocumentationExample id="custom-link" title="Custom link">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink data-route="components" render={<a href="#catalog-components" />}>
+                Components
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Breadcrumb</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </CatalogDocumentationExample>
+
+      <CatalogDocumentationExample id="responsive" title="Responsive hierarchy">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="#catalog-home">Home</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-controls={responsiveContentId}
+                  aria-label="Open hidden breadcrumb levels"
+                  id={responsiveTriggerId}
+                >
+                  <BreadcrumbEllipsis />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent id={responsiveContentId}>
+                  <DropdownMenuItem>Docs</DropdownMenuItem>
+                  <DropdownMenuItem>Shared UI</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Breadcrumb</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </CatalogDocumentationExample>
+
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="#catalog-home">الرئيسية</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>المكونات</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
+interface AccordionDocumentationExamplesProps {
+  baseId: string;
+}
+
+interface CatalogAccordionItemData {
+  content: string;
+  disabled?: boolean;
+  id: string;
+  title: string;
+  value: string;
+}
+
+function CatalogAccordionItems({ items }: { items: readonly CatalogAccordionItemData[] }): React.ReactElement {
+  return (
+    <>
+      {items.map((item) => (
+        <AccordionItem disabled={item.disabled} id={item.id} key={item.value} value={item.value}>
+          <AccordionTrigger>{item.title}</AccordionTrigger>
+          <AccordionContent>{item.content}</AccordionContent>
+        </AccordionItem>
+      ))}
+    </>
+  );
+}
+
+function AccordionDocumentationExamples({ baseId }: AccordionDocumentationExamplesProps): React.ReactElement {
+  const primaryItems = [
+    {
+      content: 'Standard delivery takes three to five business days, with expedited service available at checkout.',
+      id: useSpfxUiDerivedId(baseId, 'primary-shipping'),
+      title: 'What delivery options are available?',
+      value: 'shipping'
+    },
+    {
+      content: 'Unused items can be returned within thirty days from the original delivery date.',
+      id: useSpfxUiDerivedId(baseId, 'primary-returns'),
+      title: 'What is the return window?',
+      value: 'returns'
+    },
+    {
+      content: 'Support is available through the account portal during normal business hours.',
+      id: useSpfxUiDerivedId(baseId, 'primary-support'),
+      title: 'How do I contact support?',
+      value: 'support'
+    }
+  ] as const;
+  const basicItems = [
+    {
+      content: 'Use the reset link on the sign-in screen. The emailed link remains active for one hour.',
+      id: useSpfxUiDerivedId(baseId, 'basic-password'),
+      title: 'How do I reset my password?',
+      value: 'password'
+    },
+    {
+      content: 'Plan changes take effect at the start of the next billing period.',
+      id: useSpfxUiDerivedId(baseId, 'basic-plan'),
+      title: 'Can I change my plan?',
+      value: 'plan'
+    },
+    {
+      content: 'The account accepts major cards and approved purchase orders.',
+      id: useSpfxUiDerivedId(baseId, 'basic-payment'),
+      title: 'Which payment methods are supported?',
+      value: 'payment'
+    }
+  ] as const;
+  const multipleItems = [
+    {
+      content: 'Choose immediate alerts, daily summaries, or both from notification settings.',
+      id: useSpfxUiDerivedId(baseId, 'multiple-notifications'),
+      title: 'Notification settings',
+      value: 'notifications'
+    },
+    {
+      content: 'Review active sessions and revoke devices from the security page.',
+      id: useSpfxUiDerivedId(baseId, 'multiple-privacy'),
+      title: 'Privacy and security',
+      value: 'privacy'
+    },
+    {
+      content: 'Invoices and renewal dates remain available in the billing workspace.',
+      id: useSpfxUiDerivedId(baseId, 'multiple-billing'),
+      title: 'Billing and subscription',
+      value: 'billing'
+    }
+  ] as const;
+  const disabledItems = [
+    {
+      content: 'Account history is retained for the period shown in the organization policy.',
+      id: useSpfxUiDerivedId(baseId, 'disabled-history'),
+      title: 'Can I review account history?',
+      value: 'history'
+    },
+    {
+      content: 'This feature becomes available after the workspace upgrade is complete.',
+      disabled: true,
+      id: useSpfxUiDerivedId(baseId, 'disabled-premium'),
+      title: 'Premium feature details',
+      value: 'premium'
+    },
+    {
+      content: 'Update the address from profile settings, then confirm the verification message.',
+      id: useSpfxUiDerivedId(baseId, 'disabled-email'),
+      title: 'How do I update my email?',
+      value: 'email'
+    }
+  ] as const;
+  const borderedItems = [
+    {
+      content: 'Billing runs at the start of each cycle and invoices remain available in the account.',
+      id: useSpfxUiDerivedId(baseId, 'borders-billing'),
+      title: 'How does billing work?',
+      value: 'billing'
+    },
+    {
+      content: 'Workspace data is encrypted in transit and at rest.',
+      id: useSpfxUiDerivedId(baseId, 'borders-security'),
+      title: 'How is data protected?',
+      value: 'security'
+    },
+    {
+      content: 'Available connectors are listed in the organization integration catalog.',
+      id: useSpfxUiDerivedId(baseId, 'borders-integrations'),
+      title: 'Which integrations are available?',
+      value: 'integrations'
+    }
+  ] as const;
+  const cardItems = [
+    {
+      content: 'Choose the tier that matches the workspace size and governance needs.',
+      id: useSpfxUiDerivedId(baseId, 'card-plans'),
+      title: 'Which plans are offered?',
+      value: 'plans'
+    },
+    {
+      content: 'Renewals follow the billing cadence selected by the organization owner.',
+      id: useSpfxUiDerivedId(baseId, 'card-billing'),
+      title: 'When does billing renew?',
+      value: 'billing'
+    },
+    {
+      content: 'An owner can cancel renewal while retaining access through the paid period.',
+      id: useSpfxUiDerivedId(baseId, 'card-cancel'),
+      title: 'How do I cancel renewal?',
+      value: 'cancel'
+    }
+  ] as const;
+  const rtlItems = [
+    {
+      content: 'استخدم رابط إعادة التعيين في صفحة تسجيل الدخول ثم راجع رسالة التحقق.',
+      id: useSpfxUiDerivedId(baseId, 'rtl-password'),
+      title: 'كيف يمكنني إعادة تعيين كلمة المرور؟',
+      value: 'password'
+    },
+    {
+      content: 'تدخل تغييرات الخطة حيز التنفيذ في دورة الفوترة التالية.',
+      id: useSpfxUiDerivedId(baseId, 'rtl-plan'),
+      title: 'هل يمكنني تغيير خطة الاشتراك؟',
+      value: 'plan'
+    },
+    {
+      content: 'تظهر وسائل الدفع المتاحة عند إتمام الطلب.',
+      id: useSpfxUiDerivedId(baseId, 'rtl-payment'),
+      title: 'ما هي طرق الدفع المتاحة؟',
+      value: 'payment'
+    }
+  ] as const;
+
+  return (
+    <div data-catalog-documentation-examples="accordion">
+      <CatalogDocumentationExample id="primary" title="Primary demo">
+        <Accordion defaultValue={['shipping']}>
+          <CatalogAccordionItems items={primaryItems} />
+        </Accordion>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="basic" title="Basic">
+        <Accordion defaultValue={['password']}>
+          <CatalogAccordionItems items={basicItems} />
+        </Accordion>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="multiple" title="Multiple">
+        <Accordion defaultValue={['notifications', 'privacy']} multiple>
+          <CatalogAccordionItems items={multipleItems} />
+        </Accordion>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="disabled" title="Disabled item">
+        <Accordion defaultValue={['history']}>
+          <CatalogAccordionItems items={disabledItems} />
+        </Accordion>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="borders" title="Borders">
+        <Accordion
+          defaultValue={['billing']}
+          style={{ border: '1px solid var(--spfx-ui-color-border)', borderRadius: 'var(--spfx-ui-radius-lg)' }}
+        >
+          <CatalogAccordionItems items={borderedItems} />
+        </Accordion>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="card" title="Card">
+        <Card>
+          <CardHeader>
+            <CardTitle>Plans and billing</CardTitle>
+            <CardDescription>Common questions about plans, renewal, and cancellation.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Accordion defaultValue={['plans']}>
+              <CatalogAccordionItems items={cardItems} />
+            </Accordion>
+          </CardContent>
+        </Card>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <Accordion defaultValue={['password']}>
+              <CatalogAccordionItems items={rtlItems} />
+            </Accordion>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
+function ButtonDocumentationExamples(): React.ReactElement {
+  return (
+    <div data-catalog-documentation-examples="button">
+      <CatalogDocumentationExample id="sizes" title="Sizes">
+        <ButtonGroup aria-label="Button sizes">
+          <Button size="xs">Extra small</Button>
+          <Button size="sm">Small</Button>
+          <Button>Default</Button>
+          <Button size="lg">Large</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="default" title="Default">
+        <Button>Button</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="outline" title="Outline">
+        <Button variant="outline">Outline</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="secondary" title="Secondary">
+        <Button variant="secondary">Secondary</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="ghost" title="Ghost">
+        <Button variant="ghost">Ghost</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="destructive" title="Destructive">
+        <Button variant="destructive">Delete</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="link" title="Link variant">
+        <Button variant="link">Link-styled action</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="icon" title="Icon button">
+        <Button aria-label="Create item" size="icon">
+          <CatalogInlineIcon />
+        </Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="with-icon" title="With icon">
+        <Button>
+          <CatalogInlineIcon />
+          Create branch
+        </Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rounded" title="Rounded">
+        <Button className="rounded-full">Get started</Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="spinner" title="Spinner">
+        <Button disabled>
+          <Spinner aria-hidden="true" data-icon="inline-start" />
+          Generating
+        </Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="button-group" title="Button group">
+        <ButtonGroup aria-label="Message actions">
+          <Button variant="outline">Archive</Button>
+          <Button variant="outline">Report</Button>
+          <Button variant="outline">Snooze</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="as-link" title="As link">
+        <a className={buttonVariants({ variant: 'outline' })} href="#catalog-login">
+          Login
+        </a>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <ButtonGroup aria-label="إجراءات">
+              <Button>إرسال</Button>
+              <Button variant="destructive">حذف</Button>
+            </ButtonGroup>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
+interface ButtonGroupDocumentationExamplesProps {
+  dropdownContentId: string;
+  dropdownTriggerId: string;
+  inputId: string;
+  popoverContentId: string;
+  popoverTriggerId: string;
+  selectContentId: string;
+  selectId: string;
+  selectTriggerId: string;
+}
+
+function ButtonGroupDocumentationExamples({
+  dropdownContentId,
+  dropdownTriggerId,
+  inputId,
+  popoverContentId,
+  popoverTriggerId,
+  selectContentId,
+  selectId,
+  selectTriggerId
+}: ButtonGroupDocumentationExamplesProps): React.ReactElement {
+  return (
+    <div data-catalog-documentation-examples="button-group">
+      <CatalogDocumentationExample id="basic" title="Basic">
+        <ButtonGroup aria-label="Document actions">
+          <Button variant="outline">Archive</Button>
+          <Button variant="outline">Report</Button>
+          <Button variant="outline">Snooze</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="orientation" title="Orientation">
+        <ButtonGroup aria-label="Zoom controls" orientation="vertical">
+          <Button aria-label="Zoom in" size="icon" variant="outline">
+            <CatalogInlineIcon />
+          </Button>
+          <Button aria-label="Zoom out" size="icon" variant="outline">
+            −
+          </Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="sizes" title="Sizes">
+        <ButtonGroup aria-label="Small actions">
+          <Button size="sm">Small</Button>
+          <Button size="sm">Group</Button>
+        </ButtonGroup>
+        <ButtonGroup aria-label="Default actions">
+          <Button>Default</Button>
+          <Button>Group</Button>
+        </ButtonGroup>
+        <ButtonGroup aria-label="Large actions">
+          <Button size="lg">Large</Button>
+          <Button size="lg">Group</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="nested" title="Nested groups">
+        <ButtonGroup aria-label="Message composer">
+          <ButtonGroup>
+            <Button aria-label="Attach" size="icon" variant="outline">
+              <CatalogInlineIcon />
+            </Button>
+          </ButtonGroup>
+          <ButtonGroup>
+            <Input aria-label="Message" placeholder="Send a message…" />
+          </ButtonGroup>
+          <ButtonGroup>
+            <Button variant="outline">Send</Button>
+          </ButtonGroup>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="separator" title="Separator">
+        <ButtonGroup aria-label="Clipboard actions">
+          <Button>Copy</Button>
+          <ButtonGroupSeparator />
+          <Button>Paste</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="split" title="Split action">
+        <ButtonGroup aria-label="Create actions">
+          <Button>Create</Button>
+          <ButtonGroupSeparator />
+          <Button aria-label="More create options" size="icon">
+            <span aria-hidden="true">⌄</span>
+          </Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="input" title="Input">
+        <ButtonGroup aria-label="Search">
+          <Input id={inputId} placeholder="Search…" />
+          <Button variant="outline">Search</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="input-group" title="Input group">
+        <ButtonGroup aria-label="Send a message">
+          <InputGroup>
+            <InputGroupInput aria-label="Message" placeholder="Send a message…" />
+            <InputGroupAddon>
+              <InputGroupText>Draft</InputGroupText>
+            </InputGroupAddon>
+          </InputGroup>
+          <Button>Send</Button>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="dropdown-menu" title="Dropdown menu">
+        <ButtonGroup aria-label="Follow actions">
+          <Button>Follow</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-controls={dropdownContentId}
+              aria-label="More follow options"
+              id={dropdownTriggerId}
+              render={<Button size="icon" />}
+            >
+              ⌄
+            </DropdownMenuTrigger>
+            <DropdownMenuContent id={dropdownContentId}>
+              <DropdownMenuGroup>
+                <DropdownMenuItem>Follow quietly</DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="select" title="Select">
+        <ButtonGroup aria-label="Amount and currency">
+          <ButtonGroupText>$</ButtonGroupText>
+          <Input aria-label="Amount" defaultValue="10.00" />
+          <Select defaultValue="usd" id={selectId}>
+            <SelectTrigger aria-controls={selectContentId} aria-label="Currency" id={selectTriggerId}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent id={selectContentId}>
+              <SelectGroup>
+                <SelectItem value="usd">USD</SelectItem>
+                <SelectItem value="eur">EUR</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="popover" title="Popover">
+        <ButtonGroup aria-label="Assistant actions">
+          <Button>Copilot</Button>
+          <Popover>
+            <PopoverTrigger
+              aria-controls={popoverContentId}
+              aria-label="Open assistant options"
+              id={popoverTriggerId}
+              render={<Button size="icon" />}
+            >
+              ⌄
+            </PopoverTrigger>
+            <PopoverContent id={popoverContentId}>
+              <PopoverTitle>Assistant options</PopoverTitle>
+              <PopoverDescription>Choose how the assistant should respond.</PopoverDescription>
+            </PopoverContent>
+          </Popover>
+        </ButtonGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <ButtonGroup aria-label="إجراءات">
+              <Button variant="outline">أرشفة</Button>
+              <Button variant="outline">تقرير</Button>
+              <Button variant="outline">تأجيل</Button>
+            </ButtonGroup>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
+function SpinnerDocumentationExamples(): React.ReactElement {
+  return (
+    <div data-catalog-documentation-examples="spinner">
+      <CatalogDocumentationExample id="basic" title="Basic">
+        <Spinner aria-label="Loading" />
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="sizes" title="Sizes">
+        <Spinner aria-label="Loading" className="size-6" />
+        <Spinner aria-label="Loading" className="size-8" />
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="button" title="Button">
+        <Button disabled>
+          <Spinner aria-hidden="true" data-icon="inline-start" />
+          Loading
+        </Button>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="badge" title="Badge">
+        <Badge>
+          <Spinner aria-hidden="true" data-icon="inline-start" />
+          Syncing
+        </Badge>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="input-group" title="Input group">
+        <InputGroup>
+          <InputGroupInput aria-label="Message" placeholder="Send a message…" />
+          <InputGroupAddon>
+            <Spinner aria-hidden="true" />
+            <InputGroupText>Validating…</InputGroupText>
+          </InputGroupAddon>
+        </InputGroup>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="empty" title="Empty state">
+        <Empty>
+          <EmptyHeader>
+            <Spinner aria-hidden="true" />
+            <EmptyTitle>Processing your request</EmptyTitle>
+            <EmptyDescription>Please wait while the request completes.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline">Cancel</Button>
+          </EmptyContent>
+        </Empty>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <span>
+              <Spinner aria-hidden="true" /> جاري معالجة الدفع…
+            </span>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
+function CatalogStatusIcon({ destructive = false }: { destructive?: boolean }): React.ReactElement {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" fill="none" r="7" stroke="currentColor" />
+      {destructive ? (
+        <path d="M10 6v5m0 3h.01" fill="none" stroke="currentColor" strokeLinecap="round" />
+      ) : (
+        <path d="m6.5 10 2.25 2.25 4.75-5" fill="none" stroke="currentColor" strokeLinecap="round" />
+      )}
+    </svg>
+  );
+}
+
+function AlertDocumentationExamples(): React.ReactElement {
+  return (
+    <div data-catalog-documentation-examples="alert">
+      <CatalogDocumentationExample id="basic" title="Basic">
+        <Alert>
+          <CatalogStatusIcon />
+          <AlertTitle>Account updated successfully</AlertTitle>
+          <AlertDescription>Your profile information has been saved.</AlertDescription>
+        </Alert>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="destructive" title="Destructive">
+        <Alert variant="destructive">
+          <CatalogStatusIcon destructive />
+          <AlertTitle>Payment failed</AlertTitle>
+          <AlertDescription>Check the payment method and try again.</AlertDescription>
+        </Alert>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="action" title="Action">
+        <Alert>
+          <CatalogStatusIcon />
+          <AlertTitle>Dark mode is available</AlertTitle>
+          <AlertDescription>Enable it in profile settings when you are ready.</AlertDescription>
+          <AlertAction>
+            <Button variant="outline">Enable</Button>
+          </AlertAction>
+        </Alert>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <Alert>
+              <CatalogStatusIcon />
+              <AlertTitle>تم الدفع بنجاح</AlertTitle>
+              <AlertDescription>تمت معالجة الدفعة وإرسال الإيصال.</AlertDescription>
+            </Alert>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
+function BadgeDocumentationExamples(): React.ReactElement {
+  return (
+    <div data-catalog-documentation-examples="badge">
+      <CatalogDocumentationExample id="variants" title="Variants">
+        <Badge>Default</Badge>
+        <Badge variant="secondary">Secondary</Badge>
+        <Badge variant="destructive">Destructive</Badge>
+        <Badge variant="outline">Outline</Badge>
+        <Badge variant="ghost">Ghost</Badge>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="with-icon" title="With icon">
+        <Badge>
+          <CatalogStatusIcon />
+          Verified
+        </Badge>
+        <Badge variant="outline">
+          Bookmark
+          <span aria-hidden="true" data-icon="inline-end">
+            +
+          </span>
+        </Badge>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="with-spinner" title="With spinner">
+        <Badge variant="secondary">
+          <Spinner aria-hidden="true" data-icon="inline-start" />
+          Generating
+        </Badge>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="link" title="Link">
+        <Badge render={<a href="#catalog-release" />}>Open release</Badge>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <Badge>متحقق</Badge>
+            <Badge variant="secondary">ثانوي</Badge>
+            <Badge variant="outline">مخطط</Badge>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
+interface ProgressDocumentationExamplesProps {
+  basicId: string;
+  controlledId: string;
+  labelledId: string;
+  rtlId: string;
+}
+
+function ProgressDocumentationExamples({
+  basicId,
+  controlledId,
+  labelledId,
+  rtlId
+}: ProgressDocumentationExamplesProps): React.ReactElement {
+  const [controlledValue, setControlledValue] = React.useState(42);
+
+  return (
+    <div data-catalog-documentation-examples="progress">
+      <CatalogDocumentationExample id="basic" title="Basic">
+        <Progress aria-label="Task progress" id={basicId} value={33} />
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="label" title="Label and value">
+        <Progress id={labelledId} value={56}>
+          <ProgressLabel>Upload progress</ProgressLabel>
+          <ProgressValue />
+        </Progress>
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="controlled" title="Controlled">
+        <Progress id={controlledId} value={controlledValue}>
+          <ProgressLabel>Export progress</ProgressLabel>
+          <ProgressValue />
+        </Progress>
+        <Slider
+          aria-label="Set export progress"
+          max={100}
+          onValueChange={(value) => setControlledValue(typeof value === 'number' ? value : (value[0] ?? 0))}
+          value={[controlledValue]}
+        />
+      </CatalogDocumentationExample>
+      <CatalogDocumentationExample id="rtl" title="Right-to-left">
+        <div dir="rtl">
+          <DirectionProvider direction="rtl">
+            <Progress id={rtlId} value={56}>
+              <ProgressLabel>تقدم الرفع</ProgressLabel>
+              <ProgressValue />
+            </Progress>
+          </DirectionProvider>
+        </div>
+      </CatalogDocumentationExample>
+    </div>
+  );
+}
+
 /** A browser-smoke gallery for every React 17-compatible public catalog subpath. */
-export function UiProfileCatalogHarness(): React.ReactElement {
+export function UiProfileCatalogHarness({
+  activeComponent,
+  activeExample
+}: { activeComponent?: UiProfileCatalogComponentId; activeExample?: string } = {}): React.ReactElement {
   const [calendarDate, setCalendarDate] = React.useState<Date | undefined>(new Date(2026, 7, 9));
   const toastManager = React.useMemo(() => createToastManager(), []);
 
@@ -187,8 +1127,13 @@ export function UiProfileCatalogHarness(): React.ReactElement {
   const alertDialogTitleId = useSpfxUiId('catalog:alert-dialog-title');
   const alertDialogDescriptionId = useSpfxUiId('catalog:alert-dialog-description');
   const accordionItemId = useSpfxUiId('catalog:accordion-item');
+  const accordionExamplesId = useSpfxUiId('catalog:accordion-examples');
   const chartId = useSpfxUiId('catalog:chart');
   const checkboxId = useSpfxUiId('catalog:checkbox');
+  const breadcrumbDropdownTriggerId = useSpfxUiId('catalog:breadcrumb-dropdown-trigger');
+  const breadcrumbDropdownContentId = useSpfxUiId('catalog:breadcrumb-dropdown-content');
+  const breadcrumbResponsiveTriggerId = useSpfxUiId('catalog:breadcrumb-responsive-trigger');
+  const breadcrumbResponsiveContentId = useSpfxUiId('catalog:breadcrumb-responsive-content');
   const collapsibleTriggerId = useSpfxUiId('catalog:collapsible-trigger');
   const collapsibleContentId = useSpfxUiId('catalog:collapsible-content');
   const comboboxId = useSpfxUiId('catalog:combobox-root');
@@ -216,6 +1161,9 @@ export function UiProfileCatalogHarness(): React.ReactElement {
   const popoverTriggerId = useSpfxUiId('catalog:popover-trigger');
   const popoverContentId = useSpfxUiId('catalog:popover-content');
   const progressId = useSpfxUiId('catalog:progress');
+  const progressControlledId = useSpfxUiId('catalog:progress-controlled');
+  const progressLabelledId = useSpfxUiId('catalog:progress-labelled');
+  const progressRtlId = useSpfxUiId('catalog:progress-rtl');
   const radioGroupId = useSpfxUiId('catalog:radio-group');
   const selectId = useSpfxUiId('catalog:select-root');
   const selectTriggerId = useSpfxUiId('catalog:select-trigger');
@@ -232,24 +1180,36 @@ export function UiProfileCatalogHarness(): React.ReactElement {
   const tooltipTriggerId = useSpfxUiId('catalog:tooltip-trigger');
   const tooltipContentId = useSpfxUiId('catalog:tooltip-content');
 
-  return (
-    <main aria-label="Shared UI component catalog" data-ui-profile-catalog="base-nova">
+  const catalog = (
+    <section
+      aria-label="Shared UI component catalog"
+      data-catalog-mode={activeComponent === undefined ? 'gallery' : 'single'}
+      data-ui-profile-catalog="base-nova"
+    >
       <h2>Shared UI component catalog</h2>
 
       <CatalogSample component="accordion" title="Accordion">
-        <Accordion>
-          <AccordionItem id={accordionItemId} value="catalog-item">
-            <AccordionTrigger>Is this the official default?</AccordionTrigger>
-            <AccordionContent>Yes. The catalog classes and behavior are preserved.</AccordionContent>
-          </AccordionItem>
-        </Accordion>
+        {activeComponent === 'accordion' ? (
+          <AccordionDocumentationExamples baseId={accordionExamplesId} />
+        ) : (
+          <Accordion>
+            <AccordionItem id={accordionItemId} value="catalog-item">
+              <AccordionTrigger>Is this the official default?</AccordionTrigger>
+              <AccordionContent>Yes. The catalog classes and behavior are preserved.</AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        )}
       </CatalogSample>
 
       <CatalogSample component="alert" title="Alert">
-        <Alert>
-          <AlertTitle>Catalog ready</AlertTitle>
-          <AlertDescription>Default Base Nova alert styling.</AlertDescription>
-        </Alert>
+        {activeComponent === 'alert' ? (
+          <AlertDocumentationExamples />
+        ) : (
+          <Alert>
+            <AlertTitle>Catalog ready</AlertTitle>
+            <AlertDescription>Default Base Nova alert styling.</AlertDescription>
+          </Alert>
+        )}
       </CatalogSample>
 
       <CatalogSample component="alert-dialog" title="Alert Dialog">
@@ -299,21 +1259,20 @@ export function UiProfileCatalogHarness(): React.ReactElement {
       </CatalogSample>
 
       <CatalogSample component="badge" title="Badge">
-        <Badge>Default</Badge>
+        {activeComponent === 'badge' ? <BadgeDocumentationExamples /> : <Badge>Default</Badge>}
       </CatalogSample>
 
       <CatalogSample component="breadcrumb" title="Breadcrumb">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink href="#catalog-home">Home</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage>Components</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+        {activeComponent === 'breadcrumb' ? (
+          <BreadcrumbDocumentationExamples
+            dropdownContentId={breadcrumbDropdownContentId}
+            dropdownTriggerId={breadcrumbDropdownTriggerId}
+            responsiveContentId={breadcrumbResponsiveContentId}
+            responsiveTriggerId={breadcrumbResponsiveTriggerId}
+          />
+        ) : (
+          <BreadcrumbBasic />
+        )}
       </CatalogSample>
 
       <CatalogSample component="bubble" title="Bubble">
@@ -325,17 +1284,30 @@ export function UiProfileCatalogHarness(): React.ReactElement {
       </CatalogSample>
 
       <CatalogSample component="button" title="Button">
-        <Button>Button</Button>
+        {activeComponent === 'button' ? <ButtonDocumentationExamples /> : <Button>Button</Button>}
       </CatalogSample>
 
       <CatalogSample component="button-group" title="Button Group">
-        <ButtonGroup>
-          <Button variant="outline">Previous</Button>
-          <ButtonGroupSeparator />
-          <ButtonGroupText>1 of 3</ButtonGroupText>
-          <ButtonGroupSeparator />
-          <Button variant="outline">Next</Button>
-        </ButtonGroup>
+        {activeComponent === 'button-group' ? (
+          <ButtonGroupDocumentationExamples
+            dropdownContentId={dropdownContentId}
+            dropdownTriggerId={dropdownTriggerId}
+            inputId={inputId}
+            popoverContentId={popoverContentId}
+            popoverTriggerId={popoverTriggerId}
+            selectContentId={selectContentId}
+            selectId={selectId}
+            selectTriggerId={selectTriggerId}
+          />
+        ) : (
+          <ButtonGroup aria-label="Pagination actions">
+            <Button variant="outline">Previous</Button>
+            <ButtonGroupSeparator />
+            <ButtonGroupText>1 of 3</ButtonGroupText>
+            <ButtonGroupSeparator />
+            <Button variant="outline">Next</Button>
+          </ButtonGroup>
+        )}
       </CatalogSample>
 
       <CatalogSample component="calendar" title="Calendar">
@@ -627,10 +1599,19 @@ export function UiProfileCatalogHarness(): React.ReactElement {
       </CatalogSample>
 
       <CatalogSample component="progress" title="Progress">
-        <Progress id={progressId} value={68}>
-          <ProgressLabel>Coverage</ProgressLabel>
-          <ProgressValue />
-        </Progress>
+        {activeComponent === 'progress' ? (
+          <ProgressDocumentationExamples
+            basicId={progressId}
+            controlledId={progressControlledId}
+            labelledId={progressLabelledId}
+            rtlId={progressRtlId}
+          />
+        ) : (
+          <Progress id={progressId} value={68}>
+            <ProgressLabel>Coverage</ProgressLabel>
+            <ProgressValue />
+          </Progress>
+        )}
       </CatalogSample>
 
       <CatalogSample component="radio-group" title="Radio Group">
@@ -682,7 +1663,7 @@ export function UiProfileCatalogHarness(): React.ReactElement {
 
       <CatalogSample component="sidebar" title="Sidebar">
         <SidebarProvider defaultOpen={false}>
-          <Sidebar id={sidebarId}>
+          <Sidebar collapsible="none" id={sidebarId}>
             <SidebarContent>
               <SidebarGroup>
                 <SidebarGroupLabel>Catalog</SidebarGroupLabel>
@@ -712,7 +1693,7 @@ export function UiProfileCatalogHarness(): React.ReactElement {
       </CatalogSample>
 
       <CatalogSample component="spinner" title="Spinner">
-        <Spinner aria-label="Loading catalog" />
+        {activeComponent === 'spinner' ? <SpinnerDocumentationExamples /> : <Spinner aria-label="Loading catalog" />}
       </CatalogSample>
 
       <CatalogSample component="switch" title="Switch">
@@ -795,7 +1776,13 @@ export function UiProfileCatalogHarness(): React.ReactElement {
           </Tooltip>
         </TooltipProvider>
       </CatalogSample>
-    </main>
+    </section>
+  );
+
+  return (
+    <ActiveCatalogComponentContext.Provider value={activeComponent}>
+      <ActiveCatalogExampleContext.Provider value={activeExample}>{catalog}</ActiveCatalogExampleContext.Provider>
+    </ActiveCatalogComponentContext.Provider>
   );
 }
 
