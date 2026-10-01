@@ -14,9 +14,9 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@fluentui/react-components": "9.74.4",
-    "@hugeicons/core-free-icons": "4.2.2",
-    "@hugeicons/react": "1.1.9",
+    "@fluentui/react-components": "9.74.7",
+    "@hugeicons/core-free-icons": "4.3.3",
+    "@hugeicons/react": "1.1.10",
     "@monaco-editor/react": "4.7.0",
     "@spfx-kit/code-workbench-runtime": "file:../../packages/code-workbench-runtime",
     "@spfx-kit/source-editor-core": "file:../../packages/source-editor-core",
@@ -25,7 +25,7 @@
     "@spfx-kit/ui-profile": "file:../../packages/ui-profile",
     "@tanstack/react-query": "4.44.0",
     "@tanstack/react-table": "8.21.3",
-    "lucide-react": "1.25.0",
+    "lucide-react": "1.46.0",
     "monaco-editor": "0.53.0",
     "react": "17.0.1",
     "react-dom": "17.0.1",
@@ -33,12 +33,12 @@
     "zustand": "4.5.7"
   },
   "devDependencies": {
-    "@types/node": "^22.20.1",
+    "@types/node": "^22.20.3",
     "@types/react": "17.0.45",
     "@types/react-dom": "17.0.17",
     "@vitejs/plugin-react": "6.0.3",
     "typescript": "5.3.3",
-    "vite": "8.1.5"
+    "vite": "8.3.0"
   },
   "optionalDependencies": {
     "@rolldown/binding-linux-arm64-gnu": "1.1.5",
